@@ -26,39 +26,49 @@ afterEach(() => runCleanups());
 
 const longReply = Array.from({ length: 80 }, (_, index) => `reply line ${index + 1}`).join("\n");
 
-const openView = Effect.gen(function* () {
-  const server = yield* Effect.promise(() =>
-    startSepiace((request) => (request === "long" ? longReply : `got: ${request}`)),
-  );
-  const { harness } = yield* Effect.promise(() => openSession({ url: server.url }));
-  const service = harness.session.integrations.memory.memory;
-  if (service === undefined) throw new Error("memory is off");
-  let closed = false;
-  let renders = 0;
-  const view = new MemoryView({
-    maxHeight: () => 20,
-    onClose: () => {
-      closed = true;
-    },
-    requestRender: () => {
-      renders += 1;
-    },
-    service,
-    setRecall: (enabled) => harness.settingsManager.context.setMemoryRecallEnabled(enabled),
+const openView = (signIn = true) =>
+  Effect.gen(function* () {
+    const server = yield* Effect.promise(() =>
+      startSepiace((request) => (request === "long" ? longReply : `got: ${request}`)),
+    );
+    const { harness } = yield* Effect.promise(() => openSession({ signIn, url: server.url }));
+    const service = harness.session.integrations.memory.memory;
+    if (service === undefined) throw new Error("memory is off");
+    let closed = false;
+    let renders = 0;
+    const view = new MemoryView({
+      maxHeight: () => 20,
+      onClose: () => {
+        closed = true;
+      },
+      requestRender: () => {
+        renders += 1;
+      },
+      service,
+      setRecall: (enabled) => harness.settingsManager.context.setMemoryRecallEnabled(enabled),
+    });
+    const screen = () =>
+      view
+        .render(100)
+        .map((line) => stripAnsi(line))
+        .join("\n");
+    const type = (text: string) => {
+      for (const character of text) view.handleInput(character);
+    };
+    return {
+      closed: () => closed,
+      harness,
+      renders: () => renders,
+      screen,
+      server,
+      service,
+      type,
+      view,
+    };
   });
-  const screen = () =>
-    view
-      .render(100)
-      .map((line) => stripAnsi(line))
-      .join("\n");
-  const type = (text: string) => {
-    for (const character of text) view.handleInput(character);
-  };
-  return { closed: () => closed, harness, renders: () => renders, screen, server, type, view };
-});
 
 const sendsARequestTypedIntoTheView = Effect.gen(function* () {
-  const { screen, server, type, view } = yield* openView;
+  const { screen, server, type, view } = yield* openView();
   view.handleInput(ENTER);
   type("Forget the old address.");
   view.handleInput(ENTER);
@@ -69,7 +79,7 @@ const sendsARequestTypedIntoTheView = Effect.gen(function* () {
 });
 
 const turnsRecallOffAndClosesWithEscape = Effect.gen(function* () {
-  const { closed, harness, server, view } = yield* openView;
+  const { closed, harness, server, view } = yield* openView();
   view.handleInput("r");
   harness.setResponses([fauxAssistantMessage("ok")]);
   yield* Effect.promise(() => harness.session.run.prompting.prompt("where does the release go?"));
@@ -79,7 +89,7 @@ const turnsRecallOffAndClosesWithEscape = Effect.gen(function* () {
 });
 
 const scrollsThroughALongReply = Effect.gen(function* () {
-  const { screen, type, view } = yield* openView;
+  const { screen, type, view } = yield* openView();
   view.handleInput(ENTER);
   type("long");
   view.handleInput(ENTER);
@@ -91,7 +101,28 @@ const scrollsThroughALongReply = Effect.gen(function* () {
   expect(screen()).toContain("reply line 80");
 });
 
+const waitForScreen = (screen: () => string, text: string) =>
+  Effect.gen(function* () {
+    for (let attempt = 0; attempt < 250 && !screen().includes(text); attempt++)
+      yield* Effect.sleep("20 millis");
+    return screen();
+  });
+
+const signsInAndOutFromTheView = Effect.gen(function* () {
+  const { screen, server, service, view } = yield* openView(false);
+  expect(yield* waitForScreen(screen, "not signed in")).toContain("s sign in");
+  view.handleInput("s");
+  expect(yield* waitForScreen(screen, "Signed in to sepiace.")).toContain("Signed in to sepiace.");
+  expect(server.authorizations).toHaveLength(1);
+  expect(service.connection.state).toBe("ready");
+  expect(screen()).toContain("o sign out");
+  view.handleInput("o");
+  expect(yield* waitForScreen(screen, "Signed out of sepiace.")).toContain("not signed in");
+  expect(service.connection.state).toBe("missing");
+});
+
 describe("memory view", () => {
+  it("signs in with s and out with o", () => Effect.runPromise(signsInAndOutFromTheView));
   it("sends a request typed into the view and shows the reply", () =>
     Effect.runPromise(sendsARequestTypedIntoTheView));
   it("scrolls through a reply longer than the view", () =>

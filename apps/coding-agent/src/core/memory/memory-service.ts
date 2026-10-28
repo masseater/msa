@@ -1,6 +1,6 @@
-import type agentTypes from "@msa/agent-core/index.types";
 import * as Effect from "effect/Effect";
 
+import interop from "../../utils/interop.ts";
 import awaitingModule from "../awaiting.ts";
 import platform from "../platform/index.ts";
 import legacyMigration from "./legacy-migration.ts";
@@ -11,12 +11,12 @@ import type memoryTypes from "./memory.types.ts";
 import secretCheckLazy from "./secret-check.lazy.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
-const { randomHex } = platform;
+const { callbackPromise } = interop;
 const { exists } = platform.files;
 const { migrateLegacyMemories } = legacyMigration;
 const { resolveProjectName } = memoryProject;
 const { MAX_REQUEST_CHARS, recallRequest } = memoryRequests;
-const { SEPIACE_REQUESTS_URL, SEPIACE_SERVER_NAME } = memoryModule;
+const { SEPIACE_REQUESTS_URL, SEPIACE_URL, SIGN_IN_HINT } = memoryModule;
 const { findSecrets } = secretCheckLazy;
 
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -31,16 +31,16 @@ const describeConnection = (connection: memoryTypes.MemoryConnection) =>
       ? `not connected; ${connection.detail}`
       : `the last request failed: ${connection.detail}`;
 
+const untilAborted = (signal: AbortSignal): Promise<string | undefined> =>
+  callbackPromise((resolve) => {
+    if (signal.aborted) resolve(undefined);
+    else signal.addEventListener("abort", () => resolve(undefined), { once: true });
+  });
+
 const bounded = (signal: AbortSignal | undefined, ms: number) =>
   signal === undefined
     ? AbortSignal.timeout(ms)
     : AbortSignal.any([signal, AbortSignal.timeout(ms)]);
-
-const textOf = (result: agentTypes.AgentToolResult<unknown>) =>
-  result.content
-    .flatMap((block) => (block.type === "text" ? [block.text] : []))
-    .join("\n")
-    .trim();
 
 export default class MemoryService {
   private readonly options: memoryTypes.MemoryServiceOptions;
@@ -61,8 +61,12 @@ export default class MemoryService {
     return this.options.settings();
   }
 
+  get client(): memoryTypes.SepiaceClient {
+    return this.options.client;
+  }
+
   get connected(): boolean {
-    return this.options.tool() !== undefined;
+    return this.options.client.state === "connected";
   }
 
   get signInSaved(): boolean {
@@ -70,14 +74,13 @@ export default class MemoryService {
   }
 
   get connection(): memoryTypes.MemoryConnection {
-    if (!this.connected)
-      return {
-        detail: `sign in with /mcp login ${SEPIACE_SERVER_NAME}, or check /mcp`,
-        state: "missing",
-      };
-    return this.lastFailure === undefined
-      ? { state: "ready" }
-      : { detail: this.lastFailure, state: "failing" };
+    const { client } = this.options;
+    if (client.state === "needs-auth")
+      return { detail: `not signed in; ${SIGN_IN_HINT}`, state: "missing" };
+    if (this.lastFailure !== undefined) return { detail: this.lastFailure, state: "failing" };
+    if (client.state === "failed")
+      return { detail: `failed to connect: ${client.error ?? "unknown error"}`, state: "missing" };
+    return this.connected ? { state: "ready" } : { detail: "connecting", state: "missing" };
   }
 
   send(request: string, signal?: AbortSignal, timeoutMs = REQUEST_TIMEOUT_MS): Promise<string> {
@@ -93,25 +96,16 @@ export default class MemoryService {
           throw new Error(
             `The memory request was not sent because it looks like it holds a secret (${secrets.join(", ")}). Leave secrets out of memories.`,
           );
-        const tool = this.options.tool();
-        if (tool === undefined)
-          throw new Error(
-            `sepiace is not connected. Sign in with /mcp login ${SEPIACE_SERVER_NAME}, or check /mcp.`,
-          );
         const outcome = yield* awaited(
-          tool
-            .execute(`memory-${randomHex(8)}`, { request: text }, bounded(signal, timeoutMs))
-            .then(
-              (result) => {
-                const reply = textOf(result);
-                return result.isError === true
-                  ? { failure: reply === "" ? "sepiace reported an error." : reply }
-                  : { reply };
-              },
-              (error: unknown) => ({
-                failure: error instanceof Error ? error.message : String(error),
-              }),
-            ),
+          this.options.client.call(text, bounded(signal, timeoutMs)).then(
+            (result) =>
+              result.isError
+                ? { failure: result.text === "" ? "sepiace reported an error." : result.text }
+                : { reply: result.text },
+            (error: unknown) => ({
+              failure: error instanceof Error ? error.message : String(error),
+            }),
+          ),
         );
         this.lastFailure = "failure" in outcome ? outcome.failure : undefined;
         if ("failure" in outcome) throw new Error(outcome.failure);
@@ -124,11 +118,16 @@ export default class MemoryService {
     return Effect.runPromise(
       awaitingWith(function* () {
         const text = prompt.trim();
-        if (!this.settings.recall || text === "" || !this.connected) return undefined;
+        if (!this.settings.recall || text === "" || this.options.client.state === "needs-auth")
+          return undefined;
         if ((yield* awaited(findSecrets(text))).length > 0) return undefined;
+        const deadline = bounded(signal, RECALL_TIMEOUT_MS);
+        if (!(yield* awaited(this.options.client.ready(deadline)))) return undefined;
         this.project ??= resolveProjectName(this.options.cwd);
         const request = recallRequest(text, yield* awaited(this.project));
-        const reply = yield* awaited(this.send(request, signal, RECALL_TIMEOUT_MS).catch(() => ""));
+        const reply = yield* awaited(
+          this.send(request, deadline, RECALL_TIMEOUT_MS).catch(() => ""),
+        );
         return reply === "" ? undefined : reply;
       }, this),
     );
@@ -140,13 +139,21 @@ export default class MemoryService {
 
   migrate(): Promise<memoryTypes.MigrationResult | undefined> {
     if (this.migration !== undefined) return this.migration;
-    if (this.migrationFailed || !this.settings.enabled || !this.connected)
-      return Promise.resolve(undefined);
-    const run = migrateLegacyMemories(
-      this.options.agentDir,
-      this.options.legacyDatabase,
-      (request) => this.send(request),
+    if (
+      this.migrationFailed ||
+      !this.settings.enabled ||
+      this.options.client.state === "needs-auth"
     )
+      return Promise.resolve(undefined);
+    const run = this.options.client
+      .ready()
+      .then((ready) =>
+        ready
+          ? migrateLegacyMemories(this.options.agentDir, this.options.legacyDatabase, (request) =>
+              this.send(request),
+            )
+          : undefined,
+      )
       .catch((error: unknown) => {
         this.migrationFailed = true;
         throw error;
@@ -158,11 +165,40 @@ export default class MemoryService {
     return run;
   }
 
+  signIn(
+    signal: AbortSignal,
+    prompt?: Partial<memoryTypes.SignInPrompt>,
+  ): Promise<string | undefined> {
+    const { client } = this.options;
+    return client
+      .signIn(
+        {
+          promptForRedirectUrl: prompt?.promptForRedirectUrl ?? untilAborted,
+          showAuthorizationUrl: (url) => {
+            prompt?.showAuthorizationUrl?.(url);
+            this.options.openUrl(url.href);
+          },
+        },
+        signal,
+      )
+      .then(() => {
+        this.lastFailure = undefined;
+        return client.credentials();
+      })
+      .then((credentials) => credentials.persistenceNote());
+  }
+
+  signOut(): Promise<boolean> {
+    this.lastFailure = undefined;
+    return this.options.client.signOut();
+  }
+
   status(legacyPending: boolean): string {
     const { settings } = this;
     if (!settings.enabled) return "Memory is off (settings: memory.enabled).";
     return [
       `Memory: sepiace (${describeConnection(this.connection)})`,
+      ...(this.options.client.url === SEPIACE_URL ? [] : [`Endpoint: ${this.options.client.url}`]),
       ...(this.signInSaved ? [] : [`Sign-in: ${SIGN_IN_NOT_SAVED}`]),
       `Recall on every prompt: ${settings.recall ? "on" : "off"}`,
       ...(legacyPending ? ["memory.db: waiting to be moved to sepiace"] : []),

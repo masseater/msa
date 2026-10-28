@@ -6,7 +6,15 @@ Memory is separate from context files and compaction: those keep one conversatio
 
 ## Sign in
 
-sepiace is a built-in MCP server named `sepiace` (`https://hi.sepiace.io/api/v1/mcp`). Sign in once with `/mcp login sepiace` in a session or `msa mcp login sepiace` from a shell; until then the `memory` tool reports that sign-in is needed and prompts run without recall. After `/mcp logout sepiace` or turning the server off in `/mcp`, the `memory` tool is gone, `/memory` shows sepiace as not connected, and `memory.db` is not moved. Sign-ins are kept as described in [Store sign-ins](mcp.md#store-sign-ins).
+Memory connects to sepiace (`https://hi.sepiace.io/api/v1/mcp`) itself. It is not an MCP server: it is not listed or switched in `/mcp`, `mcp.json` does not configure it, and `--no-mcp` or an extension that replaces the MCP support leaves memory working.
+
+Sign in once with `s` in the `/memory` view or `msa memory login` from a shell. A sign-in saved by `msa mcp login sepiace` or `/mcp login sepiace` in msa 0.0.7 and earlier keeps working. Until you sign in, the `memory` tool reports that sign-in is needed, prompts run without recall, and `memory.db` is not moved. Sign out with `o` in the `/memory` view or `msa memory logout`. Sign-ins are stored where MCP sign-ins are, as described in [Store sign-ins](mcp.md#store-sign-ins).
+
+| Command             | Action                                                      |
+| ------------------- | ----------------------------------------------------------- |
+| `msa memory status` | Show whether memory is on, signed in, and connected         |
+| `msa memory login`  | Sign in in the browser; `--timeout <seconds>` (default 300) |
+| `msa memory logout` | Remove the stored sign-in                                   |
 
 ## What the model sees
 
@@ -27,22 +35,24 @@ Nothing is queued for later. A `memory` tool call or `/memory` request that cann
 
 ## Manage memories
 
-Type `/memory` in the interactive TUI to open the memory view: the sepiace connection, whether the sign-in is saved, whether recall runs, and whether `memory.db` is waiting to move, with keys to send sepiace a request and read its reply.
+Type `/memory` in the interactive TUI to open the memory view: the sepiace connection, whether the sign-in is saved, whether recall runs, and whether `memory.db` is waiting to move, with keys to sign in or out and to send sepiace a request and read its reply.
 
-| Key     | Action                                                            |
-| ------- | ----------------------------------------------------------------- |
-| `enter` | Type a request, such as "forget my old home address", and send it |
-| `↑` `↓` | Scroll a reply longer than the view                               |
-| `r`     | Turn recall on every prompt on or off (`memory.recall.enabled`)   |
-| `esc`   | Cancel the request being typed, or close the view                 |
+| Key     | Action                                                                                                        |
+| ------- | ------------------------------------------------------------------------------------------------------------- |
+| `enter` | Type a request, such as "forget my old home address", and send it                                             |
+| `↑` `↓` | Scroll a reply longer than the view                                                                           |
+| `r`     | Turn recall on every prompt on or off (`memory.recall.enabled`)                                               |
+| `s`     | Sign in to sepiace in the browser; `enter` takes the URL the browser was redirected to if it cannot reach msa |
+| `o`     | Sign out of sepiace                                                                                           |
+| `esc`   | Cancel the request being typed or the sign-in, or close the view                                              |
 
-`/memory <request>` sends a request without the view and prints the reply; outside the TUI, `/memory` prints the same status as the view.
+`/memory <request>` sends a request without the view and prints the reply; outside the TUI, `/memory` prints the same status as the view, and `msa memory status` prints it from a shell.
 
 Because sepiace returns no IDs, msa cannot list memories or delete one by ID. The sepiace console at [hi.sepiace.io/requests](https://hi.sepiace.io/requests) lists every request with the memories it changed.
 
 ## Move memories from memory.db
 
-msa 0.0.5 and earlier kept memories in `<agent dir>/memory.db`, or in the file `memory.database` named. When a session finds that file and sepiace is signed in, msa sends its memories to sepiace once, several per request and each request under 4,000 characters, naming the project for memories that belonged to one and splitting a longer memory at sentence ends. It then renames the file to `memory.db.migrated` and stops reading it. Memories that look like secrets are not sent; a notice lists them. If a request fails, the next session sends the memories that were not sent yet.
+msa 0.0.5 and earlier kept memories in `<agent dir>/memory.db`, or in the file `memory.database` named. When a session finds that file and memory is signed in to sepiace, msa sends its memories to sepiace once, several per request and each request under 4,000 characters, naming the project for memories that belonged to one and splitting a longer memory at sentence ends. It then renames the file to `memory.db.migrated` and stops reading it. Memories that look like secrets are not sent; a notice lists them. If a request fails, the next session sends the memories that were not sent yet.
 
 ## Settings
 
@@ -55,11 +65,14 @@ msa 0.0.5 and earlier kept memories in `<agent dir>/memory.db`, or in the file `
 }
 ```
 
-| Setting                 | Type    | Default | Description                                                                          |
-| ----------------------- | ------- | ------- | ------------------------------------------------------------------------------------ |
-| `memory.enabled`        | boolean | `true`  | Turn on the built-in `sepiace` MCP server, the `memory` tool, recall, and `/memory`. |
-| `memory.recall.enabled` | boolean | `true`  | Ask sepiace about every user prompt and add what it recalls to the run.              |
+| Setting                 | Type    | Default                            | Description                                                                                     |
+| ----------------------- | ------- | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `memory.enabled`        | boolean | `true`                             | Turn on the connection to sepiace, the `memory` tool, recall, and `/memory`.                    |
+| `memory.recall.enabled` | boolean | `true`                             | Ask sepiace about every user prompt and add what it recalls to the run.                         |
+| `memory.url`            | string  | `https://hi.sepiace.io/api/v1/mcp` | The sepiace endpoint. Read only from the global `settings.json`; a project file gets a warning. |
 
 Settings files that still hold `memory.embedding.*`, `memory.recall.limit`, or `memory.recall.minScore` get a startup warning for each key. `memory.database` gets one saying it is read only to move `memory.db` to sepiace.
 
-With `memory.enabled: false` the `sepiace` server is turned off, the `memory` tool and `/memory` are not offered, and no recall runs. An entry named `sepiace` in `mcp.json` changes the built-in server: `{ "enabled": false }` turns it off, and a `url` in the user-level file points it elsewhere. msa reaches sepiace through the built-in MCP support: with `--no-mcp`, or an extension that replaces that support, the `memory` tool reports that sepiace is not connected and no recall runs.
+`memory.enabled` alone turns memory on and off. With `memory.enabled: false` msa does not connect to sepiace, the `memory` tool and `/memory` are not offered, and no recall runs.
+
+`mcp.json` does not configure memory. An `mcpServers` entry named `sepiace`, or one whose `url` is on `hi.sepiace.io`, is ignored, gets a warning at startup, and is refused by `msa mcp add`; set `memory.enabled` and `memory.url` instead. The model sees only the `memory` tool, never sepiace's own tool.

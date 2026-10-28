@@ -1,17 +1,17 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type compatTypes from "@msa/ai/compat.types";
 
+import type agentSessionIntegrationConfigTypes from "./agent-session-integration-config.types.ts";
 import type cacheWarmerTypes from "./cache-warmer.types.ts";
 import type extensionsTypes from "./extensions/index.types.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
-import type sessionTelemetryTypes from "./observability/session-telemetry.types.ts";
-import type orchestratorTypes from "./orchestrator/orchestrator.types.ts";
 import type resourceLoaderTypes from "./resource-loader.types.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 import type settingsManagerTypes from "./settings-manager.types.ts";
 
 declare namespace agentSessionConfigTypes {
-  interface AgentSessionConfig {
+  interface AgentSessionConfig
+    extends agentSessionIntegrationConfigTypes.AgentSessionIntegrationConfig {
     agent: agentTypes.Agent;
     sessionManager: sessionManagerTypes.SessionManager;
     settingsManager: settingsManagerTypes.SettingsManager;
@@ -38,12 +38,6 @@ declare namespace agentSessionConfigTypes {
     baseToolsOverride?: Record<string, agentTypes.AgentTool> | undefined;
     extensionRunnerRef?: { current?: extensionsTypes.ExtensionRunner } | undefined;
     sessionStartEvent?: extensionsTypes.SessionStartEvent | undefined;
-    createWorkerSession?:
-      | ((
-          options: orchestratorTypes.CreateWorkerOptions,
-        ) => Promise<orchestratorTypes.WorkerSession>)
-      | undefined;
-    telemetry?: sessionTelemetryTypes.SessionTelemetryOptions | undefined;
     isWorker?: boolean | undefined;
   }
 

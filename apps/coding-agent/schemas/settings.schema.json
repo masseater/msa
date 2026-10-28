@@ -379,7 +379,7 @@
         "enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Long-term memory in sepiace: the built-in sepiace MCP server, the memory tool, recall, and the /memory command."
+          "description": "Long-term memory in sepiace: the connection to sepiace, the memory tool, recall, and the /memory command."
         },
         "recall": {
           "type": "object",
@@ -390,6 +390,10 @@
               "description": "Ask sepiace for memories relevant to each user prompt and add them to the run."
             }
           }
+        },
+        "url": {
+          "type": "string",
+          "description": "The sepiace MCP endpoint memory connects to. Read only from the global settings.json."
         }
       }
     },

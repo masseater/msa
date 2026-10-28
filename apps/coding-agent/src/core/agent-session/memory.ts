@@ -1,19 +1,20 @@
 import errorsModule from "../../utils/errors.ts";
 import type AgentSession from "../agent-session.ts";
-import mcpSignInStorage from "../mcp-sign-in-storage.ts";
-import legacyMigration from "../memory/legacy-migration.ts";
-import MemoryService from "../memory/memory-service.ts";
+import memoryServiceFactory from "../memory/memory-service-factory.ts";
+import type MemoryService from "../memory/memory-service.ts";
 import memoryModule from "../memory/memory.ts";
+import type memoryTypes from "../memory/memory.types.ts";
 
 const { toErrorMessage } = errorsModule;
-const { legacyDatabasePath } = legacyMigration;
-const { SEPIACE_TOOL_NAME, resolveMemorySettings } = memoryModule;
-const { signInsNotSaved } = mcpSignInStorage;
+const { createMemoryService } = memoryServiceFactory;
+const { resolveMemorySettings } = memoryModule;
 
 export default class SessionMemory {
   memoryInternal: MemoryService | undefined;
 
   private readonly session: AgentSession;
+
+  private connectionOptions: memoryTypes.MemoryConnectionOptions = {};
 
   constructor(session: AgentSession) {
     this.session = session;
@@ -23,24 +24,30 @@ export default class SessionMemory {
     return this.memoryInternal;
   }
 
+  configure(options: memoryTypes.MemoryConnectionOptions | undefined): void {
+    this.connectionOptions = options ?? {};
+  }
+
   private settings() {
     return resolveMemorySettings(this.session.settingsManager.getSettings());
   }
 
   resetMemory(): void {
+    void this.memoryInternal?.client.close();
     this.memoryInternal = this.settings().enabled
-      ? new MemoryService({
+      ? createMemoryService({
           agentDir: this.session.agentDir,
+          connection: this.connectionOptions,
           cwd: this.session.cwd,
-          legacyDatabase: legacyDatabasePath(
-            this.session.agentDir,
-            this.session.settingsManager.getSettings(),
-          ),
-          settings: () => this.settings(),
-          signInSaved: () => signInsNotSaved(this.session.agentDir) === undefined,
-          tool: () => this.session.tools.registry.toolRegistry.get(SEPIACE_TOOL_NAME),
+          settingsManager: this.session.settingsManager,
         })
       : undefined;
+  }
+
+  close(): Promise<void> {
+    const memory = this.memoryInternal;
+    this.memoryInternal = undefined;
+    return memory === undefined ? Promise.resolve() : memory.client.close();
   }
 
   migrateInBackground(): void {

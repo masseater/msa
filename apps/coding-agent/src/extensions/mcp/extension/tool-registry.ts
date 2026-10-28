@@ -59,8 +59,7 @@ export default class McpToolRegistry {
         const client = resolved.connection;
         if (client === undefined) throw new Error(`MCP server "${server}" is still starting.`);
         if (
-          (getMcpToolExposure(resolved.entry.config, tool) === "hidden" &&
-            resolved.entry.scope !== "builtin") ||
+          getMcpToolExposure(resolved.entry.config, tool) === "hidden" ||
           (client.state === "connected" && !client.tools.some((offered) => offered.name === tool))
         ) {
           throw new Error(`MCP tool "${server}/${tool}" is no longer available.`);
@@ -108,30 +107,20 @@ export default class McpToolRegistry {
       this.host.state.msa.registerTool(definition);
     }
     this.serverTools.set(server, current);
-    this.retire(
-      [...previous].filter((name) => !current.has(name)),
-      entry.scope === "builtin",
-    );
+    for (const name of previous) {
+      const definition = this.definitions.get(name);
+      if (!current.has(name) && definition !== undefined)
+        this.host.state.msa.registerTool({ ...definition, exposure: "hidden" });
+    }
     this.resourceTools.syncResourceTools();
   };
 
-  private retire(names: readonly string[], builtin: boolean): void {
-    for (const name of names) {
+  readonly hideTools = (server: string) => {
+    for (const name of this.serverTools.get(server) ?? []) {
       const definition = this.definitions.get(name);
-      if (builtin) {
-        this.definitions.delete(name);
-        this.toolOwners.delete(name);
-        this.host.state.msa.unregisterTool(name);
-      } else if (definition !== undefined)
+      if (definition !== undefined)
         this.host.state.msa.registerTool({ ...definition, exposure: "hidden" });
     }
-  }
-
-  readonly hideTools = (server: string) => {
-    this.retire(
-      [...(this.serverTools.get(server) ?? [])],
-      this.host.state.findServer(server)?.entry.scope === "builtin",
-    );
     this.serverTools.set(server, new Set());
     this.resourceTools.syncResourceTools();
   };

@@ -1,5 +1,6 @@
 import type argsTypes from "../cli/args.types.ts";
 import type agentSessionServicesTypes from "../core/agent-session-services.types.ts";
+import mcpConfigNoticesModule from "../core/memory/mcp-config-notices.ts";
 import runtimeModelScope from "../core/runtime-model-scope.ts";
 import settingsDiagnostics from "../core/settings-diagnostics.ts";
 import cliInput from "./cli-input.ts";
@@ -8,6 +9,7 @@ import type mainInternalTypes from "./main-internal.types.ts";
 const { resolveModelScope } = runtimeModelScope;
 const { collectSettingsDiagnostics } = settingsDiagnostics;
 const { resolveCliPaths } = cliInput;
+const { mcpConfigNotices } = mcpConfigNoticesModule;
 
 type Diagnostic = agentSessionServicesTypes.AgentSessionRuntimeDiagnostic;
 type Services = agentSessionServicesTypes.AgentSessionServices;
@@ -22,10 +24,17 @@ function cliResourcePaths(startup: mainInternalTypes.Startup) {
   };
 }
 
-function runtimeDiagnostics(services: Services, trustDiagnostics: Diagnostic[]): Diagnostic[] {
+function runtimeDiagnostics(
+  services: Services,
+  trustDiagnostics: Diagnostic[],
+  location: { readonly agentDir: string; readonly cwd: string },
+): Promise<Diagnostic[]> {
   const { settingsManager, resourceLoader } = services;
   const extensions = resourceLoader.getExtensions();
-  return [
+  return mcpConfigNotices({
+    ...location,
+    projectTrusted: settingsManager.isProjectTrusted(),
+  }).then((memoryNotices) => [
     ...trustDiagnostics,
     ...services.diagnostics,
     ...collectSettingsDiagnostics(settingsManager),
@@ -37,7 +46,8 @@ function runtimeDiagnostics(services: Services, trustDiagnostics: Diagnostic[]):
       message: `Extension package "${path}": ${warning}`,
       type: "warning" as const,
     })),
-  ];
+    ...memoryNotices.map((message) => ({ message, type: "warning" as const })),
+  ]);
 }
 
 function scopedModelsFor(parsed: argsTypes.Args, services: Services) {

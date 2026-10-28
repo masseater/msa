@@ -125,6 +125,6 @@ function login(
   );
 }
 
-const loginModule = { login };
+const loginModule = { login, waitForRedirectUrl };
 
 export default loginModule;

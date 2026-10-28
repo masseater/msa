@@ -3,6 +3,7 @@ import type tuiTypes from "@msa/tui/index.types";
 
 import memoryModule from "../../../core/memory/memory.ts";
 import errors from "../../../utils/errors.ts";
+import interop from "../../../utils/interop.ts";
 import themeModule from "../theme/theme.ts";
 import keybindingHints from "./keybinding-hints.ts";
 import type memoryViewTypes from "./memory-view.types.ts";
@@ -11,6 +12,7 @@ import scrollWindow from "./scroll-window.ts";
 const { Input, getKeybindings, matchesKey, truncateToWidth, wrapTextWithAnsi } = tui;
 const { SEPIACE_REQUESTS_URL } = memoryModule;
 const { toErrorMessage } = errors;
+const { callbackPromise } = interop;
 const { theme } = themeModule;
 const { rawKeyHint } = keybindingHints;
 const { fitView } = scrollWindow;
@@ -32,6 +34,10 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
   legacyPending = false;
 
   reply: { text: string; failed: boolean } | undefined;
+
+  private signingIn: AbortController | undefined;
+
+  private redirectWaiter: ((url: string | undefined) => void) | undefined;
 
   private scroll = 0;
 
@@ -57,6 +63,7 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
       options.requestRender();
       return undefined;
     });
+    void options.service.client.connect().then(() => options.requestRender());
   }
 
   invalidate(): void {}
@@ -65,16 +72,77 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
     if (this.typing) {
       this.requestInput.handleInput(data);
     } else if (getKeybindings().matches(data, "tui.select.cancel")) {
-      this.options.onClose();
+      if (this.signingIn === undefined) this.options.onClose();
+      else this.signingIn.abort();
     } else if (this.scrollStep(data) !== undefined) {
       this.scroll = Math.max(0, this.scroll + (this.scrollStep(data) ?? 0));
-    } else if (getKeybindings().matches(data, "tui.select.confirm") && !this.busy) {
+    } else if (
+      getKeybindings().matches(data, "tui.select.confirm") &&
+      (!this.busy || this.redirectWaiter !== undefined)
+    ) {
       this.typing = true;
       this.requestInput.focused = this.focusedState;
     } else if (matchesKey(data, "r")) {
       this.options.setRecall(!this.options.service.settings.recall);
+    } else if (matchesKey(data, "s") && !this.busy && !this.options.service.connected) {
+      this.signIn();
+    } else if (matchesKey(data, "o") && !this.busy) {
+      this.signOut();
     }
     this.options.requestRender();
+  }
+
+  private finish(reply: { text: string; failed: boolean }): void {
+    this.busy = false;
+    this.signingIn = undefined;
+    this.redirectWaiter = undefined;
+    this.reply = reply;
+    this.scroll = 0;
+    this.options.requestRender();
+  }
+
+  private signIn(): void {
+    const cancel = new AbortController();
+    this.signingIn = cancel;
+    this.busy = true;
+    this.reply = { failed: false, text: "Contacting the sign-in server…" };
+    void this.options.service
+      .signIn(cancel.signal, {
+        promptForRedirectUrl: (signal) =>
+          callbackPromise<string | undefined>((resolve) => {
+            this.redirectWaiter = resolve;
+            signal.addEventListener("abort", () => resolve(undefined), { once: true });
+          }),
+        showAuthorizationUrl: (url) => {
+          this.reply = {
+            failed: false,
+            text: `Sign in to sepiace in the browser:\n${url.href}\nIf the browser cannot reach this machine, press enter and paste the URL it was redirected to.`,
+          };
+          this.options.requestRender();
+        },
+      })
+      .then(
+        (note) => ({
+          failed: false,
+          text: note === undefined ? "Signed in to sepiace." : `Signed in to sepiace.\n${note}`,
+        }),
+        (error: unknown) => ({ failed: true, text: toErrorMessage(error) }),
+      )
+      .then((reply) => this.finish(reply));
+  }
+
+  private signOut(): void {
+    this.busy = true;
+    void this.options.service
+      .signOut()
+      .then(
+        (removed) => ({
+          failed: false,
+          text: removed ? "Signed out of sepiace." : "No sepiace sign-in was stored.",
+        }),
+        (error: unknown) => ({ failed: true, text: toErrorMessage(error) }),
+      )
+      .then((reply) => this.finish(reply));
   }
 
   private scrollStep(data: string): number | undefined {
@@ -98,6 +166,11 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
     this.stopTyping();
     if (request === "") return;
     this.requestInput.setValue("");
+    if (this.redirectWaiter !== undefined) {
+      this.redirectWaiter(request);
+      this.redirectWaiter = undefined;
+      return;
+    }
     this.busy = true;
     void this.options.service
       .send(request)
@@ -137,7 +210,7 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
   }
 
   private replyLines(width: number): string[] {
-    if (this.busy) return ["", theme.fg("dim", " Sending…")];
+    if (this.busy && this.signingIn === undefined) return ["", theme.fg("dim", " Sending…")];
     if (this.reply === undefined) return [];
     const color = this.reply.failed ? "error" : "text";
     return [
@@ -155,10 +228,12 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
           ...this.requestInput.render(width),
           ` ${rawKeyHint("enter", "send")}  ${rawKeyHint("esc", "cancel")}`,
         ]
-      : [
-          "",
-          ` ${rawKeyHint("enter", "request")}  ${rawKeyHint("↑↓", "scroll")}  ${rawKeyHint("r", "recall on/off")}  ${rawKeyHint("esc", "close")}`,
-        ];
+      : this.signingIn === undefined
+        ? [
+            "",
+            ` ${rawKeyHint("enter", "request")}  ${rawKeyHint("↑↓", "scroll")}  ${rawKeyHint("r", "recall on/off")}  ${this.options.service.connected ? rawKeyHint("o", "sign out") : rawKeyHint("s", "sign in")}  ${rawKeyHint("esc", "close")}`,
+          ]
+        : ["", ` ${rawKeyHint("enter", "paste the redirect URL")}  ${rawKeyHint("esc", "cancel")}`];
     const frame = {
       body: [
         ...this.statusLines().map((line) => truncateToWidth(line, width)),

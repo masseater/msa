@@ -10,6 +10,8 @@ import type memoryTypes from "../memory/memory.types.ts";
 const { awaited, awaitingWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 
+const STATUS_CONNECT_TIMEOUT_MS = 5_000;
+
 export default class SessionBuiltinCommands {
   private readonly session: AgentSession;
 
@@ -27,6 +29,7 @@ export default class SessionBuiltinCommands {
       if (memory === undefined) {
         text = "Memory is off (settings: memory.enabled).";
       } else if (command.kind === "status") {
+        yield* awaited(memory.client.ready(AbortSignal.timeout(STATUS_CONNECT_TIMEOUT_MS)));
         text = memory.status(yield* awaited(memory.legacyPending()));
       } else {
         text = yield* awaited(

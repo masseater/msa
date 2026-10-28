@@ -26,12 +26,9 @@ export default class McpSessionEvents {
   }
 
   onSessionStart(ctx: extensionsTypesTypes.ExtensionContext): Promise<void> {
-    const { loadConfig } = this.host.state.options;
-    return Promise.resolve(
-      loadConfig === undefined
-        ? defaultLoadConfig(ctx, this.host.state.msa.getSettings())
-        : loadConfig(ctx),
-    ).then((loaded) => this.startSession(loaded, ctx));
+    return Promise.resolve((this.host.state.options.loadConfig ?? defaultLoadConfig)(ctx)).then(
+      (loaded) => this.startSession(loaded, ctx),
+    );
   }
 
   private startSession(

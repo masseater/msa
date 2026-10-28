@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 
 import configModule from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
+import memoryModule from "../../../core/memory/memory.ts";
 import type cliInternalTypes from "../cli-internal.types.ts";
 import type configTypes from "../config.types.ts";
 import cliOptions from "./cli-options.ts";
@@ -15,6 +16,7 @@ const { HELP_HINT, parseOptions } = cliOptions;
 const { list } = listServers;
 const { login } = loginModule;
 const { createConnection } = serverConnection;
+const { notAnMcpServer } = memoryModule;
 
 const DEFAULT_LOGIN_TIMEOUT_SECONDS = 300;
 
@@ -36,6 +38,11 @@ function findEntry(name: string, context: CommandContext): configTypes.McpServer
   const { loaded, untrustedNote } = context;
   const entry = loaded.servers.find((server) => server.name === name);
   if (entry !== undefined) return entry;
+  const memoryHint = notAnMcpServer(name);
+  if (memoryHint !== undefined) {
+    context.error(memoryHint);
+    return undefined;
+  }
   context.error(
     `No MCP server named "${name}".${untrustedNote !== undefined && untrustedNote !== "" ? ` ${untrustedNote}` : ""} Configured: ${loaded.servers.map((server) => server.name).join(", ") || "none"}.`,
   );

@@ -116,10 +116,11 @@ See [Compaction Reference](compaction.md) for trigger, summarization, and valida
 
 ## Memory
 
-| Setting                 | Type    | Default | Description                                                                          |
-| ----------------------- | ------- | ------- | ------------------------------------------------------------------------------------ |
-| `memory.enabled`        | boolean | `true`  | Turn on the built-in `sepiace` MCP server, the `memory` tool, recall, and `/memory`. |
-| `memory.recall.enabled` | boolean | `true`  | Ask sepiace about every user prompt and add what it recalls to the run.              |
+| Setting                 | Type    | Default | Description                                                                  |
+| ----------------------- | ------- | ------- | ---------------------------------------------------------------------------- |
+| `memory.enabled`        | boolean | `true`  | Turn on the connection to sepiace, the `memory` tool, recall, and `/memory`. |
+| `memory.recall.enabled` | boolean | `true`  | Ask sepiace about every user prompt and add what it recalls to the run.      |
+| `memory.url`            | string  | sepiace | The sepiace endpoint. Read only from the global `settings.json`.             |
 
 See [Long-Term Memory](memory.md) for signing in to sepiace, secrets, and the `/memory` command.
 

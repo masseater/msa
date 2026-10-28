@@ -3,12 +3,24 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
+import memoryServiceFactory from "../src/core/memory/memory-service-factory.ts";
 import memory from "../src/core/memory/memory.ts";
+import ProjectTrustStore from "../src/core/project-trust-store.ts";
 import settingsDiagnostics from "../src/core/settings-diagnostics.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 
-const { awaited, runTest, toJsonText } = testing;
-const { resolveMemorySettings } = memory;
+const {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removeDir,
+  runTest,
+  toJsonText,
+  writeJsonFile,
+} = testing;
+const { SEPIACE_URL, resolveMemorySettings } = memory;
+const { openMemoryService } = memoryServiceFactory;
 const { collectSettingsDiagnostics } = settingsDiagnostics;
 
 const turnsRecallOffWhereTheProjectSetsIt = () =>
@@ -66,8 +78,46 @@ const namesEachRemovedSetting = () =>
     }),
   );
 
+const memoryUrlOf = (files: { global: unknown; project: unknown }) =>
+  Effect.gen(function* () {
+    const root = yield* makeTempDir("msa-memory-url-");
+    const agentDir = joinPath(root, "agent");
+    const cwd = joinPath(root, "project");
+    yield* makeDirectory(agentDir);
+    yield* makeDirectory(joinPath(cwd, ".msa"));
+    yield* writeJsonFile(joinPath(agentDir, "settings.json"), files.global);
+    yield* writeJsonFile(joinPath(cwd, ".msa", "settings.json"), files.project);
+    yield* awaited(new ProjectTrustStore(agentDir).set(cwd, true));
+    const service = yield* awaited(openMemoryService(agentDir, cwd));
+    const { url } = service.client;
+    yield* awaited(service.client.close());
+    yield* Effect.ignore(removeDir(root));
+    return url;
+  });
+
+const readsMemoryUrlOnlyFromTheGlobalSettings = () =>
+  runTest(
+    Effect.gen(function* () {
+      const elsewhere = { memory: { url: "http://127.0.0.1:9/mcp" } };
+      expect(yield* memoryUrlOf({ global: {}, project: elsewhere })).toBe(SEPIACE_URL);
+      expect(yield* memoryUrlOf({ global: elsewhere, project: {} })).toBe("http://127.0.0.1:9/mcp");
+      const storage = new InMemorySettingsStorage({
+        global: yield* toJsonText({}),
+        project: yield* toJsonText(elsewhere),
+      });
+      const manager = yield* awaited(SettingsManager.fromStorage(storage));
+      expect(collectSettingsDiagnostics(manager).map((diagnostic) => diagnostic.message)).toEqual([
+        expect.stringContaining("memory.url is read only from the global settings.json"),
+      ]);
+    }),
+  );
+
 describe("memory settings", () => {
   it("names each removed memory setting the settings still hold", namesEachRemovedSetting);
+  it(
+    "reads memory.url only from the global settings and names it in the project settings",
+    readsMemoryUrlOnlyFromTheGlobalSettings,
+  );
 });
 
 describe("memory recall setting", () => {

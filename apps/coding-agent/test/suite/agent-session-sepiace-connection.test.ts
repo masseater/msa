@@ -1,30 +1,22 @@
 import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import memory from "../../src/core/memory/memory.ts";
 import SecretStoreAuthBackend from "../../src/extensions/mcp/credentials/secret-store-backend.ts";
+import agentSessionAskSupport from "./agent-session-ask-support.ts";
 import agentSessionMcpOauthHarness from "./agent-session-mcp-oauth-harness.ts";
 import sepiaceMemoryFixtures from "./sepiace-memory-fixtures.ts";
 import sepiaceMemorySupport from "./sepiace-memory-support.ts";
-import sepiaceTuiSupport from "./sepiace-tui-support.ts";
 
 const { fauxAssistantMessage } = ai;
 const { joinPath, makeTempDir, pathExists, removeDir, runTest } = testing;
 const { runCleanups } = agentSessionMcpOauthHarness;
 const { openSession, startSepiace } = sepiaceMemorySupport;
 const { operationOf, writeLegacyDatabase } = sepiaceMemoryFixtures;
-const { customUi, initTestTheme, scriptMcpManager } = sepiaceTuiSupport;
-const { SEPIACE_TOOL_NAME } = memory;
-beforeAll(() => {
-  initTestTheme();
-});
+const { declared, record } = agentSessionAskSupport;
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  return runCleanups();
-});
+afterEach(() => runCleanups());
 
 const lockedKeychain = {
   description: "a locked keychain",
@@ -66,8 +58,7 @@ const signOutLeavesMemoryUnconnected = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => openSession({ url: server.url }));
   const service = harness.session.integrations.memory.memory;
   expect(service?.connection.state).toBe("ready");
-  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp logout sepiace"));
-  expect(harness.session.tools.registry.toolRegistry.get(SEPIACE_TOOL_NAME)).toBeUndefined();
+  expect(yield* Effect.promise(() => service?.signOut() ?? Promise.resolve(false))).toBe(true);
   expect(service?.connection.state).toBe("missing");
   const legacy = joinPath(harness.session.agentDir, "memory.db");
   writeLegacyDatabase(legacy);
@@ -75,55 +66,36 @@ const signOutLeavesMemoryUnconnected = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
   expect(yield* waitForLegacyMove(legacy)).toBe(false);
   expect(server.memoryRequests).toEqual([]);
+  expect(service?.connection.state).toBe("missing");
 });
 
-const disablingLeavesMemoryUnconnected = Effect.gen(function* () {
-  const server = yield* Effect.promise(() => startSepiace(() => ""));
-  const signedIn = yield* Effect.promise(() => openSession({ url: server.url }));
-  const { harness } = yield* Effect.promise(() =>
-    openSession({
-      backend: signedIn.backend,
-      signIn: false,
-      tui: true,
-      ui: customUi,
-      url: server.url,
-    }),
-  );
-  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp reconnect sepiace"));
-  const service = harness.session.integrations.memory.memory;
-  expect(service?.connection.state).toBe("ready");
-  scriptMcpManager(["sepiace", "disable", undefined, undefined]);
-  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp"));
-  for (
-    let attempt = 0;
-    attempt < 100 && harness.session.tools.registry.toolRegistry.has(SEPIACE_TOOL_NAME);
-    attempt++
-  )
-    yield* Effect.sleep("20 millis");
-  expect(harness.session.tools.registry.toolRegistry.get(SEPIACE_TOOL_NAME)).toBeUndefined();
-  expect(service?.connection.state).toBe("missing");
-  const legacy = joinPath(harness.session.agentDir, "memory.db");
-  writeLegacyDatabase(legacy);
-  harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
-  expect(yield* waitForLegacyMove(legacy)).toBe(false);
-  expect(server.memoryRequests).toEqual([]);
+const offersOnlyTheMemoryTool = Effect.gen(function* () {
+  const server = yield* Effect.promise(() => startSepiace(() => "Releases go to the tap."));
+  const { harness } = yield* Effect.promise(() => openSession({ url: server.url }));
+  const requests = record(harness, [fauxAssistantMessage("ok")]);
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("where does the release go?"));
+  const tools = declared(requests[0]);
+  expect(tools).toContain("memory");
+  expect(tools.filter((name) => name.startsWith("mcp__"))).toEqual([]);
+  expect(
+    [...harness.session.tools.registry.toolRegistry.keys()].filter((name) =>
+      name.startsWith("mcp__"),
+    ),
+  ).toEqual([]);
 });
 
 const warnsWhenTheSignInIsNotSaved = Effect.gen(function* () {
   const agentDir = yield* makeTempDir("msa-sepiace-signin-");
   const server = yield* Effect.promise(() => startSepiace(() => ""));
-  const { harness, notifications } = yield* Effect.promise(() =>
+  const { harness, note } = yield* Effect.promise(() =>
     openSession({
       agentDir,
       backend: new SecretStoreAuthBackend({ agentDir, defaultStore: lockedKeychain }),
       url: server.url,
     }),
   );
-  const warning = notifications.find((notice) =>
-    notice.startsWith("MCP sign-ins are not saved, because User interaction is not allowed;"),
-  );
-  expect(warning).toContain(
+  expect(note).toContain("MCP sign-ins are not saved, because User interaction is not allowed;");
+  expect(note).toContain(
     `credentialHelper to a docker-credential helper in ${joinPath(agentDir, "mcp.json")}`,
   );
   expect(harness.session.integrations.memory.memory?.status(false)).toContain("Sign-in: not saved");
@@ -133,10 +105,10 @@ const warnsWhenTheSignInIsNotSaved = Effect.gen(function* () {
 describe("sepiace connection", () => {
   it("asks sepiace a question for recall, so a prompt that says forget changes nothing", () =>
     Effect.runPromise(recallNeverSavesOrForgets));
-  it("reports memory as not connected and moves nothing after /mcp logout sepiace", () =>
+  it("reports memory as not connected and moves nothing after signing out", () =>
     Effect.runPromise(signOutLeavesMemoryUnconnected));
-  it("reports memory as not connected and moves nothing after sepiace is disabled", () =>
-    Effect.runPromise(disablingLeavesMemoryUnconnected));
-  it("warns in the session and in /memory when the sign-in can only be kept in memory", () =>
+  it("gives the model the memory tool and no mcp__ tools of sepiace", () =>
+    Effect.runPromise(offersOnlyTheMemoryTool));
+  it("tells the sign-in and /memory when the sign-in can only be kept in memory", () =>
     runTest(warnsWhenTheSignInIsNotSaved));
 });

@@ -100,10 +100,15 @@ const isSettingsRecord = (value: unknown): value is Record<string, unknown> =>
 
 const KEPT_RECALL_KEYS = new Set(["enabled"]);
 
-function removedSettingNotices(settings: settingsSchemaTypes.Settings): string[] {
+function removedSettingNotices(
+  settings: settingsSchemaTypes.Settings,
+  scope: settingsManagerTypes.SettingsScope = "global",
+): string[] {
   const memory: unknown = settings.memory;
   if (!isSettingsRecord(memory)) return [];
   const notices: string[] = [];
+  if (scope === "project" && memory["url"] !== undefined)
+    notices.push("memory.url is read only from the global settings.json; remove it here.");
   if (memory["database"] !== undefined)
     notices.push(
       "memory.database is read only to move its memories to sepiace once; remove it after the move.",
