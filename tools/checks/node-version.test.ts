@@ -29,26 +29,58 @@ it("runs the tests on the Node.js that .node-version pins", () =>
     }),
   ));
 
+const isSetupVp = ({ uses }: typeof Step.Type) =>
+  uses?.startsWith("voidzero-dev/setup-vp@") === true;
+
+const checksOutNodeVersion = (steps: ReadonlyArray<typeof Step.Type>, setupIndex: number) => {
+  const checkout = steps
+    .slice(0, setupIndex)
+    .findLast(({ uses }) => uses?.startsWith("actions/checkout@") === true);
+  if (checkout === undefined) return false;
+  const sparse = checkout.with?.["sparse-checkout"];
+  if (sparse === undefined) return true;
+  return String(sparse)
+    .split("\n")
+    .map((line) => line.trim())
+    .includes(NODE_VERSION_FILE);
+};
+
+const setupVpJobs = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const directory = path.join(root, ".github/workflows");
+  const files = (yield* fs.readDirectory(directory)).filter((name) => /\.ya?ml$/u.test(name));
+  const jobs = yield* Effect.forEach(files, (name) =>
+    Effect.gen(function* () {
+      const workflow = yield* Schema.decodeUnknownEffect(Workflow)(
+        parse(yield* fs.readFileString(path.join(directory, name))),
+      );
+      return Object.entries(workflow.jobs).flatMap(([job, { steps = [] }]) =>
+        steps.flatMap((step, index) =>
+          isSetupVp(step) ? [{ index, label: `${name}: ${job}`, step, steps }] : [],
+        ),
+      );
+    }),
+  );
+  return jobs.flat();
+});
+
 it("installs the pinned Node.js in every workflow that sets up vp", () =>
   runtime.runPromise(
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const directory = path.join(root, ".github/workflows");
-      const files = (yield* fs.readDirectory(directory)).filter((name) => /\.ya?ml$/u.test(name));
-      const unpinned = yield* Effect.forEach(files, (name) =>
-        Effect.gen(function* () {
-          const workflow = yield* Schema.decodeUnknownEffect(Workflow)(
-            parse(yield* fs.readFileString(path.join(directory, name))),
-          );
-          return Object.entries(workflow.jobs).flatMap(([job, { steps }]) =>
-            (steps ?? [])
-              .filter(({ uses }) => uses?.startsWith("voidzero-dev/setup-vp@") === true)
-              .filter((step) => step.with?.["node-version-file"] !== NODE_VERSION_FILE)
-              .map(() => `${name}: ${job}`),
-          );
-        }),
-      );
-      expect(unpinned.flat()).toEqual([]);
+      const unpinned = (yield* setupVpJobs)
+        .filter(({ step }) => step.with?.["node-version-file"] !== NODE_VERSION_FILE)
+        .map(({ label }) => label);
+      expect(unpinned).toEqual([]);
+    }),
+  ));
+
+it("checks out .node-version before every setup-vp step that reads it", () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const missing = (yield* setupVpJobs)
+        .filter(({ steps, index }) => !checksOutNodeVersion(steps, index))
+        .map(({ label }) => label);
+      expect(missing).toEqual([]);
     }),
   ));

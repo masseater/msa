@@ -23,6 +23,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             .github/scripts/audit-issues.sh
+            .node-version
             package.json
             pnpm-lock.yaml
             pnpm-workspace.yaml
@@ -47,6 +48,7 @@ jobs:
           sparse-checkout: |
             .github/scripts/release-age-expired.sh
             .github/scripts/release-age-issues.sh
+            .node-version
             package.json
             pnpm-lock.yaml
             pnpm-workspace.yaml
