@@ -119,6 +119,7 @@ interface Layout {
   readonly agentDir: string;
   readonly bin: string;
   readonly cwd: string;
+  readonly lock: string;
   readonly root: string;
   readonly store: string;
   readonly mcpConfig: string;
@@ -131,6 +132,7 @@ const makeLayout = Effect.gen(function* () {
     agentDir,
     bin: joinPath(root, "bin"),
     cwd: joinPath(root, "project"),
+    lock: joinPath(root, "keychain-locked"),
     mcpConfig: joinPath(agentDir, "mcp.json"),
     root,
     store: joinPath(root, "credentials.json"),
@@ -159,6 +161,7 @@ const writeAgentFiles = (
   Effect.gen(function* () {
     const helper = joinPath(layout.root, "credential-helper.mjs");
     yield* writeTextFile(helper, CREDENTIAL_HELPER);
+    if (options.storeFails === true) yield* writeTextFile(layout.lock, "");
     if (options.replaceMcp === true) {
       const extensions = joinPath(layout.agentDir, "extensions");
       yield* makeDirectory(extensions);
@@ -184,13 +187,13 @@ const writeAgentFiles = (
     });
   });
 
-const runners = (layout: Layout, options: PrepareOptions) =>
+const runners = (layout: Layout) =>
   Effect.gen(function* () {
     const inheritedPath = yield* Config.String("PATH").pipe(Config.withDefault(""));
     const env = {
       MEMORY_CHECK_CLI: cliPath,
+      MEMORY_CHECK_LOCK: layout.lock,
       MEMORY_CHECK_RESOLVER: sourceResolverUrl,
-      MEMORY_CHECK_STORE_FAILS: options.storeFails === true ? "1" : "0",
       MSA_CODING_AGENT_DIR: layout.agentDir,
       MSA_OFFLINE: "1",
       MSA_SKIP_VERSION_CHECK: "1",
@@ -244,7 +247,7 @@ const prepare = (options: PrepareOptions) =>
     const layout = yield* makeLayout;
     yield* writeBrowser(layout);
     yield* writeAgentFiles(layout, { model: model.origin, sepiace: sepiace.url }, options);
-    return { ...layout, ...(yield* runners(layout, options)), model, sepiace };
+    return { ...layout, ...(yield* runners(layout)), model, sepiace };
   });
 
 const memoryStartupSupport = { prepare, toolNames, toolResults };

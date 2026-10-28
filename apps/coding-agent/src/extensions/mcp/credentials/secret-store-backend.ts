@@ -113,8 +113,13 @@ export default class SecretStoreAuthBackend implements authStorageTypes.AuthStor
   }
 
   store(): Promise<SecretStore> {
-    this.resolved ??= withRefreshLock(this.options.agentDir, LOCK_KEY, () => this.resolveStore());
-    return this.resolved.then(() => this.active);
+    const resolving = (this.resolved ??= withRefreshLock(this.options.agentDir, LOCK_KEY, () =>
+      this.resolveStore(),
+    ).catch((error: unknown) => {
+      if (this.resolved === resolving) this.resolved = undefined;
+      throw error;
+    }));
+    return resolving.then(() => this.active);
   }
 
   withLockAsync<T>(

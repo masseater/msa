@@ -10,7 +10,7 @@ if (action === "store") {
   delete data[input.trim()];
   writeFileSync(file, JSON.stringify(data));
 } else {
-  if (process.env.MEMORY_CHECK_STORE_FAILS === "1") {
+  if (existsSync(process.env.MEMORY_CHECK_LOCK)) {
     process.stderr.write("gpg: decryption failed: No secret key");
     process.exit(2);
   }
@@ -53,18 +53,27 @@ const memoryToolCallStream = (request: string) => {
 
 const RPC_DRIVER = `
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 const commands = JSON.parse(process.argv.at(-1));
 const child = spawn(process.execPath, ["--import", process.env.MEMORY_CHECK_RESOLVER,
-  process.env.MEMORY_CHECK_CLI, "--no-session", "--mode", "rpc"], { stdio: ["pipe", "pipe", "pipe"] });
+  process.env.MEMORY_CHECK_CLI, "--no-session", "--provider", "memory-check", "--model", "memory-model",
+  "--mode", "rpc"], { stdio: ["pipe", "pipe", "pipe"] });
 const notices = [];
 let buffer = "";
 let stderr = "";
 let next = 0;
+let done = 0;
 const send = () => {
+  while (commands[next] === "!unlock") {
+    rmSync(process.env.MEMORY_CHECK_LOCK, { force: true });
+    next += 1;
+    done += 1;
+  }
   if (next >= commands.length) { child.stdin.end(); return; }
   child.stdin.write(JSON.stringify({ id: "c" + next, type: "prompt", message: commands[next] }) + "\\n");
   next += 1;
 };
+const finish = () => { done += 1; if (done === next) send(); };
 child.stderr.on("data", (data) => { stderr += data; });
 child.stdout.on("data", (data) => {
   buffer += data;
@@ -75,10 +84,9 @@ child.stdout.on("data", (data) => {
     try { event = JSON.parse(line); } catch { continue; }
     const notice = event.type === "extension_ui_request" && event.method === "notify"
       ? event.message : event.type === "memory_status" ? event.text : undefined;
-    if (notice !== undefined) {
-      notices.push(notice);
-      if (notices.length === next) send();
-    }
+    if (notice !== undefined) notices.push(notice);
+    const command = commands[next - 1] ?? "";
+    if (command.startsWith("/") ? notice !== undefined : event.type === "agent_end") finish();
   }
 });
 send();

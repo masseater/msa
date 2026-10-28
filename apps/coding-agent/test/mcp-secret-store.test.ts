@@ -15,6 +15,7 @@ const {
   readDirectory,
   readTextFile,
   removeDir,
+  removePath,
   runTest,
   toJsonText,
   writeTextFile,
@@ -26,6 +27,10 @@ const HELPER = `import { existsSync, readFileSync, writeFileSync, appendFileSync
 const [, , file, action] = process.argv;
 appendFileSync(file + ".argv", JSON.stringify(process.argv.slice(2)) + "\\n");
 const input = readFileSync(0, "utf8");
+if (existsSync(file + ".locked")) {
+  process.stderr.write("gpg: decryption failed: No secret key");
+  process.exit(2);
+}
 const data = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
 if (action === "store") {
   const entry = JSON.parse(input);
@@ -219,6 +224,29 @@ const failsWhenTheConfiguredHelperFails = () =>
     }),
   );
 
+const readsAgainOnceTheHelperUnlocks = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { agentDir, storeFile, useHelper } = yield* workspace;
+      yield* useHelper;
+      const saving = new McpOAuthCredentialStore(
+        new SecretStoreAuthBackend({ agentDir }),
+        agentDir,
+      );
+      yield* awaited(saving.forServer("docs", SERVER_URL).save(state("token-after-unlock")));
+      const lock = `${storeFile}.locked`;
+      yield* writeTextFile(lock, "");
+
+      const store = new McpOAuthCredentialStore(new SecretStoreAuthBackend({ agentDir }), agentDir);
+      const locked = yield* Effect.exit(awaited(store.tokens("docs", SERVER_URL)));
+      expect(Exit.isFailure(locked)).toBe(true);
+      yield* removePath(lock);
+      expect((yield* awaited(store.tokens("docs", SERVER_URL)))?.access_token).toBe(
+        "token-after-unlock",
+      );
+    }),
+  );
+
 const rejectsAProjectCredentialHelper = () =>
   runTest(
     Effect.gen(function* () {
@@ -258,5 +286,6 @@ describe("MCP sign-in storage", () => {
     "fails instead of falling back when the configured helper fails",
     failsWhenTheConfiguredHelperFails,
   );
+  it("reads the credential helper again once it stops failing", readsAgainOnceTheHelperUnlocks);
   it("rejects a credential helper in the project mcp.json", rejectsAProjectCredentialHelper);
 });

@@ -117,6 +117,30 @@ const explainsAnUnreadableCredentialStore = Effect.gen(function* () {
   expect(signInsAsked(agent.sepiace.log)).toEqual([]);
 });
 
+const recoversWhenTheCredentialStoreUnlocks = Effect.gen(function* () {
+  const agent = yield* setUp({
+    memoryToolRequest: "where does the release go?",
+    signedIn: true,
+    storeFails: true,
+  });
+  const { notices, stderr } = yield* agent.rpc([
+    "/memory",
+    "!unlock",
+    "/memory",
+    "where does the release go?",
+  ]);
+  const [locked = "", unlocked = ""] = notices;
+  expect(locked, stderr).toContain("gpg: decryption failed");
+  expect(unlocked, stderr).not.toContain("could not read the saved sign-in");
+  expect(unlocked).toContain("connected");
+  expect(unlocked).not.toContain("not connected");
+  const [request = "", answer = ""] = agent.model.bodies;
+  expect(request, stderr).toContain("Releases go to the tap.");
+  const toolResult = (yield* toolResults(answer)).join("\n");
+  expect(toolResult).toContain("Releases go to the tap.");
+  expect(signInsAsked(agent.sepiace.log)).toEqual([]);
+});
+
 const leavesSepiaceOutOfSlashMcp = Effect.gen(function* () {
   const agent = yield* setUp({ mcpServers: SEPIACE_ENTRIES, signedIn: true });
   const { notices, stderr } = yield* agent.rpc(["/mcp", "/mcp login sepiace"]);
@@ -187,6 +211,11 @@ describe.skipIf(process.platform === "win32")("long-term memory from the msa com
   it(
     "shows why when the credential store cannot be read",
     () => runTest(explainsAnUnreadableCredentialStore),
+    90_000,
+  );
+  it(
+    "reads the saved sign-in again once the credential store unlocks",
+    () => runTest(recoversWhenTheCredentialStoreUnlocks),
     90_000,
   );
   it(
