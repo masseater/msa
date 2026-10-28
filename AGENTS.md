@@ -160,11 +160,11 @@ release. Add a tool name to select part of the graph. For example, run
   1. 最新の main から枝を切り、`apps/coding-agent/CHANGELOG.md` の `[Unreleased]` の下に `## [x.y.z] - YYYY-MM-DD` の見出しを足し、`apps/coding-agent/package.json` の `version` を上げる。この 2 ファイルだけを `chore(release): vx.y.z` の PR にする。本文には、番号をその値にした理由と、何を含むかを書く。
   2. orchestrator が `merge_pull_request` で PR を squash merge する。release の worker も `gh pr merge` を使わない。ハーネスを通さないと squash の本文と `Msa-Merge` trailer が付かず、main への push で `commits` ジョブが落ちる。
   3. tag は、`apps/coding-agent/package.json` の `version` が上がった commit か、その後の main の commit のうち、release workflow が通る最新の commit に付ける。版を上げる PR のマージ commit に付けるのが普通で、`git fetch origin && git tag -a vx.y.z -m "msa vx.y.z" origin/main && git push origin vx.y.z`（`origin/main` がその commit を指しているときに限る）。
-  4. release workflow が success になり、GitHub Release が Latest になり、`masseater/homebrew-tap` の `Formula/msa.rb` が `msa x.y.z` の commit で更新されたことを確かめる。
+  4. release workflow が success になり（`cleanup-draft-release` は release job が失敗したときだけ動くので、成功時は skipped になる）、GitHub Release が Latest になり、`masseater/homebrew-tap` の `Formula/msa.rb` が `msa x.y.z` の commit で更新されたことを確かめる。
   5. `brew update && brew upgrade msa` のあと `msa --version` が `x.y.z` を返すことを確かめる。DB の移行を確かめるときは、`~/.msa/agent` をそのまま使わず、`sqlite3 ~/.msa/agent/orchestrator.db ".backup <temp>/orchestrator.db"` で取ったコピーに `MSA_CODING_AGENT_DIR=<temp>` を向けて開く。
 - release workflow が公開の前に落ちたら（`gh release view vx.y.z` が無いか draft で、`cleanup-draft-release` が draft を消す）、原因を直す PR を main にマージし、直した commit に tag を打ち直してよい。手順は `git fetch origin && git push origin :refs/tags/vx.y.z && git tag -d vx.y.z && git tag -a vx.y.z -m "msa vx.y.z" origin/main && git push origin vx.y.z`（`origin/main` が直した commit を指しているときに限る）。tag の指す commit の `apps/coding-agent/package.json` の `version` は `x.y.z` のままにする。
 - 公開済みの release と tag は書き換えず、直した版を新しい番号で出す。
-- GitHub Release の本文には、版の番号をその値にした理由を書く。release workflow は本文を作らないので、公開のあとで `gh release edit vx.y.z --notes-file <file>` で足す。
+- GitHub Release の本文には、版の番号をその値にした理由を書く。release workflow が書く本文は配布物と入れ方の定型文だけなので、公開のあとで定型文の後ろに番号の理由と含むものを足し、`gh release edit vx.y.z --notes-file <file>` で置き換える。
 - リポジトリの squash merge の既定は、件名を PR タイトル、本文を PR のコミットのメッセージにする（`gh api -X PATCH repos/masseater/msa -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES`）。ハーネスを通さずにマージされても、本文が空にならないための設定。個人のリポジトリでは ruleset の `commit_message_pattern` が使えず、マージの前に止められないので、止めるのは worker の shell の拒否で、抜けたものは main への push の `commits` ジョブが見つける。
 
 ## CI
