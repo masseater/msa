@@ -58,6 +58,10 @@ export default class SepiaceClient {
     return state;
   }
 
+  get rejected(): boolean {
+    return this.state === "needs-auth" && !this.signedOut;
+  }
+
   get error(): string | undefined {
     if (this.state !== "failed") return undefined;
     if (this.storeError !== undefined) return this.storeError;

@@ -56,6 +56,11 @@ declare namespace memoryTypes {
     | { readonly state: "ready" }
     | { readonly state: "missing" | "failing"; readonly detail: string };
 
+  type RecallOutcome =
+    | { readonly kind: "recalled"; readonly text: string }
+    | { readonly kind: "nothing" }
+    | { readonly kind: "skipped"; readonly reason: string };
+
   type MemoryService = (typeof MemoryServiceClass)["prototype"];
 
   interface MemoryCliOptions {

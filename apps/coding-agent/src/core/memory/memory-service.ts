@@ -75,6 +75,11 @@ export default class MemoryService {
 
   get connection(): memoryTypes.MemoryConnection {
     const { client } = this.options;
+    if (client.rejected)
+      return {
+        detail: `sepiace rejected the saved sign-in; ${SIGN_IN_HINT}`,
+        state: "missing",
+      };
     if (client.state === "needs-auth")
       return { detail: `not signed in; ${SIGN_IN_HINT}`, state: "missing" };
     if (this.lastFailure !== undefined) return { detail: this.lastFailure, state: "failing" };
@@ -114,21 +119,40 @@ export default class MemoryService {
     );
   }
 
-  recall(prompt: string, signal?: AbortSignal): Promise<string | undefined> {
+  private recallSkipped(): memoryTypes.RecallOutcome {
+    const { connection } = this;
+    if (connection.state === "ready")
+      return { kind: "skipped", reason: "sepiace is not connected" };
+    return {
+      kind: "skipped",
+      reason:
+        connection.detail === "connecting"
+          ? `sepiace did not answer within ${RECALL_TIMEOUT_MS / 1000} seconds`
+          : connection.detail,
+    };
+  }
+
+  recall(prompt: string, signal?: AbortSignal): Promise<memoryTypes.RecallOutcome> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const text = prompt.trim();
-        if (!this.settings.recall || text === "" || this.options.client.state === "needs-auth")
-          return undefined;
-        if ((yield* awaited(findSecrets(text))).length > 0) return undefined;
+        if (!this.settings.recall || text === "") return { kind: "nothing" };
+        if (this.options.client.state === "needs-auth") return this.recallSkipped();
+        if ((yield* awaited(findSecrets(text))).length > 0) return { kind: "nothing" };
         const deadline = bounded(signal, RECALL_TIMEOUT_MS);
-        if (!(yield* awaited(this.options.client.ready(deadline)))) return undefined;
+        if (!(yield* awaited(this.options.client.ready(deadline)))) return this.recallSkipped();
         this.project ??= resolveProjectName(this.options.cwd);
         const request = recallRequest(text, yield* awaited(this.project));
-        const reply = yield* awaited(
-          this.send(request, deadline, RECALL_TIMEOUT_MS).catch(() => ""),
+        return yield* awaited(
+          this.send(request, deadline, RECALL_TIMEOUT_MS).then(
+            (reply): memoryTypes.RecallOutcome =>
+              reply === "" ? { kind: "nothing" } : { kind: "recalled", text: reply },
+            (error: unknown): memoryTypes.RecallOutcome => ({
+              kind: "skipped",
+              reason: `the recall request failed: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+          ),
         );
-        return reply === "" ? undefined : reply;
       }, this),
     );
   }

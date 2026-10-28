@@ -72,13 +72,15 @@ export default class SessionTurnTriggers {
       if (memory === undefined) return messages;
       this.session.integrations.memory.migrateInBackground();
       const recalled = yield* awaited(memory.recall(trigger.prompt));
-      if (recalled === undefined) return messages;
+      if (recalled.kind === "skipped")
+        this.session.emit({ reason: recalled.reason, type: "memory_recall_skipped" });
+      if (recalled.kind !== "recalled") return messages;
       return [
         {
           content: [
             "<memory>",
             "Long-term memory from sepiace, recalled for this request. The memory tool can remember, recall, and forget.",
-            recalled,
+            recalled.text,
             "</memory>",
           ].join("\n"),
           customType: MEMORY_RECALL_MESSAGE_TYPE,
