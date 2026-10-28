@@ -42,7 +42,7 @@ vp install
 ./scripts/msa-dev.sh
 ```
 
-The checkout requires Node.js 22.19 or newer. State lives in `~/.msa/agent`, next to `settings.json`, `auth.json`, and sessions.
+The checkout runs on the Node.js version in `.node-version`; `vp` and version managers that read the file pick it up, and the tests fail on any other version. State lives in `~/.msa/agent`, next to `settings.json`, `auth.json`, and sessions.
 
 Run `/login` inside msa to connect a subscription or API key, then give msa a task.
 

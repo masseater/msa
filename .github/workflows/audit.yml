@@ -23,12 +23,14 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             .github/scripts/audit-issues.sh
+            .node-version
             package.json
             pnpm-lock.yaml
             pnpm-workspace.yaml
           sparse-checkout-cone-mode: false
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
+          node-version-file: .node-version
           run-install: false
       - run: .github/scripts/audit-issues.sh
         env:
@@ -46,12 +48,14 @@ jobs:
           sparse-checkout: |
             .github/scripts/release-age-expired.sh
             .github/scripts/release-age-issues.sh
+            .node-version
             package.json
             pnpm-lock.yaml
             pnpm-workspace.yaml
           sparse-checkout-cone-mode: false
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
+          node-version-file: .node-version
           run-install: false
       - run: .github/scripts/release-age-issues.sh
         env:
