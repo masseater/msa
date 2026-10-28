@@ -24,7 +24,7 @@ function* ensureSessionCwd(
   const issue = yield* awaited(getMissingSessionCwdIssue(sessionManager, cwd));
   if (issue === undefined) return sessionManager;
   if (appMode !== "interactive") {
-    writeError(chalk.red(new MissingSessionCwdError(issue).message));
+    writeError(chalk.red(MissingSessionCwdError.create(issue).message));
     process.exit(1);
   }
   const selectedCwd = yield* awaited(

@@ -10,7 +10,7 @@ import WorkerUnavailable from "./worker-unavailable.ts";
 const { startUnrefTimer } = unrefTimer;
 
 const unavailable = (cause: unknown): WorkerUnavailable =>
-  new WorkerUnavailable({ cause, message: "The Photon image worker cannot start" });
+  WorkerUnavailable.make({ cause, message: "The Photon image worker cannot start" });
 
 const startWorker = (wasm: Uint8Array): Worker => {
   const file = import.meta.url.endsWith(".ts") ? "./node-worker.ts" : "./node-worker.js";

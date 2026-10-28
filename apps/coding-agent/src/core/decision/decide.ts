@@ -32,11 +32,11 @@ const classifyPending = (host: decideTypes.DecisionHost) =>
   Effect.gen(function* () {
     const { model, context } = yield* PendingClassification;
     const result = yield* Effect.tryPromise({
-      catch: (error) => new Undecided({ reason: errorText(error) }),
+      catch: (error) => Undecided.make({ reason: errorText(error) }),
       try: (signal) => host.classify(model, context, signal),
     });
     if (result.stopReason !== "stop")
-      return yield* new Undecided({ reason: result.errorMessage ?? result.stopReason });
+      return yield* Undecided.make({ reason: result.errorMessage ?? result.stopReason });
     host.recordUsage(result);
     return result.answers;
   }).pipe(
@@ -44,7 +44,7 @@ const classifyPending = (host: decideTypes.DecisionHost) =>
       duration: DECISION_TIMEOUT,
       orElse: () =>
         Effect.fail(
-          new Undecided({ reason: `no answer within ${Duration.format(DECISION_TIMEOUT)}` }),
+          Undecided.make({ reason: `no answer within ${Duration.format(DECISION_TIMEOUT)}` }),
         ),
     }),
   );
@@ -99,9 +99,10 @@ const thresholdedAnswers = Effect.fn("thresholdedAnswers")(function* (
   answers: Readonly<Record<string, aiTypes.ClassifierAnswer>>,
 ) {
   const decided: Array<[string, decideTypes.DecisionAnswer]> = [];
+  const answered = new Map(Object.entries(answers));
   for (const [id, question] of Object.entries(request.questions)) {
-    const answer = answers[id];
-    if (answer === undefined) return yield* new Undecided({ reason: `no answer for ${id}` });
+    const answer = answered.get(id);
+    if (answer === undefined) return yield* Undecided.make({ reason: `no answer for ${id}` });
     const threshold = host.threshold(`${request.name}.${id}`) ?? question.threshold;
     decided.push([id, applyThreshold(answer, threshold)]);
   }
@@ -114,11 +115,11 @@ const decideWith = Effect.fn("decide")(function* (
   request: decideTypes.DecideRequest,
 ) {
   const resolved = host.model();
-  if ("unavailable" in resolved) return yield* new Undecided({ reason: resolved.unavailable });
+  if ("unavailable" in resolved) return yield* Undecided.make({ reason: resolved.unavailable });
   const { model } = resolved;
   const context = { questions: classifierQuestions(request.questions), state: request.state };
   const key = yield* encodeKey([model.provider, model.id, context.state, context.questions]).pipe(
-    Effect.mapError((error) => new Undecided({ reason: error.message })),
+    Effect.mapError((error) => Undecided.make({ reason: error.message })),
   );
   const answers = yield* Cache.get(cache, key).pipe(
     Effect.provideService(PendingClassification, { context, model }),
@@ -141,7 +142,9 @@ const makeDecide = (host: decideTypes.DecisionHost) =>
     return Decide.of({
       decide: (request) =>
         decideWith(host, cache, request).pipe(
-          Effect.catchDefect((defect) => Effect.fail(new Undecided({ reason: errorText(defect) }))),
+          Effect.catchDefect((defect) =>
+            Effect.fail(Undecided.make({ reason: errorText(defect) })),
+          ),
           Effect.catchTag("Undecided", ({ reason }) =>
             Effect.sync((): decideTypes.Decision => {
               host.recordUndecided(request.name, reason);

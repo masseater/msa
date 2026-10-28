@@ -8,11 +8,7 @@ const { makeDirectory, makeTempDir, removeDir } = testing;
 const { closeAgentSession } = closeAgentSessionModule;
 
 const createTempDir = (): Promise<string> =>
-  Effect.runPromise(
-    Effect.flatMap(makeTempDir("msa-suite-"), (tempDir) =>
-      Effect.as(makeDirectory(tempDir), tempDir),
-    ),
-  );
+  Effect.runPromise(Effect.tap(makeTempDir("msa-suite-"), (tempDir) => makeDirectory(tempDir)));
 
 const closeSession = (input: {
   fauxProvider: { unregister: () => void };

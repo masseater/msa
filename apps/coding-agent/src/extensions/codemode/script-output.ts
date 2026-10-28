@@ -112,12 +112,12 @@ function spillOutput(text: string): Promise<{ path: string } | { error: string }
   );
 }
 
-const IMAGE_EXTENSIONS: Record<string, string> = {
-  "image/gif": ".gif",
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-};
+const IMAGE_EXTENSIONS: ReadonlyMap<string, string> = new Map([
+  ["image/gif", ".gif"],
+  ["image/jpeg", ".jpg"],
+  ["image/png", ".png"],
+  ["image/webp", ".webp"],
+]);
 
 function saveImages(
   items: (aiTypes.TextContent | aiTypes.ImageContent)[],
@@ -130,7 +130,7 @@ function saveImages(
           awaiting(function* () {
             const bytes = Buffer.from(data, "base64");
             const kind = `${mimeType}, ${formatSize(bytes.length)}`;
-            const extension = IMAGE_EXTENSIONS[mimeType];
+            const extension = IMAGE_EXTENSIONS.get(mimeType);
             if (extension === undefined || extension === "")
               throw new Error(`No file extension for image type ${mimeType}`);
 

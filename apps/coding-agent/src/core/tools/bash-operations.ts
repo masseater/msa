@@ -26,12 +26,12 @@ const validateTimeout = (timeout: number | undefined) => {
   if (timeout === undefined) return Effect.void;
   if (!Number.isFinite(timeout) || timeout <= 0) {
     return Effect.fail(
-      new ToolFailure({ message: "Invalid timeout: must be a finite number of seconds" }),
+      ToolFailure.make({ message: "Invalid timeout: must be a finite number of seconds" }),
     );
   }
   return timeout * 1000 > MAX_TIMEOUT_MS
     ? Effect.fail(
-        new ToolFailure({ message: `Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds` }),
+        ToolFailure.make({ message: `Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds` }),
       )
     : Effect.void;
 };
@@ -109,8 +109,8 @@ const superviseChild = Effect.fn("superviseChild")(function* (
     );
   }
   const exitCode = yield* fromPromise(() => waitForChildProcess(child));
-  if (signal?.aborted === true) return yield* new ToolFailure({ message: "aborted" });
-  if (timedOut) return yield* new ToolFailure({ message: `timeout:${timeout}` });
+  if (signal?.aborted === true) return yield* ToolFailure.make({ message: "aborted" });
+  if (timedOut) return yield* ToolFailure.make({ message: `timeout:${timeout}` });
   return { exitCode: exitCodeOf(exitCode, child.signalCode) };
 });
 
@@ -122,14 +122,13 @@ const runShell = Effect.fn("runShell")(function* (
   options: bashOperationsTypes.ExecuteOptions,
 ) {
   yield* validateTimeout(options.timeout);
-  if (options.signal?.aborted === true) return yield* new ToolFailure({ message: "aborted" });
+  if (options.signal?.aborted === true) return yield* ToolFailure.make({ message: "aborted" });
   const shellConfig = yield* Effect.sync(resolveShellConfig);
   yield* FileSystem.FileSystem.use((fs) => fs.access(cwd)).pipe(
-    Effect.mapError(
-      () =>
-        new ToolFailure({
-          message: `Working directory does not exist: ${cwd}\nCannot execute ${shellName} commands.`,
-        }),
+    Effect.mapError(() =>
+      ToolFailure.make({
+        message: `Working directory does not exist: ${cwd}\nCannot execute ${shellName} commands.`,
+      }),
     ),
   );
   return yield* Effect.scoped(

@@ -1,4 +1,4 @@
-import { Cause, Effect, Fiber, Stream } from "effect";
+import { Cause, Effect, Fiber, Schema, Stream } from "effect";
 
 import openaiCodexError from "./openai-codex-error.ts";
 import type openaiCodexErrorTypes from "./openai-codex-error.types.ts";
@@ -75,7 +75,7 @@ function accept(state: InboxState, text: string | null): void {
 }
 
 const asProtocolError = (cause: unknown): openaiCodexErrorTypes.CodexStreamError =>
-  cause instanceof CodexStreamError
+  Schema.is(CodexStreamError)(cause)
     ? cause
     : codexProtocolError({ cause, payload: null, source: "WebSocket" });
 

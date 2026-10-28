@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Effect, type Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import mcp from "../src/index.ts";
@@ -60,7 +60,7 @@ class TestOAuthProvider implements oauthTypes.OAuthClientProvider {
 
   codeVerifier(): string {
     if (this.verifier === undefined || this.verifier === "")
-      throw new MissingVerifierError({ message: "Missing code verifier" });
+      throw MissingVerifierError.make({ message: "Missing code verifier" });
     return this.verifier;
   }
 
@@ -102,7 +102,7 @@ const authorizationServerMetadata = (origin: string) => ({
 });
 
 const originalError = (error: unknown): unknown =>
-  error instanceof McpForeignError ? error.cause : error;
+  Schema.is(McpForeignError)(error) ? error.cause : error;
 
 const oauthSupport = {
   TestOAuthProvider,

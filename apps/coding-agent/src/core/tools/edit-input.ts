@@ -69,7 +69,7 @@ function prepareEditArguments(input: unknown): editInputTypes.EditToolInput {
 const validateEditInput = (input: editInputTypes.EditToolInput) =>
   !Array.isArray(input.edits) || input.edits.length === 0
     ? Effect.fail(
-        new ToolFailure({
+        ToolFailure.make({
           message: "Edit tool input is invalid. edits must contain at least one replacement.",
         }),
       )

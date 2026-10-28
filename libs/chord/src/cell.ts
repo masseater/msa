@@ -14,7 +14,7 @@ const isSource = (value: unknown): value is Cell<unknown> | cellDerivedTypes.Der
   value instanceof Source;
 
 const notReady = (what: string): errorsTypes.ChordError =>
-  new ChordError("not_ready", `${what} is not ready`);
+  ChordError.create("not_ready", `${what} is not ready`);
 
 const cell = {
   Cell,

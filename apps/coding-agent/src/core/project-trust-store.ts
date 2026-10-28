@@ -19,14 +19,14 @@ const { awaited, awaiting } = awaitingModule;
 
 const LOCK_RETRIES = { factor: 1, maxTimeout: 20, minTimeout: 20, retries: 9 };
 
-type TrustFile = Record<string, boolean | null | undefined>;
+type TrustFile = Map<string, boolean | null>;
 function nearestTrustEntry(
   data: TrustFile,
   start: string,
 ): trustManagerTypes.ProjectTrustStoreEntry | null {
   let currentDir = start;
   while (true) {
-    const value = data[currentDir];
+    const value = data.get(currentDir);
     if (value === true || value === false) {
       return { decision: value, path: currentDir };
     }
@@ -51,30 +51,24 @@ function parseTrustFile(path: string, content: string): TrustFile {
     throw new Error(`Invalid trust store ${path}: expected an object`);
   }
 
-  const data: TrustFile = {};
+  const data: TrustFile = new Map();
   for (const [key, value] of Object.entries(parsed)) {
     if (value !== true && value !== false && value !== null) {
       throw new Error(
         `Invalid trust store ${path}: value for ${JSON.stringify(key)} must be true, false, or null`,
       );
     }
-    data[key] = value;
+    data.set(key, value);
   }
   return data;
 }
 function readTrustFile(path: string): Promise<TrustFile> {
   return exists(path).then((found) =>
-    found ? readText(path).then((content) => parseTrustFile(path, content)) : {},
+    found ? readText(path).then((content) => parseTrustFile(path, content)) : new Map(),
   );
 }
 function writeTrustFile(path: string, data: TrustFile): Promise<void> {
-  const sorted: TrustFile = {};
-  for (const key of Object.keys(data).sort()) {
-    const value = data[key];
-    if (value === true || value === false || value === null) {
-      sorted[key] = value;
-    }
-  }
+  const sorted = Object.fromEntries([...data].sort(([left], [right]) => (left < right ? -1 : 1)));
   return makeDirectory({ path: dirname(path) }).then(() =>
     writeFile({ data: `${JSON.stringify(sorted, null, 2)}\n`, path }),
   );
@@ -131,9 +125,9 @@ export default class ProjectTrustStore {
         for (const [index, { decision }] of decisions.entries()) {
           const key = keys[index]!;
           if (decision === null) {
-            delete data[key];
+            data.delete(key);
           } else {
-            data[key] = decision;
+            data.set(key, decision);
           }
         }
         return writeTrustFile(this.trustPath, data);

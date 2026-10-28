@@ -34,14 +34,14 @@ function findPodman(path: string | undefined): Promise<string | undefined> {
 }
 function podman(binary: string, args: readonly string[]): Effect.Effect<string, PodmanError> {
   return Effect.tryPromise({
-    catch: (error) => new PodmanError({ message: String(error) }),
+    catch: (error) => PodmanError.make({ message: String(error) }),
     try: (signal) => execCommand(binary, [...args], process.cwd(), { signal }),
   }).pipe(
     Effect.flatMap((result) =>
       result.code === 0
         ? Effect.succeed(result.stdout)
         : Effect.fail(
-            new PodmanError({
+            PodmanError.make({
               message: `podman ${args[0]} failed: ${(result.stderr || result.stdout).trim().split("\n", 1)[0]}`,
             }),
           ),

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- A message an extension's `message_end` handler returns is a new object instead of being copied into the finalized message. The agent applies it before notifying anyone, so every `message_end` listener, `session.messages`, the saved session, and the next request get the replacement. The message object passed to `message_start` handlers and to `message_end` handlers that ran before the one that replaced it keeps its original content; read the final message from `message_end` in session events, `turn_end`, or `agent_end`. The chat in interactive mode redraws a custom message an extension replaced at `message_end` ([docs](docs/extensions.md#events-and-concurrency))
+- The error class `CredentialSynchronizationError`, whose type `index.types` exports, is a `Schema.TaggedError` class. `new` takes one `{...}` object of its fields; the old positional arguments moved to the static `create(...)`, and `make({...})` builds one from the fields. `_tag`, `message` and the fields keep their names and values
+- Constructing one of these errors checks its fields against the schema and throws when one does not match
+- Encoding one of these errors to JSON lists its keys in the schema's order and drops keys the schema does not declare
+
 ## [0.0.7] - 2026-10-28
 
 ### Added

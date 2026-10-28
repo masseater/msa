@@ -19,7 +19,7 @@ const { PROTOCOL_VERSION, isFrame } = connectionKit.wire;
 type SyncWaiter = (outcome: Effect.Effect<void>) => void;
 
 const unavailable = (message: string): chordTypes.ChordError =>
-  new ChordError("unavailable", message);
+  ChordError.create("unavailable", message);
 
 const now = (): number => Effect.runSync(Clock.currentTimeMillis);
 
@@ -144,7 +144,7 @@ export default class Connection implements remoteTypes.RemoteChannel {
 
   revoke(next: unknown): void {
     this.generation += 1;
-    const error = new ChordError("gone", "principal invalidated");
+    const error = ChordError.create("gone", "principal invalidated");
     for (const served of [...this.served.values()]) {
       if (served.kind === "relay") served.relay.close(error, { notify: true, releaseDown: true });
     }
@@ -165,7 +165,7 @@ export default class Connection implements remoteTypes.RemoteChannel {
 
   violation(reason: string): void {
     this.host.report(
-      new ChordError("invalid", `link to ${this.name ?? "peer"}: ${reason}`, {
+      ChordError.create("invalid", `link to ${this.name ?? "peer"}: ${reason}`, {
         reason: "protocol",
       }),
     );
@@ -203,13 +203,15 @@ export default class Connection implements remoteTypes.RemoteChannel {
     return Effect.suspend(() => {
       const { hold, member, args, root, signal } = request;
       const id = this.nextId();
-      if (signal.aborted) return Effect.die(new ChordError("aborted", "call aborted"));
+      if (signal.aborted) return Effect.die(ChordError.create("aborted", "call aborted"));
       let detach = (): void => {};
       return Effect.callback<unknown>((resume) => {
         const onAbort = (): void => {
           this.calls.delete(id);
           this.send({ id, t: "cancel" });
-          resume(Effect.die(new ChordError("aborted", "call aborted", { cause: signal.reason })));
+          resume(
+            Effect.die(ChordError.create("aborted", "call aborted", { cause: signal.reason })),
+          );
         };
         signal.addEventListener("abort", onAbort, { once: true });
         detach = () => signal.removeEventListener("abort", onAbort);

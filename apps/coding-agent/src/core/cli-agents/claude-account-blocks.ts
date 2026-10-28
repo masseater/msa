@@ -18,19 +18,20 @@ const DISABLED_CAUSES = new Set<claudeAccountsTypes.RunFailure["cause"]>([
   "billing_error",
 ]);
 
-type Blocks = Record<string, claudeAccountsTypes.AccountBlock>;
+type Blocks = Map<string, claudeAccountsTypes.AccountBlock>;
 
 function loadBlocks(): Promise<Blocks> {
   return readText(blocksFile()).then(
-    (raw) => JSON.parse(raw) as Blocks,
-    () => ({}),
+    (raw) =>
+      new Map(Object.entries(JSON.parse(raw) as Record<string, claudeAccountsTypes.AccountBlock>)),
+    () => new Map(),
   );
 }
 
 function saveBlocks(blocks: Blocks): Promise<void> {
   const file = blocksFile();
   return makeDirectory({ path: dirname(file) }).then(() =>
-    writeFile({ data: JSON.stringify(blocks, null, 2), path: file }),
+    writeFile({ data: JSON.stringify(Object.fromEntries(blocks), null, 2), path: file }),
   );
 }
 
@@ -39,18 +40,18 @@ function blockOf(
   now = nowMs(),
 ): Promise<claudeAccountsTypes.AccountBlock | undefined> {
   return loadBlocks().then((blocks) => {
-    const block = blocks[account.name];
+    const block = blocks.get(account.name);
     return block !== undefined && block.until > now ? block : undefined;
   });
 }
 
 function clearBlocks(): Promise<void> {
-  return saveBlocks({});
+  return saveBlocks(new Map());
 }
 
 function clearBlock(name: string): Promise<void> {
   return loadBlocks().then((blocks) => {
-    delete blocks[name];
+    blocks.delete(name);
     return saveBlocks(blocks);
   });
 }
@@ -76,11 +77,11 @@ function blockIfUnusable(
   if (until === undefined) return Promise.resolve(false);
   return loadBlocks()
     .then((blocks) => {
-      blocks[account.name] = {
+      blocks.set(account.name, {
         reason: failure.error.split("\n")[0]!.slice(0, 200),
         until,
         ...(failure.cause === "usage_limit" ? { usageLimit: true } : {}),
-      };
+      });
       return saveBlocks(blocks);
     })
     .then(() => true);

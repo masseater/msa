@@ -55,7 +55,9 @@ export default class FrameDispatch {
         this.#inbound.call(frame);
         return;
       case "cancel":
-        connection.incoming.get(frame.id)?.abort(new ChordError("aborted", "cancelled by caller"));
+        connection.incoming
+          .get(frame.id)
+          ?.abort(ChordError.create("aborted", "cancelled by caller"));
         return;
       default:
         this.#state(frame);

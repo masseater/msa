@@ -1,11 +1,12 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class McpAbortError extends Data.TaggedError("McpAbortError")<{
-  readonly message: string;
-}> {
+export default class McpAbortError extends Schema.TaggedError<
+  McpAbortError,
+  { readonly brand: unique symbol }
+>()("McpAbortError", { message: Schema.String }) {
   override readonly name = "AbortError";
 
-  constructor(message = "MCP request aborted") {
-    super({ message });
+  static create(message = "MCP request aborted"): McpAbortError {
+    return McpAbortError.make({ message });
   }
 }

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import ExecutionError from "../execution-error.ts";
 import resultModule from "../result.ts";
@@ -58,7 +58,7 @@ export default class ShellRun {
   #failCallback(error: unknown): void {
     if (this.#callbackError !== undefined) return;
     const cause = toError(error);
-    this.#callbackError = new ExecutionError("callback_error", cause.message, cause);
+    this.#callbackError = ExecutionError.create("callback_error", cause.message, cause);
     this.#abort();
   }
 
@@ -114,7 +114,7 @@ export default class ShellRun {
       return child;
     } catch (error) {
       const cause = toError(error);
-      return new ExecutionError("spawn_error", cause.message, cause);
+      return ExecutionError.create("spawn_error", cause.message, cause);
     }
   }
 
@@ -144,8 +144,8 @@ export default class ShellRun {
   }
 
   #interruption(): nodeShellRunTypes.ExecutionError | undefined {
-    if (this.#timedOut) return new ExecutionError("timeout", `timeout:${this.#request.timeout}`);
-    return this.#signal?.aborted === true ? new ExecutionError("aborted", "aborted") : undefined;
+    if (this.#timedOut) return ExecutionError.create("timeout", `timeout:${this.#request.timeout}`);
+    return this.#signal?.aborted === true ? ExecutionError.create("aborted", "aborted") : undefined;
   }
 
   #complete(exit: nodeShellRunTypes.ChildExit): Effect.Effect<ExecResult> {
@@ -169,13 +169,13 @@ export default class ShellRun {
   run(): Effect.Effect<ExecResult> {
     return Effect.gen({ self: this }, function* () {
       const child = this.#spawn();
-      if (child instanceof ExecutionError) return this.#settle(err(child));
+      if (Schema.is(ExecutionError)(child)) return this.#settle(err(child));
       this.#watch(child);
       return yield* waitForChildProcess(child, () => this.#spill.draining).pipe(
         Effect.matchEffect({
           onFailure: (error) =>
             Effect.succeed(
-              this.#settle(err(new ExecutionError("spawn_error", error.message, error))),
+              this.#settle(err(ExecutionError.create("spawn_error", error.message, error))),
             ),
           onSuccess: (exit) => this.#complete(exit),
         }),

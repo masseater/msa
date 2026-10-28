@@ -1,7 +1,8 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-class MissingVerifierError extends Data.TaggedError("MissingVerifierError")<{
-  readonly message: string;
-}> {}
+class MissingVerifierError extends Schema.TaggedError<
+  MissingVerifierError,
+  { readonly brand: unique symbol }
+>()("MissingVerifierError", { message: Schema.String }) {}
 
 export default MissingVerifierError;

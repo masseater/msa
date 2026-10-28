@@ -74,40 +74,30 @@ function migrateKeybindingsConfig(rawConfig: Record<string, unknown>): {
   config: Record<string, unknown>;
   migrated: boolean;
 } {
-  const config: Record<string, unknown> = {};
+  const raw = new Map(Object.entries(rawConfig));
+  const config = new Map<string, unknown>();
   let migrated = false;
 
-  for (const [key, value] of Object.entries(rawConfig)) {
+  for (const [key, value] of raw) {
     const nextKey = isLegacyKeybindingName(key) ? KEYBINDING_NAME_MIGRATIONS[key] : key;
     if (nextKey !== key) {
       migrated = true;
     }
-    if (key !== nextKey && Object.hasOwn(rawConfig, nextKey)) {
+    if (key !== nextKey && raw.has(nextKey)) {
       migrated = true;
       continue;
     }
-    config[nextKey] = value;
+    config.set(nextKey, value);
   }
 
   return { config: orderKeybindingsConfig(config), migrated };
 }
 
-function orderKeybindingsConfig(config: Record<string, unknown>): Record<string, unknown> {
-  const ordered: Record<string, unknown> = {};
-  for (const keybinding of Object.keys(KEYBINDINGS)) {
-    if (Object.hasOwn(config, keybinding)) {
-      ordered[keybinding] = config[keybinding];
-    }
-  }
-
-  const extras = Object.keys(config)
-    .filter((key) => !Object.hasOwn(ordered, key))
-    .sort();
-  for (const key of extras) {
-    ordered[key] = config[key];
-  }
-
-  return ordered;
+function orderKeybindingsConfig(config: ReadonlyMap<string, unknown>): Record<string, unknown> {
+  const known = Object.keys(KEYBINDINGS).filter((keybinding) => config.has(keybinding));
+  const knownSet = new Set(known);
+  const extras = [...config.keys()].filter((key) => !knownSet.has(key)).sort();
+  return Object.fromEntries([...known, ...extras].map((key) => [key, config.get(key)]));
 }
 
 const keybindingMigrations = {

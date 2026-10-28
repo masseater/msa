@@ -33,7 +33,7 @@ const unrefAndClearedTimersAreNotHolding = Effect.gen(function* () {
 
 const timersArmedElsewhereMeanwhileAreNotCounted = Effect.gen(function* () {
   const elsewhereArmed = Promise.withResolvers<void>();
-  const elsewhere = yield* Effect.sleep(0).pipe(
+  const elsewhere = yield* Effect.yieldNow.pipe(
     Effect.andThen(Effect.sync(() => elsewhereArmed.resolve())),
     Effect.andThen(Effect.sleep("1 minute")),
     Effect.forkDetach,

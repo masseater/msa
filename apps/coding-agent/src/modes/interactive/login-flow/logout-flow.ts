@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import CredentialSynchronizationError from "../../../core/credential-synchronization-error.ts";
@@ -120,7 +120,7 @@ export default class LogoutFlow {
       );
     } catch (error: unknown) {
       host.showError(
-        error instanceof CredentialSynchronizationError
+        Schema.is(CredentialSynchronizationError)(error)
           ? `Credentials removed for ${providerOption.name}, but local model state could not be synchronized: ${toErrorMessage(error)}`
           : `Logout failed: ${toErrorMessage(error)}`,
       );

@@ -168,7 +168,7 @@ const missingFileContext = () => {
     renderCurrentSessionState: vi.fn(),
     runtimeHost: {
       importFromJsonl: vi.fn(() =>
-        Promise.reject(new SessionImportFileNotFoundError("/tmp/missing-session.jsonl")),
+        Promise.reject(SessionImportFileNotFoundError.create("/tmp/missing-session.jsonl")),
       ),
     },
     showError,

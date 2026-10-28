@@ -64,7 +64,7 @@ export default class McpSessionEvents {
       return;
     }
 
-    const runtime = Effect.runPromise(Effect.sleep(0)).then(() => loadMcpRuntime());
+    const runtime = Effect.runPromise(Effect.yieldNow).then(() => loadMcpRuntime());
     this.host.state.pending = Promise.all(
       enabled.map((server) => this.host.connections.startConnection(server, runtime)),
     )

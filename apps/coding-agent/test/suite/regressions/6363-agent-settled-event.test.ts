@@ -171,7 +171,7 @@ const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
     commandFinished = true;
     return undefined;
   });
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(commandFinished).toBe(false);
 
   released.release();

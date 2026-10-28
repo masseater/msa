@@ -142,6 +142,7 @@ export default class AgentSession {
 
   private installAgentHooks(): void {
     this.tools.calls.installAgentToolHooks();
+    this.extensions.events.installMessageFinalizer();
     this.run.projection.installAgentNextTurnRefresh();
     this.run.projection.installAgentRequestProjection();
     this.run.boundary.installAgentBoundaryHooks();

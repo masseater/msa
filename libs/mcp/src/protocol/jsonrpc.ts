@@ -56,7 +56,7 @@ function isJsonRpcResponse(message: unknown): message is jsonrpcTypes.JsonRpcRes
 function parseJsonRpcMessage(value: unknown): jsonrpcTypes.JsonRpcMessage {
   if (isJsonRpcRequest(value) || isJsonRpcNotification(value) || isJsonRpcResponse(value))
     return value;
-  throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid JSON-RPC message");
+  throw McpError.create(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid JSON-RPC message");
 }
 
 const jsonrpcModule = {

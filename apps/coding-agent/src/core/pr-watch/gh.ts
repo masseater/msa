@@ -64,24 +64,24 @@ function ghErrorFrom(result: Pick<execTypes.ExecResult, "stdout" | "stderr">): P
   const detail = firstLine(result.stderr) || firstLine(result.stdout);
   switch (kind) {
     case "rate-limit":
-      return new PrWatchGhError({
+      return PrWatchGhError.make({
         kind,
         message: `gh hit the GitHub rate limit${detail === "" ? "" : `: ${detail}`}`,
       });
     case "auth":
-      return new PrWatchGhError({
+      return PrWatchGhError.make({
         kind,
         message: `gh is not authenticated; run gh auth login${detail === "" ? "" : ` (${detail})`}`,
       });
     case "not-found":
-      return new PrWatchGhError({
+      return PrWatchGhError.make({
         kind,
         message: `gh could not find this pull request${detail === "" ? "" : `: ${detail}`}`,
       });
     case "missing":
-      return new PrWatchGhError({ kind, message: "gh is not on PATH" });
+      return PrWatchGhError.make({ kind, message: "gh is not on PATH" });
     case "other":
-      return new PrWatchGhError({
+      return PrWatchGhError.make({
         kind,
         message: `gh pr view failed${detail === "" ? "" : `: ${detail}`}`,
       });
@@ -95,10 +95,10 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
 
   const exec = (args: string[]): Effect.Effect<execTypes.ExecResult, PrWatchGhError> => {
     if (find("gh") === null) {
-      return Effect.fail(new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" }));
+      return Effect.fail(PrWatchGhError.make({ kind: "missing", message: "gh is not on PATH" }));
     }
     return Effect.tryPromise({
-      catch: (cause) => new PrWatchGhError({ kind: "other", message: toErrorMessage(cause) }),
+      catch: (cause) => PrWatchGhError.make({ kind: "other", message: toErrorMessage(cause) }),
       try: () => run(args),
     }).pipe(
       Effect.filterOrFail(
@@ -123,7 +123,7 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
           const snapshot = parsePrView(result.stdout);
           if (snapshot === undefined) {
             return Effect.fail(
-              new PrWatchGhError({
+              PrWatchGhError.make({
                 kind: "other",
                 message: "gh pr view printed JSON this version cannot read",
               }),
@@ -145,7 +145,7 @@ export default gh;
 
 function missingBehindByCount(): Effect.Effect<number, PrWatchGhError, never> {
   return Effect.fail(
-    new PrWatchGhError({
+    PrWatchGhError.make({
       kind: "other",
       message: "gh api compare printed no behind_by count",
     }),

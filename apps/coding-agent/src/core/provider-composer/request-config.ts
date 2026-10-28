@@ -27,7 +27,9 @@ function rawModelHeaders(
     (entry) => (entry.type ?? "chat") === (model.type ?? "chat") && entry.id === model.id,
   );
   const headers = {
-    ...(isModelType(model, "chat") ? config?.modelOverrides?.[model.id]?.headers : undefined),
+    ...(isModelType(model, "chat")
+      ? new Map(Object.entries(config?.modelOverrides ?? {})).get(model.id)?.headers
+      : undefined),
     ...chatDefinition?.headers,
     ...extensionModel?.headers,
   };
@@ -89,15 +91,15 @@ function mergeHeaders(
   override: aiTypes.ProviderHeaders | undefined,
 ): aiTypes.ProviderHeaders | undefined {
   if (base === undefined && override === undefined) return undefined;
-  const merged = { ...base };
+  const merged = new Map(Object.entries(base ?? {}));
   for (const [name, value] of Object.entries(override ?? {})) {
     const lowerName = name.toLowerCase();
-    for (const existingName of Object.keys(merged)) {
-      if (existingName.toLowerCase() === lowerName) delete merged[existingName];
+    for (const existingName of [...merged.keys()]) {
+      if (existingName.toLowerCase() === lowerName) merged.delete(existingName);
     }
-    merged[name] = value;
+    merged.set(name, value);
   }
-  return merged;
+  return Object.fromEntries(merged);
 }
 
 const requestConfig = {

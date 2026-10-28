@@ -36,7 +36,7 @@ function prepareRequest<
     awaiting(function* () {
       const provider = host.models.getProvider(model.provider);
       if (provider === undefined)
-        throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
+        throw ModelsError.create("provider", `Unknown provider: ${model.provider}`);
       const resolution = yield* awaited(
         host.getAuth(model, {
           apiKey: options?.apiKey,
@@ -45,7 +45,7 @@ function prepareRequest<
         }),
       );
       if (resolution === undefined)
-        throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
+        throw ModelsError.create("auth", `Provider is not configured: ${model.provider}`);
       const { transformHeaders, ...rawProviderOptions } = options ?? {};
       const providerOptions = rawProviderOptions as Prepared<TModel, TOptions>["options"];
       let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);

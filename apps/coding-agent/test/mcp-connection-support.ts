@@ -70,7 +70,7 @@ const createTransport = (options: mcpConnectionSupportTypes.TransportOptions = {
     const send = pair.client.send.bind(pair.client);
     pair.client.send = (message: mcpConnectionSupportTypes.JsonRpcMessage) =>
       "method" in message && message.method === "tools/call"
-        ? Promise.reject(new McpSessionExpiredError("gone"))
+        ? Promise.reject(McpSessionExpiredError.create("gone"))
         : send(message);
   }
   return pair.client;

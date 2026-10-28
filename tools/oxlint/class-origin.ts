@@ -1,4 +1,4 @@
-import type { Context, ESTree } from "vite-plus/lint/plugins";
+import type { ESTree } from "vite-plus/lint/plugins";
 
 import classRoot from "./class-root.ts";
 import type classRootTypes from "./class-root.types.ts";
@@ -128,18 +128,13 @@ const isPrefixOf = (keys: Chain["keys"], path: readonly string[]): boolean =>
   keys.length <= path.length &&
   keys.every((key, index) => key === undefined || key === path[index]);
 
-const passesReceiver = (root: Root, chain: Chain): boolean =>
-  chain.keys.length > 0 &&
-  isPrefixOf(chain.keys.slice(0, -1), root.path) &&
-  !isFactoryKey(root.base, chain.keys);
-
 const isCalled: Position = (node, parent) =>
   parent.type === "CallExpression" && parent.callee === node;
 
 const touchesPath = (walk: Walk, root: Root, chain: Chain, parent: Node): boolean =>
-  isCalled(chain.top, parent)
-    ? passesReceiver(root, chain)
-    : isPrefixOf(chain.keys, root.path) && !staysInPlace(walk, chain.top, parent);
+  !isCalled(chain.top, parent) &&
+  isPrefixOf(chain.keys, root.path) &&
+  !staysInPlace(walk, chain.top, parent);
 
 const leavesChainAlone = (walk: Walk, root: Root, chain: Chain, parent: Node): boolean =>
   WRITES[parent.type]?.(chain.top, parent) !== true && !touchesPath(walk, root, chain, parent);
@@ -163,57 +158,17 @@ const isFactoryReference = (walk: Walk, node: Node): boolean => {
   return root !== undefined && isFactoryKey(root.base, root.path) && isUntouched(walk, root);
 };
 
-const isNode = (item: unknown): item is Node =>
-  typeof item === "object" && item !== null && "type" in item;
-
-const childrenOf = (context: Context, node: Node): readonly Node[] =>
-  (context.sourceCode.visitorKeys[node.type] ?? []).flatMap((key) => {
-    const child: unknown = (node as unknown as Readonly<Record<string, unknown>>)[key];
-    return (Array.isArray(child) ? child : [child]).filter(isNode);
-  });
-
-const returnedValues = (context: Context, body: Node): readonly (Node | null)[] => {
-  if (body.type === "ReturnStatement") return [body.argument];
-  if (FUNCTIONS.has(body.type)) return [];
-  return childrenOf(context, body).flatMap((child) => returnedValues(context, child));
-};
-
-const returnsExternal = (walk: Walk, arrow: ESTree.ArrowFunctionExpression): boolean => {
-  if (arrow.body.type !== "BlockStatement") return isExternal(walk, arrow.body);
-  return returnedValues(walk.context, arrow.body).every(
-    (value) => value !== null && isExternal(walk, value),
-  );
-};
-
-const isLiteral = (node: Node): boolean =>
-  node.type === "Literal" || (node.type === "TemplateLiteral" && node.expressions.length === 0);
-
-const isExternalArgument = (walk: Walk, argument: Node): boolean => {
-  const value = unwrap(argument);
-  if (isLiteral(value)) return true;
-  return value.type === "ArrowFunctionExpression"
-    ? returnsExternal(walk, value)
-    : isExternalReference(walk, value);
-};
-
 const isTrustedCallee = (walk: Walk, callee: Node): boolean => {
   const value = unwrap(callee);
   return value.type === "CallExpression"
-    ? isExternalCall(walk, value)
+    ? isTrustedCallee(walk, value.callee)
     : isFactoryReference(walk, value);
 };
-
-function isExternalCall(walk: Walk, call: ESTree.CallExpression): boolean {
-  return (
-    isTrustedCallee(walk, call.callee) &&
-    call.arguments.every((argument) => isExternalArgument(walk, argument))
-  );
-}
 
 function isExternal(walk: Walk, node: Node): boolean {
   const value = unwrap(node);
   return value.type === "CallExpression"
-    ? isExternalCall(walk, value)
+    ? isTrustedCallee(walk, value.callee)
     : isExternalReference(walk, value);
 }
 

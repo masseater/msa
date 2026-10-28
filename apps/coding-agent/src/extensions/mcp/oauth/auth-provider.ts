@@ -46,7 +46,7 @@ export default class McpTokenRefresh implements oauthTypesNs.McpAuthProvider {
         const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
         this.options.onChallenge(challenge);
         if (challenge.error === "insufficient_scope") {
-          throw new McpOAuthAuthorizationRequiredError();
+          throw McpOAuthAuthorizationRequiredError.create();
         }
         yield* awaited(this.refresh(context.token, context.fetch, challenge));
       }, this),
@@ -99,7 +99,7 @@ export default class McpTokenRefresh implements oauthTypesNs.McpAuthProvider {
         const state = yield* awaited(store.load());
         if (state?.tokens?.access_token !== staleToken) return;
         if (state?.tokens?.refresh_token === undefined || state.tokens.refresh_token === "") {
-          throw new McpOAuthAuthorizationRequiredError();
+          throw McpOAuthAuthorizationRequiredError.create();
         }
         const settings = this.options.settings();
         const redirectUrl =
@@ -121,7 +121,7 @@ export default class McpTokenRefresh implements oauthTypesNs.McpAuthProvider {
             fetch: timedFetch(fetch),
           }).pipe(toPromise),
         );
-        if (result === "REDIRECT") throw new McpOAuthAuthorizationRequiredError();
+        if (result === "REDIRECT") throw McpOAuthAuthorizationRequiredError.create();
       }, this),
     );
   }

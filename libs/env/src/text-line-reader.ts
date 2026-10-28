@@ -31,7 +31,7 @@ export default class RemoteTextLineReader implements envTypes.TextLineReader {
     const aborted = abortResult<envTypes.TextLine | undefined>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
     if (this.#closed) {
-      return Promise.resolve(err(new FileError("invalid", "Text line reader is closed", path)));
+      return Promise.resolve(err(FileError.create("invalid", "Text line reader is closed", path)));
     }
     return Effect.runPromise(recoverFileError(this.#next(context), path));
   }

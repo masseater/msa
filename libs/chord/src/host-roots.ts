@@ -43,7 +43,7 @@ export default abstract class HostRoots extends hostRootsKit.HostBase {
         const codeVersion = this.codeVersions.get(codeVersionId);
         if (codeVersion === undefined) {
           this.#local.delete(rootId);
-          throw new ChordError(
+          throw ChordError.create(
             "superseded",
             `code version ${codeVersionId} is not retained by ${this.name}`,
           );

@@ -89,7 +89,7 @@ function parseConfigValueReference(
 }
 
 function resolveEnvConfigValue(name: string, env?: Record<string, string>): string | undefined {
-  return env?.[name] || readEnv(name) || undefined;
+  return new Map(Object.entries(env ?? {})).get(name) || readEnv(name) || undefined;
 }
 
 function getTemplateEnvVarNames(parts: resolveConfigValueInternalTypes.TemplatePart[]): string[] {

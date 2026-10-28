@@ -99,7 +99,10 @@ const readySignal = (
     void current.exited.then((exit) =>
       resume(
         Effect.fail(
-          new ChordError("unavailable", `child exited before ready (${exit.code ?? exit.signal})`),
+          ChordError.create(
+            "unavailable",
+            `child exited before ready (${exit.code ?? exit.signal})`,
+          ),
         ),
       ),
     );
@@ -108,7 +111,7 @@ const readySignal = (
       else if (message.type === "fatal")
         resume(
           Effect.fail(
-            new ChordError("unavailable", `child failed: ${message.message}`, {
+            ChordError.create("unavailable", `child failed: ${message.message}`, {
               reason: message.reason,
             }),
           ),
@@ -124,7 +127,7 @@ const awaitReady = (
   readySignal(state, current).pipe(
     Effect.timeoutOrElse({
       duration: state.options.readyTimeout ?? 30_000,
-      orElse: () => Effect.fail(new ChordError("unavailable", "child not ready in time")),
+      orElse: () => Effect.fail(ChordError.create("unavailable", "child not ready in time")),
     }),
     Effect.tapError(() =>
       Effect.promise(() => {

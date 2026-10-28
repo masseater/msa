@@ -79,7 +79,7 @@ function decide(round: Round, checked: Checked, waitingSince: number | undefined
   }
   const stop = stopText(results);
   if (stop !== undefined) {
-    threadRuns.settle(thread, new TaskStopped({ message: stop }));
+    threadRuns.settle(thread, TaskStopped.make({ message: stop }));
     return;
   }
   if (waitingForCi(results)) {

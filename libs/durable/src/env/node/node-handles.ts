@@ -82,8 +82,8 @@ const binaryOpenFlags = Effect.fnUntraced(function* ({
 
 const notRegularFile = (path: string, isDirectory: boolean): envTypes.FileError =>
   isDirectory
-    ? new FileError("is_directory", "EISDIR: illegal operation on a directory, read", path)
-    : new FileError("invalid", "Not a regular file", path);
+    ? FileError.create("is_directory", "EISDIR: illegal operation on a directory, read", path)
+    : FileError.create("invalid", "Not a regular file", path);
 
 const checkedBinaryReader = (request: nodeHandlesTypes.BinaryOpenRequest, file: FileHandle) =>
   Effect.gen(function* () {
@@ -145,7 +145,7 @@ const flushFile = (
           const stats = yield* Effect.promise(() => file.stat());
           if (stats.isDirectory()) {
             return err<void, envTypes.FileError>(
-              new FileError("is_directory", "Is a directory", request.path),
+              FileError.create("is_directory", "Is a directory", request.path),
             );
           }
           yield* Effect.promise(() => file.sync());

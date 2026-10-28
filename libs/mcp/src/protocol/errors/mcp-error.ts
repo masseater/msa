@@ -1,11 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class McpError extends Data.TaggedError("McpError")<{
-  readonly code: number;
-  readonly message: string;
-  readonly data: unknown;
-}> {
-  constructor(code: number, message: string, data?: unknown) {
-    super({ code, data, message });
+export default class McpError extends Schema.TaggedError<
+  McpError,
+  { readonly brand: unique symbol }
+>()("McpError", { code: Schema.Finite, data: Schema.Unknown, message: Schema.String }) {
+  static create(code: number, message: string, data?: unknown): McpError {
+    return McpError.make({ code, data, message });
   }
 }

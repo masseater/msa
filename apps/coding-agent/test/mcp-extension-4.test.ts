@@ -154,7 +154,7 @@ describe("MCP connections", () => {
     runTest(
       Effect.gen(function* () {
         const { connection, opened } = connect(HTTP_ENTRY, [
-          failingTransport(new McpHttpError(503, "MCP HTTP request failed with status 503")),
+          failingTransport(McpHttpError.create(503, "MCP HTTP request failed with status 503")),
           () => createTransport(),
         ]);
         yield* awaited(connection.getClient());
@@ -163,7 +163,9 @@ describe("MCP connections", () => {
         yield* awaited(connection.close());
 
         const failing = connect(HTTP_ENTRY, [
-          failingTransport(new McpHttpError(400, "MCP HTTP request failed with status 400: bad")),
+          failingTransport(
+            McpHttpError.create(400, "MCP HTTP request failed with status 400: bad"),
+          ),
         ]);
         yield* awaited(expect(failing.connection.getClient()).rejects.toThrow("status 400: bad"));
         expect(failing.connection.state).toBe("failed");

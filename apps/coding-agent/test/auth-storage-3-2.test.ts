@@ -121,7 +121,7 @@ const releasesAFileLockAcquiredConcurrentlyWith = () =>
           name: "AbortError",
         }),
       );
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
       expect(update).not.toHaveBeenCalled();
       expect(release).toHaveBeenCalledTimes(1);
     }),

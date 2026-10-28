@@ -59,7 +59,7 @@ export default class ChildReloads {
 
   #prepare(connection: connectionTypes.Connection, frame: PrepareFrame): void {
     if (this.#operation !== undefined) {
-      const error = new ChordError("unavailable", "a reload is already running", {
+      const error = ChordError.create("unavailable", "a reload is already running", {
         reason: "reload_running",
       });
       connection.send({ error: toWireError(error), reload: frame.reload, t: "vote" });
@@ -96,7 +96,7 @@ export default class ChildReloads {
     frame: PrepareFrame,
   ): Effect.Effect<void> {
     const cancelled = (): errorsTypes.ChordError =>
-      new ChordError("aborted", "reload aborted by the server", { reason: "aborted" });
+      ChordError.create("aborted", "reload aborted by the server", { reason: "aborted" });
     return Effect.gen({ self: this }, function* () {
       const reload = yield* beginReload(this.#host, {
         codeVersion: frame.codeVersion,

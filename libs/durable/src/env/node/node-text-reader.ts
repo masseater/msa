@@ -35,7 +35,7 @@ export default class NodeTextLineReader implements typesModule.TextLineReader {
     if (aborted !== undefined) return Promise.resolve(aborted);
     if (this.#closed) {
       return Promise.resolve(
-        err(new FileError("invalid", "Text line reader is closed", this.#path)),
+        err(FileError.create("invalid", "Text line reader is closed", this.#path)),
       );
     }
     return Effect.runPromise(recoverFileError(this.#nextLine(context), this.#path));

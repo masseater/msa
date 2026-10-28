@@ -12,7 +12,7 @@ const { migrateKeybindingsConfig } = keybindings;
 const { basename, dirname, join, writeLog } = platform;
 const { stripBom } = text;
 
-type Migrated = { credentials: Record<string, unknown>; providers: string[] };
+type Migrated = { credentials: Map<string, unknown>; providers: string[] };
 
 const ignoreFailure = <A>(promise: Promise<A>, fallback: A): Promise<A> =>
   promise.catch(() => fallback);
@@ -24,7 +24,7 @@ function readJson(path: string): Promise<unknown> {
 function migrateOAuthFile(oauthPath: string, migrated: Migrated): Promise<void> {
   return readJson(oauthPath).then((oauth) => {
     for (const [provider, cred] of Object.entries(oauth as Record<string, unknown>)) {
-      migrated.credentials[provider] = { type: "oauth", ...(cred as object) };
+      migrated.credentials.set(provider, { type: "oauth", ...(cred as object) });
       migrated.providers.push(provider);
     }
     return rename({ from: oauthPath, to: `${oauthPath}.migrated` });
@@ -33,8 +33,8 @@ function migrateOAuthFile(oauthPath: string, migrated: Migrated): Promise<void> 
 
 function migrateApiKeys(apiKeys: Record<string, unknown>, migrated: Migrated): void {
   for (const [provider, key] of Object.entries(apiKeys)) {
-    if (migrated.credentials[provider] !== undefined || typeof key !== "string") continue;
-    migrated.credentials[provider] = { key, type: "api_key" };
+    if (migrated.credentials.get(provider) !== undefined || typeof key !== "string") continue;
+    migrated.credentials.set(provider, { key, type: "api_key" });
     migrated.providers.push(provider);
   }
 }
@@ -50,11 +50,11 @@ function migrateSettingsApiKeys(settingsPath: string, migrated: Migrated): Promi
 }
 
 function writeMigratedAuth(authPath: string, migrated: Migrated): Promise<string[]> {
-  if (Object.keys(migrated.credentials).length === 0) return Promise.resolve(migrated.providers);
+  if (migrated.credentials.size === 0) return Promise.resolve(migrated.providers);
   return makeDirectory({ path: dirname(authPath) })
     .then(() =>
       writeFile({
-        data: JSON.stringify(migrated.credentials, null, 2),
+        data: JSON.stringify(Object.fromEntries(migrated.credentials), null, 2),
         mode: 0o600,
         path: authPath,
       }),
@@ -64,7 +64,7 @@ function writeMigratedAuth(authPath: string, migrated: Migrated): Promise<string
 
 function migrateAuthToAuthJson(agentDir: string = getAgentDir()): Promise<string[]> {
   const authPath = join(agentDir, "auth.json");
-  const migrated: Migrated = { credentials: {}, providers: [] };
+  const migrated: Migrated = { credentials: new Map(), providers: [] };
   return exists(authPath).then((found) =>
     found
       ? []

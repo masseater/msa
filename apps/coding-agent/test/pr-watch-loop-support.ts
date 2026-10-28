@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Clock, Duration, Effect, Fiber } from "effect";
+import { Clock, Duration, Effect, Fiber, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
 import type ghTypes from "../src/core/pr-watch/gh.types.ts";
@@ -47,13 +47,13 @@ const scriptedGh = (
       behind: () => {
         behindCalls.count += 1;
         return behindBy === undefined
-          ? Effect.fail(new PrWatchGhError({ kind: "other", message: "no compare" }))
+          ? Effect.fail(PrWatchGhError.make({ kind: "other", message: "no compare" }))
           : Effect.succeed(behindBy);
       },
       view: () => {
         const step = steps[Math.min(calls.count, steps.length - 1)]!;
         calls.count += 1;
-        return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+        return Schema.is(PrWatchGhError)(step) ? Effect.fail(step) : Effect.succeed(step);
       },
     },
   };

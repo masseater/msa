@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 import FileError from "../file-error.ts";
 import type fileErrorTypes from "../file-error.types.ts";
 import BudgetExceeded from "./budget-exceeded.ts";
@@ -9,9 +11,9 @@ const isDenied = (error: unknown): boolean =>
   isNodeError(error) && (error.code === "EACCES" || error.code === "EPERM");
 
 const watchFailure = (error: unknown): fileErrorTypes.FileError => {
-  if (error instanceof FileError) return error;
+  if (Schema.is(FileError)(error)) return error;
   const message = error instanceof Error ? error.message : String(error);
-  return new FileError(isDenied(error) ? "permission_denied" : "invalid", message);
+  return FileError.create(isDenied(error) ? "permission_denied" : "invalid", message);
 };
 
 const keepsWatching = (error: unknown): boolean =>

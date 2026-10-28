@@ -1,6 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class IndexLocked extends Data.TaggedError("IndexLocked")<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+export default class IndexLocked extends Schema.TaggedError<
+  IndexLocked,
+  { readonly brand: unique symbol }
+>()("IndexLocked", { cause: Schema.Unknown, message: Schema.String }) {}

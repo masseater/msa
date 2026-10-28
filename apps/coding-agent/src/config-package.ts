@@ -116,7 +116,7 @@ function resolveCodemodeWorkerSpecifierImpl(
   runtime: "bun-binary" | "bundled-node" | "unbundled",
   moduleUrl: string,
 ): string | URL | undefined {
-  if (runtime === "bun-binary") return "./src/extensions/codemode/worker.ts";
+  if (runtime === "bun-binary") return "./dist/extensions/codemode/worker.js";
   if (runtime === "bundled-node") return new URL("./codemode-worker.js", moduleUrl);
   return undefined;
 }

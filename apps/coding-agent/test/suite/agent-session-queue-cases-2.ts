@@ -64,7 +64,7 @@ const deliversExtensionOriginSteeringMessagesBefore = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
 
   extensionApi?.sendUserMessage("steer now", { deliverAs: "steer" });
   releaseToolExecution();

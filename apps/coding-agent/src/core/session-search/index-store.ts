@@ -26,7 +26,7 @@ const whileLocked = <A>(
       (failure) => isLockWait(failure.cause),
       (failure) =>
         Effect.fail(
-          new IndexLocked({
+          IndexLocked.make({
             cause: failure.cause,
             message: `The session index ${indexPath} stayed locked by another process (${failure.message}); search again once it finishes`,
           }),

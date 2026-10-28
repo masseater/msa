@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class RetryDelayExceededError extends Data.TaggedError("RetryDelayExceededError")<{
-  readonly message: string;
-}> {}
+export default class RetryDelayExceededError extends Schema.TaggedError<
+  RetryDelayExceededError,
+  { readonly brand: unique symbol }
+>()("RetryDelayExceededError", { message: Schema.String }) {}

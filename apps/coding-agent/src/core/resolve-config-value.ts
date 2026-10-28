@@ -67,14 +67,13 @@ function resolveHeaders(
   env?: Record<string, string>,
 ): Record<string, string> | undefined {
   if (headers === undefined) return undefined;
-  const resolved: Record<string, string> = {};
-  for (const [key, value] of Object.entries(headers)) {
+  const resolved = Object.entries(headers).flatMap(([key, value]) => {
     const resolvedValue = resolveConfigValue(value, env);
-    if (resolvedValue !== undefined && resolvedValue !== "") {
-      resolved[key] = resolvedValue;
-    }
-  }
-  return Object.keys(resolved).length > 0 ? resolved : undefined;
+    return resolvedValue === undefined || resolvedValue === ""
+      ? []
+      : [[key, resolvedValue] as const];
+  });
+  return resolved.length > 0 ? Object.fromEntries(resolved) : undefined;
 }
 
 function resolveHeadersOrThrow(
@@ -83,11 +82,11 @@ function resolveHeadersOrThrow(
   env?: Record<string, string>,
 ): Record<string, string> | undefined {
   if (headers === undefined) return undefined;
-  const resolved: Record<string, string> = {};
-  for (const [key, value] of Object.entries(headers)) {
-    resolved[key] = resolveConfigValueOrThrow(value, `${description} header "${key}"`, env);
-  }
-  return Object.keys(resolved).length > 0 ? resolved : undefined;
+  const resolved = Object.entries(headers).map(
+    ([key, value]) =>
+      [key, resolveConfigValueOrThrow(value, `${description} header "${key}"`, env)] as const,
+  );
+  return resolved.length > 0 ? Object.fromEntries(resolved) : undefined;
 }
 
 function clearConfigValueCache(): void {

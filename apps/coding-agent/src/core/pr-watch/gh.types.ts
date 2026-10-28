@@ -5,7 +5,7 @@ import type PrWatchGhErrorClass from "./pr-watch-gh-error.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 
 declare namespace ghTypes {
-  type PrWatchFailure = "missing" | "auth" | "not-found" | "rate-limit" | "other";
+  type PrWatchFailure = PrWatchGhErrorClass["kind"];
 
   interface PrWatchGh {
     readonly view: (

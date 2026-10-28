@@ -140,7 +140,7 @@ export default class MemoryStorage implements typesModule.Storage {
         return { commitSeq: this.state.entryCommitSeqs.get(id)!, entry: clone(entry) };
       }
       if (typeof idOrContext !== "number")
-        throw new StorageRequestError("Storage.entry() requires an entry ID");
+        throw StorageRequestError.create("Storage.entry() requires an entry ID");
       const conversationId = idFromNumber<typesModule.ConversationId>(idOrConversationId);
       const id = idFromNumber<typesModule.EntryId>(idOrContext);
       const entry = visibleEntries(this.state, conversationId, id, id).next().value;

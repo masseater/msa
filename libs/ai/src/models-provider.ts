@@ -127,7 +127,7 @@ const missingDeferred = (
   model: typesModuleModule2.Model<typesModuleModule2.Api>,
   action: string,
 ) =>
-  new ModelsError(
+  ModelsError.create(
     "provider",
     `Provider ${providerId} ${action} deferred responses for "${model.api}"`,
   );
@@ -169,7 +169,7 @@ const attachDeferred = <TApi extends typesModuleModule2.Api>(
           const count = apiFor(model)?.countTokens;
           if (count === undefined) {
             return yield* Effect.die(
-              new ModelsError(
+              ModelsError.create(
                 "provider",
                 `Provider ${provider.id} cannot count tokens for "${model.api}"`,
               ),
@@ -197,7 +197,7 @@ const dispatcher =
     const providerStreams = apiFor(model);
     if (providerStreams !== undefined) return run(providerStreams);
     return lazyStream(model, () => {
-      throw new ModelsError(
+      throw ModelsError.create(
         "stream",
         `Provider ${providerId} has no API implementation for "${model.api}"`,
       );

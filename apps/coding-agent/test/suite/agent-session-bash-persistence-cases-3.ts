@@ -42,7 +42,7 @@ const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
   };
 
   const bashPromise = harness.session.context.bash.executeBash("sleep", undefined, { operations });
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(harness.session.context.bash.isBashRunning).toBe(true);
   harness.session.context.bash.abortBash();
 

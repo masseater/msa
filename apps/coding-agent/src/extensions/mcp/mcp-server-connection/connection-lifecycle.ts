@@ -2,6 +2,7 @@ import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
 import oauthModule from "@msa/mcp/oauth";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import errors from "../../../utils/errors.ts";
@@ -25,8 +26,8 @@ export default class McpConnectionLifecycle {
 
   needsSignIn(error: unknown): boolean {
     return (
-      error instanceof McpOAuthAuthorizationRequiredError ||
-      (this.connection.auth.authProvider !== undefined && error instanceof McpAuthRequiredError)
+      Schema.is(McpOAuthAuthorizationRequiredError)(error) ||
+      (this.connection.auth.authProvider !== undefined && Schema.is(McpAuthRequiredError)(error))
     );
   }
 

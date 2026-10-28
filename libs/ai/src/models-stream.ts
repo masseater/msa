@@ -90,7 +90,7 @@ interface DeferredRequest<TOptions> {
 }
 
 const unsupportedDeferred = (model: typesModuleModule2.Model<typesModuleModule2.Api>) =>
-  new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
+  ModelsError.create("provider", `Provider ${model.provider} does not support deferred responses`);
 
 const streamDeferred = ({
   state,
@@ -174,7 +174,7 @@ const generateImages = ({
       const generate = provider.generateImages?.bind(provider);
       if (generate === undefined) {
         return yield* Effect.die(
-          new ModelsError(
+          ModelsError.create(
             "provider",
             `Provider ${model.provider} does not support image generation`,
           ),
@@ -210,7 +210,10 @@ const classify = ({
       const run = provider.classify?.bind(provider);
       if (run === undefined) {
         return yield* Effect.die(
-          new ModelsError("provider", `Provider ${model.provider} does not support classification`),
+          ModelsError.create(
+            "provider",
+            `Provider ${model.provider} does not support classification`,
+          ),
         );
       }
       const { requestModel, requestOptions } = yield* applyAuth({ model, options, state });

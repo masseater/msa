@@ -20,7 +20,7 @@ const abortedWrite = (
     Effect.flatMap((settled) => {
       const failed = settled.find((result) => result.status === "rejected");
       return failed === undefined
-        ? Effect.fail(new FileError("aborted", "The operation was aborted", write.resolved))
+        ? Effect.fail(FileError.create("aborted", "The operation was aborted", write.resolved))
         : Effect.die(failed.reason);
     }),
   );

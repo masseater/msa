@@ -1,12 +1,17 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
 import type opsTypes from "./ops.types.ts";
 
-export default class PathError extends Data.TaggedError("PathError")<{
-  readonly path: opsTypes.Path | number;
-  readonly message: string;
-}> {
-  constructor(path: opsTypes.Path | number) {
-    super({ message: `unresolvable path: ${JSON.stringify(path)}`, path });
+const Seg = Schema.Union([Schema.String, Schema.Finite]);
+
+export default class PathError extends Schema.TaggedError<
+  PathError,
+  { readonly brand: unique symbol }
+>()("PathError", {
+  message: Schema.String,
+  path: Schema.Union([Schema.Array(Seg), Schema.Finite]),
+}) {
+  static create(path: opsTypes.Path | number): PathError {
+    return PathError.make({ message: `unresolvable path: ${JSON.stringify(path)}`, path });
   }
 }

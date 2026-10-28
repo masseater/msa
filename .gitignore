@@ -48,3 +48,6 @@ plans/
 collect.sh
 libs/agent/docs/extensions/msa-server-artifact/index.md
 .alchemy
+
+lint-probe/
+apps/coding-agent/.class-seal-probe/

@@ -36,7 +36,7 @@ function linkedSignal(sources: readonly AbortSignal[]): {
 }
 
 const callAborted = (signal: AbortSignal): errorsTypes.ChordError =>
-  new ChordError("aborted", "call aborted", { cause: signal.reason });
+  ChordError.create("aborted", "call aborted", { cause: signal.reason });
 
 const abortedBy = (signal: AbortSignal): Effect.Effect<never> =>
   Effect.callback<never>((resume) => {
@@ -58,7 +58,7 @@ const readyTimeout = (ref: coreTypes.RefCore, ms: number): Effect.Effect<never> 
   Number.isFinite(ms)
     ? Effect.flatMap(unrefSleep(ms), () =>
         Effect.die(
-          new ChordError("unavailable", `${ref.address} was not ready after ${ms} ms`, {
+          ChordError.create("unavailable", `${ref.address} was not ready after ${ms} ms`, {
             reason: "ready_timeout",
           }),
         ),

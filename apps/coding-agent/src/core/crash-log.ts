@@ -210,9 +210,7 @@ function recordCrash(
 }
 
 const markNotified = (records: readonly crashLogTypes.CrashRecord[]): crashLogTypes.CrashRecord[] =>
-  records.map((record) =>
-    record.notified === true ? record : Object.assign({}, record, { notified: true }),
-  );
+  records.map((record) => (record.notified === true ? record : { ...record, notified: true }));
 
 function takeUnnotifiedCrash(
   path = crashLogPath(),

@@ -1,7 +1,7 @@
 import type chordTypes from "@msa/chord/index.types";
 import envModule from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 
 import connectionModule from "./connection.ts";
 import type connectionTypes from "./connection.types.ts";
@@ -36,27 +36,30 @@ function invalidTimeout(timeout: number | undefined): ExecResult | undefined {
   if (timeout === undefined) return undefined;
   if (!Number.isFinite(timeout) || timeout <= 0) {
     return err(
-      new ExecutionError("timeout", "Invalid timeout: must be a finite number of seconds"),
+      ExecutionError.create("timeout", "Invalid timeout: must be a finite number of seconds"),
     );
   }
   if (timeout * 1000 > MAX_TIMEOUT_MS) {
     return err(
-      new ExecutionError("timeout", `Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds`),
+      ExecutionError.create(
+        "timeout",
+        `Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds`,
+      ),
     );
   }
   return undefined;
 }
 
 function failureOf(error: unknown, timeout: number | undefined): envTypes.ExecutionError {
-  if (!(error instanceof RemoteError)) return new ExecutionError("unknown", errorMessage(error));
+  if (!Schema.is(RemoteError)(error)) return ExecutionError.create("unknown", errorMessage(error));
   const failure =
     error.code === "timeout"
-      ? new ExecutionError("timeout", `timeout:${timeout}`)
+      ? ExecutionError.create("timeout", `timeout:${timeout}`)
       : error.code === "aborted"
-        ? new ExecutionError("aborted", "aborted")
+        ? ExecutionError.create("aborted", "aborted")
         : error.code === "shell_unavailable" || error.code === "spawn_error"
-          ? new ExecutionError(error.code, error.message)
-          : new ExecutionError("unknown", error.message);
+          ? ExecutionError.create(error.code, error.message)
+          : ExecutionError.create("unknown", error.message);
   const spillPath = error.fields["spillPath"];
   if (typeof spillPath === "string") failure.spillPath = spillPath;
   return failure;
@@ -102,7 +105,7 @@ function deliverOutput(
     onOutput(text, request.context, info);
   } catch (error) {
     const cause = error instanceof Error ? error : new Error(String(error));
-    state.callbackError = new ExecutionError("callback_error", cause.message, cause);
+    state.callbackError = ExecutionError.create("callback_error", cause.message, cause);
     controller.abort();
   }
 }
@@ -165,7 +168,7 @@ function execIn(request: execTypes.ExecIn): Promise<ExecResult> {
   const { target, options, context } = request;
   const signal = context.abortSignal;
   if (signal?.aborted === true)
-    return Promise.resolve(err(new ExecutionError("aborted", "aborted")));
+    return Promise.resolve(err(ExecutionError.create("aborted", "aborted")));
   const invalid = invalidTimeout(options?.timeout);
   if (invalid !== undefined) return Promise.resolve(invalid);
   const inheritEnv = options?.inheritEnv ?? true;
@@ -176,7 +179,7 @@ function execIn(request: execTypes.ExecIn): Promise<ExecResult> {
       : run(resolveIn({ path: cwdOption, target }));
   return cwd.then(
     (resolvedCwd) => {
-      if (signal?.aborted === true) return err(new ExecutionError("aborted", "aborted"));
+      if (signal?.aborted === true) return err(ExecutionError.create("aborted", "aborted"));
       return runExec({
         command: request.command,
         connection: target.connection,
@@ -189,7 +192,7 @@ function execIn(request: execTypes.ExecIn): Promise<ExecResult> {
         shellPath: request.shellPath,
       });
     },
-    (error: unknown) => err(new ExecutionError("unknown", errorMessage(error))),
+    (error: unknown) => err(ExecutionError.create("unknown", errorMessage(error))),
   );
 }
 

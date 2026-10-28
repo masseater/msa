@@ -74,7 +74,7 @@ const readTable: {
   ): Promise<T> => {
     try {
       assertOpen(state);
-      if (state.hasTableWrite) throw new ReadAfterWrite(method);
+      if (state.hasTableWrite) throw ReadAfterWrite.create(method);
       return track(state, read());
     } catch (error) {
       return Promise.reject(error);

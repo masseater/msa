@@ -1,4 +1,4 @@
-import { Data, Effect, Stream } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import { afterEach, beforeEach, vi } from "vite-plus/test";
 
 import compatModule from "../src/compat.ts";
@@ -12,10 +12,13 @@ const { currentTimeMillis } = clock;
 
 const { envValue } = env;
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
+class PayloadCaptured extends Schema.TaggedError<
+  PayloadCaptured,
+  { readonly brand: unique symbol }
+>()("PayloadCaptured", { message: Schema.String }) {}
 
 const toCaptured = (error: unknown): PayloadCaptured =>
-  error instanceof PayloadCaptured ? error : new PayloadCaptured({ message: String(error) });
+  Schema.is(PayloadCaptured)(error) ? error : PayloadCaptured.make({ message: String(error) });
 
 const context = normalizeContext({
   messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
@@ -29,7 +32,7 @@ const capturePayload = <TPayload>(
     const captured: { value: TPayload | undefined } = { value: undefined };
     const stream = start((payload) => {
       captured.value = payload as TPayload;
-      throw new PayloadCaptured({ message: "payload captured" });
+      throw PayloadCaptured.make({ message: "payload captured" });
     });
     yield* Effect.ignore(
       Stream.fromAsyncIterable(stream, toCaptured).pipe(

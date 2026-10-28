@@ -1,11 +1,12 @@
 import type codingAgentTypes from "@msa/coding-agent/index.types";
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import ms from "ms";
 import { Type } from "typebox";
 
-class InvalidDurationError extends Data.TaggedError("InvalidDurationError")<{
-  readonly message: string;
-}> {}
+class InvalidDurationError extends Schema.TaggedError<
+  InvalidDurationError,
+  { readonly brand: unique symbol }
+>()("InvalidDurationError", { message: Schema.String }) {}
 
 export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
@@ -16,7 +17,7 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
         Effect.gen(function* () {
           const result = ms(params.duration as ms.StringValue);
           if (result === undefined) {
-            return yield* new InvalidDurationError({
+            return yield* InvalidDurationError.make({
               message: `Invalid duration: "${params.duration}"`,
             });
           }

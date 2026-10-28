@@ -5,7 +5,7 @@ import serverState from "./server-state.ts";
 const { mcpNamespace } = mcpServers;
 const { configuredExposures, hasIndirectTools, isEnabled } = serverState;
 
-const MCP_SERVERS_SECTION = "mcp_servers";
+const MCP_SERVERS_SECTION = "mcp_servers" as const;
 
 const MAX_SERVER_DESCRIPTION_CHARS = 250;
 

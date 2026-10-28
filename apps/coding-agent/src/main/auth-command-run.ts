@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { Schema } from "effect";
 
 import type argsTypes from "../cli/args.types.ts";
 import AuthCommandError from "../cli/auth-command-error.ts";
@@ -30,7 +31,7 @@ function* printCredential(
 function* runParsedAuthCommand(parsed: argsTypes.Args, command: authCommandTypes.AuthCommand) {
   try {
     if (parsed.diagnostics.length > 0) {
-      throw new AuthCommandError(
+      throw AuthCommandError.create(
         parsed.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
       );
     }
@@ -40,8 +41,9 @@ function* runParsedAuthCommand(parsed: argsTypes.Args, command: authCommandTypes
       yield* printCredential(parsed, command.kind, command.minExpiryMs);
     }
   } catch (error) {
-    const message =
-      error instanceof AuthCommandError ? error.message : "Failed to resolve credential";
+    const message = Schema.is(AuthCommandError)(error)
+      ? error.message
+      : "Failed to resolve credential";
     writeError(chalk.red(`Error: ${message}`));
     process.exitCode = command.kind === "check" ? 2 : 1;
   }

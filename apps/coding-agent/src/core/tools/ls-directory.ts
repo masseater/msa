@@ -35,7 +35,7 @@ const listEntries = Effect.fn("listEntries")(function* (
 ) {
   const names = yield* Effect.tryPromise({
     catch: (error) =>
-      new ToolFailure({ message: `Cannot read directory: ${toErrorMessage(error)}` }),
+      ToolFailure.make({ message: `Cannot read directory: ${toErrorMessage(error)}` }),
     try: () => Promise.resolve(ops.readdir(dirPath)),
   });
   const entries = [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -86,10 +86,10 @@ const runLs = Effect.fn("ls")(function* (
   effectiveLimit: number,
 ) {
   const exists = yield* fromMaybePromise(() => ops.exists(dirPath));
-  if (!exists) return yield* new ToolFailure({ message: `Path not found: ${dirPath}` });
+  if (!exists) return yield* ToolFailure.make({ message: `Path not found: ${dirPath}` });
   const stat = yield* fromMaybePromise(() => ops.stat(dirPath));
   if (!stat.isDirectory())
-    return yield* new ToolFailure({ message: `Not a directory: ${dirPath}` });
+    return yield* ToolFailure.make({ message: `Not a directory: ${dirPath}` });
   const { results, entryLimitReached } = yield* listEntries(ops, dirPath, effectiveLimit);
   return formatListing(results, entryLimitReached, effectiveLimit);
 });

@@ -40,7 +40,7 @@ const invocationOf = Effect.fnUntraced(function* (
   const [first, ...rest] = command;
   if (first === undefined) {
     return err<Invocation, nodeExecTypes.ExecutionError>(
-      new ExecutionError("spawn_error", "Empty argv: no program to run"),
+      ExecutionError.create("spawn_error", "Empty argv: no program to run"),
     );
   }
   return ok<Invocation, nodeExecTypes.ExecutionError>({
@@ -55,7 +55,7 @@ const missingWorkingDirectory = (cwd: string) =>
     Effect.as(undefined),
     Effect.catch((error) =>
       Effect.succeed(
-        new ExecutionError(
+        ExecutionError.create(
           "spawn_error",
           `Working directory does not exist: ${cwd}\nCannot execute bash commands.`,
           toError(error.cause ?? error),
@@ -80,7 +80,7 @@ const executeIn = Effect.fnUntraced(function* (
 ) {
   if (context.abortSignal?.aborted === true) {
     return err<typesModule.ShellExecResult, nodeExecTypes.ExecutionError>(
-      new ExecutionError("aborted", "aborted"),
+      ExecutionError.create("aborted", "aborted"),
     );
   }
   const timeoutMs = resolveTimeoutMs(options?.timeout);

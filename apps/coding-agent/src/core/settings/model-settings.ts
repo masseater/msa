@@ -36,7 +36,7 @@ export default class ModelSettings {
   }
 
   getDecisionThreshold(key: string): number | undefined {
-    return this.manager.settings.decision?.thresholds?.[key];
+    return new Map(Object.entries(this.manager.settings.decision?.thresholds ?? {})).get(key);
   }
 
   getOrchestratorWorkerModel(): string | undefined {
@@ -60,7 +60,9 @@ export default class ModelSettings {
   }
 
   getModelThinkingLevel(provider: string, modelId: string): agentTypes.ThinkingLevel | undefined {
-    return this.manager.settings.modelThinkingLevels?.[`${provider}/${modelId}`];
+    return new Map(Object.entries(this.manager.settings.modelThinkingLevels ?? {})).get(
+      `${provider}/${modelId}`,
+    );
   }
 
   getAllModelThinkingLevels(): Record<string, agentTypes.ThinkingLevel> {
@@ -104,20 +106,21 @@ export default class ModelSettings {
   }
 
   setModelThinkingLevel(provider: string, modelId: string, level: agentTypes.ThinkingLevel): void {
-    if (this.manager.globalSettings.modelThinkingLevels === undefined) {
-      this.manager.globalSettings.modelThinkingLevels = {};
-    }
-    this.manager.globalSettings.modelThinkingLevels[`${provider}/${modelId}`] = level;
+    this.manager.globalSettings.modelThinkingLevels = {
+      ...this.manager.globalSettings.modelThinkingLevels,
+      [`${provider}/${modelId}`]: level,
+    };
     this.manager.persistence.markModified("modelThinkingLevels");
     this.manager.persistence.save();
   }
 
   removeModelThinkingLevel(provider: string, modelId: string): void {
-    if (this.manager.globalSettings.modelThinkingLevels === undefined) return;
-    delete this.manager.globalSettings.modelThinkingLevels[`${provider}/${modelId}`];
-    if (Object.keys(this.manager.globalSettings.modelThinkingLevels).length === 0) {
-      delete this.manager.globalSettings.modelThinkingLevels;
-    }
+    const levels = this.manager.globalSettings.modelThinkingLevels;
+    if (levels === undefined) return;
+    const removed = `${provider}/${modelId}`;
+    const remaining = Object.entries(levels).filter(([key]) => key !== removed);
+    if (remaining.length === 0) delete this.manager.globalSettings.modelThinkingLevels;
+    else this.manager.globalSettings.modelThinkingLevels = Object.fromEntries(remaining);
     this.manager.persistence.markModified("modelThinkingLevels");
     this.manager.persistence.save();
   }
@@ -154,18 +157,19 @@ export default class ModelSettings {
       current: settingsSchemaTypes.Settings,
       apply: (settings: settingsSchemaTypes.Settings) => void,
     ): TChange[] => {
-      const next = structuredClone(current) as Record<string, unknown>;
-      const changes = rewrite(next as settingsSchemaTypes.Settings);
+      const next = structuredClone(current);
+      const changes = rewrite(next);
       if (changes.length === 0) return changes;
-      for (const key of new Set([...Object.keys(current), ...Object.keys(next)])) {
-        if (JSON.stringify((current as Record<string, unknown>)[key]) === JSON.stringify(next[key]))
-          continue;
+      const before = new Map(Object.entries(current));
+      const after = new Map(Object.entries(next));
+      for (const key of new Set([...before.keys(), ...after.keys()])) {
+        if (JSON.stringify(before.get(key)) === JSON.stringify(after.get(key))) continue;
         if (scope === "global")
           this.manager.persistence.markModified(key as keyof settingsSchemaTypes.Settings);
         else
           this.manager.persistence.markProjectModified(key as keyof settingsSchemaTypes.Settings);
       }
-      apply(next as settingsSchemaTypes.Settings);
+      apply(next);
       return changes;
     };
 

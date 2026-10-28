@@ -56,7 +56,7 @@ export default class RelayRef {
 
   ready(): Effect.Effect<connectionTypes.Connection> {
     return Effect.suspend(() => {
-      if (this.closed) return Effect.die(new ChordError("gone", "relayed hold closed"));
+      if (this.closed) return Effect.die(ChordError.create("gone", "relayed hold closed"));
       if (this.down !== undefined) return Effect.succeed(this.down);
       return Effect.callback<connectionTypes.Connection>((resume) => {
         this.#waiters.add(resume);

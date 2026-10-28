@@ -1,13 +1,7 @@
 import type modelsError from "./models-error.ts";
 
 declare namespace modelsErrorTypes {
-  type ModelsErrorCode =
-    | "model_source"
-    | "model_validation"
-    | "provider"
-    | "stream"
-    | "auth"
-    | "oauth";
+  type ModelsErrorCode = (typeof modelsError.ModelsError)["prototype"]["code"];
 
   interface ModelsErrorSpec {
     readonly code: ModelsErrorCode;

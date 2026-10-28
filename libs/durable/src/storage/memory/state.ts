@@ -101,7 +101,7 @@ const cursorId = <I extends typesModule.Id<string>>(
   const after = cursor?.["after"];
   if (after === undefined) return undefined;
   if (typeof after !== "number" || !Number.isSafeInteger(after))
-    throw new StorageRequestError("Invalid storage cursor");
+    throw StorageRequestError.create("Invalid storage cursor");
   return idFromNumber<I>(after);
 };
 

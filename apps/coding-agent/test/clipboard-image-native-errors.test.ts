@@ -17,7 +17,7 @@ vi.mock("@msa/tui", (importOriginal) =>
       const actual = yield* testing.awaited(importOriginal<{ default: typeof tui }>());
       return {
         ...actual,
-        default: {
+        default: Object.freeze({
           ...actual.default,
           getNativeClipboard: () => ({
             getImage() {
@@ -28,7 +28,7 @@ vi.mock("@msa/tui", (importOriginal) =>
               );
             },
           }),
-        },
+        }),
       };
     }),
   ),

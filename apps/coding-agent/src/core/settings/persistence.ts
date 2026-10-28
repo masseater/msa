@@ -232,10 +232,10 @@ export default class SettingsPersistence {
     K extends settingsManagerInternalTypes.ObjectSettingKey,
     N extends keyof NonNullable<settingsSchemaTypes.Settings[K]> & string,
   >(field: K, key: N, value: NonNullable<settingsSchemaTypes.Settings[K]>[N]): void {
-    const group: NonNullable<settingsSchemaTypes.Settings[K]> =
-      this.manager.globalSettings[field] ?? ({} as NonNullable<settingsSchemaTypes.Settings[K]>);
-    (group as Record<string, unknown>)[key] = value;
-    this.manager.globalSettings[field] = group;
+    this.manager.globalSettings[field] = {
+      ...this.manager.globalSettings[field],
+      [key]: value,
+    } as NonNullable<settingsSchemaTypes.Settings[K]>;
     this.markModified(field, key);
     this.save();
   }

@@ -93,12 +93,15 @@ release. Add a tool name to select part of the graph. For example, run
 
 - msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
 - 機能はコマンドラインやツールだけで終わらせず、人間が使う画面（TUI）も作る。状態をひと目で見られ、キー操作で覗く・指示する・止められるようにする。
-- `apps/coding-agent/src` では、同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む（`msa/no-local-class-extends`）。`tui.Container` や `Data.TaggedError` のような、別パッケージが継承して使う前提で出している基底は継承してよい。
+- `apps/coding-agent/src` では、同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む（`msa/no-local-class-extends`）。`tui.Container` や `Schema.TaggedError` のような、別パッケージが継承して使う前提で出している基底は継承してよい。
+  - 継承元は、build・vitest・開発用の起動の変換が全 class に入れる実行時の検査で確かめる。検査が通すのは、外の package の import から凍結された入れ物を辿った値と、信頼する factory（`tools/oxlint/class-factories.ts`）の返り値だけで、ローカルの関数・bind・Proxy を含むそれ以外は断る。class はモジュールの直下に書く（`msa/no-nested-class`）
+  - prototype の書き換え・文字列からのコード生成・計算したキーでのアクセスは使わない（`msa/no-prototype-write`、`tools/checks/typed-access.ts`）
 
 ## 環境変数
 
 - 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
 - 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
+- 実際の `process.env` に書く必要があるとき（子プロセスや `Bun.env` に見せる）は、`platform/env.ts` の `assignProcessEnv` だけを使う。書き込みはこの関数の 1 か所だけに置き、`msa/process-env-writer` と `tools/checks/typed-access.ts` がほかの形を断る。
 
 ## node の組み込み
 
@@ -106,6 +109,11 @@ release. Add a tool name to select part of the graph. For example, run
 - import 文だけでなく、`require`・`createRequire(...)(...)`・`Module._load`・動的 `import()`・`export ... from` による再 export・`process.getBuiltinModule`・`process.binding` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。`node:module` から来た `createRequire`・`Module` と CJS の `module`（`module.constructor`）、`process`・`globalThis` は変数・別名・分割代入・再代入を追い、読み込む先やキーを決められない書き方（文字列でない引数、計算したキー、値を外へ渡すなど）も弾く。
 - 同期の fs（`existsSync`・`readFileSync` などの `*Sync`）は `msa/no-sync-fs` で禁じている。Effect の `FileSystem` か platform の非同期 API を使う。起動前など同期でしか書けない処理は、`core/platform/node/` の名前付き関数に閉じる。
 - 規則は `tools/oxlint/` にあり、すり抜けの書き方と一覧が effecttsgo・node の fs とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。lint の抑止コメントは書けない（`no-comments` で弾く）。読み込む先が実行時に決まるファイルは、`import()` に `pathToFileURL(...)` の URL を直接渡すか、ネイティブアドオンなら `process.dlopen` で読む（`libs/tui/src/native-addon.ts`）。どちらも組み込みには届かない。
+
+## effect-tsgo の規則
+
+- effect-tsgo の規則は、`effect-rules.config.ts` の `adoptedEffectRules`（error で掛ける）か `declinedEffectRules`（掛けない）のどちらかに名前で置く。preset に載っているだけの規則は掛からない。
+- `@effect/tsgo` を上げて preset に新しい規則が増えると、`tools/checks/effect-rules.test.ts` が落ちる。採るなら違反を直して `adoptedEffectRules` に足し、採らないなら `declinedEffectRules` に足して理由（上流の既定・自動修正の有無・違反の件数）をコミットログに書く。今効いている規則を `declinedEffectRules` に移さない。
 
 ## テスト
 

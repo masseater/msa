@@ -33,7 +33,7 @@ const defaultGrepOperations: grepSupportTypes.GrepOperations = {
 const resolveRipgrep = Effect.gen(function* () {
   const rgPath = yield* fromPromise(() => ensureTool("rg"));
   if (rgPath === undefined || rgPath === "") {
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: "ripgrep (rg) is not available and could not be downloaded",
     });
   }
@@ -55,7 +55,7 @@ const searchWithRipgrep = Effect.fn("ripgrep")(function* (
   );
   if (!stoppedEarly && exitCode !== 0 && exitCode !== 1) {
     const message = stderr.trim();
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: message === "" ? `ripgrep exited with code ${exitCode}` : message,
     });
   }
@@ -69,7 +69,7 @@ const runGrep = Effect.fn("grep")(function* (
   const rgPath = yield* resolveRipgrep;
   const isDirectory = yield* fromPromise(() => ops.isDirectory(request.searchPath)).pipe(
     Effect.catchTag("ForeignError", () =>
-      Effect.fail(new ToolFailure({ message: `Path not found: ${request.searchPath}` })),
+      Effect.fail(ToolFailure.make({ message: `Path not found: ${request.searchPath}` })),
     ),
   );
   const collector = yield* searchWithRipgrep(rgPath, { ...request, isDirectory });

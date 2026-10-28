@@ -1,6 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class ForeignError extends Data.TaggedError("ForeignError")<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+export default class ForeignError extends Schema.TaggedError<
+  ForeignError,
+  { readonly brand: unique symbol }
+>()("ForeignError", { cause: Schema.Unknown, message: Schema.String }) {}

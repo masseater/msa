@@ -25,13 +25,16 @@ const resolveTimeoutMs = (
   if (timeout === undefined) return ok(undefined);
   if (!Number.isFinite(timeout) || timeout <= 0) {
     return err(
-      new ExecutionError("timeout", "Invalid timeout: must be a finite number of seconds"),
+      ExecutionError.create("timeout", "Invalid timeout: must be a finite number of seconds"),
     );
   }
   const timeoutMs = timeout * 1000;
   if (timeoutMs > MAX_TIMEOUT_MS) {
     return err(
-      new ExecutionError("timeout", `Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds`),
+      ExecutionError.create(
+        "timeout",
+        `Invalid timeout: maximum is ${MAX_TIMEOUT_SECONDS} seconds`,
+      ),
     );
   }
   return ok(timeoutMs);
@@ -88,7 +91,7 @@ const bashShellConfig = (shell: string): nodeShellTypes.ShellConfig =>
     : { args: ["-c"], shell };
 
 const missingWindowsBash = (candidates: readonly string[]): executionErrorTypes.ExecutionError =>
-  new ExecutionError(
+  ExecutionError.create(
     "shell_unavailable",
     `No bash shell found. Options:\n` +
       `  1. Install Git for Windows: https://git-scm.com/download/win\n` +
@@ -127,7 +130,7 @@ const shellConfigOf = Effect.fnUntraced(function* (customShellPath: string | und
       );
     }
     return err<nodeShellTypes.ShellConfig, executionErrorTypes.ExecutionError>(
-      new ExecutionError("shell_unavailable", `Custom shell path not found: ${customShellPath}`),
+      ExecutionError.create("shell_unavailable", `Custom shell path not found: ${customShellPath}`),
     );
   }
   if (process.platform === "win32") return yield* windowsShellConfig();

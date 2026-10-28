@@ -16,9 +16,11 @@ const mergeNested = (
   inMemory: Record<string, unknown>,
   keys: ReadonlySet<string>,
 ): Record<string, unknown> => {
-  const merged = { ...((base as Record<string, unknown> | undefined) ?? {}) };
-  for (const key of keys) merged[key] = inMemory[key];
-  return merged;
+  const values = new Map(Object.entries(inMemory));
+  return {
+    ...((base as Record<string, unknown> | undefined) ?? {}),
+    ...Object.fromEntries([...keys].map((key) => [key, values.get(key)])),
+  };
 };
 
 function mergeModifiedSettings(options: {

@@ -17,7 +17,7 @@ const usesSocketFile = (): boolean =>
   process.platform !== "win32" && process.platform !== "linux" && process.platform !== "android";
 
 const lockDirectoryError = (directory: string): errorsTypes.ChordError =>
-  new ChordError(
+  ChordError.create(
     "unavailable",
     `lock directory ${directory} must be a directory only its owner can access`,
   );
@@ -75,7 +75,7 @@ const bind = (server: Server, address: string, name: string): Effect.Effect<void
         Effect.flatMap(usesSocketFile() ? accepting(address) : Effect.succeed(true), (held) =>
           held
             ? Effect.die(
-                new ChordError("unavailable", `lock ${name} is held by another process`, {
+                ChordError.create("unavailable", `lock ${name} is held by another process`, {
                   reason: "locked",
                 }),
               )

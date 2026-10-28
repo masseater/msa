@@ -27,7 +27,7 @@ const programsEnv = Effect.fn("programsEnv")(function* (
       commands.push(command);
       if (typeof command === "string" || !installed.includes(command[0]!)) {
         return Promise.resolve(
-          err(new ExecutionError("spawn_error", `spawn ${command[0]} ENOENT`)),
+          err(ExecutionError.create("spawn_error", `spawn ${command[0]} ENOENT`)),
         );
       }
       options?.onOutput?.(output, context, { stream: "stdout" });

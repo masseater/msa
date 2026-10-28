@@ -71,7 +71,7 @@ const failSession: dualTypes.Dual2<sessionStateTypes.SessionState, unknown, void
   (state: sessionStateTypes.SessionState, error: unknown): void => {
     if (state.failure !== undefined) return;
     state.failure = { error };
-    state.failed.reject(new SessionFailed(error));
+    state.failed.reject(SessionFailed.create(error));
     Effect.runFork(
       Effect.ignoreCause(Effect.promise(() => closeSession(state, BACKGROUND_CONTEXT))),
     );

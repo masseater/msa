@@ -105,7 +105,7 @@ export default abstract class McpClientCore {
     const transport = this.transport;
     this.transport = undefined;
     for (const dispose of this.disposers.splice(0)) dispose();
-    this.markClosed(new McpConnectionClosedError());
+    this.markClosed(McpConnectionClosedError.create());
     return transport?.close() ?? Promise.resolve();
   }
 
@@ -118,8 +118,8 @@ export default abstract class McpClientCore {
     return Effect.suspend((): Effect.Effect<unknown, clientResultsTypes.McpRequestFailure> => {
       const transport = this.requireTransport(allowConnecting);
       if (transport === undefined)
-        return Effect.fail(new McpConnectionClosedError(`MCP client is ${this.state}`));
-      if (options.signal?.aborted === true) return Effect.fail(new McpAbortError());
+        return Effect.fail(McpConnectionClosedError.create(`MCP client is ${this.state}`));
+      if (options.signal?.aborted === true) return Effect.fail(McpAbortError.create());
       const id = this.nextRequestId++;
       const progressToken = options.onProgress === undefined ? undefined : id;
       const meta = params?.["_meta"];
@@ -139,7 +139,7 @@ export default abstract class McpClientCore {
         onAbort: () =>
           this.pending.cancel(
             id,
-            new McpAbortError(),
+            McpAbortError.create(),
             method !== "initialize",
             String(options.signal?.reason ?? "Aborted"),
           ),
@@ -170,7 +170,7 @@ export default abstract class McpClientCore {
       > => {
         const transport = this.requireTransport(allowConnecting);
         if (transport === undefined)
-          return Effect.fail(new McpConnectionClosedError(`MCP client is ${this.state}`));
+          return Effect.fail(McpConnectionClosedError.create(`MCP client is ${this.state}`));
         return fromPromise(() =>
           transport.send({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) }),
         );
@@ -187,7 +187,7 @@ export default abstract class McpClientCore {
       this.handleNotification(message.method, message.params);
     else
       this.emitError(
-        new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Received invalid JSON-RPC message"),
+        McpError.create(JSON_RPC_ERROR_CODES.invalidRequest, "Received invalid JSON-RPC message"),
       );
   }
 
@@ -227,7 +227,7 @@ export default abstract class McpClientCore {
     const outcome =
       "error" in message
         ? Effect.fail(
-            foreign(new McpError(message.error.code, message.error.message, message.error.data)),
+            foreign(McpError.create(message.error.code, message.error.message, message.error.data)),
           )
         : Effect.succeed(message.result);
     if (!this.pending.resolve(message.id, outcome))

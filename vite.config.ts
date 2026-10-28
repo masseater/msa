@@ -1,17 +1,20 @@
-import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
 import lintConfig from "./lint.config.ts";
 import vitestShared from "./vitest.shared.ts";
 
 const {
+  adoptedEffectRules,
   builtinModuleBases,
   effectReplaceableBuiltins,
   fsSyncFunctions,
   generated,
   lintPlugins,
+  lintProbeDir,
+  lintProbeRoot,
   loopbackTestServerMembers,
   platformOnlyImports,
+  processEnvWriter,
   restrictedImports,
   restrictedProperties,
   strictCategoryRules,
@@ -24,12 +27,10 @@ type Rules = Readonly<Record<string, "error">>;
 const asErrors = (names: readonly string[]): Rules =>
   Object.fromEntries(names.map((name) => [name, "error"] as const));
 
-const effectRuleNames = Object.values(effectPresets).flatMap((preset) =>
-  Object.keys(preset.rules ?? {}),
-);
-
-const effectRules = asErrors(effectRuleNames);
-
+const withProbes = (files: readonly string[]): string[] => [
+  ...files,
+  ...files.filter((file) => !file.startsWith("**/")).map((file) => `${lintProbeRoot}/*/${file}`),
+];
 export default defineConfig({
   fmt: {
     ignorePatterns: generated,
@@ -56,24 +57,29 @@ export default defineConfig({
     },
     overrides: [
       {
-        files: ["**/*.ts"],
+        files: withProbes(["**/*.ts"]),
         rules: {
           "import/extensions": ["error", "ignorePackages", { checkTypeImports: true, js: "never" }],
         },
       },
       {
-        files: ["apps/coding-agent/src/**"],
+        files: withProbes(["apps/coding-agent/src/**"]),
         rules: {
           "eslint/no-restricted-imports": ["error", platformOnlyImports],
           "msa/no-builtin-require": ["error", { modules: builtinModuleBases }],
           "msa/no-local-class-extends": [
             "error",
-            { builtins: builtinModuleBases, packages: workspacePackages },
+            { builtins: builtinModuleBases, packages: workspacePackages, probeRoot: lintProbeDir },
           ],
+          "msa/no-nested-class": "error",
+          "msa/no-prototype-write": "error",
         },
       },
       {
-        files: ["libs/durable/src/env/node/**", "apps/coding-agent/src/core/platform/node/**"],
+        files: withProbes([
+          "libs/durable/src/env/node/**",
+          "apps/coding-agent/src/core/platform/node/**",
+        ]),
         rules: {
           "effecttsgo/node-builtin-import": "off",
           "eslint/no-restricted-imports": ["error", restrictedImports],
@@ -82,23 +88,35 @@ export default defineConfig({
         },
       },
       {
-        files: ["tools/oxlint/**"],
+        files: withProbes([processEnvWriter]),
+        rules: { "effecttsgo/process-env": "off", "msa/process-env-writer": "error" },
+      },
+      {
+        files: ["apps/coding-agent/test/fixtures/class-seal/**"],
+        rules: {
+          "effecttsgo/error-payload-shadows-name": "off",
+          "effecttsgo/prefer-schema-tagged-error": "off",
+          "effecttsgo/schema-class-missing-brand": "off",
+        },
+      },
+      {
+        files: withProbes(["tools/oxlint/**"]),
         rules: { "msa/no-builtin-module-lookup": "off" },
       },
       {
-        files: ["lint.config.ts"],
+        files: withProbes(["lint.config.ts"]),
         rules: { "msa/no-sync-fs": "off" },
       },
       {
-        files: ["scripts/**"],
+        files: withProbes(["scripts/**"]),
         rules: { "import/max-dependencies": ["error", { ignoreTypeImports: true, max: 10 }] },
       },
       {
-        files: ["libs/*/test/**"],
+        files: withProbes(["libs/*/test/**"]),
         rules: { "import/max-dependencies": ["error", { max: 15 }] },
       },
       {
-        files: ["**/*.types.ts"],
+        files: withProbes(["**/*.types.ts"]),
         rules: { "eslint/max-lines": ["error", { max: 400 }] },
       },
     ],
@@ -126,7 +144,7 @@ export default defineConfig({
       "promise/always-return": "error",
       "vite-plus/prefer-vite-plus-imports": "error",
       ...asErrors(strictCategoryRules),
-      ...effectRules,
+      ...asErrors(adoptedEffectRules),
     },
   },
   run: {

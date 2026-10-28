@@ -2,7 +2,7 @@ import type { TSchema } from "typebox";
 
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 
-const ASK_SECTION_NAME = "ask";
+const ASK_SECTION_NAME = "ask" as const;
 
 const ASK_SECTION_TEXT =
   "This turn is an /ask: reply with an answer only. You may propose work, but do not start it. " +

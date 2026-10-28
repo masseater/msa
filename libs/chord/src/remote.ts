@@ -137,9 +137,9 @@ export default class RemoteBinding {
   read(name: string): unknown {
     if (this.status === "ended") throw this.terminalError();
     if (!this.hydrated)
-      throw new ChordError("not_ready", `${this.key}.${name} is not hydrated yet`);
+      throw ChordError.create("not_ready", `${this.key}.${name} is not hydrated yet`);
     if (!this.inVariant(name))
-      throw new ChordError(
+      throw ChordError.create(
         "not_in_variant",
         `${this.key}: ${name} is not a state member of variant ${this.shape?.variant}`,
       );
@@ -173,7 +173,7 @@ export default class RemoteBinding {
   }
 
   terminalError(): unknown {
-    return this.error ?? new ChordError("released", `reference ${this.key} released`);
+    return this.error ?? ChordError.create("released", `reference ${this.key} released`);
   }
 
   bound(channel: remoteTypesModule.RemoteChannel, id: number): void {
@@ -255,7 +255,7 @@ export default class RemoteBinding {
     this.hold = undefined;
     if (this.status !== "ended") {
       this.status = "ended";
-      const error = new ChordError("released", `reference ${this.key} released`);
+      const error = ChordError.create("released", `reference ${this.key} released`);
       Deferred.doneUnsafe(this.#live, Effect.die(error));
       this.#settleHydration(error);
       for (const view of [...this.views]) view.end(error);

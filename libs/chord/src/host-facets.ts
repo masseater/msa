@@ -111,7 +111,7 @@ export default abstract class HostFacets extends hostFacetsKit.HostRemote {
     if (run === undefined) this.#facetRuns.delete(name);
     else this.#facetRuns.set(name, run);
     if (replaced !== run)
-      replaced?.abort(new ChordError("gone", `facet ${name} was replaced or removed`));
+      replaced?.abort(ChordError.create("gone", `facet ${name} was replaced or removed`));
   }
 
   protected endFacetRuns(): void {

@@ -25,7 +25,7 @@ export default class HostImpl extends HostLinks implements hostTypesModule.Host 
   ): Promise<reloadTypes.ReloadReport> {
     if (this.kind !== "client" && this.upstream !== undefined) {
       return Promise.reject(
-        new ChordError("unavailable", "reloads are coordinated by the server", {
+        ChordError.create("unavailable", "reloads are coordinated by the server", {
           reason: "not_coordinator",
         }),
       );
@@ -47,7 +47,7 @@ export default class HostImpl extends HostLinks implements hostTypesModule.Host 
         return disposeHoldersFirst({
           message: "host close: disposal failed",
           objects: [...this.objects.values()],
-          reason: new ChordError("gone", `host ${this.name} closed`),
+          reason: ChordError.create("gone", `host ${this.name} closed`),
         }).pipe(
           Effect.ensuring(
             Effect.sync(() => {

@@ -171,7 +171,7 @@ const admitSubmission: typesModule.Dual5<
     const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
     const busy = live.run !== undefined;
     if (busy && draft.type === "input" && draft.whenBusy === "reject")
-      return yield* Effect.die(new ConversationBusy(conversationId));
+      return yield* Effect.die(ConversationBusy.create(conversationId));
     const boundary = busy ? undefined : yield* prepareBoundary(tx, conversationId, queueModes);
     if (boundary === undefined || boundary.inbox.items.length > 0) {
       const id = yield* queueDraft(tx, conversationId, { draft, requestId }, boundary);

@@ -17,6 +17,9 @@ export default class StreamingView {
 
   streamingMessage: compatTypes.AssistantMessage | undefined = undefined;
 
+  private startedCustomMessage: Extract<agentTypes.AgentMessage, { role: "custom" }> | undefined =
+    undefined;
+
   private onAgentStart(): void {
     this.mode.view.toolExecutions.pendingTools.clear();
     if (this.mode.display.operationStatus.retryEscapeHandler === undefined) return;
@@ -71,6 +74,7 @@ export default class StreamingView {
 
   private onMessageStart(message: agentTypes.AgentMessage): void {
     if (message.role === "custom" || message.role === "user") {
+      this.startedCustomMessage = message.role === "custom" ? message : undefined;
       this.mode.view.messages.addMessageToChat(message);
       if (message.role === "user") this.mode.input.queue.updatePendingMessagesDisplay();
       this.mode.ui.requestRender();
@@ -127,6 +131,9 @@ export default class StreamingView {
 
   private onMessageEnd(message: agentTypes.AgentMessage): void {
     if (message.role === "user") return;
+    if (message.role === "custom" && this.startedCustomMessage !== undefined)
+      this.mode.view.customMessages.replaceCustomMessage(this.startedCustomMessage, message);
+    this.startedCustomMessage = undefined;
     if (this.streamingComponent !== undefined && message.role === "assistant")
       this.finishStreamingMessage(message);
     this.mode.ui.requestRender();

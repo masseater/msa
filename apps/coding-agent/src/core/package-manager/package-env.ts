@@ -10,14 +10,12 @@ const { envNames, envSnapshot, readEnv } = platformModule;
 const { readProcessEnvironFile } = processEnviron;
 
 function parseEnviron(data: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const entry of data.split("\0")) {
-    const idx = entry.indexOf("=");
-    if (idx > 0) {
-      env[entry.slice(0, idx)] = entry.slice(idx + 1);
-    }
-  }
-  return env;
+  return Object.fromEntries(
+    data.split("\0").flatMap((entry) => {
+      const idx = entry.indexOf("=");
+      return idx > 0 ? [[entry.slice(0, idx), entry.slice(idx + 1)] as const] : [];
+    }),
+  );
 }
 
 function getEnv(): NodeJS.ProcessEnv {

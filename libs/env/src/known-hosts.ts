@@ -83,7 +83,7 @@ function addAccepted(
     const known = trusted.get(type);
     if (known === key) continue;
     if (known !== undefined) {
-      throw new HostKeyChangedError(
+      throw HostKeyChangedError.create(
         `The ${type} host key of ${target.host} changed; forget the old key first`,
       );
     }

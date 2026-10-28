@@ -1,6 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class PlatformFailure extends Data.TaggedError("PlatformFailure")<{
-  readonly operation: string;
-  readonly cause: unknown;
-}> {}
+export default class PlatformFailure extends Schema.TaggedError<
+  PlatformFailure,
+  { readonly brand: unique symbol }
+>()("PlatformFailure", { cause: Schema.Unknown, operation: Schema.String }) {}

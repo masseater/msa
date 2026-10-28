@@ -21,7 +21,7 @@ declare namespace themeTypes {
 
   type TerminalTheme = "dark" | "light";
 
-  type Theme = (typeof ThemeClass)["prototype"];
+  type Theme = { [K in keyof ThemeClass]: ThemeClass[K] };
 
   type ThemeJson = themeSchemaTypes.ValidatedThemeJson;
 

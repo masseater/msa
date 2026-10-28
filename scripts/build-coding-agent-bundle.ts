@@ -1,16 +1,16 @@
-import { isBuiltin } from "node:module";
-
-import { Console, Data, Effect } from "effect";
+import { Console, Effect } from "effect";
 import { build } from "esbuild";
 import type { Metafile } from "esbuild";
 
+import codingAgentBundleChecks from "./coding-agent-bundle-checks.ts";
 import codingAgentBundleOptions from "./coding-agent-bundle-options.ts";
 import hostModule from "./host.ts";
 import type hostTypes from "./host.types.ts";
 
 const { Host, runScript } = hostModule;
-const { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions, unbannedBuildOptions } =
-  codingAgentBundleOptions;
+const { commonBuildOptions, unbannedBuildOptions } = codingAgentBundleOptions;
+const { BundleError, checkCodemodeWorker, checkImageResizeWorker, validateExternalImports } =
+  codingAgentBundleChecks;
 
 const CLI_MODE = 0o755;
 
@@ -22,8 +22,6 @@ import { createRequire, enableCompileCache } from "node:module";
 enableCompileCache();
 createRequire(import.meta.url)("./cli-runtime.js");
 `;
-
-class BundleError extends Data.TaggedError("BundleError")<{ readonly message: string }> {}
 
 interface Layout {
   readonly aiDistDir: string;
@@ -45,36 +43,14 @@ const layoutOf = (host: hostTypes.HostShape): Layout => {
 
 const runBuild = (options: Parameters<typeof build>[0]) =>
   Effect.tryPromise({
-    catch: (cause) => new BundleError({ message: `esbuild failed: ${String(cause)}` }),
+    catch: (cause) => BundleError.make({ message: `esbuild failed: ${String(cause)}` }),
     try: () => build(options),
   });
 
 const metafileOf = (result: { readonly metafile?: Metafile | undefined }) =>
   result.metafile === undefined
-    ? Effect.fail(new BundleError({ message: "esbuild did not return a metafile" }))
+    ? Effect.fail(BundleError.make({ message: "esbuild did not return a metafile" }))
     : Effect.succeed(result.metafile);
-
-const unexpectedExternal = (path: string, external: boolean | undefined): boolean =>
-  external === true && !isBuiltin(path) && !ALLOWED_EXTERNAL_PACKAGES.has(path);
-
-const validateExternalImports = (metafiles: ReadonlyArray<Metafile>) => {
-  const unexpected = new Set(
-    metafiles.flatMap((metafile) =>
-      Object.values(metafile.inputs).flatMap((input) =>
-        input.imports
-          .filter((imported) => unexpectedExternal(imported.path, imported.external))
-          .map((imported) => imported.path),
-      ),
-    ),
-  );
-  return unexpected.size > 0
-    ? Effect.fail(
-        new BundleError({
-          message: `Bundle left unexpected external imports: ${[...unexpected].sort().join(", ")}`,
-        }),
-      )
-    : Effect.void;
-};
 
 const findContainingOutput = (options: {
   readonly host: hostTypes.HostShape;
@@ -90,7 +66,7 @@ const findContainingOutput = (options: {
     if (hit) return Effect.succeed(options.host.resolve(options.repoRoot, outputPath));
   }
   return Effect.fail(
-    new BundleError({
+    BundleError.make({
       message: `Could not locate bundled output containing ${options.inputSuffix}`,
     }),
   );
@@ -117,7 +93,7 @@ const requireInputs = (host: hostTypes.HostShape, layout: Layout) =>
     (entry) =>
       Effect.gen(function* () {
         if (yield* host.exists(entry)) return;
-        return yield* new BundleError({
+        return yield* BundleError.make({
           message: `Bundle input is missing: ${host.relative(layout.repoRoot, entry)}. Build the workspace packages first.`,
         });
       }),
@@ -142,35 +118,17 @@ const requireOAuthEntries = (
     for (const match of source.matchAll(OAUTH_IMPORT)) {
       const flow = match[1];
       if (flow !== undefined && !(flow in lazyEntryPoints)) {
-        return yield* new BundleError({
+        return yield* BundleError.make({
           message: `OAuth flow "${flow}" is lazily imported but has no lazy bundle entry`,
         });
       }
     }
   });
 
-const checkCodemodeWorker = (host: hostTypes.HostShape, layout: Layout, metafile: Metafile) =>
-  Effect.forEach(Object.entries(metafile.outputs), ([outputPath, output]) =>
-    Effect.gen(function* () {
-      const invalid = output.imports.filter(
-        (imported) => imported.kind !== "import-statement" || !isBuiltin(imported.path),
-      );
-      if (invalid.length > 0) {
-        return yield* new BundleError({
-          message: `Codemode worker must only import Node builtins: ${invalid.map((imported) => imported.path).join(", ")}`,
-        });
-      }
-      const contents = yield* host.readText(host.resolve(layout.repoRoot, outputPath));
-      if (contents.includes("import.meta")) {
-        return yield* new BundleError({ message: "Codemode worker must not use import.meta" });
-      }
-    }),
-  );
-
 const sameDirectory = (host: hostTypes.HostShape, left: string, right: string, message: string) =>
   host.dirname(left) === host.dirname(right)
     ? Effect.void
-    : Effect.fail(new BundleError({ message }));
+    : Effect.fail(BundleError.make({ message }));
 
 const buildMain = (host: hostTypes.HostShape, layout: Layout) =>
   Effect.gen(function* () {
@@ -223,7 +181,7 @@ const buildCodemodeWorker = (host: hostTypes.HostShape, layout: Layout, lazyDir:
         splitting: false,
       }),
     );
-    yield* checkCodemodeWorker(host, layout, metafile);
+    yield* checkCodemodeWorker(host, layout.repoRoot, metafile);
     return metafile;
   });
 
@@ -256,6 +214,7 @@ const program = Effect.gen(function* () {
 
   const lazyDir = host.dirname(oauthLoaderOutput);
   const lazyMetafile = yield* buildLazy(host, layout, lazyDir);
+  yield* checkImageResizeWorker(lazyMetafile);
   const codemodeMetafile = yield* buildCodemodeWorker(host, layout, lazyDir);
 
   yield* sameDirectory(

@@ -10,7 +10,7 @@ const { groupProviderModelData, readModelDataProviderIds } = modelData;
 
 const missingProviders = (providerIds: readonly string[]) =>
   Effect.fail(
-    new ModelDataError({
+    ModelDataError.make({
       message: `Cannot hydrate missing providers: ${providerIds.join(", ")}`,
     }),
   );

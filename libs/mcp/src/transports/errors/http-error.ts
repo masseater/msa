@@ -1,11 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class McpHttpError extends Data.TaggedError("McpHttpError")<{
-  readonly status: number;
-  readonly message: string;
-  readonly body: string;
-}> {
-  constructor(status: number, message: string, body = "") {
-    super({ body, message, status });
+export default class McpHttpError extends Schema.TaggedError<
+  McpHttpError,
+  { readonly brand: unique symbol }
+>()("McpHttpError", { body: Schema.String, message: Schema.String, status: Schema.Finite }) {
+  static create(status: number, message: string, body = ""): McpHttpError {
+    return McpHttpError.make({ body, message, status });
   }
 }

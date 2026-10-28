@@ -94,8 +94,10 @@ const streamAssistantResponse = (
       context.messages.push(finalMessage);
       yield* emit({ message: { ...finalMessage }, type: "message_start" });
     }
-    yield* emit({ message: finalMessage, type: "message_end" });
-    return finalMessage;
+    const end = { message: finalMessage, type: "message_end" as const };
+    yield* emit(end);
+    context.messages[context.messages.length - 1] = end.message;
+    return end.message;
   });
 
 const assistantResponse = {

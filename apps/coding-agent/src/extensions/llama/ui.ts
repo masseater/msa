@@ -61,7 +61,9 @@ function startProgressRun<T>(ui: uiTypes.LlamaUi, options: ProgressOptions<T>) {
   };
   const settled = options
     .run(controller.signal, (progress) => {
-      Object.assign(state, progress);
+      state.message = progress.message;
+      if ("ratio" in progress) state.ratio = progress.ratio;
+      if ("detail" in progress) state.detail = progress.detail;
       ui.updateProgress(state);
     })
     .then(

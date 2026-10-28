@@ -50,14 +50,15 @@ function getScopeFormatter(
   scope: string,
   theme: syntaxHighlightTypes.HighlightTheme,
 ): syntaxHighlightTypes.HighlightFormatter | undefined {
-  const exact = theme[scope];
+  const formatters = new Map(Object.entries(theme));
+  const exact = formatters.get(scope);
   if (exact !== undefined) {
     return exact;
   }
 
   const dotIndex = scope.indexOf(".");
   if (dotIndex !== -1) {
-    const prefixFormatter = theme[scope.slice(0, dotIndex)];
+    const prefixFormatter = formatters.get(scope.slice(0, dotIndex));
     if (prefixFormatter !== undefined) {
       return prefixFormatter;
     }
@@ -65,7 +66,7 @@ function getScopeFormatter(
 
   const dashIndex = scope.indexOf("-");
   if (dashIndex !== -1) {
-    const prefixFormatter = theme[scope.slice(0, dashIndex)];
+    const prefixFormatter = formatters.get(scope.slice(0, dashIndex));
     if (prefixFormatter !== undefined) {
       return prefixFormatter;
     }

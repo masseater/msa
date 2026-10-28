@@ -95,7 +95,7 @@ const spawnProcess = (
         stderr: Stream.ignore(handle.stderr),
         stdout: Stream.ignore(handle.stdout),
       })),
-      Effect.mapError((error) => new SpawnError({ cause: error, message: causeMessage(error) })),
+      Effect.mapError((error) => SpawnError.make({ cause: error, message: causeMessage(error) })),
     ),
   );
 

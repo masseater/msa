@@ -9,7 +9,7 @@ import type buildProcessTypes from "./build-process.types.ts";
 const { Win32BuildError } = buildProcess;
 
 const toBuildError = (error: { readonly message: string }): buildProcessTypes.Win32BuildError =>
-  new Win32BuildError({ message: error.message });
+  Win32BuildError.make({ message: error.message });
 
 const processOperations = (
   spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],

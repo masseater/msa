@@ -1,4 +1,4 @@
-import { Data, Deferred, Effect, type Scope } from "effect";
+import { Deferred, Effect, Schema, type Scope } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import cryptoModule from "../../utils/crypto.ts";
@@ -37,7 +37,10 @@ interface AuthorizationResult {
   readonly clientId: string;
 }
 
-class CallbackError extends Data.TaggedError("CallbackError")<{ readonly message: string }> {}
+class CallbackError extends Schema.TaggedError<CallbackError, { readonly brand: unique symbol }>()(
+  "CallbackError",
+  { message: Schema.String },
+) {}
 
 const randomValue = (): string => Base64Url.encode(randomBytes(32));
 
@@ -45,7 +48,7 @@ const authorizationResultFromCallback = (
   url: URL,
   expectedState: string,
 ): Effect.Effect<AuthorizationResult, CallbackError> => {
-  const fail = (message: string) => Effect.fail(new CallbackError({ message }));
+  const fail = (message: string) => Effect.fail(CallbackError.make({ message }));
   const code = url.searchParams.get("code");
   if (code === null || code === "") return fail("Missing authorization code");
   const state = url.searchParams.get("state");
@@ -63,18 +66,18 @@ const authorizationResultFromManualInput = (
 ): Effect.Effect<AuthorizationResult> =>
   Effect.gen(function* () {
     const url = yield* Effect.try({
-      catch: () => new CallbackError({ message: "Paste the full callback URL from the browser" }),
+      catch: () => CallbackError.make({ message: "Paste the full callback URL from the browser" }),
       try: () => new URL(input.trim()),
     });
     const expected = new URL(REDIRECT_URI);
     if (url.origin !== expected.origin || url.pathname !== expected.pathname) {
-      return yield* new CallbackError({
+      return yield* CallbackError.make({
         message: `The pasted callback URL must start with ${REDIRECT_URI}`,
       });
     }
     const error = url.searchParams.get("error");
     if (error !== null && error !== "") {
-      return yield* new CallbackError({ message: `ChatGPT authorization failed: ${error}` });
+      return yield* CallbackError.make({ message: `ChatGPT authorization failed: ${error}` });
     }
     return yield* authorizationResultFromCallback(url, expectedState);
   }).pipe(Effect.catchTag("CallbackError", (error) => Effect.die(new Error(error.message))));

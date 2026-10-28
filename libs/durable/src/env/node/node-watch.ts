@@ -82,7 +82,7 @@ export default class NodeFileWatcher implements nodeWatchTypes.FileWatcher {
         yield* watcher.#sync(false).pipe(
           Effect.onError(() => Effect.sync(() => watcher.#stop())),
           Effect.catchTag("BudgetExceeded", (error: nodeWatchTypes.BudgetExceeded) =>
-            Effect.fail(new FileError("invalid", error.message)),
+            Effect.fail(FileError.create("invalid", error.message)),
           ),
         );
         watcher.#schedulePoll();

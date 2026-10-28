@@ -1,4 +1,4 @@
-import { Data, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import testing from "../src/index.ts";
@@ -27,7 +27,10 @@ const {
   writeTextFile,
 } = testing;
 
-class TestFailure extends Data.TaggedError("TestFailure")<{ readonly message: string }> {}
+class TestFailure extends Schema.TaggedError<TestFailure, { readonly brand: unique symbol }>()(
+  "TestFailure",
+  { message: Schema.String },
+) {}
 
 const created: string[] = [];
 
@@ -115,7 +118,7 @@ describe("effect support", () => {
   it("reports the failure of an effect", () =>
     runTest(
       Effect.gen(function* () {
-        const cause = yield* failure(Effect.fail(new TestFailure({ message: "boom" })));
+        const cause = yield* failure(Effect.fail(TestFailure.make({ message: "boom" })));
         expect(String(cause)).toContain("boom");
       }),
     ));

@@ -133,7 +133,7 @@ export default class CredentialOperations {
           this.availability.updateModels();
           yield* performed(this.availability.refreshProvider(providerId, signal));
         } catch (cause) {
-          throw new CredentialSynchronizationError(providerId, operation, credential, { cause });
+          throw CredentialSynchronizationError.create(providerId, operation, credential, { cause });
         }
       }, this),
     );

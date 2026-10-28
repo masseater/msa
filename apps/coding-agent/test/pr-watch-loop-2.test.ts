@@ -133,7 +133,7 @@ describe("pull request watch loop", () => {
 const keepsPollingAtALongerIntervalAfter = () =>
   runTest(
     Effect.gen(function* () {
-      const rateLimited = new PrWatchGhError({
+      const rateLimited = PrWatchGhError.make({
         kind: "rate-limit",
         message: "gh hit the GitHub rate limit",
       });
@@ -160,7 +160,7 @@ describe("pull request watch loop", () => {
 const reportsItsStatusAgainAfterARate = () =>
   runTest(
     Effect.gen(function* () {
-      const rateLimited = new PrWatchGhError({
+      const rateLimited = PrWatchGhError.make({
         kind: "rate-limit",
         message: "gh hit the GitHub rate limit",
       });
@@ -186,7 +186,7 @@ describe("pull request watch loop", () => {
 const stopsWatchingWhenGhCannotRunAt = () =>
   runTest(
     Effect.gen(function* () {
-      const missing = new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" });
+      const missing = PrWatchGhError.make({ kind: "missing", message: "gh is not on PATH" });
       const result = yield* awaited(runPolls(scriptedGh([missing, pendingChecks]), [INTERVAL_MS]));
 
       expect(seen(result)).toEqual([

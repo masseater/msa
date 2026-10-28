@@ -49,13 +49,13 @@ function configContextEnv(
   explicit?: Record<string, string>,
 ): Effect.Effect<Record<string, string> | undefined> {
   return awaiting(function* () {
-    const env = { ...explicit };
+    const env = new Map(Object.entries(explicit ?? {}));
     for (const name of new Set(values.flatMap(getConfigValueEnvVarNames))) {
-      if (env[name] !== undefined) continue;
+      if (env.get(name) !== undefined) continue;
       const value = yield* awaited(ctx.env(name));
-      if (value !== undefined) env[name] = value;
+      if (value !== undefined) env.set(name, value);
     }
-    return Object.keys(env).length > 0 ? env : undefined;
+    return env.size > 0 ? Object.fromEntries(env) : undefined;
   });
 }
 

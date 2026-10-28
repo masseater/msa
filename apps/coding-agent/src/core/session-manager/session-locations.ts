@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 import paths from "../../utils/paths.ts";
 import platform from "../platform/index.ts";
 import SessionHeaderScanLimitError from "../session-header-scan-limit-error.ts";
@@ -38,7 +40,7 @@ const readExistingHeader = (resolvedPath: string): Promise<ExistingHeader> =>
   readSessionHeader(resolvedPath).then(
     (header) => ({ header }),
     (error: unknown) => {
-      if (!(error instanceof SessionHeaderScanLimitError)) throw error;
+      if (!Schema.is(SessionHeaderScanLimitError)(error)) throw error;
       return loadEntriesFromFile(resolvedPath).then((preloadedFileEntries) => {
         const firstEntry = preloadedFileEntries[0];
         return {

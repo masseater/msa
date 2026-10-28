@@ -1,4 +1,5 @@
 import type { Context, ESTree, Variable } from "vite-plus/lint/plugins";
+import { defineRule } from "vite-plus/lint/plugins";
 
 import type flowTypes from "./flow.types.ts";
 import scopeLookup from "./scope-lookup.ts";
@@ -125,6 +126,121 @@ const restrictedMembersOf = (context: Context): readonly RestrictedMember[] => {
   return options?.members ?? [];
 };
 
-const restrictedMember = { checkImport, restrictedMembersOf };
+const PROCESS_ENV_MESSAGE =
+  "process.env のメンバーには、for (const name of Object.keys(values)) process.env[name] = String(values[name]); の形でだけ触る。読むときは platform の readEnv を使う";
+
+const isIdentifier = (
+  node: Node | null | undefined,
+  name?: string,
+): node is ESTree.IdentifierName =>
+  node?.type === "Identifier" && (name === undefined || node.name === name);
+
+const isProcessEnv = (node: Node): boolean =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  isIdentifier(node.object as Node, "process") &&
+  isIdentifier(node.property as Node, "env");
+
+const isStaticMember = (node: Node, object: string, property: string): boolean =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  isIdentifier(node.object as Node, object) &&
+  isIdentifier(node.property as Node, property);
+
+const isKeysOf = (node: Node, values: string): boolean =>
+  node.type === "CallExpression" &&
+  node.arguments.length === 1 &&
+  isIdentifier(node.arguments[0] as Node, values) &&
+  isStaticMember(node.callee as Node, "Object", "keys");
+
+const isLoopBody = (loop: Node, statement: Node): loop is ESTree.ForOfStatement =>
+  loop.type === "ForOfStatement" && loop.body === statement && !loop.await;
+
+const loopAround = (statement: Node): ESTree.ForOfStatement | undefined => {
+  const loop = statement.parent as Node | null;
+  return loop !== null && isLoopBody(loop, statement) ? loop : undefined;
+};
+
+const isConstDeclaration = (left: Node): left is ESTree.VariableDeclaration =>
+  left.type === "VariableDeclaration" && left.kind === "const";
+
+const declaresName = (left: ESTree.VariableDeclaration, name: string): boolean =>
+  left.declarations.length === 1 && isIdentifier(left.declarations[0]?.id as Node, name);
+
+const declaresOnly = (left: Node, name: string): boolean =>
+  isConstDeclaration(left) && declaresName(left, name);
+
+const loopOver = (statement: Node, name: string, values: string): boolean => {
+  const loop = loopAround(statement);
+  return (
+    loop !== undefined &&
+    declaresOnly(loop.left as Node, name) &&
+    isKeysOf(loop.right as Node, values)
+  );
+};
+
+const onlyStringArgument = (node: Node): Node | undefined =>
+  node.type === "CallExpression" &&
+  isIdentifier(node.callee as Node, "String") &&
+  node.arguments.length === 1
+    ? (node.arguments[0] as Node)
+    : undefined;
+
+const computedRead = (node: Node): ESTree.MemberExpression | undefined => {
+  const read = onlyStringArgument(node);
+  return read?.type === "MemberExpression" && read.computed ? read : undefined;
+};
+
+const readValues = (node: Node, name: string): string | undefined => {
+  const read = computedRead(node);
+  if (read === undefined) return undefined;
+  const values = read.object as Node;
+  return isIdentifier(read.property as Node, name) && isIdentifier(values)
+    ? values.name
+    : undefined;
+};
+
+const isPlainAssignmentTo = (
+  node: Node,
+  member: ESTree.MemberExpression,
+): node is ESTree.AssignmentExpression =>
+  node.type === "AssignmentExpression" && node.operator === "=" && node.left === member;
+
+const assignmentOf = (member: ESTree.MemberExpression): ESTree.AssignmentExpression | undefined => {
+  const assignment = (member as Node).parent as Node | null;
+  return assignment !== null && isPlainAssignmentTo(assignment, member) ? assignment : undefined;
+};
+
+const statementAround = (node: Node): Node | undefined => {
+  const statement = node.parent as Node | null;
+  return statement?.type === "ExpressionStatement" ? statement : undefined;
+};
+
+const writesValuesOf = (assignment: ESTree.AssignmentExpression, name: string): boolean => {
+  const values = readValues(assignment.right as Node, name);
+  const statement = statementAround(assignment as Node);
+  return values !== undefined && statement !== undefined && loopOver(statement, name, values);
+};
+
+const isSanctionedWrite = (member: ESTree.MemberExpression): boolean => {
+  const name = member.property as Node;
+  if (!member.computed || !isIdentifier(name)) return false;
+  const assignment = assignmentOf(member);
+  return assignment !== undefined && writesValuesOf(assignment, name.name);
+};
+
+const processEnvWriter = defineRule({
+  create(context) {
+    return {
+      MemberExpression(node) {
+        if (isProcessEnv(node.object as Node) && !isSanctionedWrite(node))
+          context.report({ message: PROCESS_ENV_MESSAGE, node });
+      },
+    };
+  },
+  meta: { type: "problem" },
+});
+
+const restrictedMember = { checkImport, processEnvWriter, restrictedMembersOf };
 
 export default restrictedMember;

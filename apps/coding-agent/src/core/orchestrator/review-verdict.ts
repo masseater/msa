@@ -126,7 +126,7 @@ function choiceOf(
   decision: Extract<decideTypes.Decision, { status: "decided" }>,
   id: string,
 ): { choice: string | undefined; odds: string } | undefined {
-  const answer = decision.answers[id];
+  const answer = new Map(Object.entries(decision.answers)).get(id);
   if (answer?.type !== "choice") return undefined;
   const odds = Object.entries(answer.probabilities)
     .map(([choice, probability]) => `${choice} ${probability.toFixed(2)}`)

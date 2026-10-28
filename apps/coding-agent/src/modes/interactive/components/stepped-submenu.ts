@@ -50,7 +50,7 @@ export default class SteppedSubmenu extends tui.Container {
       items,
       preselect,
       (value) => {
-        this.context[step.key] = value;
+        this.context = { ...this.context, [step.key]: value };
 
         if (stepIndex < total - 1) {
           this.activeComponent = this.buildStep(stepIndex + 1);
@@ -67,7 +67,9 @@ export default class SteppedSubmenu extends tui.Container {
       },
       () => {
         if (stepIndex > 0) {
-          delete this.context[step.key];
+          this.context = Object.fromEntries(
+            Object.entries(this.context).filter(([key]) => key !== step.key),
+          );
           this.activeComponent = this.buildStep(stepIndex - 1);
         } else {
           this.onCancel();

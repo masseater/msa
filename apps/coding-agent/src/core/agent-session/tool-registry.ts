@@ -30,23 +30,19 @@ export default class SessionToolRegistry {
   toolDefinitions: Map<string, agentSessionInternalTypes.ToolDefinitionEntry> = new Map();
 
   getAllTools(): extensionsTypes.ToolInfo[] {
-    return Array.from(this.toolDefinitions.values()).map(({ definition, sourceInfo }) =>
-      Object.assign(
-        {
-          description: definition.description,
-          exposure: this.getToolExposure(definition.name),
-          name: definition.name,
-          parameters: definition.parameters,
-          promptGuidelines: definition.promptGuidelines,
-          sourceInfo,
-        },
-        definition.namespace === undefined ? {} : { namespace: definition.namespace },
-        definition.annotations === undefined
-          ? {}
-          : { annotations: Object.assign({}, definition.annotations) },
-        definition.reachesTools === undefined ? {} : { reachesTools: definition.reachesTools },
-      ),
-    );
+    return Array.from(this.toolDefinitions.values(), ({ definition, sourceInfo }) => ({
+      description: definition.description,
+      exposure: this.getToolExposure(definition.name),
+      name: definition.name,
+      parameters: definition.parameters,
+      promptGuidelines: definition.promptGuidelines,
+      sourceInfo,
+      ...(definition.namespace === undefined ? {} : { namespace: definition.namespace }),
+      ...(definition.annotations === undefined
+        ? {}
+        : { annotations: { ...definition.annotations } }),
+      ...(definition.reachesTools === undefined ? {} : { reachesTools: definition.reachesTools }),
+    }));
   }
 
   getToolDefinition(name: string): extensionsTypes.ToolDefinition | undefined {

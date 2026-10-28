@@ -123,7 +123,7 @@ function contractFromDescription(
     !Number.isInteger(version) ||
     (scope === "remote") !== (host !== undefined)
   ) {
-    throw new ChordError("invalid", "malformed contract token", { reason: "token" });
+    throw ChordError.create("invalid", "malformed contract token", { reason: "token" });
   }
   const base = {
     description,

@@ -41,7 +41,7 @@ interface RequestHost {
 
 function supported<F>(capability: F | undefined, model: aiTypes.AnyModel, feature: string): F {
   if (capability === undefined) {
-    throw new ModelsError("provider", `Provider ${model.provider} does not support ${feature}`);
+    throw ModelsError.create("provider", `Provider ${model.provider} does not support ${feature}`);
   }
   return capability;
 }

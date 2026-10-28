@@ -113,10 +113,8 @@ export default class SessionExtensionBinding {
   }
 
   createReplacedSessionContext(): extensionsTypes.ReplacedSessionContext {
-    const context = Object.defineProperties(
-      {},
-      Object.getOwnPropertyDescriptors(this.extensionRunnerInternal.createCommandContext()),
-    ) as extensionsTypes.ReplacedSessionContext;
+    const context =
+      this.extensionRunnerInternal.createCommandContext() as extensionsTypes.ReplacedSessionContext;
     context.sendMessage = (message, options) =>
       this.session.run.prompting.sendCustomMessage(message, options);
     context.sendUserMessage = (content, options) =>

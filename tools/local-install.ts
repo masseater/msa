@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 
 import { NodeServices } from "@effect/platform-node";
-import { Console, Data, Effect, FileSystem, Layer, Path } from "effect";
+import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
 import captureProcessModule from "./capture-process.ts";
 import codingAgentPackage from "./coding-agent-package.ts";
@@ -15,9 +15,10 @@ const { runMainWith } = runMain;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 
-class LocalInstallError extends Data.TaggedError("LocalInstallError")<{
-  readonly message: string;
-}> {}
+class LocalInstallError extends Schema.TaggedError<
+  LocalInstallError,
+  { readonly brand: unique symbol }
+>()("LocalInstallError", { message: Schema.String }) {}
 
 const makeContext = () =>
   Effect.gen(function* () {
@@ -27,12 +28,12 @@ const makeContext = () =>
     const path = yield* Path.Path;
     const platform = RELEASE_PLATFORMS.find((candidate) => candidate.name === hostPlatformName());
     if (platform === undefined) {
-      return yield* new LocalInstallError({
+      return yield* LocalInstallError.make({
         message: `unsupported host platform: ${process.platform} ${process.arch}`,
       });
     }
     if (platform.archive !== "tar.gz") {
-      return yield* new LocalInstallError({
+      return yield* LocalInstallError.make({
         message: `unsupported archive format: ${platform.archive}`,
       });
     }
@@ -80,7 +81,7 @@ const verifyInstall = (context: Context) =>
     });
     const reported = stdout.trim();
     if (exitCode !== 0 || reported !== context.version) {
-      return yield* new LocalInstallError({
+      return yield* LocalInstallError.make({
         message: `installed msa reported "${reported}" (exit ${exitCode}), expected ${context.version}:\n${stderr}`,
       });
     }
@@ -91,7 +92,7 @@ const verifyInstall = (context: Context) =>
 
 const program = Effect.gen(function* () {
   if (process.argv.length > 2) {
-    return yield* new LocalInstallError({
+    return yield* LocalInstallError.make({
       message: `unknown argument(s): ${process.argv.slice(2).join(", ")}`,
     });
   }

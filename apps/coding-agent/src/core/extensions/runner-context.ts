@@ -104,10 +104,7 @@ export default class ContextFactory {
   createCommandContext(): extensionsTypesTypes.ExtensionCommandContext {
     const { host } = this;
     const { bindings } = host;
-    const context = Object.defineProperties(
-      {},
-      Object.getOwnPropertyDescriptors(this.createContext()),
-    ) as extensionsTypesTypes.ExtensionCommandContext;
+    const context = this.createContext() as extensionsTypesTypes.ExtensionCommandContext;
     const guarded = <T>(read: () => T): T => {
       host.assertActive();
       return read();

@@ -29,12 +29,12 @@ const ColorValueSchema = colorValue();
 type ColorValue = Static<typeof ColorValueSchema>;
 
 function themeTokenProperties(tokens: themeTokensTypes.ThemeTokenDescriptors): TProperties {
-  const properties: TProperties = {};
-  for (const [name, descriptor] of Object.entries(tokens)) {
-    const schema = colorValue(descriptor.description);
-    properties[name] = descriptor.fallback === undefined ? schema : Type.Optional(schema);
-  }
-  return properties;
+  return Object.fromEntries(
+    Object.entries(tokens).map(([name, descriptor]) => {
+      const schema = colorValue(descriptor.description);
+      return [name, descriptor.fallback === undefined ? schema : Type.Optional(schema)];
+    }),
+  );
 }
 
 const ThemeColorsSchema = Type.Unsafe<themeTokensTypes.ThemeColorValues<ColorValue>>(

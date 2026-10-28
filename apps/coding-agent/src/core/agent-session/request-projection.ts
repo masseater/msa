@@ -16,6 +16,25 @@ const { getCurrentSystemMessage } = ai;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { convertToLlm } = messagesModule;
 
+const withoutHiddenToolChanges = (
+  message: agentTypes.AgentMessage,
+  hidden: ReadonlySet<string>,
+): agentTypes.AgentMessage => {
+  if (
+    message.role !== "system" ||
+    (message.toolsAdded === undefined && message.toolsRemoved === undefined)
+  )
+    return message;
+  const { toolsAdded, toolsRemoved, ...rest } = message;
+  const added = toolsAdded?.filter((tool) => !hidden.has(tool.name)) ?? [];
+  const removed = toolsRemoved?.filter((tool) => !hidden.has(tool.name)) ?? [];
+  return {
+    ...rest,
+    ...(added.length > 0 ? { toolsAdded: added } : {}),
+    ...(removed.length > 0 ? { toolsRemoved: removed } : {}),
+  };
+};
+
 export default class SessionRequestProjection {
   private readonly session: AgentSession;
 
@@ -34,22 +53,7 @@ export default class SessionRequestProjection {
               : yield* awaited(previousTransformContext(messages, signal));
           const hidden = this.session.tools.loadout.hiddenDeclarations;
           if (hidden.size === 0) return transformed;
-          return transformed.map((message) => {
-            if (
-              message.role !== "system" ||
-              (message.toolsAdded === undefined && message.toolsRemoved === undefined)
-            )
-              return message;
-            const { toolsAdded, toolsRemoved, ...rest } = message;
-            const added = toolsAdded?.filter((tool) => !hidden.has(tool.name)) ?? [];
-            const removed = toolsRemoved?.filter((tool) => !hidden.has(tool.name)) ?? [];
-            return Object.assign(
-              {},
-              rest,
-              added.length > 0 ? { toolsAdded: added } : {},
-              removed.length > 0 ? { toolsRemoved: removed } : {},
-            );
-          });
+          return transformed.map((message) => withoutHiddenToolChanges(message, hidden));
         }, this),
       );
   }

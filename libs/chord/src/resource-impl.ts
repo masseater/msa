@@ -27,7 +27,7 @@ export default class ResourceImpl<T = unknown> implements declareTypes.Resource<
 
   get value(): T {
     if (this.state === "unavailable")
-      throw new ChordError("unavailable", `resource ${this.key} could not be restored`);
+      throw ChordError.create("unavailable", `resource ${this.key} could not be restored`);
     if (this.state !== "open") throw notReady(`resource ${this.key}`);
     return this.#value as T;
   }
@@ -48,7 +48,7 @@ export default class ResourceImpl<T = unknown> implements declareTypes.Resource<
       if (signal.aborted) {
         this.state = "closed";
         yield* Effect.promise(() => Promise.resolve(this.spec.close?.(value)));
-        throw new ChordError("aborted", `resource ${this.key} opened after abort`);
+        throw ChordError.create("aborted", `resource ${this.key} opened after abort`);
       }
       this.#value = value;
       this.state = "open";

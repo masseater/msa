@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Cause, Data, Effect, Exit, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, ManagedRuntime, Schema } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
 import InMemoryAuthStorageBackend from "../../src/core/in-memory-auth-storage-backend.ts";
@@ -17,16 +17,16 @@ const { fromJsonText, tempRoot, toJsonText, writeTextFile } = testing;
 const MAX_SIGN_INS = 3;
 const REQUEST_TIMEOUT_SECONDS = 20;
 
-class ConformanceError extends Data.TaggedError("ConformanceError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+class ConformanceError extends Schema.TaggedError<
+  ConformanceError,
+  { readonly brand: unique symbol }
+>()("ConformanceError", { cause: Schema.optionalKey(Schema.Unknown), message: Schema.String }) {}
 
 const conformanceError = (message: string, cause?: unknown): ConformanceError =>
-  new ConformanceError({ message, ...(cause === undefined ? {} : { cause }) });
+  ConformanceError.make({ message, ...(cause === undefined ? {} : { cause }) });
 
 const toConformanceError = (error: unknown): ConformanceError =>
-  error instanceof ConformanceError ? error : conformanceError(errorMessage(error), error);
+  Schema.is(ConformanceError)(error) ? error : conformanceError(errorMessage(error), error);
 
 interface ToolCall {
   name: string;

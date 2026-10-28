@@ -27,16 +27,15 @@ const MODEL_DATA_SCHEMA_VERSION = 6;
 const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
 const MODEL_DATA_IMPORT_PATTERN =
   /^import \w+Models from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
-const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
+const fail = (message: string) => Effect.fail(ModelDataError.make({ message }));
 const sha256 = (value: string): Effect.Effect<string> =>
   Effect.map(digest("SHA-256", new TextEncoder().encode(value)), Hex.encode);
 const readJsonObject = Effect.fn("readJsonObject")(function* (path: string, description: string) {
   const files = yield* ScriptFiles;
   const parsed = yield* files.readText(path).pipe(
     Effect.flatMap(decodeJson),
-    Effect.mapError(
-      (error) =>
-        new ModelDataError({ message: `${description} is not valid JSON: ${error.message}` }),
+    Effect.mapError((error) =>
+      ModelDataError.make({ message: `${description} is not valid JSON: ${error.message}` }),
     ),
   );
   if (!isRecord(parsed)) return yield* fail(`${description} must contain a JSON object`);
@@ -167,7 +166,7 @@ function validationFailure(errors: readonly string[]): ModelDataError {
   const visible = errors.slice(0, 30);
   const suffix =
     errors.length > visible.length ? `\n  ... and ${errors.length - visible.length} more` : "";
-  return new ModelDataError({
+  return ModelDataError.make({
     message: `Invalid generated model data:\n${visible.map((error) => `  - ${error}`).join("\n")}${suffix}`,
   });
 }

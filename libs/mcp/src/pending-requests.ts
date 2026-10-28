@@ -61,7 +61,12 @@ export default class PendingRequests {
     entry.timer = undefined;
     if (!Number.isFinite(entry.timeoutMs) || entry.timeoutMs <= 0) return;
     const timedOut = Effect.sync(() => {
-      this.cancel(id, new McpTimeoutError(entry.timeoutMs), entry.cancellable, "Request timed out");
+      this.cancel(
+        id,
+        McpTimeoutError.create(entry.timeoutMs),
+        entry.cancellable,
+        "Request timed out",
+      );
     });
     entry.timer = Effect.runFork(Effect.delay(timedOut, entry.timeoutMs));
   }

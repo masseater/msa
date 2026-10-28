@@ -53,7 +53,7 @@ function waitForAuthorizationResponse(
         signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
       const fromBrowser = callback.waitForCallback(state, redirectUrl.pathname);
       const fromUser = prompt.promptForRedirectUrl(promptSignal).then((input) => {
-        if (input === undefined || input.trim() === "") throw new McpSignInCancelledError();
+        if (input === undefined || input.trim() === "") throw McpSignInCancelledError.create();
         return responseFromRedirectUrl(input, state, redirectUrl);
       });
       try {

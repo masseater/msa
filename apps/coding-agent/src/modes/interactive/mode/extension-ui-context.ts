@@ -6,7 +6,6 @@ import type extensionsTypes from "../../../core/extensions/index.types.ts";
 import type keybindingsTypes from "../../../core/keybindings.types.ts";
 import type interactiveModeInternalTypes from "../interactive-mode-internal.types.ts";
 import type InteractiveMode from "../interactive-mode.ts";
-import Theme from "../theme/theme-class.ts";
 import themeModule from "../theme/theme.ts";
 import type themeTypes from "../theme/theme.types.ts";
 
@@ -28,7 +27,7 @@ export default class ExtensionUIContextFactory {
   private setThemeFromExtension(
     themeOrName: Parameters<extensionsTypes.ExtensionUIContext["setTheme"]>[0],
   ): ReturnType<extensionsTypes.ExtensionUIContext["setTheme"]> {
-    if (themeOrName instanceof Theme)
+    if (typeof themeOrName !== "string")
       return this.mode.display.theme.themeController.setThemeInstance(themeOrName);
     const result = this.mode.display.theme.themeController.setThemeName(themeOrName);
     if (result.success && this.mode.settingsManager.display.getTheme() !== themeOrName)

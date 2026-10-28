@@ -9,7 +9,7 @@ import type protocolTypes from "./protocol.ts";
 const { RuntimeError, parseBridgeJson, parseScriptError, parseStoreWrites } = bridge;
 const { errorMessage, parseJson, stringifyJson } = preludeSource;
 const toolError = (error: unknown) =>
-  new RuntimeError({ message: errorMessage(error), reason: "tool" });
+  RuntimeError.make({ message: errorMessage(error), reason: "tool" });
 
 const invokeTool = (
   executors: protocolTypes.Executors,
@@ -97,7 +97,7 @@ const handleDone = (
   );
 };
 
-const bridgeError = (message: string) => new RuntimeError({ message, reason: "bridge" });
+const bridgeError = (message: string) => RuntimeError.make({ message, reason: "bridge" });
 
 const handleCallMessage = (
   execution: protocolTypes.Execution,

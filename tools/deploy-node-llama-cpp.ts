@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Data, Effect, FileSystem, Layer, Path } from "effect";
+import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 
 import captureProcessModule from "./capture-process.ts";
 import releasePlatforms from "./release-platforms.ts";
@@ -15,9 +15,10 @@ const DEPLOY_LEFTOVERS: ReadonlyArray<string> = [".bin", ".modules.yaml", ".pnpm
 const LLAMA_CPP_SOURCE_BUNDLE = ["node-llama-cpp", "llama", "gitRelease.bundle"];
 const PREBUILT_SCOPE = "@node-llama-cpp";
 
-class DeployNodeLlamaCppError extends Data.TaggedError("DeployNodeLlamaCppError")<{
-  readonly message: string;
-}> {}
+class DeployNodeLlamaCppError extends Schema.TaggedError<
+  DeployNodeLlamaCppError,
+  { readonly brand: unique symbol }
+>()("DeployNodeLlamaCppError", { message: Schema.String }) {}
 
 const removeTree = (target: string) =>
   Effect.gen(function* () {
@@ -32,7 +33,7 @@ const keepOnlyPrebuilt = (platform: releasePlatformsTypes.ReleasePlatform, prebu
     const { prebuilt } = platform.nodeLlamaCpp;
     const installed = yield* fs.readDirectory(prebuiltsDir);
     if (!installed.includes(prebuilt)) {
-      return yield* new DeployNodeLlamaCppError({
+      return yield* DeployNodeLlamaCppError.make({
         message: `pnpm deploy did not install ${PREBUILT_SCOPE}/${prebuilt} for ${platform.name}`,
       });
     }
@@ -72,7 +73,7 @@ const program = Effect.gen(function* () {
   const [platformName, payloadDir, ...rest] = process.argv.slice(2);
   const platform = RELEASE_PLATFORMS.find((candidate) => candidate.name === platformName);
   if (platform === undefined || payloadDir === undefined || rest.length > 0) {
-    return yield* new DeployNodeLlamaCppError({
+    return yield* DeployNodeLlamaCppError.make({
       message: "usage: deploy-node-llama-cpp <release platform> <payload directory>",
     });
   }

@@ -38,7 +38,7 @@ const entryIdOf = (
 ): typesModule.EntryId => {
   if (context === undefined) return idFromNumber<typesModule.EntryId>(idOrConversationId);
   if (typeof idOrContext === "number") return idFromNumber<typesModule.EntryId>(idOrContext);
-  throw new StorageRequestError("Storage.entry() requires an entry ID");
+  throw StorageRequestError.create("Storage.entry() requires an entry ID");
 };
 
 const readEntry: {

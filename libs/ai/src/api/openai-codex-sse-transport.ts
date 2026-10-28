@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import openaiCodexError from "./openai-codex-error.ts";
 import openaiCodexEvents from "./openai-codex-events.ts";
@@ -69,7 +69,7 @@ function retryCodexSseAttempt(
   const lastError = error instanceof Error ? error : new Error(String(error));
   const retryable =
     attempt < request.maxRetries &&
-    !(lastError instanceof RetryDelayExceededError) &&
+    !Schema.is(RetryDelayExceededError)(lastError) &&
     !lastError.message.includes("usage limit");
   if (!retryable) return Effect.die(lastError);
   return sleepUnless(request.run.options?.signal)(BASE_DELAY_MS * 2 ** attempt).pipe(

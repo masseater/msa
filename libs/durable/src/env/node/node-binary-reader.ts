@@ -86,7 +86,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
     if (invalidRange(offset, length)) {
       return Promise.resolve(
         err(
-          new FileError(
+          FileError.create(
             "invalid",
             "Offset and length must be non-negative safe integers",
             this.#path,
@@ -128,7 +128,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
       Effect.exit(Effect.try(() => new LineScanner(options.startLine, options.endLine))),
     );
     if (Exit.isFailure(scanner)) {
-      return Promise.resolve(err(new FileError("invalid", "Invalid line range", this.#path)));
+      return Promise.resolve(err(FileError.create("invalid", "Invalid line range", this.#path)));
     }
     return this.#run(this.#scan(scanner.value, context));
   }

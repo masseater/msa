@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class ModelDataError extends Data.TaggedError("ModelDataError")<{
-  readonly message: string;
-}> {}
+export default class ModelDataError extends Schema.TaggedError<
+  ModelDataError,
+  { readonly brand: unique symbol }
+>()("ModelDataError", { message: Schema.String }) {}

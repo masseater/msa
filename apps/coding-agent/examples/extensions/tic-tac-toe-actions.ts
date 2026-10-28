@@ -51,10 +51,10 @@ const applyAction = (request: {
 const playForAgent = (access: ticTacToeActionsTypes.GameAccess): string => {
   const gameState = access.getState();
   if (gameState.status !== "playing") {
-    throw new TicTacToeError({ message: `Game is over (${gameState.status}).` });
+    throw TicTacToeError.make({ message: `Game is over (${gameState.status}).` });
   }
   if (gameState.currentTurn !== gameState.agentMark) {
-    throw new TicTacToeError({ message: "It is not your turn." });
+    throw TicTacToeError.make({ message: "It is not your turn." });
   }
 
   const r = gameState.agentCursorRow;
@@ -63,7 +63,7 @@ const playForAgent = (access: ticTacToeActionsTypes.GameAccess): string => {
   if (target !== " ") {
     access.syncComponent();
     access.save();
-    throw new TicTacToeError({
+    throw TicTacToeError.make({
       message: `Cell (${r},${c}) is already ${target}. Your cursor is still at (${r},${c}). Move to an empty cell and retry play.`,
     });
   }

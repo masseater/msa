@@ -1,23 +1,9 @@
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 import { dual } from "effect/Function";
 
+import CHORD_ERROR_CODES from "./chord-error-codes.ts";
 import ChordError from "./chord-error.ts";
 import type errorsTypes from "./errors.types.ts";
-
-const CHORD_ERROR_CODES = [
-  "aborted",
-  "contract_mismatch",
-  "forbidden",
-  "gone",
-  "invalid",
-  "not_in_variant",
-  "not_ready",
-  "released",
-  "superseded",
-  "unavailable",
-  "upgrade_conflict",
-  "upgrade_required",
-] as const;
 
 const isChordErrorCode = (value: unknown): value is errorsTypes.ChordErrorCode =>
   CHORD_ERROR_CODES.some((code) => code === value);
@@ -28,10 +14,10 @@ const isChordError: {
 } = dual(
   (args) => args.length >= 2 || !isChordErrorCode(args[0]),
   (error: unknown, code?: errorsTypes.ChordErrorCode): error is ChordError =>
-    error instanceof ChordError && (code === undefined || error.code === code),
+    Schema.is(ChordError)(error) && (code === undefined || error.code === code),
 );
 
-const forbidden = (message = "forbidden"): ChordError => new ChordError("forbidden", message);
+const forbidden = (message = "forbidden"): ChordError => ChordError.create("forbidden", message);
 
 const invalid: {
   (message: string, details?: unknown): (reason: errorsTypes.ChordErrorReason) => ChordError;
@@ -39,16 +25,16 @@ const invalid: {
 } = dual(
   (args) => args.length >= 2,
   (reason: errorsTypes.ChordErrorReason, message: string, details?: unknown): ChordError =>
-    new ChordError("invalid", message, { details, reason }),
+    ChordError.create("invalid", message, { details, reason }),
 );
 
 const asChordError: {
   (context: string): (error: unknown) => ChordError;
   (error: unknown, context: string): ChordError;
 } = dual(2, (error: unknown, context: string): ChordError =>
-  error instanceof ChordError
+  Schema.is(ChordError)(error)
     ? error
-    : new ChordError(
+    : ChordError.create(
         "unavailable",
         `${context}: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },

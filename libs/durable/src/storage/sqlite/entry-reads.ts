@@ -38,7 +38,7 @@ const knownConversation = Effect.fnUntraced(function* (
   id: typesModule.ConversationId,
 ) {
   const conversation = yield* readConversation(db, id);
-  if (conversation === undefined) throw new StorageRequestError(`Unknown conversation: ${id}`);
+  if (conversation === undefined) throw StorageRequestError.create(`Unknown conversation: ${id}`);
   return conversation;
 });
 

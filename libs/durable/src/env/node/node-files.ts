@@ -48,7 +48,7 @@ const runCancellableFileOp = <T>(
       Exit.isSuccess(exit)
         ? exit.value
         : err<T, fileErrorTypes.FileError>(
-            new FileError("aborted", "The operation was aborted", path),
+            FileError.create("aborted", "The operation was aborted", path),
           ),
     );
 };
@@ -134,7 +134,7 @@ const truncateFile = (
   if (aborted !== undefined) return Promise.resolve(aborted);
   if (!Number.isSafeInteger(size) || size < 0) {
     return Promise.resolve(
-      err(new FileError("invalid", "File size must be a non-negative safe integer", path)),
+      err(FileError.create("invalid", "File size must be a non-negative safe integer", path)),
     );
   }
   return nodeRuntime.runPromise(

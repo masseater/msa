@@ -209,7 +209,23 @@ function callTreg(
   );
 }
 
-function pickString(row: unknown, ...keys: string[]): string | undefined {
+type TregRowField =
+  | "content"
+  | "date"
+  | "description"
+  | "final_url"
+  | "link"
+  | "markdown"
+  | "name"
+  | "publishedDate"
+  | "published_date"
+  | "raw_content"
+  | "snippet"
+  | "text"
+  | "title"
+  | "url";
+
+function pickString(row: unknown, ...keys: TregRowField[]): string | undefined {
   if (typeof row !== "object" || row === null) return undefined;
   for (const key of keys) {
     const value = (row as Record<string, unknown>)[key];
@@ -218,7 +234,7 @@ function pickString(row: unknown, ...keys: string[]): string | undefined {
   return undefined;
 }
 
-function rows(output: Readonly<Record<string, unknown>>, key: string): unknown[] {
+function rows(output: Readonly<Record<string, unknown>>, key: "pages" | "results"): unknown[] {
   const value = output[key];
   return Array.isArray(value) ? value : [];
 }

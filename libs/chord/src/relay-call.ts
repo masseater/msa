@@ -17,11 +17,11 @@ const abortedWith = (signal: AbortSignal, error: () => unknown): Effect.Effect<n
 const relayCall = (request: relayCallTypes.RelayRequest): Effect.Effect<unknown> => {
   const { relay, frame, root, signal } = request;
   const abortError = (): errorsTypes.ChordError =>
-    new ChordError("aborted", "call cancelled", { cause: signal.reason });
+    ChordError.create("aborted", "call cancelled", { cause: signal.reason });
   return Effect.gen(function* () {
     if (signal.aborted) throw abortError();
     const down = yield* Effect.raceFirst(relay.ready(), abortedWith(signal, abortError));
-    if (relay.closed) throw new ChordError("gone", "relayed hold closed");
+    if (relay.closed) throw ChordError.create("gone", "relayed hold closed");
     let detach = (): void => {};
     return yield* Effect.callback<unknown>((resume) => {
       const call = new RelayCall(relay, frame.id, down.nextId(), {

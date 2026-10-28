@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import CredentialSynchronizationError from "../../../core/credential-synchronization-error.ts";
@@ -111,7 +111,7 @@ export default class ProviderLogin {
       } catch (error: unknown) {
         host.editorSlot.restoreEditor();
         const message = toErrorMessage(error);
-        if (error instanceof CredentialSynchronizationError) {
+        if (Schema.is(CredentialSynchronizationError)(error)) {
           host.showError(
             `${actionLabel}, but local model state could not be synchronized: ${message}`,
           );

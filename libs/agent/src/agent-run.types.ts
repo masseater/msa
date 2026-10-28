@@ -17,6 +17,12 @@ declare namespace agentRunTypes {
     readonly signal: AbortSignal | undefined;
   }
 
+  interface EndMessageFinalization {
+    readonly event: Extract<typesModule.AgentEvent, { type: "message_end" }>;
+    readonly finalize: agentOptionsTypes.FinalizeMessage | undefined;
+    readonly signal: AbortSignal | undefined;
+  }
+
   type AgentRuns = (typeof agentRun.AgentRuns)["prototype"];
 }
 

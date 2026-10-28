@@ -69,7 +69,10 @@ export default class ContextSettings {
     }
 
     const modelKey = model === undefined ? undefined : `${model.provider}/${model.id}`;
-    const entry = modelKey === undefined ? undefined : compaction?.modelOverrides?.[modelKey];
+    const entry =
+      modelKey === undefined
+        ? undefined
+        : new Map(Object.entries(compaction?.modelOverrides ?? {})).get(modelKey);
     if (entry !== undefined && !isMergeableObject(entry)) {
       throw new Error(
         `Invalid compaction.modelOverrides["${modelKey}"] setting: ${String(entry)}. Expected an object.`,

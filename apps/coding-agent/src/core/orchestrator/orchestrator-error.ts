@@ -1,6 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class OrchestratorError extends Data.TaggedError("OrchestratorError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export default class OrchestratorError extends Schema.TaggedError<
+  OrchestratorError,
+  { readonly brand: unique symbol }
+>()("OrchestratorError", { cause: Schema.optionalKey(Schema.Unknown), message: Schema.String }) {}

@@ -54,7 +54,7 @@ export default class RefImpl {
     this.ready = object.ready.then(() => {
       if (this.status === "gone") throw this.error;
       if (this.status === "released")
-        throw new ChordError("released", `reference ${this.address} released`);
+        throw ChordError.create("released", `reference ${this.address} released`);
       return undefined;
     });
     this.ready.catch(noop);
@@ -150,7 +150,7 @@ export default class RefImpl {
   terminalError(): unknown {
     return this.status === "gone"
       ? this.error
-      : new ChordError("released", `reference ${this.address} released`);
+      : ChordError.create("released", `reference ${this.address} released`);
   }
 
   viewOf(installed: coreTypes.Installed): Record<string, unknown> {
@@ -227,7 +227,7 @@ export default class RefImpl {
           typesModule.Ctx | undefined,
         ];
         if (this.object.host.inFactory > 0) {
-          throw new ChordError("not_ready", `${this.address}.${name} called inside a factory`);
+          throw ChordError.create("not_ready", `${this.address}.${name} called inside a factory`);
         }
         if (ctx !== undefined && !(ctx instanceof CtxImpl)) {
           return Promise.reject(invalid("foreign_ctx", "ctx must come from a Chord host"));

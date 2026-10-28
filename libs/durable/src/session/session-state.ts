@@ -62,7 +62,7 @@ const createSessionState = (init: {
 });
 
 const assertHealthy = (state: sessionStateTypes.SessionState): void => {
-  if (state.failure !== undefined) throw new SessionFailed(state.failure.error);
+  if (state.failure !== undefined) throw SessionFailed.create(state.failure.error);
 };
 
 const assertUsable = (state: sessionStateTypes.SessionState): void => {

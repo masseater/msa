@@ -86,7 +86,7 @@ export default class RemoteWatcher implements envTypes.FileWatcher {
       else this.#deliver({ paths: event["paths"] as string[] });
     } else if (event["kind"] === "error") {
       const code = event["code"] === "permission_denied" ? "permission_denied" : "invalid";
-      this.#deliver({ error: new FileError(code, String(event["message"])) });
+      this.#deliver({ error: FileError.create(code, String(event["message"])) });
       this.#closed = true;
     }
   }

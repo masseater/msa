@@ -30,13 +30,13 @@ function modelSettingKey(model: Model): string {
   return `${model.provider}/${model.id}`;
 }
 
-function overridesSummary(overrides: Record<string, agentTypes.ThinkingLevel>): string {
-  const count = Object.keys(overrides).length;
+function overridesSummary(overrides: ReadonlyMap<string, agentTypes.ThinkingLevel>): string {
+  const count = overrides.size;
   return count === 0 ? "none" : `${count} configured`;
 }
 
 export default class ModelThinkingSubmenu {
-  private readonly levels: Record<string, agentTypes.ThinkingLevel>;
+  private readonly levels: Map<string, agentTypes.ThinkingLevel>;
   private readonly modelsByKey: Map<string, Model>;
   private readonly currentModelKey: string | undefined;
   private readonly defaultModelKey: string | undefined;
@@ -44,7 +44,7 @@ export default class ModelThinkingSubmenu {
 
   constructor(config: settingsSelectorTypes.SettingsConfig) {
     this.config = config;
-    this.levels = { ...config.modelThinkingLevels };
+    this.levels = new Map(Object.entries(config.modelThinkingLevels));
     this.modelsByKey = new Map(
       config.availableDefaultModels.map((model) => [modelSettingKey(model), model]),
     );
@@ -78,7 +78,7 @@ export default class ModelThinkingSubmenu {
     const level = selections["level"];
     if (level === CLEAR_OVERRIDE_VALUE) {
       callbacks.onModelThinkingLevelRemove(model.provider, model.id);
-      delete this.levels[modelKey];
+      this.levels.delete(modelKey);
       return;
     }
     callbacks.onModelThinkingLevelChange(
@@ -86,7 +86,7 @@ export default class ModelThinkingSubmenu {
       model.id,
       level as agentTypes.ThinkingLevel,
     );
-    this.levels[modelKey] = level as agentTypes.ThinkingLevel;
+    this.levels.set(modelKey, level as agentTypes.ThinkingLevel);
   }
 
   private steps(): settingsSubmenuTypes.SteppedSubmenuStep[] {
@@ -106,7 +106,7 @@ export default class ModelThinkingSubmenu {
         options: (ctx) => this.levelItems(ctx["model"]),
         preselect: (ctx) => {
           const modelKey = ctx["model"];
-          return modelKey === undefined ? undefined : this.levels[modelKey];
+          return modelKey === undefined ? undefined : this.levels.get(modelKey);
         },
         title: (ctx) => {
           const modelKey = ctx["model"];
@@ -130,7 +130,7 @@ export default class ModelThinkingSubmenu {
     );
     const items = sorted.map((model): tuiTypes.SelectItem => {
       const key = modelSettingKey(model);
-      const override = this.levels[key];
+      const override = this.levels.get(key);
       const item: tuiTypes.SelectItem = {
         label: `${model.id} ${theme.fg("muted", `[${model.provider}]`)}`,
         value: key,
@@ -154,7 +154,7 @@ export default class ModelThinkingSubmenu {
     const levels = (
       model.reasoning ? ai.getSupportedThinkingLevels(model) : ["off"]
     ) as agentTypes.ThinkingLevel[];
-    const activeLevel = this.levels[modelKey];
+    const activeLevel = this.levels.get(modelKey);
     const items: tuiTypes.SelectItem[] = levels.map((level) => ({
       description: THINKING_DESCRIPTIONS[level],
       label: `${level === activeLevel ? "✓ " : "  "}${level}`,

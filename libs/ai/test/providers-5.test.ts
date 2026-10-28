@@ -151,7 +151,7 @@ const letsANewerDynamicRefreshBypass = () =>
       yield* expectOnlyLatestListing(provider, store);
 
       firstBlocked.resolve();
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
       yield* expectOnlyLatestListing(provider, store);
     }),
   );

@@ -1,4 +1,4 @@
-import * as Data from "effect/Data";
+import * as Schema from "effect/Schema";
 
 import type sourceTypes from "./source.types.ts";
 
@@ -18,11 +18,12 @@ NEWLINE: /\r?\n/
 SOURCE: /[\s\S]+/
 `;
 
-class CodemodeSourceError extends Data.TaggedError("CodemodeSourceError")<{
-  readonly message: string;
-}> {
-  constructor(message: string) {
-    super({ message });
+class CodemodeSourceError extends Schema.TaggedError<
+  CodemodeSourceError,
+  { readonly brand: unique symbol }
+>()("CodemodeSourceError", { message: Schema.String }) {
+  static create(message: string): CodemodeSourceError {
+    return CodemodeSourceError.make({ message });
   }
 }
 
@@ -32,7 +33,7 @@ function isSafeInteger(value: unknown): value is number {
 
 function parseOptions(directive: string): sourceTypes.CodemodeSourceOptions {
   if (directive === "") {
-    throw new CodemodeSourceError(
+    throw CodemodeSourceError.create(
       `@options must be a JSON object with supported fields ${SUPPORTED_FIELDS_TEXT}`,
     );
   }
@@ -40,19 +41,19 @@ function parseOptions(directive: string): sourceTypes.CodemodeSourceOptions {
   try {
     value = JSON.parse(directive);
   } catch (error) {
-    throw new CodemodeSourceError(
+    throw CodemodeSourceError.create(
       `@options must be valid JSON with supported fields ${SUPPORTED_FIELDS_TEXT}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new CodemodeSourceError(
+    throw CodemodeSourceError.create(
       `@options must be a JSON object with supported fields ${SUPPORTED_FIELDS_TEXT}`,
     );
   }
   const fields = value as Record<string, unknown>;
   for (const key of Object.keys(fields)) {
     if (!(SUPPORTED_FIELDS as readonly string[]).includes(key)) {
-      throw new CodemodeSourceError(
+      throw CodemodeSourceError.create(
         `@options only supports ${SUPPORTED_FIELDS_TEXT}; got \`${key}\``,
       );
     }
@@ -61,7 +62,7 @@ function parseOptions(directive: string): sourceTypes.CodemodeSourceOptions {
   const { max_output_tokens, timeout_ms } = fields;
   if (max_output_tokens !== undefined) {
     if (!isSafeInteger(max_output_tokens)) {
-      throw new CodemodeSourceError(
+      throw CodemodeSourceError.create(
         "@options field `max_output_tokens` must be a non-negative safe integer",
       );
     }
@@ -69,7 +70,7 @@ function parseOptions(directive: string): sourceTypes.CodemodeSourceOptions {
   }
   if (timeout_ms !== undefined) {
     if (!isSafeInteger(timeout_ms) || timeout_ms === 0 || timeout_ms > MAX_TIMEOUT_MS) {
-      throw new CodemodeSourceError(
+      throw CodemodeSourceError.create(
         `@options field \`timeout_ms\` must be a positive integer up to ${MAX_TIMEOUT_MS}`,
       );
     }
@@ -80,7 +81,7 @@ function parseOptions(directive: string): sourceTypes.CodemodeSourceOptions {
 
 function parseCodemodeSource(input: string): sourceTypes.ParsedCodemodeSource {
   if (input.trim() === "") {
-    throw new CodemodeSourceError(
+    throw CodemodeSourceError.create(
       'Expected JavaScript source text (non-empty). Provide JS only, optionally with a first line `// @options: {"max_output_tokens": 1000}`.',
     );
   }
@@ -89,7 +90,7 @@ function parseCodemodeSource(input: string): sourceTypes.ParsedCodemodeSource {
     (line, index) => index > 0 && line.trimStart().startsWith(CODEMODE_OPTIONS_PREFIX),
   );
   if (misplaced !== -1) {
-    throw new CodemodeSourceError(
+    throw CodemodeSourceError.create(
       `The ${CODEMODE_OPTIONS_PREFIX} line must be the first line of the input; found one on line ${misplaced + 1}`,
     );
   }
@@ -99,7 +100,7 @@ function parseCodemodeSource(input: string): sourceTypes.ParsedCodemodeSource {
   if (!trimmed.startsWith(CODEMODE_OPTIONS_PREFIX)) return { code: input, options: {} };
   const code = newline === -1 ? "" : input.slice(newline);
   if (code.trim() === "") {
-    throw new CodemodeSourceError(
+    throw CodemodeSourceError.create(
       "The @options line must be followed by JavaScript source on subsequent lines",
     );
   }

@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 
 import { NodeServices } from "@effect/platform-node";
-import { Console, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
 import codingAgentPackage from "./coding-agent-package.ts";
 import releasePlatforms from "./release-platforms.ts";
@@ -18,9 +18,10 @@ const SUMS_LINE_PATTERN = /^([0-9a-f]{64}) {2}(\S+)$/u;
 const HOMEPAGE = "https://github.com/masseater/msa";
 const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] as const;
 
-class RenderHomebrewFormulaError extends Data.TaggedError("RenderHomebrewFormulaError")<{
-  readonly message: string;
-}> {}
+class RenderHomebrewFormulaError extends Schema.TaggedError<
+  RenderHomebrewFormulaError,
+  { readonly brand: unique symbol }
+>()("RenderHomebrewFormulaError", { message: Schema.String }) {}
 
 const packageJsonJson = Schema.fromJsonString(
   Schema.Struct({
@@ -34,7 +35,7 @@ type Flags = Readonly<{ out?: string; sums?: string; version?: string }>;
 const parseFlags = () =>
   Effect.try({
     catch: (error) =>
-      new RenderHomebrewFormulaError({
+      RenderHomebrewFormulaError.make({
         message: `usage: render-homebrew-formula.ts [--version <x.y.z>] [--sums <SHA256SUMS>] [--out <path>] (${String(error)})`,
       }),
     try: (): Flags =>
@@ -50,12 +51,12 @@ const parseFlags = () =>
 const requireVersion = (candidate: string) =>
   VERSION_PATTERN.test(candidate)
     ? Effect.succeed(candidate)
-    : Effect.fail(new RenderHomebrewFormulaError({ message: `invalid version: ${candidate}` }));
+    : Effect.fail(RenderHomebrewFormulaError.make({ message: `invalid version: ${candidate}` }));
 
 const requireShortDescription = (description: string) =>
   description.length >= 80
     ? Effect.fail(
-        new RenderHomebrewFormulaError({
+        RenderHomebrewFormulaError.make({
           message: `package description must be shorter than 80 characters for Homebrew: ${description}`,
         }),
       )
@@ -105,7 +106,7 @@ const readChecksums = (context: Context) =>
     const linesWithEntries = lines.map((line) => ({ entry: parseChecksumLine(line), line }));
     const malformed = linesWithEntries.find(({ entry }) => entry === undefined);
     if (malformed !== undefined) {
-      return yield* new RenderHomebrewFormulaError({
+      return yield* RenderHomebrewFormulaError.make({
         message: `malformed checksum line in ${context.sumsPath}: ${malformed.line}`,
       });
     }
@@ -122,14 +123,14 @@ const checksumFor = (context: Context, checksums: Checksums, platformName: strin
   Effect.gen(function* () {
     const platform = RELEASE_PLATFORMS.find((candidate) => candidate.name === platformName);
     if (platform === undefined) {
-      return yield* new RenderHomebrewFormulaError({
+      return yield* RenderHomebrewFormulaError.make({
         message: `unknown platform: ${platformName}`,
       });
     }
     const archive = archiveFileNameFor(platform);
     const sha256 = checksums.get(archive);
     if (sha256 === undefined) {
-      return yield* new RenderHomebrewFormulaError({
+      return yield* RenderHomebrewFormulaError.make({
         message: `no checksum for ${archive} in ${context.sumsPath}`,
       });
     }

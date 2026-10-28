@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import testing from "@msa/testing";
 import chalk from "chalk";
-import { Cause, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, FileSystem, ManagedRuntime, Schema } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import config from "../../../src/config.ts";
@@ -107,7 +107,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
         );
         if (Exit.isFailure(tryExit4)) {
           const error = Cause.squash(tryExit4.cause);
-          if (!(error instanceof ProcessExitError)) throw error;
+          if (!Schema.is(ProcessExitError)(error)) throw error;
         }
       }
     }),
@@ -116,7 +116,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
 
 const signalTriggeredShutdownEmitsSessionShutdown = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError({});
+    throw ProcessExitError.make({});
   }) as typeof process.exit);
   const order: string[] = [];
   const context = createContext(order);
@@ -129,7 +129,7 @@ const signalTriggeredShutdownEmitsSessionShutdown = Effect.gen(function* () {
 
 const interactiveQuitStopsTheTuiBefore = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError({});
+    throw ProcessExitError.make({});
   }) as typeof process.exit);
   const order: string[] = [];
   const context = createContext(order);
@@ -141,7 +141,7 @@ const interactiveQuitStopsTheTuiBefore = Effect.gen(function* () {
 
 const interactiveQuitPrintsAResumeHint = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError({});
+    throw ProcessExitError.make({});
   }) as typeof process.exit);
   const stdoutWrite = vi
     .spyOn(process.stdout, "write")
@@ -163,7 +163,7 @@ const interactiveQuitPrintsAResumeHint = Effect.gen(function* () {
 
 const signalTriggeredShutdownDoesNotPrint = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError({});
+    throw ProcessExitError.make({});
   }) as typeof process.exit);
   const stdoutWrite = vi
     .spyOn(process.stdout, "write")
@@ -184,7 +184,7 @@ const signalTriggeredShutdownDoesNotPrint = Effect.gen(function* () {
 
 const reEntrantShutdownIsANo = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError({});
+    throw ProcessExitError.make({});
   }) as typeof process.exit);
   const order: string[] = [];
   const context = createContext(order);

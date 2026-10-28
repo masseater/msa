@@ -33,28 +33,28 @@ function renameProviderRefsIn(value: unknown): unknown {
   return typeof value === "string" && value.includes("/") ? renameProviderRef(value) : value;
 }
 
-function renameKeys(record: Record<string, unknown>): boolean {
+type JsonRecord = Record<string, unknown>;
+
+function renameKeys(record: JsonRecord): JsonRecord | undefined {
+  const next = new Map(Object.entries(record));
   let changed = false;
   for (const [key, value] of Object.entries(record)) {
     const renamed = renamedProviderId(key);
     if (renamed === undefined) continue;
-    if (!(renamed in record)) record[renamed] = value;
-    delete record[key];
+    if (!next.has(renamed)) next.set(renamed, value);
+    next.delete(key);
     changed = true;
   }
-  return changed;
+  return changed ? Object.fromEntries(next) : undefined;
 }
 
-function rewriteJson(
-  path: string,
-  update: (data: Record<string, unknown>) => boolean,
-): Promise<void> {
+function rewriteJson(path: string, update: (data: JsonRecord) => JsonRecord | undefined) {
   return readText(path)
     .then((content) => {
-      const data = JSON.parse(stripBom(content)) as Record<string, unknown>;
-      return update(data)
-        ? writeFile({ data: `${JSON.stringify(data, null, 2)}\n`, path })
-        : undefined;
+      const updated = update(JSON.parse(stripBom(content)) as JsonRecord);
+      return updated === undefined
+        ? undefined
+        : writeFile({ data: `${JSON.stringify(updated, null, 2)}\n`, path });
     })
     .catch(() => undefined);
 }
@@ -67,28 +67,28 @@ function migrateRenamedProviders(agentDir: string = getAgentDir()): Promise<void
   ]).then(() => undefined);
 }
 
-function renameAuthProviders(data: Record<string, unknown>): boolean {
-  const anthropic = data["anthropic"] as { type?: unknown } | undefined;
-  if (anthropic?.type === "oauth") delete data["anthropic"];
-  return renameKeys(data) || anthropic?.type === "oauth";
+function renameAuthProviders(data: JsonRecord): JsonRecord | undefined {
+  const anthropicOAuth = (data["anthropic"] as { type?: unknown } | undefined)?.type === "oauth";
+  const kept = anthropicOAuth
+    ? Object.fromEntries(Object.entries(data).filter(([key]) => key !== "anthropic"))
+    : data;
+  return renameKeys(kept) ?? (anthropicOAuth ? kept : undefined);
 }
 
-function renameModelProviders(data: Record<string, unknown>): boolean {
-  return data["providers"] !== null && typeof data["providers"] === "object"
-    ? renameKeys(data["providers"] as Record<string, unknown>)
-    : false;
+function renameModelProviders(data: JsonRecord): JsonRecord | undefined {
+  if (data["providers"] === null || typeof data["providers"] !== "object") return undefined;
+  const providers = renameKeys(data["providers"] as JsonRecord);
+  return providers === undefined ? undefined : { ...data, providers };
 }
 
-function renameSettingsProviders(data: Record<string, unknown>): boolean {
-  const before = JSON.stringify(data);
-  const renamed = renameProviderRefsIn(data) as Record<string, unknown>;
+function renameSettingsProviders(data: JsonRecord): JsonRecord | undefined {
+  const renamed = renameProviderRefsIn(data) as JsonRecord;
   const provider = renamed["defaultProvider"];
-  if (typeof provider === "string")
-    renamed["defaultProvider"] = renamedProviderId(provider) ?? provider;
-  if (JSON.stringify(renamed) === before) return false;
-  for (const key of Object.keys(data)) delete data[key];
-  Object.assign(data, renamed);
-  return true;
+  const next =
+    typeof provider === "string"
+      ? { ...renamed, defaultProvider: renamedProviderId(provider) ?? provider }
+      : renamed;
+  return JSON.stringify(next) === JSON.stringify(data) ? undefined : next;
 }
 
 const providerRenames = { migrateRenamedProviders };

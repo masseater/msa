@@ -57,7 +57,7 @@ export default class DoomEngine {
       .runPromise(
         Effect.gen(function* () {
           if (!(yield* fsService.exists(doomPath).pipe(Effect.orElseSucceed(() => false)))) {
-            return yield* new DoomEngineError({
+            return yield* DoomEngineError.make({
               message: `WASM not found at ${doomPath}. Run ./doom/build.sh first`,
             });
           }

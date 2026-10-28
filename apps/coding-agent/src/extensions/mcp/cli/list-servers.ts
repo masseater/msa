@@ -78,8 +78,9 @@ function printReport(report: Report, log: Line): void {
     log(`  project override: ${report.override}`);
   if (report.state === "needs-auth") log(`  sign in with: ${APP_NAME} mcp login ${report.name}`);
   if (report.tools.length > 0) {
+    const toolExposure = new Map(Object.entries(report.toolExposure ?? {}));
     const tools = report.tools.map((tool) => {
-      const exposure = report.toolExposure?.[tool];
+      const exposure = toolExposure.get(tool);
       return exposure !== undefined && exposure !== "" ? `${tool} [${exposure}]` : tool;
     });
     log(`  tools: ${tools.join(", ")}`);

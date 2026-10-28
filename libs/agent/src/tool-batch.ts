@@ -68,8 +68,9 @@ const emitToolResultMessage = (
   Effect.gen(function* () {
     const message = createToolResultMessage(finalized);
     yield* emit({ message, type: "message_start" });
-    yield* emit({ message, type: "message_end" });
-    return message;
+    const end = { message, type: "message_end" as const };
+    yield* emit(end);
+    return end.message;
   });
 
 const failToolCallsFromTruncatedMessage = ({

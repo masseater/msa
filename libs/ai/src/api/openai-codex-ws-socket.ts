@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import headersModule from "../utils/headers.ts";
 import openaiCodexError from "./openai-codex-error.ts";
@@ -13,12 +13,15 @@ const { getWebSocketConstructor } = openaiCodexWsConstructor;
 const DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS = 15_000;
 const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
 
-class WebSocketCloseError extends Data.TaggedError("WebSocketCloseError")<{
-  readonly message: string;
-  readonly code: number | undefined;
-  readonly reason: string | undefined;
-  readonly wasClean: boolean | undefined;
-}> {}
+class WebSocketCloseError extends Schema.TaggedError<
+  WebSocketCloseError,
+  { readonly brand: unique symbol }
+>()("WebSocketCloseError", {
+  code: Schema.UndefinedOr(Schema.Finite),
+  message: Schema.String,
+  reason: Schema.UndefinedOr(Schema.String),
+  wasClean: Schema.UndefinedOr(Schema.Boolean),
+}) {}
 
 const field = (event: object, key: string): unknown =>
   key in event ? (event as Record<string, unknown>)[key] : undefined;
@@ -44,7 +47,7 @@ function extractWebSocketCloseError(event: unknown): Error {
   const codeText = typeof code === "number" ? ` ${code}` : "";
   const tooBig = code === WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE ? " message too big" : "";
   const reasonText = nonEmpty(reason) ? ` ${reason}` : tooBig;
-  return new WebSocketCloseError({
+  return WebSocketCloseError.make({
     code: typeof code === "number" ? code : undefined,
     message: `WebSocket closed${codeText}${reasonText}`.trim(),
     reason: nonEmpty(reason) ? reason : undefined,

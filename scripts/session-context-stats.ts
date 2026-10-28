@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import { Console, Data, DateTime, Effect, Option, Schema } from "effect";
+import { Console, DateTime, Effect, Option, Schema } from "effect";
 
 import cliOptions from "./cli-options.ts";
 import hostModule from "./host.ts";
@@ -50,9 +50,10 @@ interface Args {
   text: boolean;
 }
 
-class SessionContextStatsError extends Data.TaggedError("SessionContextStatsError")<{
-  readonly message: string;
-}> {}
+class SessionContextStatsError extends Schema.TaggedError<
+  SessionContextStatsError,
+  { readonly brand: unique symbol }
+>()("SessionContextStatsError", { message: Schema.String }) {}
 
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
@@ -68,7 +69,7 @@ const defaultArgs = (host: sessionContextStatsTypes.HostShape): Args => ({
   text: false,
 });
 
-const fail = (message: string) => new SessionContextStatsError({ message });
+const fail = (message: string) => SessionContextStatsError.make({ message });
 
 const requiredValue = (
   name: string,

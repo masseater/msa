@@ -24,22 +24,24 @@ function deepMergeObjects(
   base: Record<string, unknown>,
   overrides: Record<string, unknown>,
 ): Record<string, unknown> {
-  const result = { ...base };
-
-  for (const key of Object.keys(overrides)) {
-    const overrideValue = overrides[key];
-    if (overrideValue === undefined) {
-      continue;
-    }
-
-    const baseValue = base[key];
-    result[key] =
-      isMergeableObject(baseValue) && isMergeableObject(overrideValue)
-        ? deepMergeObjects(baseValue, overrideValue)
-        : overrideValue;
-  }
-
-  return result;
+  const baseValues = new Map(Object.entries(base));
+  return {
+    ...base,
+    ...Object.fromEntries(
+      Object.entries(overrides).flatMap(([key, overrideValue]) => {
+        if (overrideValue === undefined) return [];
+        const baseValue = baseValues.get(key);
+        return [
+          [
+            key,
+            isMergeableObject(baseValue) && isMergeableObject(overrideValue)
+              ? deepMergeObjects(baseValue, overrideValue)
+              : overrideValue,
+          ] as const,
+        ];
+      }),
+    ),
+  };
 }
 
 function mergeDefaultTools(

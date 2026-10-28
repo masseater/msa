@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class AnthropicAuthError extends Data.TaggedError("AnthropicAuthError")<{
-  readonly message: string;
-}> {}
+export default class AnthropicAuthError extends Schema.TaggedError<
+  AnthropicAuthError,
+  { readonly brand: unique symbol }
+>()("AnthropicAuthError", { message: Schema.String }) {}

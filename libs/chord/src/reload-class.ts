@@ -108,7 +108,7 @@ export default class Reload {
 
   alive(): void {
     if (this.rolledBack)
-      throw new ChordError("aborted", "reload aborted while preparing", { reason: "aborted" });
+      throw ChordError.create("aborted", "reload aborted while preparing", { reason: "aborted" });
   }
 
   #stage(): void {
@@ -132,7 +132,7 @@ export default class Reload {
       const retired = yield* until(host, () => gone() || host.retirable(), deadline);
       if (!retired && !gone()) {
         previous.abort.abort(
-          new ChordError("superseded", `code version ${previous.id} was retired`),
+          ChordError.create("superseded", `code version ${previous.id} was retired`),
         );
         yield* until(
           host,
@@ -153,7 +153,9 @@ export default class Reload {
             duration: deadline,
             orElse: () =>
               Effect.die(
-                new ChordError("aborted", `${what} within ${deadline} ms`, { reason: "deadline" }),
+                ChordError.create("aborted", `${what} within ${deadline} ms`, {
+                  reason: "deadline",
+                }),
               ),
           }),
         ),

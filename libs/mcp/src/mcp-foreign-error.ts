@@ -1,6 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class McpForeignError extends Data.TaggedError("McpForeignError")<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+export default class McpForeignError extends Schema.TaggedError<
+  McpForeignError,
+  { readonly brand: unique symbol }
+>()("McpForeignError", { cause: Schema.Unknown, message: Schema.String }) {}

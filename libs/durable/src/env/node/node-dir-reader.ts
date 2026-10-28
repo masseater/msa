@@ -67,7 +67,7 @@ export default class NodeDirReader implements typesModule.DirReader {
       return Promise.resolve(closedResult<DirBatch>("Directory reader", this.#path));
     if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
       return Promise.resolve(
-        err(new FileError("invalid", "maxEntries must be a positive safe integer", this.#path)),
+        err(FileError.create("invalid", "maxEntries must be a positive safe integer", this.#path)),
       );
     }
     return Effect.runPromise(recoverFileError(this.#fill(maxEntries, context), this.#path));

@@ -1,4 +1,4 @@
-import * as Effect from "effect/Effect";
+import { Effect, Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
@@ -77,7 +77,7 @@ export default class McpServerActions {
             ),
           );
         } catch (error) {
-          if (error instanceof runtime.McpSignInCancelledError) return "Sign-in cancelled.";
+          if (Schema.is(runtime.McpSignInCancelledError)(error)) return "Sign-in cancelled.";
           return `Sign-in failed: ${toErrorMessage(error)}`;
         }
 

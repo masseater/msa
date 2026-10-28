@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import compat from "../src/compat.ts";
@@ -21,7 +21,10 @@ interface SamplingPayload {
   reasoning?: { effort?: string };
 }
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
+class PayloadCaptured extends Schema.TaggedError<
+  PayloadCaptured,
+  { readonly brand: unique symbol }
+>()("PayloadCaptured", { message: Schema.String }) {}
 
 function makeContext(): typesModule.Context {
   return {
@@ -55,7 +58,7 @@ function capturingOptions(onCapture: (payload: SamplingPayload) => void) {
     apiKey: "fake-key",
     onPayload: (payload: unknown) => {
       onCapture(payload as SamplingPayload);
-      throw new PayloadCaptured({ message: "payload captured" });
+      throw PayloadCaptured.make({ message: "payload captured" });
     },
   };
 }

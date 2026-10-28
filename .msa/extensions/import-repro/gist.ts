@@ -36,7 +36,7 @@ interface IssueComment {
 }
 
 const toImportReproError = (error: { readonly message: string }): sessionTypes.ImportReproError =>
-  new ImportReproError({ message: error.message });
+  ImportReproError.make({ message: error.message });
 
 const fetchResponse = (
   url: string,
@@ -63,7 +63,7 @@ const fetchText = (
   Effect.gen(function* () {
     const response = yield* fetchResponse(url, { Accept: "application/vnd.github+json" });
     if (!isOk(response)) {
-      return yield* new ImportReproError({
+      return yield* ImportReproError.make({
         message: `failed to fetch ${url}: HTTP ${response.status}`,
       });
     }
@@ -78,7 +78,7 @@ const readGistFile = (
   }
   if (file.raw_url === undefined || file.raw_url === "") {
     return Effect.fail(
-      new ImportReproError({
+      ImportReproError.make({
         message: `gist file ${file.filename ?? "<unknown>"} has no raw URL`,
       }),
     );
@@ -109,7 +109,7 @@ const collectIssueGistIds = (
       GITHUB_API_HEADERS,
     );
     if (!isOk(response)) {
-      return yield* new ImportReproError({
+      return yield* ImportReproError.make({
         message: `failed to fetch issue comments: HTTP ${response.status}`,
       });
     }
@@ -132,7 +132,7 @@ const findIssueGistIdWithClient = ({
   Effect.gen(function* () {
     const gistId = (yield* collectIssueGistIds(owner, repo, issue, 1)).at(-1);
     if (gistId === undefined) {
-      return yield* new ImportReproError({
+      return yield* ImportReproError.make({
         message: `no github-actions gist link found in comments on ${owner}/${repo}#${issue}`,
       });
     }
@@ -152,7 +152,7 @@ const fetchGistSessionWithClient = (
       GITHUB_API_HEADERS,
     );
     if (!isOk(response)) {
-      return yield* new ImportReproError({
+      return yield* ImportReproError.make({
         message: `failed to fetch gist ${gistId}: HTTP ${response.status}`,
       });
     }
@@ -165,7 +165,7 @@ const fetchGistSessionWithClient = (
     const htmlFile = files.find((file) => file.filename?.endsWith(".html") === true);
     if (htmlFile !== undefined) return decodeExportedHtml(yield* readGistFile(htmlFile));
 
-    return yield* new ImportReproError({
+    return yield* ImportReproError.make({
       message: `gist ${gistId} has no .jsonl or .html session file`,
     });
   });

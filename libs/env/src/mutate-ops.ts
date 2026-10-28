@@ -42,7 +42,11 @@ const truncateAt = (
       operation: (resolved) =>
         !Number.isSafeInteger(size) || size < 0
           ? Effect.fail(
-              new FileError("invalid", "File size must be a non-negative safe integer", resolved),
+              FileError.create(
+                "invalid",
+                "File size must be a non-negative safe integer",
+                resolved,
+              ),
             )
           : Effect.asVoid(
               remoteRequest({ connection, json: { path: resolved, size }, op: "truncate" }),

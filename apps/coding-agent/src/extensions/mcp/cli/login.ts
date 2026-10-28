@@ -1,4 +1,4 @@
-import * as Effect from "effect/Effect";
+import { Effect, Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import nodeReadline from "../../../core/platform/node/readline.ts";
@@ -104,7 +104,7 @@ function login(
         yield* awaited(signIn(name, connection, url, timeoutMs, options, credentials, log));
       } catch (signInError) {
         error(
-          signInError instanceof McpSignInCancelledError
+          Schema.is(McpSignInCancelledError)(signInError)
             ? `Sign-in to MCP server "${name}" was cancelled or not completed within ${Math.round(timeoutMs / 1000)} seconds.`
             : `Sign-in to MCP server "${name}" failed: ${toErrorMessage(signInError)}`,
         );

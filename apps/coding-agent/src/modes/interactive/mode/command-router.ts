@@ -156,12 +156,14 @@ export default class BuiltinCommandRouter {
     return awaitingWith(function* () {
       const space = text.indexOf(" ");
       const name = space === -1 ? text : text.slice(0, space);
-      const commands = {
-        ...this.builtinViewCommands(),
-        ...this.builtinSessionCommands(),
-        ...this.builtinArgumentCommands(),
-      };
-      const command = Object.hasOwn(commands, name) ? commands[name] : undefined;
+      const commands = new Map(
+        Object.entries({
+          ...this.builtinViewCommands(),
+          ...this.builtinSessionCommands(),
+          ...this.builtinArgumentCommands(),
+        }),
+      );
+      const command = commands.get(name);
       if (command === undefined || (space !== -1 && !command.args)) return false;
       if (command.clearFirst) this.mode.editor.setText("");
       yield* performed(command.run(text));

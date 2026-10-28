@@ -13,6 +13,8 @@ import spawnAgent from "./spawn-agent.ts";
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { serializeJsonLine, attachJsonlLineReader } = jsonl;
 
+type RpcResponseField = "commands" | "disposition" | "levels" | "messages" | "models" | "text";
+
 export default class RpcConnection {
   private readonly client: RpcClient;
 
@@ -272,7 +274,7 @@ export default class RpcConnection {
     );
   }
 
-  requestField<T, K extends keyof T>(
+  requestField<T, K extends keyof T & RpcResponseField>(
     command: rpcClientInternalTypes.RpcCommandBody,
     field: K,
   ): Promise<T[K]> {

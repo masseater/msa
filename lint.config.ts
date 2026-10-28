@@ -2,6 +2,7 @@ import { builtinModules } from "node:module";
 
 import type { OxlintConfig } from "vite-plus/lint";
 
+import effectRules from "./effect-rules.config.ts";
 import lintedPackages from "./tools/oxlint/workspace-packages.json" with { type: "json" };
 
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
@@ -254,19 +255,32 @@ const strictCategoryRules = [
   "promise/no-return-in-finally",
 ];
 
+const lintProbeRoot = "lint-probe";
+
+const processEnvWriter = "apps/coding-agent/src/core/platform/env.ts";
+
+const lintProbeDir = `${import.meta.dirname}/${lintProbeRoot}`;
+
 const workspacePackages = lintedPackages.map(({ dir, specifiers }) => ({
   dir: `${import.meta.dirname}/${dir}`,
   specifiers,
 }));
 
+const { adoptedEffectRules, declinedEffectRules } = effectRules;
+
 const lintConfig = {
+  adoptedEffectRules,
   builtinModuleBases,
+  declinedEffectRules,
   effectReplaceableBuiltins,
   fsSyncFunctions,
   generated,
   lintPlugins,
+  lintProbeDir,
+  lintProbeRoot,
   loopbackTestServerMembers,
   platformOnlyImports,
+  processEnvWriter,
   requiredStack,
   restrictedImports,
   restrictedProperties,

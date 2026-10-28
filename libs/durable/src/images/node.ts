@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Schema } from "effect";
 
 import type imageTypes from "../tools/image.types.ts";
 import imagesModule from "./index.ts";
@@ -57,7 +57,7 @@ function threaded(options: nodeTypes.NodePhotonImagesOptions): imageTypes.ImageP
       return thread.then((started) => started.prepare(bytes, mimeType, limits));
     }).pipe(
       Effect.catchDefect((defect) => {
-        if (!(defect instanceof WorkerUnavailable)) return Effect.die(defect);
+        if (!Schema.is(WorkerUnavailable)(defect)) return Effect.die(defect);
         fallback = inProcess();
         return prepareWith(fallback, bytes, mimeType, limits);
       }),

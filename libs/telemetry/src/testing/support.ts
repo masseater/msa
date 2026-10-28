@@ -1,15 +1,16 @@
 import { fail, ok, strictEqual } from "node:assert/strict";
 
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import type memoryTypes from "../memory.types.ts";
 import type supportTypes from "./support.types.ts";
 import type typesModule from "./types.ts";
 
-class OperationRejected extends Data.TaggedError("OperationRejected")<{
-  readonly reason: unknown;
-}> {}
+class OperationRejected extends Schema.TaggedError<
+  OperationRejected,
+  { readonly brand: unique symbol }
+>()("OperationRejected", { reason: Schema.Unknown }) {}
 
 const createCase: {
   (
@@ -71,7 +72,7 @@ const rejectsWithSameValue: {
   (operation: () => Promise<unknown>, expected: unknown): Effect.Effect<void>;
 } = dual(2, (operation: () => Promise<unknown>, expected: unknown): Effect.Effect<void> =>
   Effect.tryPromise({
-    catch: (reason) => new OperationRejected({ reason }),
+    catch: (reason) => OperationRejected.make({ reason }),
     try: operation,
   }).pipe(
     Effect.matchEffect({

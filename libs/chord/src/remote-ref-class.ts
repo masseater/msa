@@ -1,4 +1,4 @@
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Schema } from "effect";
 import { Value } from "typebox/value";
 
 import type contractTypes from "./contract.types.ts";
@@ -88,14 +88,14 @@ export default class RemoteRef implements coreTypes.RefCore {
   terminalError(): unknown {
     return this.status === "gone"
       ? this.error
-      : new ChordError("released", `reference ${this.address} released`);
+      : ChordError.create("released", `reference ${this.address} released`);
   }
 
   release(): void {
     if (this.ended) return;
     this.status = "released";
     this.#notify();
-    this.#settle(Effect.die(new ChordError("released", `reference ${this.address} released`)));
+    this.#settle(Effect.die(ChordError.create("released", `reference ${this.address} released`)));
     this.#settleReady = undefined;
     for (const readable of this.#readables.values()) readable.stop();
     this.binding.removeView(this);
@@ -119,7 +119,7 @@ export default class RemoteRef implements coreTypes.RefCore {
 
   end(error: unknown): void {
     if (this.ended) return;
-    const released = error instanceof ChordError && error.code === "released";
+    const released = Schema.is(ChordError)(error) && error.code === "released";
     this.status = released ? "released" : "gone";
     if (!released) this.error = error;
     this.#notify();
@@ -172,7 +172,7 @@ export default class RemoteRef implements coreTypes.RefCore {
         ];
         const host = this.binding.host;
         if (host.inFactory > 0)
-          throw new ChordError("not_ready", `${this.address}.${name} called inside a factory`);
+          throw ChordError.create("not_ready", `${this.address}.${name} called inside a factory`);
         if (ctx !== undefined && !(ctx instanceof CtxImpl)) {
           return Promise.reject(invalid("foreign_ctx", "ctx must come from a Chord host"));
         }
@@ -216,7 +216,7 @@ export default class RemoteRef implements coreTypes.RefCore {
             ? undefined
             : binding.contract.description.variants[variant]?.[name];
         if (description?.kind !== "method") {
-          throw new ChordError(
+          throw ChordError.create(
             "not_in_variant",
             `${binding.key}: ${name} is not a method of variant ${variant}`,
           );

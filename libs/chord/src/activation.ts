@@ -77,7 +77,7 @@ export default class ObjectActivation {
     const timedOut = Effect.flatMap(unrefSleep(ms), () => {
       const list = waiting();
       return Effect.die(
-        new ChordError(
+        ChordError.create(
           "unavailable",
           `${object.address} was not ready after ${ms} ms${list.length === 0 ? "" : `, waiting on ${list.join(", ")}`} (a reference cycle across hosts?)`,
           { reason: "ready_timeout" },

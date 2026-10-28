@@ -36,7 +36,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
     const aborted = abortResult<T>(context.abortSignal, this.#path);
     if (aborted !== undefined) return aborted;
     return this.#closed
-      ? err(new FileError("invalid", "Binary reader is closed", this.#path))
+      ? err(FileError.create("invalid", "Binary reader is closed", this.#path))
       : undefined;
   }
 
@@ -68,7 +68,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
     if (!isNonNegativeSafeInteger(offset) || !isNonNegativeSafeInteger(length)) {
       return Promise.resolve(
         err(
-          new FileError(
+          FileError.create(
             "invalid",
             "Offset and length must be non-negative safe integers",
             this.#path,
@@ -89,7 +89,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
           Effect.map((read) =>
             read === undefined
               ? err<Uint8Array, envTypes.FileError>(
-                  new FileError("aborted", "aborted", handle.path),
+                  FileError.create("aborted", "aborted", handle.path),
                 )
               : ok<Uint8Array, envTypes.FileError>(concat(read.chunks, read.total)),
           ),
@@ -110,7 +110,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
       !isNonNegativeSafeInteger(startLine) ||
       (endLine !== undefined && (!Number.isSafeInteger(endLine) || endLine <= startLine))
     ) {
-      return Promise.resolve(err(new FileError("invalid", "Invalid line range", this.#path)));
+      return Promise.resolve(err(FileError.create("invalid", "Invalid line range", this.#path)));
     }
     const handle = this.#handle;
     return Effect.runPromise(

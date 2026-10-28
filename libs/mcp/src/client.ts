@@ -71,14 +71,14 @@ export default class McpClient extends clientKit.McpClientCore {
   connect(transport: transportTypes.McpTransport): Promise<typesModule.InitializeResult> {
     if (this.state !== "idle")
       return toPromise(
-        Effect.fail(new McpClientError(`Cannot connect MCP client in ${this.state} state`)),
+        Effect.fail(McpClientError.create(`Cannot connect MCP client in ${this.state} state`)),
       );
     this.state = "connecting";
     this.transport = transport;
     this.disposers = [
       transport.onMessage((message) => this.handleMessage(message)),
       transport.onError((error) => this.emitError(error)),
-      transport.onClose(() => this.markClosed(new McpConnectionClosedError())),
+      transport.onClose(() => this.markClosed(McpConnectionClosedError.create())),
     ];
     return toPromise(
       this.initialize(transport).pipe(
@@ -200,7 +200,7 @@ export default class McpClient extends clientKit.McpClientCore {
       const result = yield* fromSync(() => validateInitializeResult(value));
       const supported: readonly string[] = SUPPORTED_PROTOCOL_VERSIONS;
       if (!supported.includes(result.protocolVersion)) {
-        return yield* new McpClientError(
+        return yield* McpClientError.create(
           `MCP server selected unsupported protocol version ${result.protocolVersion}`,
         );
       }

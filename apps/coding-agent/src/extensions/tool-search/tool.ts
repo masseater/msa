@@ -21,7 +21,7 @@ function schemaText(schema: unknown, parts: string[]): void {
     }
   }
   schemaText(schema["items"], parts);
-  for (const key of ["anyOf", "oneOf", "allOf"]) {
+  for (const key of ["anyOf", "oneOf", "allOf"] as const) {
     const variants = schema[key];
     if (Array.isArray(variants)) for (const variant of variants) schemaText(variant, parts);
   }

@@ -67,7 +67,9 @@ export default class Inbound {
     }
     if (!downstream) {
       connection.send({
-        error: toWireError(new ChordError("unavailable", `${connection.host.name} does not relay`)),
+        error: toWireError(
+          ChordError.create("unavailable", `${connection.host.name} does not relay`),
+        ),
         id: frame.id,
         t: "gone",
       });
@@ -95,7 +97,7 @@ export default class Inbound {
       return;
     }
     if (connection.incoming.size >= connection.maxCalls) {
-      const error = new ChordError(
+      const error = ChordError.create(
         "unavailable",
         `Too many calls in progress on this connection (${connection.maxCalls}); wait for earlier ones to finish`,
         { reason: "too_many_calls" },
@@ -106,7 +108,7 @@ export default class Inbound {
     const served = connection.served.get(frame.hold);
     if (served === undefined) {
       connection.send({
-        error: toWireError(new ChordError("gone", "unknown hold")),
+        error: toWireError(ChordError.create("gone", "unknown hold")),
         id: frame.id,
         t: "result",
       });

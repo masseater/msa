@@ -1,9 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class AuthCommandError extends Data.TaggedError("AuthCommandError")<{
-  readonly message: string;
-}> {
-  constructor(message: string) {
-    super({ message });
+export default class AuthCommandError extends Schema.TaggedError<
+  AuthCommandError,
+  { readonly brand: unique symbol }
+>()("AuthCommandError", { message: Schema.String }) {
+  static create(message: string): AuthCommandError {
+    return AuthCommandError.make({ message });
   }
 }

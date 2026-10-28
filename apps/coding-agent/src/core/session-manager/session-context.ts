@@ -169,22 +169,27 @@ function projectContextEntry(
   const replacement = edit.replacement;
   if (replacement === null) return [];
 
-  return messages.map((message) => {
-    if (
-      message.role !== "user" &&
-      message.role !== "assistant" &&
-      message.role !== "toolResult" &&
-      message.role !== "custom"
-    ) {
-      return message;
-    }
-    const content =
-      (message.role === "assistant" || message.role === "toolResult") &&
-      typeof replacement.content === "string"
-        ? [{ text: replacement.content, type: "text" as const }]
-        : replacement.content;
-    return Object.assign({}, message, { content }) as agentTypes.AgentMessage;
-  });
+  return messages.map((message) => withEditedContent(message, replacement));
+}
+
+function withEditedContent(
+  message: agentTypes.AgentMessage,
+  replacement: NonNullable<sessionManagerTypes.ContextEditEntry["replacement"]>,
+): agentTypes.AgentMessage {
+  if (
+    message.role !== "user" &&
+    message.role !== "assistant" &&
+    message.role !== "toolResult" &&
+    message.role !== "custom"
+  ) {
+    return message;
+  }
+  const content =
+    (message.role === "assistant" || message.role === "toolResult") &&
+    typeof replacement.content === "string"
+      ? [{ text: replacement.content, type: "text" as const }]
+      : replacement.content;
+  return { ...message, content } as agentTypes.AgentMessage;
 }
 
 function buildSessionProjection(

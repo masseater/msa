@@ -39,17 +39,19 @@ const loopState = (
 const runPrompt = (run: loopRunTypes.PromptRun): Effect.Effect<typesModule.AgentMessage[]> =>
   Effect.gen(function* () {
     const initialMessages = declareToolChanges({ context: run.context, messages: run.prompts });
-    const newMessages: typesModule.AgentMessage[] = [...initialMessages];
-    const context: typesModule.AgentContext = {
-      ...run.context,
-      messages: [...run.context.messages, ...initialMessages],
-    };
     yield* run.emit({ type: "agent_start" });
     yield* run.emit({ type: "turn_start" });
+    const newMessages: typesModule.AgentMessage[] = [];
     for (const message of initialMessages) {
       yield* run.emit({ message, type: "message_start" });
-      yield* run.emit({ message, type: "message_end" });
+      const end = { message, type: "message_end" as const };
+      yield* run.emit(end);
+      newMessages.push(end.message);
     }
+    const context: typesModule.AgentContext = {
+      ...run.context,
+      messages: [...run.context.messages, ...newMessages],
+    };
     yield* runLoop(loopState(run, context, newMessages));
     return newMessages;
   });

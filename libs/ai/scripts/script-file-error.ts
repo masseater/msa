@@ -1,7 +1,8 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-class ScriptFileError extends Data.TaggedError("ScriptFileError")<{
-  readonly message: string;
-}> {}
+class ScriptFileError extends Schema.TaggedError<
+  ScriptFileError,
+  { readonly brand: unique symbol }
+>()("ScriptFileError", { message: Schema.String }) {}
 
 export default ScriptFileError;

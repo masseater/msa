@@ -6,9 +6,9 @@ const MCP_EXPOSURES: readonly string[] = [
   "direct",
   "hidden",
 ] satisfies mcpServersTypes.McpExposure[];
-const MCP_EXPOSURE_ALIASES: Readonly<Record<string, mcpServersTypes.McpExposure>> = {
-  "codemode-deferred": "codemode",
-};
+const MCP_EXPOSURE_ALIASES: ReadonlyMap<string, mcpServersTypes.McpExposure> = new Map([
+  ["codemode-deferred", "codemode"],
+]);
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 
@@ -42,7 +42,7 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 }
 
 const optionalString =
-  (value: Record<string, unknown>, key: string): Check =>
+  (value: Record<string, unknown>, key: "clientId" | "clientSecret" | "scope"): Check =>
   () =>
     value[key] !== undefined && typeof value[key] !== "string"
       ? `oauth.${key} must be a string`
@@ -119,7 +119,7 @@ function isExposure(value: unknown): value is mcpServersTypes.McpExposure {
 }
 
 function resolveExposureAlias(value: unknown): unknown {
-  return typeof value === "string" ? (MCP_EXPOSURE_ALIASES[value] ?? value) : value;
+  return typeof value === "string" ? (MCP_EXPOSURE_ALIASES.get(value) ?? value) : value;
 }
 
 function resolveExposureAliases(value: Record<string, unknown>): Record<string, unknown> {

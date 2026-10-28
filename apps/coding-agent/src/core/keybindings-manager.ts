@@ -17,12 +17,11 @@ const { KEYBINDINGS, migrateKeybindingsConfig } = keybindings;
 
 const validateKeybindingValue = Compile(KeybindingValueSchema);
 function toKeybindingsConfig(value: Record<string, unknown>): tuiTypes.KeybindingsConfig {
-  const config: tuiTypes.KeybindingsConfig = {};
-  for (const [key, binding] of Object.entries(value)) {
-    if (key === "$schema") continue;
-    if (validateKeybindingValue.Check(binding)) config[key] = binding;
-  }
-  return config;
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, binding]) =>
+      key !== "$schema" && validateKeybindingValue.Check(binding) ? [[key, binding] as const] : [],
+    ),
+  );
 }
 function parseRawConfig(content: string): Record<string, unknown> | undefined {
   const parsed = JSON.parse(stripBom(content)) as unknown;

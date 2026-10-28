@@ -1,13 +1,18 @@
+import platformEnv from "../core/platform/env.ts";
 import platformFiles from "../core/platform/files.ts";
 
 const isBun = (): boolean =>
   process.versions?.["bun"] !== undefined && process.versions["bun"] !== "";
 
 const assignEntries = (data: string): void => {
-  for (const entry of data.split("\0")) {
-    const idx = entry.indexOf("=");
-    if (idx > 0) Object.assign(process.env, { [entry.slice(0, idx)]: entry.slice(idx + 1) });
-  }
+  platformEnv.assignProcessEnv(
+    Object.fromEntries(
+      data.split("\0").flatMap((entry) => {
+        const idx = entry.indexOf("=");
+        return idx > 0 ? [[entry.slice(0, idx), entry.slice(idx + 1)] as const] : [];
+      }),
+    ),
+  );
 };
 
 function restoreSandboxEnv(): Promise<void> {

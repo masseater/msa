@@ -146,10 +146,8 @@ export default class ProviderCatalog {
     this.nativeProviders.delete(providerId);
     const effective: modelRuntimeTypes.ProviderConfigInput = {
       ...this.extensionProviders.get(providerId),
+      ...Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined)),
     };
-    for (const [key, value] of Object.entries(config)) {
-      if (value !== undefined) (effective as Record<string, unknown>)[key] = value;
-    }
     this.extensionProviders.set(providerId, effective);
     this.recompose(providerId);
     return effective;

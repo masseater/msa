@@ -59,7 +59,7 @@ const parseJson = (text: string, description: string): unknown => {
   try {
     return JSON.parse(text) as unknown;
   } catch (error) {
-    throw new JsonlCorruptionError(
+    throw JsonlCorruptionError.create(
       `Malformed complete ${description}`,
       error instanceof Error ? error : undefined,
     );
@@ -108,13 +108,14 @@ const operationChecks: Readonly<
 
 const validateMainOperation = (value: unknown, description: string): formatTypes.MainOperation => {
   if (!isObject(value) || typeof value["type"] !== "string") {
-    throw new JsonlCorruptionError(`Invalid write in ${description}`);
+    throw JsonlCorruptionError.create(`Invalid write in ${description}`);
   }
   const check = Object.hasOwn(operationChecks, value["type"])
     ? operationChecks[value["type"]]
     : undefined;
-  if (check === undefined) throw new JsonlCorruptionError(`Unknown write type in ${description}`);
-  if (!check[0](value)) throw new JsonlCorruptionError(`${check[1]} in ${description}`);
+  if (check === undefined)
+    throw JsonlCorruptionError.create(`Unknown write type in ${description}`);
+  if (!check[0](value)) throw JsonlCorruptionError.create(`${check[1]} in ${description}`);
   return value as formatTypes.MainOperation;
 };
 
@@ -132,7 +133,7 @@ const parseMainMarker: {
     value["seq"] < 1 ||
     !Array.isArray(value["writes"])
   ) {
-    throw new JsonlCorruptionError(`Invalid commit marker in ${description}`);
+    throw JsonlCorruptionError.create(`Invalid commit marker in ${description}`);
   }
   return {
     format: FORMAT_VERSION,
@@ -147,13 +148,13 @@ const validateDocumentContent = (
   description: string,
 ): typesModule.DocumentContent => {
   if (!isObject(value) || !isSafeInteger(value["version"]) || value["version"] < 1) {
-    throw new JsonlCorruptionError(`Invalid document content in ${description}`);
+    throw JsonlCorruptionError.create(`Invalid document content in ${description}`);
   }
   if (value["kind"] === "base" && isObject(value["value"]))
     return value as typesModule.DocumentContent;
   if (value["kind"] === "delta" && Array.isArray(value["ops"]))
     return value as typesModule.DocumentContent;
-  throw new JsonlCorruptionError(`Invalid document content in ${description}`);
+  throw JsonlCorruptionError.create(`Invalid document content in ${description}`);
 };
 
 const isRecordShape = (value: unknown): value is Record<string, unknown> =>
@@ -169,15 +170,15 @@ const isRecordShape = (value: unknown): value is Record<string, unknown> =>
 const validatePayload = (payload: Record<string, unknown>, description: string): void => {
   if (payload["type"] === "task") {
     if (!hasTaskStatus(payload, false)) {
-      throw new JsonlCorruptionError(`Invalid live task record in ${description}`);
+      throw JsonlCorruptionError.create(`Invalid live task record in ${description}`);
     }
   } else if (payload["type"] === "document") {
     if (!isSafeInteger(payload["id"])) {
-      throw new JsonlCorruptionError(`Invalid document record in ${description}`);
+      throw JsonlCorruptionError.create(`Invalid document record in ${description}`);
     }
     validateDocumentContent(payload["content"], description);
   } else {
-    throw new JsonlCorruptionError(`Unknown sidecar record type in ${description}`);
+    throw JsonlCorruptionError.create(`Unknown sidecar record type in ${description}`);
   }
 };
 
@@ -188,7 +189,7 @@ const parseSidecarRecord: {
   const description = `${file} line ${line}`;
   const value = parseJson(text, description);
   if (!isRecordShape(value)) {
-    throw new JsonlCorruptionError(`Invalid sidecar record in ${description}`);
+    throw JsonlCorruptionError.create(`Invalid sidecar record in ${description}`);
   }
   validatePayload(value["payload"] as Record<string, unknown>, description);
   return value as formatTypes.SidecarRecord;

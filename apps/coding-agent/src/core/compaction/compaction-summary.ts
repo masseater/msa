@@ -65,10 +65,10 @@ const requireSummary = (
   Effect.gen(function* () {
     const failure = getSummarizationFailure(response, label);
     if (failure !== undefined && failure !== "") {
-      return yield* new ToolFailure({ message: failure });
+      return yield* ToolFailure.make({ message: failure });
     }
     if (response.content.some((block) => block.type === "toolCall")) {
-      return yield* new ToolFailure({ message: toolMessage });
+      return yield* ToolFailure.make({ message: toolMessage });
     }
     return { text: contentText(response.content, "\n"), usage: response.usage };
   });

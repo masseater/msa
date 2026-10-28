@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class WadDownloadError extends Data.TaggedError("WadDownloadError")<{
-  readonly message: string;
-}> {}
+export default class WadDownloadError extends Schema.TaggedError<
+  WadDownloadError,
+  { readonly brand: unique symbol }
+>()("WadDownloadError", { message: Schema.String }) {}

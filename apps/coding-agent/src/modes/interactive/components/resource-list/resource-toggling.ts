@@ -155,8 +155,8 @@ export default class ResourceToggling {
 
     (pkg as Record<string, unknown>)[arrayKey] = updated.length > 0 ? updated : undefined;
 
-    const hasFilters = ["extensions", "skills", "prompts", "themes"].some(
-      (k) => (pkg as Record<string, unknown>)[k] !== undefined,
+    const hasFilters = (["extensions", "skills", "prompts", "themes"] as const).some(
+      (k) => pkg[k] !== undefined,
     );
     if (!hasFilters) {
       packages[pkgIndex] = (pkg as { source: string }).source;

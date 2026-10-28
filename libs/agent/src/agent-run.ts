@@ -22,9 +22,24 @@ const notifyListeners = ({
     }
   });
 
+const finalizeEndMessage = ({
+  event,
+  finalize,
+  signal,
+}: agentRunTypes.EndMessageFinalization): Effect.Effect<void> => {
+  if (finalize === undefined || signal === undefined) return Effect.void;
+  return call(() => finalize(event.message, signal)).pipe(
+    Effect.map((message) => {
+      event.message = message ?? event.message;
+      return undefined;
+    }),
+  );
+};
+
 const agentRun = {
   AgentRuns,
   busy,
+  finalizeEndMessage,
   notifyListeners,
 };
 

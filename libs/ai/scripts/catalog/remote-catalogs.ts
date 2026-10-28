@@ -38,7 +38,7 @@ const fetchOpenRouterModels = (strict: boolean) =>
       `Fetched ${catalog.chat.length} tool-capable, ${catalog.images.length} image, and ${catalog.classifiers.length} classifier models from OpenRouter`,
     );
     if (strict && catalog.images.length === 0) {
-      return yield* new UpstreamError({
+      return yield* UpstreamError.make({
         message: "OpenRouter API returned no usable image models",
       });
     }

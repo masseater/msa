@@ -1,11 +1,14 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class SshError extends Data.TaggedError("SshError")<{
-  readonly message: string;
-  readonly exitCode: number | null;
-  readonly stderr: string;
-}> {
-  constructor(message: string, exitCode: number | null, stderr: string) {
-    super({ exitCode, message, stderr });
+export default class SshError extends Schema.TaggedError<
+  SshError,
+  { readonly brand: unique symbol }
+>()("SshError", {
+  exitCode: Schema.NullOr(Schema.Finite),
+  message: Schema.String,
+  stderr: Schema.String,
+}) {
+  static create(message: string, exitCode: number | null, stderr: string): SshError {
+    return SshError.make({ exitCode, message, stderr });
   }
 }

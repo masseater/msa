@@ -1,6 +1,6 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import { Cause, Data, Effect, Exit, Function, Layer, Option, Schema, Stream, Tracer } from "effect";
+import { Cause, Effect, Exit, Function, Layer, Option, Schema, Stream, Tracer } from "effect";
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http";
 
 import callModule from "./call.ts";
@@ -31,10 +31,10 @@ function buildProxyRequestOptions(
   };
 }
 
-class ProxyError extends Data.TaggedError("ProxyError")<{
-  readonly message: string;
-  readonly status?: number;
-}> {}
+class ProxyError extends Schema.TaggedError<ProxyError, { readonly brand: unique symbol }>()(
+  "ProxyError",
+  { message: Schema.String, status: Schema.optionalKey(Schema.Finite) },
+) {}
 
 const globalFetch = (): typeof globalThis.fetch => globalThis.fetch;
 
@@ -102,7 +102,7 @@ const openProxy = ({ model, context, options }: ProxyRequest, received: Received
     const response = yield* Effect.orDie(client.execute(request));
     if (response.status >= 200 && response.status < 300) return response;
     const text = yield* Effect.orElseSucceed(response.text, () => "");
-    return yield* new ProxyError({
+    return yield* ProxyError.make({
       message: errorFromBody(`Proxy error: ${response.status} ${received.statusText}`, text),
       status: response.status,
     });
@@ -160,7 +160,7 @@ const readProxy = (request: ProxyRequest, read: ProxyRead) => {
 const abortedBy = (signal: AbortSignal) =>
   Effect.callback<never, ProxyError>((resume) => {
     const onAbort = () =>
-      resume(Effect.fail(new ProxyError({ message: "Request aborted by user" })));
+      resume(Effect.fail(ProxyError.make({ message: "Request aborted by user" })));
     if (signal.aborted) {
       onAbort();
       return;
@@ -205,7 +205,7 @@ const streamProxyEffect = (request: ProxyRequest, read: ProxyRead): Effect.Effec
       fail(
         read,
         error instanceof Error ? error.message : String(error),
-        error instanceof ProxyError ? error.status : undefined,
+        Schema.is(ProxyError)(error) ? error.status : undefined,
         signal?.aborted === true,
       );
     }

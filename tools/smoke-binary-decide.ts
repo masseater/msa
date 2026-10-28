@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Console, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
 import captureProcessModule from "./capture-process.ts";
 import runMain from "./run-main.ts";
@@ -12,9 +12,10 @@ const PROBE_PROMPT = "decide-probe: create the probe task";
 const PROBE_SETTINGS = { decision: { model: "local/decide-probe" } };
 const DECIDED = /^Review verdict: fail \(local\/decide-probe: /u;
 
-class DecideSmokeError extends Data.TaggedError("DecideSmokeError")<{
-  readonly message: string;
-}> {}
+class DecideSmokeError extends Schema.TaggedError<
+  DecideSmokeError,
+  { readonly brand: unique symbol }
+>()("DecideSmokeError", { message: Schema.String }) {}
 
 const ProbeResult = Schema.fromJsonString(Schema.Struct({ verdict: Schema.String }));
 
@@ -44,16 +45,15 @@ const decideSmoke = (binaryArgument: string) =>
       env: { MSA_CODING_AGENT_DIR: agentDir },
     });
     const raw = yield* fs.readFileString(path.join(workDir, PROBE_RESULT_FILE)).pipe(
-      Effect.mapError(
-        () =>
-          new DecideSmokeError({
-            message: `${binary} exited ${exitCode} without a review verdict:\n${stderr}`,
-          }),
+      Effect.mapError(() =>
+        DecideSmokeError.make({
+          message: `${binary} exited ${exitCode} without a review verdict:\n${stderr}`,
+        }),
       ),
     );
     const { verdict } = yield* Schema.decodeEffect(ProbeResult)(raw);
     if (!DECIDED.test(verdict))
-      return yield* new DecideSmokeError({
+      return yield* DecideSmokeError.make({
         message: `${binary} did not fail the review with the fixture decision model: ${verdict}\n${stderr}`,
       });
     return verdict;
@@ -62,7 +62,7 @@ const decideSmoke = (binaryArgument: string) =>
 const program = Effect.gen(function* () {
   const [binary, ...rest] = process.argv.slice(2);
   if (binary === undefined || rest.length > 0) {
-    return yield* new DecideSmokeError({ message: "usage: smoke-binary-decide <msa binary>" });
+    return yield* DecideSmokeError.make({ message: "usage: smoke-binary-decide <msa binary>" });
   }
   const verdict = yield* decideSmoke(binary);
   yield* Console.log(`==> ${binary} decides a task review through node-llama-cpp: ${verdict}`);

@@ -183,7 +183,7 @@ const refreshProvider = (request: ProviderRefreshRequest): Effect.Effect<void> =
             provider.id,
             error instanceof Error
               ? error
-              : new ModelsError("model_source", `Model refresh failed for ${provider.id}`, {
+              : ModelsError.create("model_source", `Model refresh failed for ${provider.id}`, {
                   cause: error,
                 }),
           );

@@ -32,7 +32,7 @@ export default class ResolvedMethod {
   ) {
     const installed = object.implementations.get(ctx.codeVersion);
     if (installed === undefined)
-      throw new ChordError(
+      throw ChordError.create(
         "superseded",
         `${object.address} has no implementation for code version ${ctx.codeVersion}`,
       );
@@ -42,7 +42,7 @@ export default class ResolvedMethod {
     const wanted = ref.describe(remote ? variant : LOCAL_VARIANT, name);
     const fn = view[name];
     if (typeof fn !== "function" || (remote && wanted?.kind !== "method")) {
-      throw new ChordError(
+      throw ChordError.create(
         "not_in_variant",
         `${object.address}: ${name} is not a method of variant ${variant ?? "(local)"}`,
       );

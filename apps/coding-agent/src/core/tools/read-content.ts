@@ -95,7 +95,7 @@ const readTextContent = Effect.fn("readTextContent")(function* (
   const startLineDisplay = startLine + 1;
   const firstLine = allLines[startLine];
   if (firstLine === undefined) {
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: `Offset ${input.offset} is beyond end of file (${allLines.length} lines total)`,
     });
   }

@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 import { beforeEach, describe } from "vite-plus/test";
 
@@ -90,7 +90,10 @@ const delayed: {
   Effect.runPromise(Effect.sleep(ms).pipe(Effect.as(value))),
 );
 
-class ToolAborted extends Data.TaggedError("ToolAborted")<{ readonly message: string }> {}
+class ToolAborted extends Schema.TaggedError<ToolAborted, { readonly brand: unique symbol }>()(
+  "ToolAborted",
+  { message: Schema.String },
+) {}
 
 const rejectOnAbort: {
   (onAbort: () => void): (signal: AbortSignal) => Promise<never>;
@@ -100,7 +103,7 @@ const rejectOnAbort: {
     Effect.callback<never, ToolAborted>((resume) => {
       signal.addEventListener("abort", () => {
         onAbort();
-        resume(Effect.fail(new ToolAborted({ message: "aborted" })));
+        resume(Effect.fail(ToolAborted.make({ message: "aborted" })));
       });
     }),
   ),

@@ -29,7 +29,7 @@ class ScriptFiles extends Context.Service<
 >()("@msa/ai/scripts/script-files/ScriptFiles") {}
 
 const toScriptFileError = (error: { readonly message: string }) =>
-  new ScriptFileError({ message: error.message });
+  ScriptFileError.make({ message: error.message });
 
 const scriptFilesLayer: Layer.Layer<ScriptFiles> = Layer.effect(
   ScriptFiles,

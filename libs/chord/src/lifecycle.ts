@@ -53,7 +53,7 @@ export default class ObjectLifecycle {
       if (signal.aborted) throw this.#abandoned();
       const service = object.host.service(object.typeName);
       if (service === undefined)
-        throw new ChordError("unavailable", `${object.typeName} is not served`, {
+        throw ChordError.create("unavailable", `${object.typeName} is not served`, {
           reason: "unknown_type",
         });
       object.service = service;
@@ -68,7 +68,7 @@ export default class ObjectLifecycle {
   }
 
   #abandoned(): errorsTypes.ChordError {
-    return new ChordError("aborted", `${this.#object.address} abandoned`);
+    return ChordError.create("aborted", `${this.#object.address} abandoned`);
   }
 
   #install(
@@ -110,7 +110,7 @@ export default class ObjectLifecycle {
       !object.implementations.has(host.currentCodeVersion()) &&
       (pending === undefined || !object.implementations.has(pending))
     ) {
-      throw new ChordError("superseded", `${object.address}: code changed during activation`);
+      throw ChordError.create("superseded", `${object.address}: code changed during activation`);
     }
     for (const derived of run.created.derives) derived.attach();
     this.refreshSchemas();
@@ -149,7 +149,7 @@ export default class ObjectLifecycle {
       object.status = "disposing";
       object.host.forget(object);
       object.clearLinger();
-      const error = reason ?? new ChordError("gone", `${object.address} was disposed`);
+      const error = reason ?? ChordError.create("gone", `${object.address} was disposed`);
       if (forced) {
         for (const ref of object.refs) ref.gone(error);
         object.callAbort.abort(error);

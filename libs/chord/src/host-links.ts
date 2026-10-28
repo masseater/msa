@@ -64,7 +64,7 @@ export default abstract class HostLinks extends HostFacets {
   peerHello(connection: connectionTypes.Connection, codeVersion: number): void {
     if (codeVersion > this.current.id) {
       this.report(
-        new ChordError(
+        ChordError.create(
           "invalid",
           `${connection.name} runs code version ${codeVersion}, ahead of ${this.current.id}`,
         ),
@@ -143,7 +143,7 @@ export default abstract class HostLinks extends HostFacets {
       typeof match === "function"
         ? match
         : (principal: unknown) => matchesPattern(match, principal);
-    const reason = new ChordError("gone", "principal invalidated");
+    const reason = ChordError.create("gone", "principal invalidated");
     for (const connection of [...this.connections]) {
       if (connection.role !== "downstream" || !matches(connection.principal)) continue;
       connection.revoke(connection.restamp?.(connection.principal));

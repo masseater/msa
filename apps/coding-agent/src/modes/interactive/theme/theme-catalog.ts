@@ -1,7 +1,6 @@
 import config from "../../../config.ts";
 import platformModule from "../../../core/platform/index.ts";
 import systemTheme from "./system-theme.ts";
-import type Theme from "./theme-class.ts";
 import themeJson from "./theme-json.ts";
 import themeState from "./theme-state.ts";
 import type themeTypes from "./theme.types.ts";
@@ -54,7 +53,7 @@ function assertThemeNameIsValid(name: string): void {
   }
 }
 
-function setRegisteredThemes(themes: Theme[]): void {
+function setRegisteredThemes(themes: themeTypes.Theme[]): void {
   registeredThemes.clear();
   for (const entry of themes) {
     if (entry.name !== undefined && entry.name !== "") {

@@ -98,7 +98,7 @@ export default class SessionToolLoadout {
     }
     const declared = tools.map((tool) => {
       const description = descriptions.get(tool.name);
-      return description === undefined ? tool : Object.assign({}, tool, { description });
+      return description === undefined ? tool : { ...tool, description };
     });
     return { declared, hidden };
   }

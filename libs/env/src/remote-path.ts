@@ -37,7 +37,7 @@ const toInfo: {
     paths: platformTypes.PathOps,
   ): envTypes.Result<envTypes.FileInfo, envTypes.FileError> => {
     if (remote.kind === "other") {
-      return err(new FileError("invalid", "Unsupported file type", path));
+      return err(FileError.create("invalid", "Unsupported file type", path));
     }
     return ok({
       kind: remote.kind,

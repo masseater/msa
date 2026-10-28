@@ -59,18 +59,18 @@ function decoder(): decodeTypes.Decoder {
         const short = isShort(op);
         let path: opsTypes.Path;
         if (short) {
-          if (previous === undefined) throw new PathError([]);
+          if (previous === undefined) throw PathError.create([]);
           path = previous;
         } else {
           const ref = op[1] as opsTypes.PathRef;
           if (typeof ref === "number") {
             const resolved = paths.get(ref);
-            if (resolved === undefined) throw new PathError(ref);
+            if (resolved === undefined) throw PathError.create(ref);
             path = resolved;
           } else path = ref;
           previous = path;
         }
-        if (op[0] !== "p" && op[0] !== "m" && path.length === 0) throw new PathError(path);
+        if (op[0] !== "p" && op[0] !== "m" && path.length === 0) throw PathError.create(path);
         out.push(decoded(op, path, short));
       }
       return out;

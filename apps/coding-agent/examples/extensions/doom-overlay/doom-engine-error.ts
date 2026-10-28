@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class DoomEngineError extends Data.TaggedError("DoomEngineError")<{
-  readonly message: string;
-}> {}
+export default class DoomEngineError extends Schema.TaggedError<
+  DoomEngineError,
+  { readonly brand: unique symbol }
+>()("DoomEngineError", { message: Schema.String }) {}

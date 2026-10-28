@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { Console, Data, Effect, Schema } from "effect";
+import { Console, Effect, Schema } from "effect";
 import type { SchemaError } from "effect/Schema";
 import type { TSchema } from "typebox";
 import { format } from "vite-plus/fmt";
@@ -25,9 +25,10 @@ const DEFINITION_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/u;
 const encodeCompactJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const encodeIndentedJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
 
-class SchemaRenderError extends Data.TaggedError("SchemaRenderError")<{
-  readonly message: string;
-}> {}
+class SchemaRenderError extends Schema.TaggedError<
+  SchemaRenderError,
+  { readonly brand: unique symbol }
+>()("SchemaRenderError", { message: Schema.String }) {}
 
 const schemaAnnotationKeys = new Set([
   "default",
@@ -65,7 +66,9 @@ const prepareDefinitions = (
   Effect.forEach(Object.entries(definitions), ([name, definition]) =>
     Effect.gen(function* () {
       if (!DEFINITION_NAME.test(name)) {
-        return yield* new SchemaRenderError({ message: `Invalid schema definition name: ${name}` });
+        return yield* SchemaRenderError.make({
+          message: `Invalid schema definition name: ${name}`,
+        });
       }
       const { shape } = splitAnnotations(definition);
       return { name, shape, shapeKey: yield* encodeCompactJson(shape) };
@@ -112,7 +115,7 @@ const addDefinitions = (
     );
     const unused = prepared.map(({ name }) => name).filter((name) => !referenced.has(name));
     if (unused.length > 0) {
-      return yield* new SchemaRenderError({
+      return yield* SchemaRenderError.make({
         message: `Unused schema definitions: ${unused.join(", ")}`,
       });
     }
@@ -140,7 +143,7 @@ const renderArtifact = (artifact: schemaArtifactsTypes.SchemaArtifact) =>
     const serialized = yield* serializeSchema(artifact);
     const { code, errors } = yield* Effect.promise(() => format(relativePath, serialized));
     if (errors.length > 0) {
-      return yield* new SchemaRenderError({
+      return yield* SchemaRenderError.make({
         message: `Failed to format ${relativePath}: ${errors.map((error) => error.message).join("; ")}`,
       });
     }

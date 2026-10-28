@@ -1,4 +1,4 @@
-import { Clock, Effect, Function } from "effect";
+import { Clock, Effect, Function, Schema } from "effect";
 
 import type typesModule from "../types.types.ts";
 import abortModule from "../utils/abort.ts";
@@ -64,12 +64,12 @@ const refreshWithLock = (
       ),
     ).pipe(
       Effect.catchDefect((error) =>
-        error instanceof ModelsError
+        Schema.is(ModelsError)(error)
           ? Effect.die(error)
           : Effect.sync(() => signal.throwIfAborted()).pipe(
               Effect.andThen(
                 Effect.die(
-                  new ModelsError(
+                  ModelsError.create(
                     "auth",
                     `Credential store modify failed for ${request.providerId}`,
                     { cause: error },
@@ -138,7 +138,7 @@ const resolveStoredOAuth = (
       credential = post;
       if (minOAuthValidityMs !== undefined && expiresSoon(credential)) {
         return yield* Effect.die(
-          new ModelsError(
+          ModelsError.create(
             "oauth",
             `OAuth refresh returned a token that expires too soon for ${providerId}`,
           ),

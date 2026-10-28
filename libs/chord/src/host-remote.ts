@@ -118,7 +118,7 @@ export default abstract class HostRemote extends hostRemoteKit.HostObjects {
     }
     const route = this.#routeFor(binding.at);
     if (route === undefined)
-      binding.gone(new ChordError("unavailable", `no route to ${binding.at}`));
+      binding.gone(ChordError.create("unavailable", `no route to ${binding.at}`));
     else bindWhenSynced(this.#resolve(route, binding.at, binding.principal ?? this.principal));
   }
 
@@ -138,9 +138,9 @@ export default abstract class HostRemote extends hostRemoteKit.HostObjects {
     still: () => boolean = () => true,
   ): Effect.Effect<connectionTypes.Connection> {
     const refuse = (): errorsTypes.ChordError =>
-      new ChordError("forbidden", `${hostName} refused for this principal`);
+      ChordError.create("forbidden", `${hostName} refused for this principal`);
     const revoked = (): errorsTypes.ChordError =>
-      new ChordError("gone", "principal invalidated while resolving");
+      ChordError.create("gone", "principal invalidated while resolving");
     const authorized = Effect.promise(() => Promise.resolve(route.authorize(principal, hostName)));
     return Effect.gen({ self: this }, function* () {
       if (!(yield* authorized)) throw refuse();
@@ -176,8 +176,8 @@ export default abstract class HostRemote extends hostRemoteKit.HostObjects {
       const route = this.#routeFor(at);
       if (route === undefined) {
         throw this.#childNamed(at) === undefined
-          ? new ChordError("unavailable", `no route to ${at}`)
-          : new ChordError("forbidden", `no route authorizes ${at}`);
+          ? ChordError.create("unavailable", `no route to ${at}`)
+          : ChordError.create("forbidden", `no route authorizes ${at}`);
       }
       const down = yield* this.#resolve(route, at, relay.principal, () => relay.current);
       if (!relay.current) return;

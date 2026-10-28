@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import type detectTypes from "./detect.types.ts";
 import HostKeyChangedError from "./host-key-changed-error.ts";
@@ -74,7 +74,7 @@ const probeTarget = (
 ): Effect.Effect<Probe, detectTypes.DetectFailure> =>
   probeWith(target, POSIX_PROBE).pipe(
     Effect.catchIf(
-      (error) => !(error instanceof HostKeyUnknownError || error instanceof HostKeyChangedError),
+      (error) => !(Schema.is(HostKeyUnknownError)(error) || Schema.is(HostKeyChangedError)(error)),
       () => probeWith(target, WINDOWS_PROBE),
     ),
     Effect.filterOrElse(

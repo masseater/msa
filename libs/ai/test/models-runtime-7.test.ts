@@ -45,7 +45,7 @@ const stopsWaitingOnAbortWhenA = () => {
       expect(result.errors.size).toBe(0);
 
       stalledGate.reject(new Error("late provider failure"));
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
       expect(result.errors.size).toBe(0);
     }),
   );
@@ -93,7 +93,7 @@ const rejectsLatePublicationFromASuperseded = () =>
       yield* Effect.promise(() => models.refresh({ providers: ["dynamic"] }));
       yield* Effect.promise(() => first);
       firstBlocked.resolve();
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
 
       expect(state.value).toBe("generation-2");
       const stored = yield* Effect.promise(() => store.read("dynamic"));

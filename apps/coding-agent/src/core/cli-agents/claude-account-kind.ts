@@ -130,31 +130,43 @@ const removeNamed = (name: string | undefined, _rest: string[], ctx: Context) =>
 
 type Handler = (name: string | undefined, rest: string[], ctx: Context) => Effect.Effect<unknown>;
 
-const HANDLERS: Record<string, Handler> = {
-  "": () => Effect.void,
-  add: addAndLogin,
-  clear: () => Effect.promise(clearBlocks),
-  disable: (name) =>
-    Effect.flatMap(named(name), (account) =>
-      Effect.promise(() => setAutoRotation(account.name, false)),
-    ),
-  enable: (name) =>
-    Effect.flatMap(named(name), (account) =>
-      Effect.promise(() => setAutoRotation(account.name, true)),
-    ),
-  login: (name, _rest, ctx) => Effect.flatMap(named(name), (account) => login(account, ctx)),
-  logout: (name) =>
-    Effect.flatMap(named(name), (account) => Effect.promise(() => logoutAccount(account))),
-  remove: removeNamed,
-  use: (name) =>
-    Effect.flatMap(named(name), (account) => Effect.promise(() => preferAccount(account.name))),
-};
+const HANDLERS: ReadonlyMap<string, Handler> = new Map<string, Handler>([
+  ["", () => Effect.void],
+  ["add", addAndLogin],
+  ["clear", () => Effect.promise(clearBlocks)],
+  [
+    "disable",
+    (name) =>
+      Effect.flatMap(named(name), (account) =>
+        Effect.promise(() => setAutoRotation(account.name, false)),
+      ),
+  ],
+  [
+    "enable",
+    (name) =>
+      Effect.flatMap(named(name), (account) =>
+        Effect.promise(() => setAutoRotation(account.name, true)),
+      ),
+  ],
+  ["login", (name, _rest, ctx) => Effect.flatMap(named(name), (account) => login(account, ctx))],
+  [
+    "logout",
+    (name) =>
+      Effect.flatMap(named(name), (account) => Effect.promise(() => logoutAccount(account))),
+  ],
+  ["remove", removeNamed],
+  [
+    "use",
+    (name) =>
+      Effect.flatMap(named(name), (account) => Effect.promise(() => preferAccount(account.name))),
+  ],
+]);
 
 const run = (args: string, ctx: Context): Promise<void> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
-      const handler = Object.hasOwn(HANDLERS, action) ? HANDLERS[action] : undefined;
+      const handler = HANDLERS.get(action);
       if (handler === undefined)
         throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
       const before = (yield* Effect.promise(loadAccounts)).length;

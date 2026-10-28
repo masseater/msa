@@ -59,7 +59,7 @@ const runRemote = (
 ) =>
   Effect.tryPromise({
     catch: (error) =>
-      new RuntimeError({ cause: error, message: errorMessage(error), reason: "remote" }),
+      RuntimeError.make({ cause: error, message: errorMessage(error), reason: "remote" }),
     try: () => target.execute(request, exchangeWith(link)),
   }).pipe(
     Effect.match({
@@ -89,7 +89,7 @@ const remoteLauncher =
       const link: Link = { events, settled: false, stopped: false, waiting: new Map() };
       const target = yield* Effect.try({
         catch: (cause) =>
-          new RuntimeError({
+          RuntimeError.make({
             cause,
             message: `Failed to reach the remote sandbox: ${errorMessage(cause)}`,
             reason: "launch",

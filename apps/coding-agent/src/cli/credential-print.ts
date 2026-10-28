@@ -48,7 +48,7 @@ function resolveCredentialForPrintImpl(
       const [onlyCredential] = credentials;
       if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
       assertCredentialFound(credentials, providers, credentialTypes, cliProvider, kind);
-      throw new AuthCommandError(
+      throw AuthCommandError.create(
         `Multiple configured providers matched (${credentials.map(({ providerId }) => providerId).join(", ")}). Specify --provider.`,
       );
     }),
@@ -124,7 +124,7 @@ function assertCredentialFound(
     const type =
       providerId !== undefined && providerId !== "" ? credentialTypes.get(providerId) : undefined;
     if (cliProvider !== undefined && cliProvider !== "" && kind === "api_key" && type === "oauth") {
-      throw new AuthCommandError(
+      throw AuthCommandError.create(
         `Provider "${providerId}" is configured with OAuth, not an API key`,
       );
     }
@@ -134,11 +134,11 @@ function assertCredentialFound(
       kind === "bearer_token" &&
       type !== "oauth"
     ) {
-      throw new AuthCommandError(
+      throw AuthCommandError.create(
         `Provider "${providerId}" is not configured with an OAuth bearer token`,
       );
     }
-    throw new AuthCommandError(
+    throw AuthCommandError.create(
       `No usable ${kind === "api_key" ? "API key" : "OAuth bearer token"} is configured`,
     );
   }

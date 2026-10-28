@@ -4,6 +4,17 @@ import type settingsSchemaTypes from "../settings-schema.types.ts";
 type Change = modelUpgradeTypes.ModelReferenceChange;
 type Rewrite = (value: string) => string | undefined;
 type SettingsRecord = Record<string, unknown>;
+type ModelSettingKey =
+  | "allow"
+  | "defaultModel"
+  | "deny"
+  | "enabledModels"
+  | "evaluatorModel"
+  | "model"
+  | "modelOverrides"
+  | "modelThinkingLevels"
+  | "reviewModel"
+  | "workerModel";
 
 const KEY_SEPARATOR = "\u0000";
 
@@ -41,10 +52,10 @@ function upgradeModelReference(
 
 function rewriteString(
   settings: SettingsRecord,
-  key: string,
+  key: ModelSettingKey,
   rewrite: Rewrite,
   changes: Change[],
-  path = key,
+  path: string = key,
 ): void {
   const current = settings[key];
   if (typeof current !== "string") return;
@@ -56,7 +67,7 @@ function rewriteString(
 
 function rewriteStringArray(
   settings: SettingsRecord,
-  key: string,
+  key: ModelSettingKey,
   rewrite: Rewrite,
   changes: Change[],
   path = `${key}[]`,
@@ -77,25 +88,24 @@ function rewriteStringArray(
 
 function rewriteRecordKeys(
   settings: SettingsRecord,
-  key: string,
+  key: ModelSettingKey,
   rewrite: Rewrite,
   changes: Change[],
   path = `${key} key`,
 ): void {
   const current = settings[key];
   if (!isRecord(current)) return;
-  const next: SettingsRecord = {};
   let changed = false;
-  for (const [entryKey, value] of Object.entries(current)) {
+  const next = Object.entries(current).map(([entryKey, value]) => {
     const replacement = rewrite(entryKey);
     const target = replacement === undefined || replacement === entryKey ? entryKey : replacement;
     if (target !== entryKey) {
       changed = true;
       changes.push({ from: entryKey, setting: path, to: target });
     }
-    next[target] = value;
-  }
-  if (changed) settings[key] = next;
+    return [target, value] as const;
+  });
+  if (changed) settings[key] = Object.fromEntries(next);
 }
 
 function isRecord(value: unknown): value is SettingsRecord {

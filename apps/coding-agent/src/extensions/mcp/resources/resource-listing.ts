@@ -39,7 +39,7 @@ function listed<T extends Item>(server: string, item: T): Record<string, unknown
   return { server, ...rest };
 }
 
-function stringArgument(params: unknown, key: string): string | undefined {
+function stringArgument(params: unknown, key: "cursor" | "server" | "uri"): string | undefined {
   const value = (params as Record<string, unknown> | undefined)?.[key];
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "string") throw new Error(`${key} must be a string`);
