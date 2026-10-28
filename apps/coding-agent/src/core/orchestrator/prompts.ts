@@ -184,7 +184,7 @@ function taskReviewerPrompt(
     `Read the report, inspect the changed files and the surrounding code, and check the work against the task and against the user's instructions and decisions. ${searchSessionsHint({ kind: "task", taskId: task.id })} Do not redo it and do not edit files.`,
     STYLE_CRITERIA,
     ...verdictCriteria("the task's goal"),
-    "Before you end your turn, call record_goal_items with one entry for each item in <goal-items>: met only when the work fully meets it, unmet otherwise, with what in the work shows it. The harness passes the review only when every item is recorded as met; an unmet item sends the work back whatever your report says.",
+    "Before you end your turn, call record_goal_items with one entry for each item in <goal-items>: met only when the work fully meets it, unmet otherwise, with what in the work shows it, and every finding within the goal the work still has, or none. The harness passes the review only when every item is recorded as met; an unmet item sends the work back whatever your report says.",
     "",
     work,
     notesBlock(notes),

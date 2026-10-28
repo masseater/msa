@@ -161,7 +161,14 @@ function modelVerdict(decision: decideTypes.Decision, unchanged: boolean): Verdi
 
 function verdictOf(decision: decideTypes.Decision, gates: Gates): Verdict {
   const judged = { ...modelVerdict(decision, gates.unchanged), checklist: gates.checklist.text };
-  if (gates.checklist.kind === "met") return judged;
+  if (gates.checklist.kind === "met") {
+    if (judged.result !== "undecided" || !gates.checklist.settled) return judged;
+    return {
+      ...judged,
+      reason: `${judged.reason}; the reviewer recorded every goal item met with its evidence and no finding within the goal, so the record decides`,
+      result: "pass",
+    };
+  }
   const progress = decision.status === "decided" ? choiceOf(decision, "progress") : undefined;
   return {
     ...judged,

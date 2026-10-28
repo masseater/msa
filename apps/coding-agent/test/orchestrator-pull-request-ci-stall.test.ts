@@ -20,6 +20,8 @@ const RERUN_CI = {
   grounds: "Nothing in the work is wrong; a stalled run is fixed by running it again.",
 };
 
+const FINDING = "The pull request body does not name the re-run.";
+
 const stalledCi = (remote: Remote, options: Parameters<typeof openedTask>[1] = {}) =>
   Effect.gen(function* () {
     const { github } = remote;
@@ -90,7 +92,10 @@ const triagesADifferentRequestAfterADecisionThatChangedNoFile = () =>
         remote.github.ci.set(yield* remote.github.head(branch), "success");
         worker.complete("re-ran CI with gh run rerun; it passed");
         yield* waitFor(() => workers.length === 3);
-        workers[2]!.complete("Acceptable. Every goal item is met.");
+        const reviewer = workers[2]!;
+        const met = { evidence: "the diff", item: 1, status: "met" as const };
+        yield* Effect.promise(() => reviewer.recordGoalItems([met], [FINDING]));
+        reviewer.completeUnrecorded(`Acceptable.\n${FINDING}`);
 
         yield* waitFor(() => runningTriage(workers) !== undefined);
         const second = runningTriage(workers)!;

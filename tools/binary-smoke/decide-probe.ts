@@ -77,6 +77,7 @@ const mainReply = (context: aiTypes.TranscriptContext): aiTypes.AssistantMessage
 const recordGoalItems = () =>
   ai.fauxAssistantMessage(
     ai.fauxToolCall("record_goal_items", {
+      findings: [],
       items: [{ evidence: "probe.txt holds the agreed text.", item: 1, status: "met" }],
     }),
     { stopReason: "toolUse" },
