@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The default export is frozen with `Object.freeze`. In strict mode code (ES modules), adding a member throws `TypeError: Cannot add property <name>, object is not extensible`, replacing one throws `TypeError: Cannot assign to read only property '<name>' of object '#<Object>'`, deleting one throws `TypeError: Cannot delete property '<name>' of #<Object>`, and `Object.defineProperty` throws; `Reflect.defineProperty` returns `false`, and an assignment in sloppy mode is ignored without an error. The classes it holds are not frozen: `tui.Box.prototype.render = ...` still works in a process that only loads `@msa/tui`
+
 ### Added
 
 - `formatAttentionAlert` rings the bell and sends OSC 9 and OSC 777 notifications, wrapped for tmux passthrough with `{ tmux: true }`
