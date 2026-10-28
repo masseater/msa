@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "security:minimumReleaseAgeNpm", ":semanticCommits"],
+  "enabledManagers": ["nodenv"],
+  "packageRules": [
+    {
+      "matchManagers": ["nodenv"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}

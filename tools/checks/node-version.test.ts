@@ -33,6 +33,7 @@ const isSetupVp = ({ uses }: typeof Step.Type) =>
   uses?.startsWith("voidzero-dev/setup-vp@") === true;
 
 const THIS_REPOSITORY = "${{ github.repository }}";
+const THIS_COMMIT = ["${{ github.sha }}", "${{ github.ref }}"];
 
 const workspacePath = (value: string) =>
   value
@@ -62,7 +63,9 @@ const nodeVersionLocations = (steps: ReadonlyArray<typeof Step.Type>, setupIndex
       const kept = locations.filter((location) => !isInside(location, directory));
       const repository = options["repository"];
       const thisRepository = repository === undefined || repository === THIS_REPOSITORY;
-      return thisRepository && sparseKeepsNodeVersion(options)
+      const ref = options["ref"];
+      const thisCommit = ref === undefined || THIS_COMMIT.includes(String(ref));
+      return thisRepository && thisCommit && sparseKeepsNodeVersion(options)
         ? [...kept, workspacePath(`${directory}/${NODE_VERSION_FILE}`)]
         : kept;
     }, []);
@@ -176,6 +179,29 @@ it.each([
     found: true,
     name: "another repository checked out beside this one",
     steps: [checkout(), checkout({ path: "other", repository: "someone/else" }), setupVp()],
+  },
+  {
+    found: false,
+    name: "another commit, such as an old tag without .node-version",
+    steps: [checkout({ ref: "${{ env.RELEASE_TAG }}" }), setupVp()],
+  },
+  {
+    found: true,
+    name: "the commit that runs the workflow, named by ref",
+    steps: [checkout({ ref: "${{ github.sha }}" }), setupVp()],
+  },
+  {
+    found: true,
+    name: "another commit with this commit's .node-version checked out beside it",
+    steps: [
+      checkout({ ref: "${{ env.RELEASE_TAG }}" }),
+      checkout({
+        path: ".release-workflow",
+        "sparse-checkout": ".node-version",
+        "sparse-checkout-cone-mode": false,
+      }),
+      setupVp(".release-workflow/.node-version"),
+    ],
   },
   {
     found: false,

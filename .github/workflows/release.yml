@@ -31,9 +31,18 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
+      - name: Checkout the pinned Node.js version
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .release-workflow
+          persist-credentials: false
+          sparse-checkout: |
+            .node-version
+          sparse-checkout-cone-mode: false
+
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
-          node-version-file: .node-version
+          node-version-file: .release-workflow/.node-version
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
@@ -104,9 +113,18 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
+      - name: Checkout the pinned Node.js version
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .release-workflow
+          persist-credentials: false
+          sparse-checkout: |
+            .node-version
+          sparse-checkout-cone-mode: false
+
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
-          node-version-file: .node-version
+          node-version-file: .release-workflow/.node-version
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
