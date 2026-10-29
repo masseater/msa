@@ -127,6 +127,8 @@ release. Add a tool name to select part of the graph. For example, run
 - ライブラリが型を提供する値は、その型のまま `Schema.decode*` に渡す。
 - ライブラリが export する型・スキーマ・enum・定数を書き写さない。
 - 外部 API のクライアントは手で包まず、Effect 公式のパッケージ、distilled.cloud、公開 OpenAPI から `@effect/openapi-generator` で生成、の順に選ぶ。
+- `vp pm audit` の指摘は、`pnpm why -r <pkg>` で経路を出し、まず直接の依存を上げて経路ごと修正版に移す。上げても上流の依存範囲が修正前の版を許す経路にだけ、`pnpm-workspace.yaml` の `overrides` に `"<pkg>@<修正版": ^<修正版>` の形で下限を置く。同じパッケージの行が前の advisory で入っていれば、行を足さずにその行を書き換える。指摘を消すために `audit.ignore` に足したり閾値を変えたりしない。
+- override が major を越えるときは、その版を使う経路を既存のテストか実際の起動で動かして確かめる。依存を上げて使われなくなった override は消す（fallow の `unused-dependency-override` が見つける）。
 
 ## エージェント向けの機能
 

@@ -72,7 +72,7 @@ const pollUntil = Effect.fn("pollUntil")(function* (
 });
 
 const randomSuffix: Effect.Effect<string> = provideNode(
-  Crypto.Crypto.use((crypto) => crypto.randomUUIDv4),
+  Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()),
 ).pipe(
   Effect.orDie,
   Effect.map((uuid) => uuid.replaceAll("-", "").slice(0, 12)),

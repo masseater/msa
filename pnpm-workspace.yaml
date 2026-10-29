@@ -16,7 +16,7 @@ catalog:
   "@ast-grep/cli": 0.45.3
   "@commitlint/cli": 21.2.3
   "@commitlint/config-conventional": 21.2.3
-  "@effect/platform-node": 4.0.2
+  "@effect/platform-node": 4.0.6
   "@google/genai": 2.21.0
   "@jridgewell/remapping": ^2.3.5
   "@modelcontextprotocol/sdk": 1.32.1
@@ -80,10 +80,11 @@ catalog:
 
 catalogs:
   stack:
+    "@alchemy.run/cloudflare": 2.0.0-beta.84
     "@effect/tsgo": 0.56.0
-    "@effect/vitest": 4.0.2
-    alchemy: 2.0.0-beta.81
-    effect: 4.0.2
+    "@effect/vitest": 4.0.6
+    alchemy: 2.0.0-beta.84
+    effect: 4.0.6
     fallow: 3.34.0
     vite-plus: 1.3.0
 
@@ -94,10 +95,8 @@ overrides:
   protobufjs: 7.6.6
   "@anthropic-ai/sandbox-runtime>zod": 4.6.7
   simple-git: 4.0.2
-  "@hono/node-server@<1.19.15": ^1.19.15
+  "@hono/node-server@<2.1.3": ^2.1.3
   hono@<4.13.7: ^4.13.7
-  lodash@<=4.17.23: ^4.18.1
-  valibot@<=1.4.1: ^1.4.2
 
 allowBuilds:
   "@ast-grep/cli": true

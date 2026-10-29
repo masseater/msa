@@ -1,4 +1,4 @@
-import { Workers } from "alchemy/Cloudflare";
+import { Workers } from "@alchemy.run/cloudflare";
 import { Config, Effect, Schema } from "effect";
 
 import CI_TELEMETRY_AUDIENCE from "./ci-telemetry-audience.ts";

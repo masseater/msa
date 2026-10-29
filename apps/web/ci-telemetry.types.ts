@@ -1,4 +1,4 @@
-import type { InferEnv } from "alchemy/Cloudflare";
+import type { InferEnv } from "@alchemy.run/cloudflare";
 
 import type ciTelemetry from "./ci-telemetry.ts";
 
