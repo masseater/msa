@@ -58,6 +58,16 @@
       "types": "./dist/json.types.d.ts",
       "import": "./dist/json.types.js"
     },
+    "./local-time": {
+      "source": "./src/local-time.ts",
+      "types": "./dist/local-time.d.ts",
+      "import": "./dist/local-time.js"
+    },
+    "./local-time.types": {
+      "source": "./src/local-time.types.ts",
+      "types": "./dist/local-time.types.d.ts",
+      "import": "./dist/local-time.types.js"
+    },
     "./sleep": {
       "source": "./src/sleep.ts",
       "types": "./dist/sleep.d.ts",

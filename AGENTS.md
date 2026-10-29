@@ -105,6 +105,11 @@ release. Add a tool name to select part of the graph. For example, run
 - 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
 - 実際の `process.env` に書く必要があるとき（子プロセスや `Bun.env` に見せる）は、`platform/env.ts` の `assignProcessEnv` だけを使う。書き込みはこの関数の 1 か所だけに置き、`msa/process-env-writer` と `tools/checks/typed-access.ts` がほかの形を断る。
 
+## 時刻
+
+- ローカルの時刻を文字列にするのは `@msa/chord/local-time` の `format` だけにする（coding-agent からは platform の `formatLocalTime`・`formatLocalDateTime`、拡張からは `@msa/coding-agent` の `formatLocalTime`）。端末のタイムゾーンの名前とずれは同じモジュールの `zone`、ローカルの日の境目は `dayStart` で得る。
+- `Date` のローカルの getter・`toString` 系・文字列への変換、`Intl.DateTimeFormat`、Effect の `DateTime` のローカルのゾーン（`zoneMakeLocal`・`formatLocal`・`layerCurrentZoneLocal`・`withCurrentZoneLocal`・`timeZone` のない `makeZoned`）は、`tools/checks/local-time.ts` が型を見て断る。
+
 ## node の組み込み
 
 - Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`vite.config.ts` で `effecttsgo/node-builtin-import` を外す override もこの 2 つだけに置き、ほかの場所を足さない。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。

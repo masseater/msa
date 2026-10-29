@@ -1,4 +1,5 @@
-import { DateTime, Effect } from "effect";
+import localTime from "@msa/chord/local-time";
+import { Clock, Effect } from "effect";
 
 import env from "./env.ts";
 import fileLog from "./file-log.ts";
@@ -10,13 +11,7 @@ const { readEnv } = env;
 const { writeFileInBackground } = fileLog;
 
 function timestampedLogName(): string {
-  const now = DateTime.toParts(
-    DateTime.makeZonedUnsafe(Effect.runSync(DateTime.now), {
-      timeZone: DateTime.zoneMakeLocal(),
-    }),
-  );
-  const pad = (value: number): string => String(value).padStart(2, "0");
-  const ts = `${now.year}-${pad(now.month)}-${pad(now.day)}_${pad(now.hour)}-${pad(now.minute)}-${pad(now.second)}`;
+  const ts = localTime.format(Effect.runSync(Clock.currentTimeMillis), "YYYY-MM-DD_HH-mm-ss");
   return `tui-${ts}-${process.pid}.log`;
 }
 

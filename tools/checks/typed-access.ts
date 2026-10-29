@@ -26,14 +26,16 @@ import {
   isSpreadAssignment,
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
-import { API, SymbolFlags } from "typescript/unstable/sync";
+import { SymbolFlags } from "typescript/unstable/sync";
 import type { Checker, Project, Symbol as TsSymbol } from "typescript/unstable/sync";
 
 import lintConfig from "../../lint.config.ts";
 import processEnvWrite from "./process-env-write.ts";
 import typedKey from "./typed-key.ts";
+import typedProject from "./typed-project.ts";
 
 const { processEnvWriter } = lintConfig;
+const { descendants, locate, scanProject } = typedProject;
 
 type Finding = {
   readonly detail: string;
@@ -119,17 +121,6 @@ const computedKey = (node: Node): Expression | undefined => {
     ? undefined
     : node.argumentExpression;
 };
-
-const children = (node: Node): readonly Node[] => {
-  const found: Node[] = [];
-  node.forEachChild((child) => {
-    found.push(child);
-    return undefined;
-  });
-  return found;
-};
-
-const descendants = (node: Node): readonly Node[] => [node, ...children(node).flatMap(descendants)];
 
 const isObjectIdentifier = (node: Node): boolean => isIdentifier(node) && node.text === "Object";
 
@@ -254,16 +245,12 @@ const scanFile = (project: Project, file: SourceFile, relative: string): readonl
     .filter(
       (key) => relative !== processEnvWriter || !processEnvWrite.isSanctionedAccess(key.parent!),
     );
-  const at = (rule: Finding["rule"]) => (found: { detail: string; node: Node }) => {
-    const start = found.node.getStart(file);
-    return {
-      detail: found.detail,
-      file: relative,
-      line: file.text.slice(0, start).split("\n").length,
-      rule,
-      text: file.text.slice(start, found.node.end).slice(0, 100),
-    };
-  };
+  const at = (rule: Finding["rule"]) => (found: { detail: string; node: Node }) => ({
+    ...locate(file, found.node),
+    detail: found.detail,
+    file: relative,
+    rule,
+  });
   return [
     ...keyFindings(project, keys).map(at("computed-key")),
     ...nodes
@@ -273,23 +260,7 @@ const scanFile = (project: Project, file: SourceFile, relative: string): readonl
   ];
 };
 
-const scan = ({ files, root }: Scope): readonly Finding[] => {
-  const api = new API({ cwd: root });
-  const prefix = new URL(`file://${root}/`).pathname;
-  try {
-    const snapshot = api.updateSnapshot({ openProject: `${root}/tsconfig.json` } as never);
-    const [project] = snapshot.getProjects();
-    if (project === undefined) throw new Error("tsconfig.json の project を開けない");
-    return project.program
-      .getSourceFileNames()
-      .filter(files)
-      .flatMap((name) =>
-        scanFile(project, project.program.getSourceFile(name)!, name.replace(prefix, "")),
-      );
-  } finally {
-    api.close();
-  }
-};
+const scan = (scope: Scope): readonly Finding[] => scanProject(scope, scanFile);
 
 const typedAccess = { scan };
 

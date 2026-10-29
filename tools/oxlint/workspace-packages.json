@@ -86,6 +86,8 @@
       "@msa/chord/context.types",
       "@msa/chord/json",
       "@msa/chord/json.types",
+      "@msa/chord/local-time",
+      "@msa/chord/local-time.types",
       "@msa/chord/sleep",
       "@msa/chord/state",
       "@msa/chord/state.types",

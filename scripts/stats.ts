@@ -1,5 +1,6 @@
-import { Console, DateTime, Effect, Option, Schema, Stream } from "effect";
+import { Clock, Console, DateTime, Effect, Option, Schema, Stream } from "effect";
 
+import localTime from "../libs/chord/src/local-time.ts";
 import cliOptions from "./cli-options.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
 import hostModule from "./host.ts";
@@ -19,6 +20,8 @@ const {
 const { helpOptions, ignoreUnknown, parseOptions, valueOption } = cliOptions;
 const { Host, runScript } = hostModule;
 const { getOrCreate } = maps;
+
+const DAY = "YYYY-MM-DD";
 
 interface Totals {
   input: number;
@@ -191,25 +194,23 @@ const instantWithin = (entry: sessionsTypes.SessionEntry, startMillis: number, e
 const collect = (
   host: hostTypes.HostShape,
   sessionsDir: string,
-  start: DateTime.Zoned,
-  end: DateTime.Zoned,
+  startMillis: number,
+  endMillis: number,
 ) =>
   Effect.gen(function* () {
     const stats = new Map<string, DayStats>();
     const grandTotal = createTotals();
     const files = yield* jsonlFiles({ directory: sessionsDir, host });
-    const startMillis = DateTime.toEpochMillis(start);
-    const endMillis = DateTime.toEpochMillis(end);
     yield* Effect.forEach(files, (file) =>
       sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
         Stream.runForEach((entry) =>
-          Effect.gen(function* () {
+          Effect.sync(() => {
             const usage = assistantMessageOf(entry)?.usage;
             if (usage === undefined) return;
             const instant = instantWithin(entry, startMillis, endMillis);
             if (Option.isNone(instant)) return;
-            const zoned = yield* DateTime.setZoneCurrent(instant.value);
-            accumulate(stats, grandTotal, entry, DateTime.formatIsoDate(zoned), file, usage);
+            const day = localTime.format(DateTime.toEpochMillis(instant.value), DAY);
+            accumulate(stats, grandTotal, entry, day, file, usage);
           }),
         ),
       ),
@@ -220,16 +221,15 @@ const collect = (
 const report = (
   args: Args,
   sessionsDir: string,
-  start: DateTime.Zoned,
-  end: DateTime.Zoned,
+  startMillis: number,
+  endMillis: number,
   collected: { readonly grandTotal: Totals; readonly stats: Map<string, DayStats> },
 ) =>
   Effect.gen(function* () {
-    const lastDay = DateTime.subtractDuration(end, 1);
     yield* Console.log(`Usage for ${args.cwd}`);
     yield* Console.log(`Sessions: ${sessionsDir}`);
     yield* Console.log(
-      `Period: ${DateTime.formatIsoDate(start)} through ${DateTime.formatIsoDate(lastDay)} (${args.days} local days)`,
+      `Period: ${localTime.format(startMillis, DAY)} through ${localTime.format(endMillis - 1, DAY)} (${args.days} local days)`,
     );
     yield* Console.log("".padEnd(160, "="));
     yield* Effect.forEach(
@@ -252,9 +252,9 @@ const program = Effect.gen(function* () {
   const args = yield* parseArgs(host);
   const sessionsDir = host.join(args.sessionsBase, encodeSessionDir(args.cwd));
   yield* requireSessionsDir({ fail: (message) => StatsError.make({ message }), host, sessionsDir });
-  const today = DateTime.startOf(yield* DateTime.nowInCurrentZone, "day");
-  const start = DateTime.subtract(today, { days: args.days - 1 });
-  const end = DateTime.add(today, { days: 1 });
+  const now = yield* Clock.currentTimeMillis;
+  const start = localTime.dayStart(now, 1 - args.days);
+  const end = localTime.dayStart(now, 1);
   yield* report(args, sessionsDir, start, end, yield* collect(host, sessionsDir, start, end));
 });
 
