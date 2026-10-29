@@ -10,7 +10,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 import triageSupport from "./triage-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { joinPath, makeTempDir, removePath } = testing;
+const { dirnameOf, joinPath, makeTempDir, removePath } = testing;
 const { LINT_CHECK } = goalChecksSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
@@ -134,4 +134,96 @@ const consultAdvisorFailsWithTheRemedy = () =>
 it(
   "fails consult_advisor with the refusal and its replan remedy when the task's cwd is no longer a git working tree",
   consultAdvisorFailsWithTheRemedy,
+);
+
+const sendMessageToADecisionFailsWithTheRemedy = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const databasePath = joinPath(dirnameOf(repository), "orchestrator.db");
+        const runCommand = () => Promise.resolve({ exitCode: 0, output: "0 errors\n" });
+        const first = setup({ cwd: repository, databasePath, runCommand });
+        const lint = yield* create(first.orchestrator, {
+          checks: [LINT_CHECK],
+          currentState: "lint reports 3 errors",
+          goalState: "lint reports 0 errors and no rule is disabled",
+          title: "lint",
+        });
+        yield* Effect.promise(() =>
+          first.workers[0]!.requestDecision({
+            options: [{ choice: "Disable the rule", tradeoffs: "Breaks the goal" }],
+            unmet: "The last error comes from a rule the goal forbids disabling.",
+          }),
+        );
+        yield* escalateTriage(first.workers);
+        yield* waitFor(() => taskStatus(first.orchestrator, lint.id) === "needs-decision");
+        yield* Effect.promise(() => first.orchestrator.dispose());
+
+        const second = setup({ cwd: repository, databasePath, runCommand });
+        const { orchestrator } = second;
+        expect(taskStatus(orchestrator, lint.id)).toBe("needs-decision");
+        const threads = threadsOf(orchestrator, lint.id);
+        yield* sh("rm -rf .git", repository);
+
+        expectRefused(
+          yield* call(second, "send_message", { message: "Fix the code", taskId: lint.id }),
+          lint.id,
+          repository,
+        );
+        expect(taskStatus(orchestrator, lint.id)).toBe("stopped");
+        expect(threadsOf(orchestrator, lint.id)).toBe(threads);
+        expect(second.workers).toHaveLength(0);
+        yield* Effect.promise(() => orchestrator.dispose());
+      }),
+    ),
+  );
+
+it(
+  "fails send_message to a task that waits for a decision in a thread no longer open with the refusal and its replan remedy when the task's cwd is no longer a git working tree",
+  sendMessageToADecisionFailsWithTheRemedy,
+);
+
+const sendMessageToADecisionWithoutAnAskerFailsWithTheRemedy = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const session = setup({
+          cwd: repository,
+          runCommand: () => Promise.resolve({ exitCode: 0, output: "0 errors\n" }),
+        });
+        const { orchestrator } = session;
+        const lint = yield* create(orchestrator, {
+          checks: [LINT_CHECK],
+          currentState: "lint reports 3 errors",
+          goalState: "lint reports 0 errors and no rule is disabled",
+          title: "lint",
+        });
+        yield* Effect.promise(() =>
+          session.workers[0]!.requestDecision({
+            options: [{ choice: "Disable the rule", tradeoffs: "Breaks the goal" }],
+            unmet: "The last error comes from a rule the goal forbids disabling.",
+          }),
+        );
+        yield* escalateTriage(session.workers);
+        yield* waitFor(() => taskStatus(orchestrator, lint.id) === "needs-decision");
+        orchestrator.database.prepare("DELETE FROM reports WHERE task_id = ?").run(lint.id);
+        const threads = threadsOf(orchestrator, lint.id);
+        const started = session.workers.length;
+        yield* sh("rm -rf .git", repository);
+
+        expectRefused(
+          yield* call(session, "send_message", { message: "Fix the code", taskId: lint.id }),
+          lint.id,
+          repository,
+        );
+        expect(taskStatus(orchestrator, lint.id)).toBe("stopped");
+        expect(threadsOf(orchestrator, lint.id)).toBe(threads);
+        expect(session.workers).toHaveLength(started);
+      }),
+    ),
+  );
+
+it(
+  "fails send_message to a task that waits for a decision with no report of the thread that asked with the refusal and its replan remedy when the task's cwd is no longer a git working tree",
+  sendMessageToADecisionWithoutAnAskerFailsWithTheRemedy,
 );
