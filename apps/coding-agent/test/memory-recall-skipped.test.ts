@@ -79,20 +79,28 @@ const recallFails = Effect.gen(function* () {
   ]);
 });
 
-const ABORT_DURING_RECALL = `export default function (msa) {
+const abortAfter = (ms: number) => `export default function (msa) {
   msa.on("before_agent_start", (_event, ctx) => {
-    setTimeout(() => ctx.abort(), 500);
+    setTimeout(() => ctx.abort(), ${ms});
   });
 }
 `;
 
 const saysNothingWhenTheRunIsStoppedWhileConnecting = Effect.gen(function* () {
   const agent = yield* setUp({
-    extension: ABORT_DURING_RECALL,
+    extension: abortAfter(500),
     sepiaceHangs: true,
     signedIn: true,
   });
   const result = yield* agent.prompt(PROMPT);
+  expect(result.stderr).not.toContain(SKIPPED);
+});
+
+const saysNothingWhenTheRunIsStoppedWhileTheRecallWaits = Effect.gen(function* () {
+  const agent = yield* setUp({ extension: abortAfter(2000), signedIn: true });
+  agent.sepiace.stallMethods.add("tools/call");
+  const result = yield* agent.prompt(PROMPT);
+  expect(agent.sepiace.stalled, result.stderr).toHaveLength(1);
   expect(result.stderr).not.toContain(SKIPPED);
 });
 
@@ -140,6 +148,11 @@ describe.skipIf(process.platform === "win32")("msa -p when long-term memory is s
   it(
     "says nothing when the run is stopped while sepiace is connecting",
     () => runTest(saysNothingWhenTheRunIsStoppedWhileConnecting),
+    90_000,
+  );
+  it(
+    "says nothing when the run is stopped while the recall waits for its reply",
+    () => runTest(saysNothingWhenTheRunIsStoppedWhileTheRecallWaits),
     90_000,
   );
   it(
