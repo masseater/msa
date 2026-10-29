@@ -13,7 +13,7 @@ import credentialHelperConfig from "./credentials/credential-helper-config.ts";
 const { mcpNamespace, validateMcpServerConfig } = mcpServers;
 const { credentialHelperError } = credentialHelperConfig;
 const { applyOverride, isOverride } = configOverrides;
-const { isSepiaceServer } = memoryModule;
+const { isSepiaceServer, readSepiaceUrl } = memoryModule;
 const { toErrorMessage } = errorsModule;
 const { dirname, join } = platformModule;
 const { exists, makeDirectory, readText, writeFile } = platformModule.files;
@@ -24,6 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 interface McpConfigState {
+  readonly memoryUrl: string;
   servers: Map<string, configTypes.McpServerEntry>;
   autoEnableCodemode?: boolean;
   errors: string[];
@@ -84,10 +85,9 @@ function applyServers(input: {
   readonly state: McpConfigState;
 }): void {
   const { path, scope, state } = input;
-  const { servers, errors } = state;
+  const { memoryUrl, servers, errors } = state;
   for (const [name, value] of Object.entries(input.servers)) {
-    const url = isRecord(value) && typeof value["url"] === "string" ? value["url"] : undefined;
-    if (isSepiaceServer(name, url)) continue;
+    if (isSepiaceServer(name, value, memoryUrl)) continue;
     if (scope === "project" && isRecord(value) && isOverride(value)) {
       applyOverride(value, servers.get(name), errors, path, name, servers);
       continue;
@@ -118,17 +118,19 @@ function loadMcpConfig(options: {
   cwd: string;
   projectTrusted: boolean;
 }): Promise<configTypes.LoadedMcpConfig> {
-  const state: McpConfigState = { errors: [], servers: new Map() };
   const projectConfig = options.projectTrusted
     ? join(options.cwd, CONFIG_DIR_NAME, "mcp.json")
     : undefined;
-  return readConfigFile(join(options.agentDir, "mcp.json"), "global", state)
-    .then(() =>
-      projectConfig !== undefined && projectConfig !== ""
-        ? readConfigFile(projectConfig, "project", state)
-        : undefined,
-    )
-    .then(() => loadedConfig(state, projectConfig));
+  return readSepiaceUrl(options).then((memoryUrl) => {
+    const state: McpConfigState = { errors: [], memoryUrl, servers: new Map() };
+    return readConfigFile(join(options.agentDir, "mcp.json"), "global", state)
+      .then(() =>
+        projectConfig !== undefined && projectConfig !== ""
+          ? readConfigFile(projectConfig, "project", state)
+          : undefined,
+      )
+      .then(() => loadedConfig(state, projectConfig));
+  });
 }
 
 function loadedConfig(

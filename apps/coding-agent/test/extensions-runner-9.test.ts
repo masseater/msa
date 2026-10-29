@@ -17,7 +17,7 @@ const { awaited, joinPath, runTest, writeTextFile } = testing;
 function loadSubscriptionExtension(factory: extensionsTypesTypes.ExtensionFactory) {
   return runTest(
     Effect.gen(function* () {
-      const runtime = createExtensionRuntime();
+      const runtime = createExtensionRuntime(() => ({}));
       const extension = yield* awaited(
         loadExtensionFromFactory(factory, env.tempDir, createEventBus(), runtime),
       );

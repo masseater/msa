@@ -17,7 +17,7 @@ const providerConfig = {
 } satisfies extensionsTypesTypes.ProviderConfig;
 
 const discardsRuntimeChangesAndDisablesThe = Effect.gen(function* () {
-  const runtime = createExtensionRuntime();
+  const runtime = createExtensionRuntime(() => ({}));
   const eventBus = createEventBus();
   let capturedApi: extensionsTypesTypes.ExtensionAPI | undefined;
   let eventCalls = 0;
@@ -69,7 +69,7 @@ const discardsRuntimeChangesAndDisablesThe = Effect.gen(function* () {
 
 const doesNotDiscardAConcurrentlyLoaded = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const runtime = createExtensionRuntime();
+  const runtime = createExtensionRuntime(() => ({}));
   const eventBus = createEventBus();
   const waitBeforeFailure = gate();
   const failingLoad = loadExtensionFromFactory(

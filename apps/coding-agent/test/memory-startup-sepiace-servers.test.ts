@@ -4,10 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import memoryStartupScripts from "./memory-startup-scripts.ts";
 import memoryStartupSupport from "./memory-startup-support.ts";
+import mcpOauthServer from "./suite/mcp-oauth-server.ts";
 
 const { readTextFile, runTest } = testing;
 const { SEPIACE_ENTRIES } = memoryStartupScripts;
 const { LEGACY_TOKEN, toolNames, useAgents } = memoryStartupSupport;
+const { startOAuthMcpServer } = mcpOauthServer;
 
 const setUp = useAgents();
 
@@ -89,10 +91,16 @@ const dropsAServerReRegisteredAtSepiace = Effect.gen(function* () {
   expect(notices[0]).not.toContain("notes");
 });
 
+const otherServer = Effect.acquireRelease(
+  Effect.promise(() => startOAuthMcpServer({ memory: () => "" })),
+  (server) => Effect.promise(server.close),
+).pipe(Effect.tap((server) => Effect.sync(() => server.trustToken(LEGACY_TOKEN))));
+
 const judgesSepiaceBeforeCheckingTheServer = Effect.gen(function* () {
+  const other = yield* otherServer;
   const agent = yield* setUp({
-    extensionServers: (url) => [
-      ["my_notes", reachableServer(url)],
+    extensionServers: () => [
+      ["my_notes", reachableServer(other.url)],
       ["sepiace", { exposure: "direct" }],
       ["my-notes", { exposure: "direct", url: SEPIACE_HOST_URL }],
     ],
@@ -111,6 +119,48 @@ const judgesSepiaceBeforeCheckingTheServer = Effect.gen(function* () {
   expect(new Set(tools.filter((name) => name.startsWith("mcp__")))).toEqual(
     new Set(["mcp__my_notes__memory", "mcp__my_notes__whoami"]),
   );
+}).pipe(Effect.scoped);
+
+const proxiedThrough = (url: string) => ({
+  args: ["-y", "mcp-remote", url],
+  command: "npx",
+  exposure: "direct",
+});
+
+const ignoresServersAtTheConfiguredMemoryHost = Effect.gen(function* () {
+  const agent = yield* setUp({
+    extensionServers: (url) => [
+      ["recall", reachableServer(url)],
+      ["recall-proxy", proxiedThrough(url)],
+    ],
+    mcpServers: (url) => ({
+      memories: reachableServer(url),
+      "memories-proxy": proxiedThrough(url),
+    }),
+    signedIn: true,
+  });
+  expect(new URL(agent.sepiace.url).host).not.toBe(new URL(SEPIACE_HOST_URL).host);
+  const result = yield* agent.prompt("where does the release go?");
+  expect(result.code, result.stderr).toBe(0);
+  const [request = ""] = agent.model.bodies;
+  expect(request).toContain("Releases go to the tap.");
+  const tools = yield* toolNames(request);
+  expect(tools).toContain("memory");
+  expect(tools.filter((name) => name.startsWith("mcp__"))).toEqual([]);
+  for (const name of ["memories", "memories-proxy"])
+    expect(result.stderr).toContain(`${agent.mcpConfig}: MCP server "${name}" is ignored`);
+  for (const name of ["recall", "recall-proxy"])
+    expect(result.stderr).toContain(`${agent.extension}: MCP server "${name}" is ignored`);
+  const before = yield* readTextFile(agent.mcpConfig);
+  for (const args of [
+    ["mcp", "add", "memories", "--url", agent.sepiace.url],
+    ["mcp", "add", "memories", "--", "npx", "-y", "mcp-remote", agent.sepiace.url],
+  ]) {
+    const added = yield* agent.run(args);
+    expect(added.code).toBe(1);
+    expect(added.stderr).toContain("sepiace is long-term memory, not an MCP server");
+  }
+  expect(yield* readTextFile(agent.mcpConfig)).toBe(before);
 });
 
 describe.skipIf(process.platform === "win32")("sepiace configured as an MCP server", () => {
@@ -137,6 +187,11 @@ describe.skipIf(process.platform === "win32")("sepiace configured as an MCP serv
   it(
     "ignores a sepiace server before checking its config and name clashes",
     () => runTest(judgesSepiaceBeforeCheckingTheServer),
+    90_000,
+  );
+  it(
+    "ignores servers at the host of memory.url, directly or through a stdio proxy, on every path",
+    () => runTest(ignoresServersAtTheConfiguredMemoryHost),
     90_000,
   );
 });

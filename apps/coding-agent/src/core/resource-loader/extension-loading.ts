@@ -13,7 +13,7 @@ import addExtensionConflictDiagnostics from "./extension-conflicts.ts";
 const { isSyntheticPath, BUILTIN_PATH_PREFIX } = sourceInfoModule;
 const { resolvePath } = pathsModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { loadExtensionFromFactory, loadExtensionsCached } = loader;
+const { createExtensionRuntime, loadExtensionFromFactory, loadExtensionsCached } = loader;
 const { collectExtensionPackageWarnings, mergeExtensionWarnings, omitReplacedExtensions } =
   defaultResourceLoaderHelpers;
 
@@ -22,6 +22,11 @@ export default class ExtensionLoading {
 
   constructor(owner: DefaultResourceLoader) {
     this.owner = owner;
+  }
+
+  private newRuntime(): extensionsTypesTypes.ExtensionRuntime {
+    const { settingsManager } = this.owner.environment;
+    return createExtensionRuntime(() => settingsManager.getGlobalSettings());
   }
 
   resolveExtensionLoadPath(path: string): string {
@@ -73,7 +78,9 @@ export default class ExtensionLoading {
         collectExtensionPackageWarnings(extensionPaths, metadataByPath),
       );
       const { cwd, eventBus } = this.owner.environment;
-      const extensionsResult = yield* awaited(loadExtensionsCached(extensionPaths, cwd, eventBus));
+      const extensionsResult = yield* awaited(
+        loadExtensionsCached(extensionPaths, cwd, eventBus, this.newRuntime()),
+      );
       mergeExtensionWarnings(extensionsResult, packageWarnings);
       const inlineExtensions = yield* performed(
         this.loadExtensionFactories(extensionsResult.runtime),
@@ -101,7 +108,7 @@ export default class ExtensionLoading {
           paths.filter((path) => !isBuiltinPath(path)),
           this.owner.environment.cwd,
           this.owner.environment.eventBus,
-          runtime,
+          runtime ?? this.newRuntime(),
         ),
       );
       for (const path of paths.filter(isBuiltinPath)) {

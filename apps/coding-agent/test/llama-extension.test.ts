@@ -22,7 +22,7 @@ afterEach(() => runTest(closeServers));
 const registersANativeProviderAndLlamaCommand = () =>
   runTest(
     Effect.gen(function* () {
-      const runtime = createExtensionRuntime();
+      const runtime = createExtensionRuntime(() => ({}));
       const extension = yield* awaited(
         loadExtensionFromFactory(
           llamaExtension,

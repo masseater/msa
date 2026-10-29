@@ -1,4 +1,5 @@
 import settingsDefaults from "../settings-defaults.ts";
+import SettingsManager from "../settings-manager.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import type memoryTypes from "./memory.types.ts";
 
@@ -28,14 +29,47 @@ function sepiaceUrl(globalSettings: settingsManagerTypes.Settings): string {
   return url === undefined || url === "" ? SEPIACE_URL : url;
 }
 
-function isSepiaceServer(name: string, url: string | undefined): boolean {
-  if (name === SEPIACE_NAME) return true;
-  if (url === undefined) return false;
+function readSepiaceUrl(location: {
+  readonly agentDir: string;
+  readonly cwd: string;
+}): Promise<string> {
+  return SettingsManager.create(location.cwd, location.agentDir).then((settingsManager) =>
+    sepiaceUrl(settingsManager.getGlobalSettings()),
+  );
+}
+
+function webHost(text: string): string | undefined {
   try {
-    return new URL(url).host === SEPIACE_HOST;
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.host : undefined;
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+function argUrls(arg: unknown): string[] {
+  if (typeof arg !== "string") return [];
+  const flagValue = arg.startsWith("-") && arg.includes("=") ? arg.slice(arg.indexOf("=") + 1) : "";
+  return [arg, flagValue];
+}
+
+function serverUrls(config: unknown): string[] {
+  if (!isRecord(config)) return [];
+  const url = typeof config["url"] === "string" ? [config["url"]] : [];
+  const args = Array.isArray(config["args"]) ? config["args"].flatMap(argUrls) : [];
+  return [...url, ...args];
+}
+
+function isSepiaceServer(name: string, config: unknown, memoryUrl: string): boolean {
+  if (name === SEPIACE_NAME) return true;
+  const hosts = new Set([SEPIACE_HOST, webHost(memoryUrl)]);
+  return serverUrls(config).some((url) => {
+    const host = webHost(url);
+    return host !== undefined && hosts.has(host);
+  });
 }
 
 function notAnMcpServer(name: string): string | undefined {
@@ -58,6 +92,7 @@ const memory = {
   ignoredMcpServerNotice,
   isSepiaceServer,
   notAnMcpServer,
+  readSepiaceUrl,
   resolveMemorySettings,
   sepiaceUrl,
 };

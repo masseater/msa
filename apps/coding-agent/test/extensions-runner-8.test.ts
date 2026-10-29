@@ -49,7 +49,7 @@ const providerModelConfig: extensionsTypesTypes.ProviderConfig = {
 const bindcoreIgnoresInvalidQueuedRegistrationsAndReports = () =>
   runTest(
     Effect.gen(function* () {
-      const runtime = createExtensionRuntime();
+      const runtime = createExtensionRuntime(() => ({}));
       runtime.registerProvider(
         "broken-provider",
         {
@@ -81,7 +81,7 @@ const bindcoreIgnoresInvalidQueuedRegistrationsAndReports = () =>
   );
 
 const preBindUnregisterRemovesAllQueuedRegistrations = () => {
-  const runtime = createExtensionRuntime();
+  const runtime = createExtensionRuntime(() => ({}));
 
   runtime.registerProvider("queued-provider", providerModelConfig);
   runtime.registerProvider("queued-provider", {
@@ -105,7 +105,7 @@ const preBindUnregisterRemovesAllQueuedRegistrations = () => {
 };
 
 const postBindRegisterAndUnregisterTakeEffect = () => {
-  const runtime = createExtensionRuntime();
+  const runtime = createExtensionRuntime(() => ({}));
   const runner = new ExtensionRunner(
     [],
     runtime,
@@ -138,7 +138,7 @@ const passesForkOptionsThroughToTheBound = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const runtime = createExtensionRuntime();
+      const runtime = createExtensionRuntime(() => ({}));
       const runner = new ExtensionRunner(
         [],
         runtime,

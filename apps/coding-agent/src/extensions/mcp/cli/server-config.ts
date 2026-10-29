@@ -10,7 +10,7 @@ import serverPersist from "./server-persist.ts";
 
 const { APP_NAME, CONFIG_DIR_NAME } = configModule;
 const { validateMcpServerConfig } = mcpServers;
-const { SIGN_IN_HINT, isSepiaceServer } = memoryModule;
+const { SIGN_IN_HINT, isSepiaceServer, readSepiaceUrl } = memoryModule;
 const { join } = platform;
 const { removeConfiguredServer, saveAddedServer } = serverPersist;
 const { HELP_HINT, parseOptions, parsePairs } = cliOptions;
@@ -136,26 +136,31 @@ function add(
   }
   const validated = buildServerConfig(name, command, parsed, error);
   if (validated === undefined) return Promise.resolve(1);
-  if (isSepiaceServer(name, "url" in validated ? validated.url : undefined)) {
-    error(
-      `sepiace is long-term memory, not an MCP server, so mcp.json does not take it; ${SIGN_IN_HINT}.`,
-    );
-    return Promise.resolve(1);
-  }
   const project = parsed.values.has("local");
   const path = project ? projectConfig : join(options.agentDir, "mcp.json");
-  return saveAddedServer({ error, log, name, options, path, project, validated }).then((saved) => {
-    if (!saved) return 1;
-    const mayNeedSignIn =
-      "url" in validated &&
-      !Object.keys(validated.headers ?? {}).some(
-        (header) => header.toLowerCase() === "authorization",
+  return readSepiaceUrl(options).then((memoryUrl) => {
+    if (isSepiaceServer(name, validated, memoryUrl)) {
+      error(
+        `sepiace is long-term memory, not an MCP server, so mcp.json does not take it; ${SIGN_IN_HINT}.`,
       );
-    log(
-      `Check it with: ${APP_NAME} mcp list${mayNeedSignIn ? `. If it requires sign-in: ${APP_NAME} mcp login ${name}` : ""}`,
+      return 1;
+    }
+    return saveAddedServer({ error, log, name, options, path, project, validated }).then((saved) =>
+      saved ? added(name, validated, log) : 1,
     );
-    return 0;
   });
+}
+
+function added(name: string, validated: mcpServersTypes.McpServerConfig, log: Line): number {
+  const mayNeedSignIn =
+    "url" in validated &&
+    !Object.keys(validated.headers ?? {}).some(
+      (header) => header.toLowerCase() === "authorization",
+    );
+  log(
+    `Check it with: ${APP_NAME} mcp list${mayNeedSignIn ? `. If it requires sign-in: ${APP_NAME} mcp login ${name}` : ""}`,
+  );
+  return 0;
 }
 
 function remove(

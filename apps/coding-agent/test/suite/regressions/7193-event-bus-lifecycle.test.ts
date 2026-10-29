@@ -59,7 +59,7 @@ const removesExtensionOwnedEventBusListenersStep1 = () =>
     const loadExtensions = () =>
       runPromise(
         Effect.gen(function* () {
-          const runtime = createExtensionRuntime();
+          const runtime = createExtensionRuntime(() => ({}));
           const extension = yield* Effect.promise(() =>
             loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime),
           );
