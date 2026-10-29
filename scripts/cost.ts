@@ -1,5 +1,6 @@
-import { Console, DateTime, Effect, Option, Stream } from "effect";
+import { Clock, Console, DateTime, Effect, Option, Stream } from "effect";
 
+import localTime from "../libs/chord/src/local-time.ts";
 import cliOptions from "./cli-options.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
 import hostModule from "./host.ts";
@@ -144,11 +145,10 @@ const recordEntryCost = (
   addCost(dayCostOf(stats, DateTime.formatIsoDateUtc(instant.value), providerOf(entry)), cost);
 };
 
-const collect = (host: hostTypes.HostShape, sessionsDir: string, cutoff: DateTime.Zoned) =>
+const collect = (host: hostTypes.HostShape, sessionsDir: string, cutoffMillis: number) =>
   Effect.gen(function* () {
     const stats = new Map<string, Map<string, DayCost>>();
     const files = yield* jsonlFiles({ directory: sessionsDir, host });
-    const cutoffMillis = DateTime.toEpochMillis(cutoff);
     const fresh = files.filter((file) =>
       Option.match(fileInstant(file), {
         onNone: () => false,
@@ -194,7 +194,7 @@ const reportDays = (
     return grandTotal;
   });
 
-const report = (args: Args, cutoff: DateTime.Zoned, stats: Map<string, Map<string, DayCost>>) =>
+const report = (args: Args, cutoffMillis: number, stats: Map<string, Map<string, DayCost>>) =>
   Effect.gen(function* () {
     if (stats.size === 0) {
       yield* Console.log(`No sessions found in the last ${args.days} days for: ${args.directory}`);
@@ -202,7 +202,7 @@ const report = (args: Args, cutoff: DateTime.Zoned, stats: Map<string, Map<strin
     }
     yield* Console.log(`\nCost breakdown for: ${args.directory}`);
     yield* Console.log(
-      `Period: last ${args.days} days (since ${DateTime.formatIsoDateUtc(cutoff)})`,
+      `Period: last ${args.days} days (since ${DateTime.formatIsoDateUtc(DateTime.makeUnsafe(cutoffMillis))})`,
     );
     yield* Console.log("=".repeat(80));
     const providerTotals = new Map<string, DayCost>();
@@ -226,10 +226,7 @@ const program = Effect.gen(function* () {
     yield* Console.error(`Sessions directory not found: ${sessionsDir}`);
     return yield* Effect.sync(() => process.exit(1));
   }
-  const cutoff = DateTime.startOf(
-    DateTime.subtract(yield* DateTime.nowInCurrentZone, { days: args.days }),
-    "day",
-  );
+  const cutoff = localTime.dayStart(yield* Clock.currentTimeMillis, -args.days);
   yield* report(args, cutoff, yield* collect(host, sessionsDir, cutoff));
 });
 

@@ -1,18 +1,14 @@
+import { DateTime } from "effect";
+
 import platform from "../platform/index.ts";
 
 const { toEpochMs } = platform;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/u;
 const DAY_MS = 86_400_000;
-const UTC_DATE = new Intl.DateTimeFormat("en-CA", {
-  day: "2-digit",
-  month: "2-digit",
-  timeZone: "UTC",
-  year: "numeric",
-});
 
 function nextDate(date: string): string {
-  return UTC_DATE.format(toEpochMs(`${date}T00:00:00Z`) + DAY_MS);
+  return DateTime.formatIsoDateUtc(DateTime.makeUnsafe(toEpochMs(`${date}T00:00:00Z`) + DAY_MS));
 }
 
 function parseBound(value: string, end: boolean): number {

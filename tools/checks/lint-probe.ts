@@ -133,12 +133,18 @@ const codesOnLine = (
 const msaCodesOnLine = (report: Diagnostics, file: string, line: number): readonly string[] =>
   codesOnLine(report, file, line, "msa(");
 
+const readRepoFile = (file: string): Promise<string> =>
+  probeRuntime.runPromise(
+    FileSystem.FileSystem.use((fs) => fs.readFileString(`${repoRoot}/${file}`)).pipe(Effect.orDie),
+  );
+
 const lintProbe = {
   codesOnLine,
   lintAndInspectProbes,
   lintProbes,
   msaCodesOnLine,
   probePath,
+  readRepoFile,
   repoRoot,
 };
 

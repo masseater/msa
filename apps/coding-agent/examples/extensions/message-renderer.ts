@@ -1,6 +1,7 @@
+import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
-import { Clock, DateTime, Effect } from "effect";
+import { Clock, Effect } from "effect";
 
 const { Box, Text } = tui;
 
@@ -15,7 +16,7 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
     let text = `${prefix} ${message.content}`;
 
     if (expanded && details?.timestamp !== undefined) {
-      const time = DateTime.formatLocal(DateTime.makeUnsafe(details.timestamp));
+      const time = codingAgent.formatLocalTime(details.timestamp, "YYYY-MM-DD HH:mm:ss");
       text += `\n${theme.fg("dim", `  at ${time}`)}`;
     }
 

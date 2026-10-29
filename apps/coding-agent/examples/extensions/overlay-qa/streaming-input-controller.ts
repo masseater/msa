@@ -1,7 +1,8 @@
+import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { DateTime, Effect, type Fiber } from "effect";
+import { Clock, Effect, type Fiber } from "effect";
 
 import BaseOverlay from "./base-overlay.ts";
 import StreamingInputPanel from "./streaming-input-panel.ts";
@@ -50,7 +51,10 @@ export default class StreamingInputController extends BaseOverlay {
       Effect.forever(
         Effect.gen(function* () {
           self.lineCount++;
-          const timestamp = DateTime.formatLocal(DateTime.nowUnsafe());
+          const timestamp = codingAgent.formatLocalTime(
+            yield* Clock.currentTimeMillis,
+            "YYYY-MM-DD HH:mm:ss",
+          );
           self.streamLines.push(`[${timestamp}] Streaming line ${self.lineCount}...`);
           if (self.streamLines.length > 8) {
             self.streamLines.shift();

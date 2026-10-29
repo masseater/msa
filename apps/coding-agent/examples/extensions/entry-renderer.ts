@@ -1,6 +1,7 @@
+import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
-import { Clock, DateTime, Effect } from "effect";
+import { Clock, Effect } from "effect";
 
 const { Box, Text } = tui;
 
@@ -19,7 +20,7 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
     box.addChild(new Text(`${theme.fg("accent", "[status]")} ${data.message}`, 0, 0));
 
     if (expanded) {
-      const time = DateTime.formatLocal(DateTime.makeUnsafe(data.timestamp));
+      const time = codingAgent.formatLocalTime(data.timestamp, "YYYY-MM-DD HH:mm:ss");
       box.addChild(new Text(theme.fg("dim", time), 0, 0));
     }
 

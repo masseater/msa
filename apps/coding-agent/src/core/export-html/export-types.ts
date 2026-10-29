@@ -25,6 +25,11 @@ declare namespace exportTypesTypes {
     toolRenderer?: ToolHtmlRenderer;
   }
 
+  interface LocalTimes {
+    entries: Record<string, string>;
+    session?: string | undefined;
+  }
+
   interface SessionData {
     header: ReturnType<sessionManagerTypes.SessionManager["getHeader"]>;
     entries: ReturnType<sessionManagerTypes.SessionManager["getEntries"]>;

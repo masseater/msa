@@ -13,6 +13,7 @@ const workspaceSourcePaths = {
   chordContext: fileURLToPath(new URL("./libs/chord/src/context/index.ts", import.meta.url)),
   chordDelta: fileURLToPath(new URL("./libs/chord/src/delta/index.ts", import.meta.url)),
   chordIndex: fileURLToPath(new URL("./libs/chord/src/index.ts", import.meta.url)),
+  chordLocalTime: fileURLToPath(new URL("./libs/chord/src/local-time.ts", import.meta.url)),
   chordNode: fileURLToPath(new URL("./libs/chord/src/node.ts", import.meta.url)),
   chordSleep: fileURLToPath(new URL("./libs/chord/src/sleep.ts", import.meta.url)),
   codemodeDeclarations: fileURLToPath(
@@ -52,6 +53,7 @@ const testBaseConfig = {
         replacement: workspaceSourcePaths.chordContext,
       },
       { find: /^@msa\/chord\/delta$/u, replacement: workspaceSourcePaths.chordDelta },
+      { find: /^@msa\/chord\/local-time$/u, replacement: workspaceSourcePaths.chordLocalTime },
       { find: /^@msa\/chord\/node$/u, replacement: workspaceSourcePaths.chordNode },
       { find: /^@msa\/chord\/sleep$/u, replacement: workspaceSourcePaths.chordSleep },
       {

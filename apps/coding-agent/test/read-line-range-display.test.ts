@@ -2,10 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
+import platform from "../src/core/platform/index.ts";
 import renderUtils from "../src/core/tools/render-utils.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import readLineRangeSupport from "./read-line-range-support.ts";
 
+const { formatLocalTime } = platform;
 const { formatReadLineRange } = renderUtils;
 const { initTheme } = themeModule;
 
@@ -33,6 +35,14 @@ const showsStringRangesInTheHtmlExport = Effect.gen(function* () {
   expect(viewer.renderEntry(assistant)).toContain('<span class="line-numbers">:25-37</span>');
 });
 
+const showsEntryTimesFromTheLocalTimeFormatter = Effect.gen(function* () {
+  const { assistant, sessionPath } = yield* writeReadSession(dirs.temp);
+  const viewer = yield* exportViewer(sessionPath, dirs.temp);
+  expect(viewer.renderEntry(assistant)).toContain(
+    `<div class="message-timestamp">${formatLocalTime(assistant.timestamp, "HH:mm:ss")}</div>`,
+  );
+});
+
 describe("read line range display", () => {
   beforeAll(() =>
     runTest(
@@ -48,4 +58,7 @@ describe("read line range display", () => {
   it("formats raw read arguments", formatsRawReadArguments);
 
   it("shows string ranges in the HTML export", () => runTest(showsStringRangesInTheHtmlExport));
+
+  it("shows entry times from the local time formatter in the HTML export", () =>
+    runTest(showsEntryTimesFromTheLocalTimeFormatter));
 });

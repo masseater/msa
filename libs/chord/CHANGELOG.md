@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `@msa/chord/local-time` writes times in the local time zone: `format(value, layout)` fills the tokens `YYYY`, `YY`, `MM`, `M`, `DD`, `D`, `HH`, `mm` and `ss`, `zone()` returns the zone's name and its offset from UTC, and `dayStart(value, days)` returns the epoch milliseconds at which the local day `days` after `value` starts
+
 ### Changed
 
 - The error classes `ChordError`, `PathError`, `UnsafePathError` are `Schema.TaggedError` classes. `new` takes one `{...}` object of their fields; the old positional arguments moved to the static `create(...)`, and `make({...})` builds one from the fields. `_tag`, `message` and the fields keep their names and values

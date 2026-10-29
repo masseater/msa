@@ -1,16 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import {
-  Cause,
-  Context,
-  DateTime,
-  Effect,
-  FileSystem,
-  Layer,
-  Option,
-  Path,
-  Queue,
-  Stream,
-} from "effect";
+import { Cause, Context, Effect, FileSystem, Layer, Option, Path, Queue, Stream } from "effect";
 import type { Scope } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -131,12 +120,10 @@ const hostLayer: Layer.Layer<Host> = Layer.effect(
   }),
 ).pipe(Layer.provide(NodeServices.layer));
 
-const scriptLayer = Layer.mergeAll(hostLayer, DateTime.layerCurrentZoneLocal);
-
-const runScript = runMainWith(scriptLayer);
+const runScript = runMainWith(hostLayer);
 
 const runScriptWith = <ROut, E>(layer: Layer.Layer<ROut, E>) =>
-  runMainWith(Layer.mergeAll(scriptLayer, layer));
+  runMainWith(Layer.mergeAll(hostLayer, layer));
 
 const host = {
   Host,

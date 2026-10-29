@@ -23,6 +23,8 @@
       "@msa/chord/output.types": ["./libs/chord/src/output.types.ts"],
       "@msa/chord/progress": ["./libs/chord/src/progress.ts"],
       "@msa/chord/progress.types": ["./libs/chord/src/progress.types.ts"],
+      "@msa/chord/local-time": ["./libs/chord/src/local-time.ts"],
+      "@msa/chord/local-time.types": ["./libs/chord/src/local-time.types.ts"],
       "@msa/chord/sleep": ["./libs/chord/src/sleep.ts"],
       "@msa/chord/state": ["./libs/chord/src/state.ts"],
       "@msa/chord/state.types": ["./libs/chord/src/state.types.ts"],

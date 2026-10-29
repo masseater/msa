@@ -1,5 +1,6 @@
+import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
-import { DateTime } from "effect";
+import { Clock, Effect } from "effect";
 
 export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("input", (event, ctx) => {
@@ -21,7 +22,10 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
       return { action: "handled" };
     }
     if (event.text.toLowerCase() === "time") {
-      ctx.ui.notify(DateTime.formatLocal(DateTime.nowUnsafe()), "info");
+      ctx.ui.notify(
+        codingAgent.formatLocalTime(Effect.runSync(Clock.currentTimeMillis), "YYYY-MM-DD HH:mm:ss"),
+        "info",
+      );
       return { action: "handled" };
     }
 

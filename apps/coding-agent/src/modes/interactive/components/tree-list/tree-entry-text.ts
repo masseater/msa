@@ -4,7 +4,7 @@ import renderUtils from "../../../../core/tools/render-utils.ts";
 import themeModule from "../../theme/theme.ts";
 import type TreeList from "../tree-list.ts";
 
-const { nowMs, toDate } = platform;
+const { formatLocalTime, nowMs } = platform;
 const { formatReadLineRange, shortenPath } = renderUtils;
 const { theme } = themeModule;
 
@@ -75,28 +75,12 @@ export default class TreeEntryText {
   }
 
   formatLabelTimestamp(timestamp: string): string {
-    const date = toDate(timestamp);
-    const now = toDate(nowMs());
-    const hours = date.getHours().toString().padStart(2, "0");
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-    const time = `${hours}:${minutes}`;
-
-    if (
-      date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate()
-    ) {
-      return time;
-    }
-
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    if (date.getFullYear() === now.getFullYear()) {
-      return `${month}/${day} ${time}`;
-    }
-
-    const year = date.getFullYear().toString().slice(-2);
-    return `${year}/${month}/${day} ${time}`;
+    const now = nowMs();
+    const sameAsNow = (layout: string): boolean =>
+      formatLocalTime(timestamp, layout) === formatLocalTime(now, layout);
+    if (sameAsNow("YYYY-MM-DD")) return formatLocalTime(timestamp, "HH:mm");
+    if (sameAsNow("YYYY")) return formatLocalTime(timestamp, "M/D HH:mm");
+    return formatLocalTime(timestamp, "YY/M/D HH:mm");
   }
 
   private formatToolCall(name: string, args: Record<string, unknown>): string {

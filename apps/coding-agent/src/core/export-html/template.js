@@ -12,7 +12,7 @@
         bytes[i] = binary.charCodeAt(i);
       }
       const data = JSON.parse(new TextDecoder('utf-8').decode(bytes));
-      const { header, entries, leafId: defaultLeafId, systemPrompt, tools, renderedTools } = data;
+      const { header, entries, leafId: defaultLeafId, systemPrompt, tools, renderedTools, localTimes } = data;
 
       // ============================================================
       // URL PARAMETER HANDLING
@@ -800,12 +800,6 @@
         return (count / 1000000).toFixed(1) + 'M';
       }
 
-      function formatTimestamp(ts) {
-        if (!ts) return '';
-        const date = new Date(ts);
-        return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      }
-
       function replaceTabs(text) {
         return text.replace(/\t/g, '   ');
       }
@@ -1198,7 +1192,7 @@
       }
 
       function renderEntry(entry) {
-        const ts = formatTimestamp(entry.timestamp);
+        const ts = localTimes.entries[entry.id] || '';
         const tsHtml = ts ? `<div class="message-timestamp">${ts}</div>` : '';
         const entryDomId = `entry-${escapeHtml(entry.id)}`;
         const copyBtnHtml = renderCopyLinkButton(entry.id);
@@ -1420,7 +1414,7 @@
               </div>
             </div>
             <div class="header-info">
-              <div class="info-item"><span class="info-label">Date:</span><span class="info-value">${header?.timestamp ? new Date(header.timestamp).toLocaleString() : 'unknown'}</span></div>
+              <div class="info-item"><span class="info-label">Date:</span><span class="info-value">${escapeHtml(localTimes.session || 'unknown')}</span></div>
               <div class="info-item"><span class="info-label">Models:</span><span class="info-value">${escapeHtml(globalStats.models.join(', ') || 'unknown')}</span></div>
               <div class="info-item"><span class="info-label">Messages:</span><span class="info-value">${msgParts.join(', ') || '0'}</span></div>
               <div class="info-item"><span class="info-label">Tool Calls:</span><span class="info-value">${globalStats.toolCalls}</span></div>

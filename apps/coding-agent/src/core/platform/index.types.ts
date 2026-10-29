@@ -16,11 +16,6 @@ declare namespace platformTypes {
     readonly open: () => void;
   }
 
-  interface LocalTimeZone {
-    readonly name: string;
-    readonly offset: string;
-  }
-
   interface ParsedPath {
     readonly root: string;
     readonly dir: string;
