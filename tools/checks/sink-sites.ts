@@ -9,7 +9,7 @@ import {
   isPropertyAccessExpression,
   isStringLiteral,
 } from "typescript/unstable/ast/is";
-import { TypeFlags } from "typescript/unstable/sync";
+import { SymbolFlags, TypeFlags } from "typescript/unstable/sync";
 import type { Checker, Symbol as TsSymbol, Type } from "typescript/unstable/sync";
 
 import type sinkSitesTypes from "./sink-sites.types.ts";
@@ -144,12 +144,50 @@ const firstValueIsString = (checker: Checker, site: Site): boolean => {
   return value !== undefined && isStringLike(typesOf(checker, [value])[0]);
 };
 
-const symbolsOf = (checker: Checker, nodes: readonly Node[]): readonly (TsSymbol | undefined)[] =>
-  nodes.length === 0
-    ? []
-    : checker
-        .getSymbolAtLocation(nodes)
-        .map((symbol) => (symbol === undefined ? undefined : resolveAlias(checker, symbol)));
+const accessed = (node: Node): Node | undefined =>
+  isPropertyAccessExpression(node) || isElementAccessExpression(node) ? node.expression : undefined;
+
+const accessOwner = (node: Node): Node | undefined => {
+  const owner = node.parent === undefined ? undefined : accessed(node.parent);
+  return owner === node ? undefined : owner;
+};
+
+const innerExpression = (node: Node): Node | undefined =>
+  isCallExpression(node) ? node.expression : accessed(node);
+
+const receiverRoot = (node: Node): Node | undefined => {
+  let current = accessOwner(node);
+  while (current !== undefined && !isIdentifier(current)) current = innerExpression(current);
+  return current;
+};
+
+const isImportBinding = (symbol: TsSymbol | undefined): symbol is TsSymbol =>
+  symbol !== undefined && (symbol.flags & SymbolFlags.Alias) !== 0;
+
+const importedRoots = (
+  checker: Checker,
+  nodes: readonly Node[],
+): readonly (TsSymbol | undefined)[] => {
+  const roots = nodes.map(receiverRoot);
+  const present = roots.filter((root): root is Node => root !== undefined);
+  const symbols = present.length === 0 ? [] : checker.getSymbolAtLocation(present);
+  let next = 0;
+  return roots.map((root) => {
+    if (root === undefined) return undefined;
+    const symbol = symbols[next];
+    next += 1;
+    return isImportBinding(symbol) ? symbol : undefined;
+  });
+};
+
+const symbolsOf = (checker: Checker, nodes: readonly Node[]): readonly (TsSymbol | undefined)[] => {
+  if (nodes.length === 0) return [];
+  const symbols = checker.getSymbolAtLocation(nodes);
+  const imported = symbols.includes(undefined) ? importedRoots(checker, nodes) : [];
+  return symbols.map((symbol, index) =>
+    symbol === undefined ? imported[index] : resolveAlias(checker, symbol),
+  );
+};
 
 const resolvedSites = (
   checker: Checker,

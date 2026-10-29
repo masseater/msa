@@ -18,6 +18,8 @@ const JS_URL = `["java", "${SCHEME.slice(4)}:${LOCALE}"].join("")`;
 
 const HANDLER_HTML = `["<img src=x o", 'nerror="${LOCALE}">'].join("")`;
 
+const UNRESOLVED = "msa-local-time-unresolved-probe";
+
 const SCRIPT_SINK = ["scriptSink"];
 
 const HTML_SINK = ["htmlSink"];
@@ -63,6 +65,11 @@ const sinkCases: Readonly<Record<string, SinkCase>> = {
   iframeSrcdoc: [`document.createElement("iframe").srcdoc = ${HANDLER_HTML};`, HTML_SINK],
   imageSrc: ['document.createElement("img").src = "a.png";', []],
   importScripts: ['importScripts("worker.js");', SCRIPT_SINK],
+  importedInnerHTML: [
+    `import page from "${UNRESOLVED}";\npage.view.innerHTML = ${HANDLER_HTML};`,
+    [],
+  ],
+  importedWorker: [`import { Workers } from "${UNRESOLVED}";\nWorkers.Worker("ci");`, []],
   innerHTML: [
     `const d = document.createElement("div");\nd.innerHTML = ${HANDLER_HTML};`,
     HTML_SINK,
