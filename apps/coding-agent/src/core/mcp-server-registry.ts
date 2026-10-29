@@ -1,20 +1,21 @@
 import mcpServersModule from "./mcp-servers.ts";
 import type mcpServersTypes from "./mcp-servers.types.ts";
 import memoryModule from "./memory/memory.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
 
-const { ignoredMcpServerNotice, isSepiaceServer } = memoryModule;
+const { ignoredMcpServerNotice, isSepiaceServer, sepiaceUrl } = memoryModule;
 const { mcpNamespace, validateMcpServerConfig } = mcpServersModule;
 
-function rawUrl(config: unknown): string | undefined {
-  if (typeof config !== "object" || config === null || !("url" in config)) return undefined;
-  return typeof config.url === "string" ? config.url : undefined;
-}
-
 export default class McpServerRegistry {
+  private readonly globalSettings: () => settingsManagerTypes.Settings;
   private readonly servers = new Map<string, mcpServersTypes.RegisteredMcpServer>();
   private readonly ignoredNotices: string[] = [];
   private changeListener: (() => void) | undefined;
   private ignoreListener: ((notice: string, extensionPath: string) => void) | undefined;
+
+  constructor(globalSettings: () => settingsManagerTypes.Settings) {
+    this.globalSettings = globalSettings;
+  }
 
   admit(input: {
     name: string;
@@ -22,7 +23,8 @@ export default class McpServerRegistry {
     extensionPath: string;
   }): mcpServersTypes.McpServerAdmission {
     const { name, extensionPath } = input;
-    if (isSepiaceServer(name, rawUrl(input.config))) return { extensionPath, ignored: true, name };
+    if (isSepiaceServer(name, input.config, sepiaceUrl(this.globalSettings())))
+      return { extensionPath, ignored: true, name };
     const config = validateMcpServerConfig(name, input.config);
     if (typeof config === "string") {
       throw new Error(`Invalid MCP server registered by extension "${extensionPath}": ${config}`);

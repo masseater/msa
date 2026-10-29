@@ -13,12 +13,21 @@ const {
 
 const { getModel } = compat;
 
+const settingsManager = SettingsManager.inMemory({
+  compaction: { enabled: false },
+  retry: { enabled: true, maxRetries: 2 },
+});
+
 const resourceLoader: codingAgentTypes.ResourceLoader = {
   extendResources: () => {},
   getAgentsFiles: () => ({ agentsFiles: [] }),
   getAppendSystemPrompt: () => [],
   getAppendSystemPromptSources: () => [],
-  getExtensions: () => ({ errors: [], extensions: [], runtime: createExtensionRuntime() }),
+  getExtensions: () => ({
+    errors: [],
+    extensions: [],
+    runtime: createExtensionRuntime(() => settingsManager.getGlobalSettings()),
+  }),
   getPrompts: () => ({ diagnostics: [], prompts: [] }),
   getSkills: () => ({ diagnostics: [], skills: [] }),
   getSystemPrompt: () => `You are a minimal assistant.
@@ -27,11 +36,6 @@ Available: read, bash. Be concise.`,
   getThemes: () => ({ diagnostics: [], themes: [] }),
   reload: () => Promise.resolve(),
 };
-
-const settingsManager = SettingsManager.inMemory({
-  compaction: { enabled: false },
-  retry: { enabled: true, maxRetries: 2 },
-});
 
 void Effect.runPromise(
   Effect.gen(function* () {

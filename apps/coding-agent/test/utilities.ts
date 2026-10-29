@@ -62,7 +62,7 @@ const createTestExtensionsResultImpl = (
 ): Promise<extensionsTypes.LoadExtensionsResult> =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const extensionRuntime = createExtensionRuntime();
+      const extensionRuntime = createExtensionRuntime(() => ({}));
       const eventBus = createEventBus();
       const extensions: extensionsTypes.Extension[] = [];
 
@@ -107,7 +107,7 @@ function createTestResourceLoader(
   const extensionsResult = options.extensionsResult ?? {
     errors: [],
     extensions: options.extensions ?? [],
-    runtime: createExtensionRuntime(),
+    runtime: createExtensionRuntime(() => ({})),
   };
 
   return {

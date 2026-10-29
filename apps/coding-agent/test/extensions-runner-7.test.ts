@@ -77,7 +77,7 @@ const keepsCtxGetsystempromptInSyncWithChained = Effect.gen(function* () {
 });
 
 const resolvesToolRenderersInExtensionLoadOrder = Effect.gen(function* () {
-  const runtime = createExtensionRuntime();
+  const runtime = createExtensionRuntime(() => ({}));
   const eventBus = createEventBus();
   const renderCall = () => ({ invalidate: () => {}, render: () => [] });
   const first = yield* awaited(

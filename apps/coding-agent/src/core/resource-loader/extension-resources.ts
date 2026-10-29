@@ -35,7 +35,9 @@ export default class ExtensionResources {
   extensionsResult: extensionsTypesTypes.LoadExtensionsResult = {
     errors: [],
     extensions: [],
-    runtime: createExtensionRuntime(),
+    runtime: createExtensionRuntime(() =>
+      this.owner.environment.settingsManager.getGlobalSettings(),
+    ),
   };
 
   normalizeExtensionPaths(

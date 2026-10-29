@@ -29,7 +29,7 @@ let modelRegistry: codingAgentTypes.ModelRegistry;
 
 const chainsSharedDraftProposalsAndPreservesOmittedSetup = () =>
   Effect.gen(function* () {
-    const runtime = createExtensionRuntime();
+    const runtime = createExtensionRuntime(() => ({}));
     const eventBus = createEventBus();
     const observations: Array<{ entries: number; continuation: boolean; preview: number }> = [];
     const first = yield* awaited(
@@ -142,7 +142,7 @@ const reportsInvalidBoundaryPreviewsAndLetsLaterStep1Step = ({
 
 const reportsInvalidBoundaryPreviewsAndLetsLaterStep1 = () =>
   Effect.gen(function* () {
-    const runtime = createExtensionRuntime();
+    const runtime = createExtensionRuntime(() => ({}));
     let secondRan = false;
     const first = yield* awaited(
       loadExtensionFromFactory(
@@ -195,7 +195,7 @@ const reportsInvalidBoundaryPreviewsAndLetsLater = Effect.gen(function* () {
 });
 
 const keepsSharedMutationsMadeBeforeAHandler = Effect.gen(function* () {
-  const runtime = createExtensionRuntime();
+  const runtime = createExtensionRuntime(() => ({}));
   const extension = yield* awaited(
     loadExtensionFromFactory(
       (msa) => {

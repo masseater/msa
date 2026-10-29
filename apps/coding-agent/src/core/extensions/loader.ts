@@ -11,7 +11,7 @@ import loaderRuntime from "./loader-runtime.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
 const { useExtensionCacheCwd } = loaderCache;
-const { createExtensionRuntime } = loaderRuntime;
+const { createAgentDirExtensionRuntime } = loaderRuntime;
 const { createEventBus } = eventBusModule;
 const { loadExtension } = loaderExtension;
 const { resolvePath } = pathsModule;
@@ -20,6 +20,7 @@ const { discoverExtensionPaths } = loaderDiscovery;
 const loadAll = Effect.fn("loadExtensions")(function* (input: {
   paths: string[];
   cwd: string;
+  agentDir: string | undefined;
   eventBus: eventBusTypes.EventBus | undefined;
   runtime: extensionsTypesTypes.ExtensionRuntime | undefined;
   useCache: boolean;
@@ -29,7 +30,9 @@ const loadAll = Effect.fn("loadExtensions")(function* (input: {
   const cacheToken = input.useCache ? useExtensionCacheCwd(input.cwd) : undefined;
   const cwd = cacheToken?.cwd ?? resolvePath(input.cwd);
   const eventBus = input.eventBus ?? createEventBus();
-  const runtime = input.runtime ?? createExtensionRuntime();
+  const runtime =
+    input.runtime ??
+    (yield* Effect.promise(() => createAgentDirExtensionRuntime(cwd, input.agentDir)));
   for (const extensionPath of input.paths) {
     const { extension, error } = yield* loadExtension({
       cacheToken,
@@ -62,7 +65,7 @@ const loadExtensionsWith =
     paths: string[],
     ...[cwd, eventBus, runtime]: LoadRest
   ): Promise<extensionsTypesTypes.LoadExtensionsResult> =>
-    Effect.runPromise(loadAll({ cwd, eventBus, paths, runtime, useCache }));
+    Effect.runPromise(loadAll({ agentDir: undefined, cwd, eventBus, paths, runtime, useCache }));
 
 const loadExtensions: {
   (...rest: LoadRest): (paths: string[]) => Promise<extensionsTypesTypes.LoadExtensionsResult>;
@@ -84,7 +87,18 @@ const discoverAndLoadImpl = (
     configuredPaths,
     cwd,
     ...(agentDir === undefined ? {} : { agentDir }),
-  }).then(({ resolvedCwd, allPaths }) => loadExtensions(allPaths, resolvedCwd, eventBus));
+  }).then(({ resolvedCwd, allPaths }) =>
+    Effect.runPromise(
+      loadAll({
+        agentDir,
+        cwd: resolvedCwd,
+        eventBus,
+        paths: allPaths,
+        runtime: undefined,
+        useCache: false,
+      }),
+    ),
+  );
 
 const discoverAndLoadExtensions: {
   (

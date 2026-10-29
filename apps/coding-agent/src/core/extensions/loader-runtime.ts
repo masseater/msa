@@ -1,4 +1,6 @@
 import McpServerRegistry from "../mcp-server-registry.ts";
+import SettingsManager from "../settings-manager.ts";
+import type settingsManagerTypes from "../settings-manager.types.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 const STALE_MESSAGE =
   "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
@@ -96,13 +98,15 @@ const registrations = (runtime: () => extensionsTypesTypes.ExtensionRuntime) => 
   },
 });
 
-function createExtensionRuntime(): extensionsTypesTypes.ExtensionRuntime {
+function createExtensionRuntime(
+  globalSettings: () => settingsManagerTypes.Settings,
+): extensionsTypesTypes.ExtensionRuntime {
   const runtime: extensionsTypesTypes.ExtensionRuntime = {
     ...pendingActions(),
     ...lifecycle(),
     ...registrations(() => runtime),
     flagValues: new Map(),
-    mcpServers: new McpServerRegistry(),
+    mcpServers: new McpServerRegistry(globalSettings),
     pendingNativeProviderRegistrations: [],
     pendingProviderRegistrations: [],
     pendingVirtualModelRegistrations: [],
@@ -110,7 +114,17 @@ function createExtensionRuntime(): extensionsTypesTypes.ExtensionRuntime {
   return runtime;
 }
 
+function createAgentDirExtensionRuntime(
+  cwd: string,
+  agentDir: string | undefined,
+): Promise<extensionsTypesTypes.ExtensionRuntime> {
+  return SettingsManager.create(cwd, agentDir).then((settings) =>
+    createExtensionRuntime(() => settings.getGlobalSettings()),
+  );
+}
+
 const loaderRuntime = {
+  createAgentDirExtensionRuntime,
   createExtensionRuntime,
 };
 
