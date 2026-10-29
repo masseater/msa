@@ -29,11 +29,7 @@ const getNativeModuleCandidates: {
       candidates.push(join(dirname(packageEntry), "..", nativePath));
     } catch {}
 
-    candidates.push(
-      join(moduleDir, "..", nativePath),
-      join(moduleDir, nativePath),
-      join(dirname(options.execPath ?? process.execPath), nativePath),
-    );
+    candidates.push(join(moduleDir, "..", nativePath), join(moduleDir, nativePath));
     return Array.from(new Set(candidates));
   },
 );

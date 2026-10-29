@@ -4,11 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import config from "../src/config.ts";
 import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 
-const { getThemesDir } = config;
 const {
   awaited,
   currentTimeMillis,
@@ -22,6 +20,15 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
+
+const BUILTIN_THEMES_DIR = joinPath(
+  import.meta.dirname,
+  "..",
+  "src",
+  "modes",
+  "interactive",
+  "theme",
+);
 
 let tempDir: string;
 
@@ -58,7 +65,7 @@ description: Package prompt
 Package prompt content`,
     );
     const baseTheme = (yield* fromJsonText(
-      yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+      yield* readTextFile(joinPath(BUILTIN_THEMES_DIR, "dark.json")),
     )) as {
       name: string;
     };

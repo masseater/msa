@@ -15,20 +15,33 @@ type NativePlatformHelper = nativePlatformTypes.NativeClipboard & {
 };
 
 const helpers = new Map<string, NativePlatformHelper | undefined>();
+const embeddedModules = new Map<string, string>();
+
+function setEmbeddedNativeModules(modules: Readonly<Record<string, string>>): void {
+  for (const [nativePath, modulePath] of Object.entries(modules)) {
+    embeddedModules.set(nativePath, modulePath);
+  }
+  helpers.clear();
+}
 
 function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatformHelper | undefined {
   const arch = process.arch;
   if (arch !== "x64" && arch !== "arm64") return undefined;
-  const nativePath = pathOperations.join(
+  const nativePath = [
     "native",
     platform,
     "prebuilds",
     `${platform}-${arch}`,
     `${platform}-platform${suffix}.node`,
-  );
+  ].join("/");
   if (helpers.has(nativePath)) return helpers.get(nativePath);
 
-  for (const modulePath of getNativeModuleCandidates(nativePath)) {
+  const embedded = embeddedModules.get(nativePath);
+  const candidates =
+    embedded === undefined
+      ? getNativeModuleCandidates(pathOperations.join(...nativePath.split("/")))
+      : [embedded];
+  for (const modulePath of candidates) {
     try {
       const helper = loadNativeAddon(modulePath) as Partial<NativePlatformHelper> | null;
       if (typeof helper?.getText === "function" && typeof helper.getImage === "function") {
@@ -55,6 +68,7 @@ function getNativeClipboard(): nativePlatformTypes.NativeClipboard | undefined {
 const nativePlatform = {
   getNativeClipboard,
   getNativePlatformHelper,
+  setEmbeddedNativeModules,
 };
 
 export default nativePlatform;

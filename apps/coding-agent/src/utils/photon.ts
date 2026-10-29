@@ -1,12 +1,10 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
-import platform from "../core/platform/index.ts";
 import wasmReadFallback from "../core/platform/node/wasm-read-fallback.ts";
 
 const { redirectMissingWasmRead } = wasmReadFallback;
 
-const { dirname, join } = platform;
 const { awaited, awaiting } = awaitingModule;
 
 const WASM_FILENAME = "photon_rs_bg.wasm";
@@ -14,13 +12,14 @@ const WASM_FILENAME = "photon_rs_bg.wasm";
 let photonModule: typeof import("@silvia-odwyer/photon-node") | null = null;
 let loadPromise: Promise<typeof import("@silvia-odwyer/photon-node") | null> | null = null;
 
-function getFallbackWasmPaths(): string[] {
-  const execDir = dirname(process.execPath);
-  return [
-    join(execDir, WASM_FILENAME),
-    join(execDir, "photon", WASM_FILENAME),
-    join(process.cwd(), WASM_FILENAME),
-  ];
+let embeddedWasmPath: string | undefined;
+
+function setEmbeddedWasmPath(path: string): void {
+  embeddedWasmPath = path;
+}
+
+function getEmbeddedWasmPath(): string | undefined {
+  return embeddedWasmPath;
 }
 
 function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
@@ -38,7 +37,7 @@ function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | nul
         Effect.runPromise(
           awaiting(function* () {
             const restoreReadFileSync = redirectMissingWasmRead({
-              fallbackPaths: getFallbackWasmPaths(),
+              fallbackPaths: embeddedWasmPath === undefined ? [] : [embeddedWasmPath],
               fileName: WASM_FILENAME,
             });
             try {
@@ -59,7 +58,9 @@ function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | nul
 }
 
 const photon = {
+  getEmbeddedWasmPath,
   loadPhoton,
+  setEmbeddedWasmPath,
 };
 
 export default photon;

@@ -12,6 +12,7 @@ const loaded = import.meta.glob(
     "!../src/cli.ts",
     "!../src/rpc-entry.ts",
     "!../src/bun/cli.ts",
+    "!../src/bun/embedded-native-modules.ts",
     "!../src/bun/runtime-setup.ts",
     "!../src/experimental/source-resolver.ts",
     "!../src/utils/image-resize-worker.ts",

@@ -9,6 +9,7 @@ const RUNTIME = "src/core/platform/node/class-seal";
 
 const entries: readonly string[] = [
   "src/bun/cli",
+  "src/bun/embedded-native-modules",
   "src/bun/runtime-setup",
   "src/cli",
   "src/experimental/source-resolver",

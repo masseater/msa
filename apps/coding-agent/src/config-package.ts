@@ -35,6 +35,9 @@ const isBunRuntime = process.versions["bun"] !== undefined && process.versions["
 declare const MSA_BUNDLED_NODE: boolean;
 const isBundledNode = typeof MSA_BUNDLED_NODE !== "undefined" && MSA_BUNDLED_NODE;
 
+declare const MSA_PACKAGE_JSON: string;
+const embeddedPackageJson = typeof MSA_PACKAGE_JSON === "undefined" ? undefined : MSA_PACKAGE_JSON;
+
 let nodePackageDir: string | undefined;
 
 const sourceLayouts = new Map<string, "dist" | "src">();
@@ -58,23 +61,14 @@ function getPackageDir(): string {
   return nodePackageDir;
 }
 
-function getThemesDir(): string {
-  if (isBunBinary) {
-    return join(getPackageDir(), "theme");
-  }
+let embeddedAssets: configPackageTypes.EmbeddedAssets | undefined;
 
-  const packageDir = getPackageDir();
-  return join(packageDir, sourceLayout(packageDir), "modes", "interactive", "theme");
-}
-
-let exportTemplateCssPath: string | undefined;
-
-function setEmbeddedExportTemplateCssPath(path: string): void {
-  exportTemplateCssPath = path;
+function setEmbeddedAssets(assets: configPackageTypes.EmbeddedAssets): void {
+  embeddedAssets = assets;
 }
 
 function getExportTemplateCssPath(): string {
-  if (exportTemplateCssPath !== undefined) return exportTemplateCssPath;
+  if (embeddedAssets !== undefined) return embeddedAssets.exportTemplateCss;
   const packageDir = getPackageDir();
   return join(packageDir, sourceLayout(packageDir), "core", "export-html", "template.css");
 }
@@ -102,17 +96,15 @@ function getExamplesPath(): string {
 }
 
 function getChangelogPath(): string {
-  return resolve(join(getPackageDir(), "CHANGELOG.md"));
+  return embeddedAssets?.changelog ?? resolve(join(getPackageDir(), "CHANGELOG.md"));
 }
 
 let quickJSWasmPath: string | undefined;
 
-function setEmbeddedQuickJSWasmPath(path: string): void {
-  quickJSWasmPath = path;
-}
-
 function getQuickJSWasmPath(): string {
-  quickJSWasmPath ??= createRequire(import.meta.url).resolve("quickjs-wasi/quickjs.wasm");
+  quickJSWasmPath ??=
+    embeddedAssets?.quickJSWasm ??
+    createRequire(import.meta.url).resolve("quickjs-wasi/quickjs.wasm");
   return quickJSWasmPath;
 }
 
@@ -120,7 +112,7 @@ function resolveCodemodeWorkerSpecifierImpl(
   runtime: "bun-binary" | "bundled-node" | "unbundled",
   moduleUrl: string,
 ): string | URL | undefined {
-  if (runtime === "bun-binary") return "./dist/extensions/codemode/worker.js";
+  if (runtime === "bun-binary") return "./extensions/codemode/worker.js";
   if (runtime === "bundled-node") return new URL("./codemode-worker.js", moduleUrl);
   return undefined;
 }
@@ -177,11 +169,15 @@ let pkg: PackageJson = {};
 
 let startupPackageJsonPath: string | undefined;
 {
-  const packageJsonPath = getPackageJsonPath();
-  const packageJsonText = readStartupPackageJson(packageJsonPath);
-  if (packageJsonText !== undefined) {
-    pkg = JSON.parse(stripBom(packageJsonText)) as PackageJson;
-    startupPackageJsonPath = packageJsonPath;
+  if (embeddedPackageJson === undefined) {
+    const packageJsonPath = getPackageJsonPath();
+    const packageJsonText = readStartupPackageJson(packageJsonPath);
+    if (packageJsonText !== undefined) {
+      pkg = JSON.parse(stripBom(packageJsonText)) as PackageJson;
+      startupPackageJsonPath = packageJsonPath;
+    }
+  } else {
+    pkg = JSON.parse(embeddedPackageJson) as PackageJson;
   }
 }
 
@@ -282,7 +278,6 @@ const configPackage = {
   getSessionsDir,
   getSettingsPath,
   getShareViewerUrl,
-  getThemesDir,
   getToolsDir,
   isBunBinary,
   isBunRuntime,
@@ -291,8 +286,7 @@ const configPackage = {
   moduleFilename,
   nodeLlamaCppLoader,
   resolveCodemodeWorkerSpecifier,
-  setEmbeddedExportTemplateCssPath,
-  setEmbeddedQuickJSWasmPath,
+  setEmbeddedAssets,
 };
 
 export default configPackage;

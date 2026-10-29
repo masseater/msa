@@ -73,7 +73,7 @@ declare namespace scriptOutputTypes {
 
   type OutputMode = "ignore" | "inherit" | "pipe";
 
-  type CommandName = "bun" | "msa" | "node" | "npm" | "pnpm" | "tar" | "vp" | "zip";
+  type CommandName = "bun" | "msa" | "node" | "npm" | "pnpm" | "sudo" | "tar" | "vp" | "zip";
 
   interface MsaBinary {
     readonly msaBinary: string;
