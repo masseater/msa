@@ -8,25 +8,6 @@ const { awaited, runTest } = testing;
 
 const { INTERVAL_MS, pendingChecks, runPolls, scriptedGh, seen, snapshotOf } = prWatchLoopSupport;
 
-const saysCiIsStalledWhenTheChecks = () =>
-  runTest(
-    Effect.gen(function* () {
-      const result = yield* awaited(runPolls(scriptedGh([pendingChecks]), [21 * INTERVAL_MS]));
-
-      expect(seen(result)).toEqual([
-        { label: "status", text: "#12: checks running (verify), mergeable, review required" },
-        {
-          label: "status",
-          text: "#12: CI stalled 10m (verify), mergeable, review required — it may be stalled; check the run or push again",
-        },
-        {
-          label: "status",
-          text: "#12: CI stalled 15m (verify), mergeable, review required — it may be stalled; check the run or push again",
-        },
-      ]);
-    }),
-  );
-
 const reportsABaseMoveInItsStatus = () =>
   runTest(
     Effect.gen(function* () {
@@ -36,7 +17,7 @@ const reportsABaseMoveInItsStatus = () =>
       expect(seen(result)).toEqual([
         {
           label: "status",
-          text: "#12: checks running (verify), base 2 behind for 5m, review required",
+          text: "#12: checks running 5m (verify; past runs not read yet), base 2 behind for 5m, review required",
         },
       ]);
     }),
@@ -94,7 +75,10 @@ const reportsItsStatusWhenNothingChangedFor = () =>
       const result = yield* awaited(runPolls(scriptedGh([pendingChecks]), [7 * INTERVAL_MS]));
 
       expect(seen(result)).toEqual([
-        { label: "status", text: "#12: checks running (verify), mergeable, review required" },
+        {
+          label: "status",
+          text: "#12: checks running 5m (verify; past runs not read yet), mergeable, review required",
+        },
       ]);
       expect(result.notifications[0]?.wake).toBe(false);
     }),
@@ -122,8 +106,6 @@ describe("pull request watch loop", () => {
 });
 
 describe("pull request watch loop", () => {
-  it("says CI is stalled when the checks stay pending", saysCiIsStalledWhenTheChecks);
-
   it(
     "reports a base move in its status with how long it has been behind",
     reportsABaseMoveInItsStatus,

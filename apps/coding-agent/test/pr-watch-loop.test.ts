@@ -9,15 +9,39 @@ const { awaited, runTest } = testing;
 const { INTERVAL_MS, pendingChecks, runPolls, scriptedGh, seen, snapshotOf } = prWatchLoopSupport;
 
 const finishedChecks = snapshotOf({
-  checks: { cancelled: 0, failed: 1, passed: 2, pending: 0, pendingNames: [], total: 3 },
+  checks: {
+    cancelled: 0,
+    failed: 1,
+    passed: 2,
+    pending: 0,
+    pendingNames: [],
+    pendingWorkflows: [],
+    total: 3,
+  },
 });
 
 const passedChecks = snapshotOf({
-  checks: { cancelled: 0, failed: 0, passed: 2, pending: 0, pendingNames: [], total: 2 },
+  checks: {
+    cancelled: 0,
+    failed: 0,
+    passed: 2,
+    pending: 0,
+    pendingNames: [],
+    pendingWorkflows: [],
+    total: 2,
+  },
 });
 
 const cancelledChecks = snapshotOf({
-  checks: { cancelled: 1, failed: 0, passed: 2, pending: 0, pendingNames: [], total: 3 },
+  checks: {
+    cancelled: 1,
+    failed: 0,
+    passed: 2,
+    pending: 0,
+    pendingNames: [],
+    pendingWorkflows: [],
+    total: 3,
+  },
 });
 
 const reportsALoneCancelledCheckApartFromFailures = () =>

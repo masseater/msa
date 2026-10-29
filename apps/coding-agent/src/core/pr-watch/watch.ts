@@ -48,6 +48,7 @@ function createPrWatchEntry(
   return {
     baseIntervalMs: intervalMs,
     baseMovedAt: undefined,
+    ciHistory: undefined,
     error: undefined,
     intervalMs,
     key: prWatchKey(target),
@@ -103,7 +104,13 @@ function trackTimers(
   now: number,
 ): void {
   if (current.checks.pending > 0) {
-    if (previous === undefined || previous.checks.pending === 0) entry.pendingSince = now;
+    if (
+      previous === undefined ||
+      previous.checks.pending === 0 ||
+      previous.headRefOid !== current.headRefOid
+    ) {
+      entry.pendingSince = now;
+    }
   } else {
     entry.pendingSince = undefined;
   }
@@ -162,6 +169,27 @@ function readBehind(
     .pipe(Effect.option);
 }
 
+function readCiHistory(
+  options: watchTypes.PrWatchLoopOptions,
+  current: snapshotTypes.PrSnapshot,
+): Effect.Effect<void> {
+  const { entry } = options;
+  if (current.checks.pending === 0) return Effect.void;
+  if (entry.ciHistory?.headRefOid === current.headRefOid) return Effect.void;
+  const { gh } = options;
+  return Effect.all({
+    runs: gh.runs(entry.target),
+    timeouts: gh.timeouts(entry.target, current.headRefOid),
+  }).pipe(
+    Effect.tap((history) =>
+      Effect.sync(() => {
+        entry.ciHistory = { headRefOid: current.headRefOid, ...history };
+      }),
+    ),
+    Effect.ignore,
+  );
+}
+
 function handleSnapshot(
   options: watchTypes.PrWatchLoopOptions,
   current: snapshotTypes.PrSnapshot,
@@ -171,7 +199,8 @@ function handleSnapshot(
   entry.error = undefined;
   entry.notifiedError = undefined;
   entry.intervalMs = entry.baseIntervalMs;
-  return readBehind(options, current).pipe(
+  return readCiHistory(options, current).pipe(
+    Effect.andThen(readBehind(options, current)),
     Effect.map((behind) =>
       applySnapshot(
         entry,

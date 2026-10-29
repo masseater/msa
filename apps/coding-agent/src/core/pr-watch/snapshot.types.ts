@@ -11,6 +11,7 @@ declare namespace snapshotTypes {
     readonly cancelled: number;
     readonly pending: number;
     readonly pendingNames: readonly string[];
+    readonly pendingWorkflows: readonly string[];
   }
 
   interface PrSnapshot {

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type execTypes from "../src/core/exec.types.ts";
 import ghModule from "../src/core/pr-watch/gh.ts";
 
-const { ghCompareArgs, ghPrViewArgs, makeGh } = ghModule;
+const { ghCompareArgs, ghPrViewArgs, ghRunsArgs, makeGh } = ghModule;
 
 const { runTest } = testing;
 
@@ -28,7 +28,13 @@ const viewJson = JSON.stringify({
   statusCheckRollup: [
     { __typename: "CheckRun", conclusion: "SUCCESS", name: "build", status: "COMPLETED" },
     { __typename: "CheckRun", conclusion: "FAILURE", name: "test", status: "COMPLETED" },
-    { __typename: "CheckRun", conclusion: null, name: "lint", status: "IN_PROGRESS" },
+    {
+      __typename: "CheckRun",
+      conclusion: null,
+      name: "lint",
+      status: "IN_PROGRESS",
+      workflowName: "verify",
+    },
     { __typename: "StatusContext", context: "ci/legacy", state: "SUCCESS" },
   ],
   updatedAt: "2024-05-01T00:00:00Z",
@@ -89,6 +95,7 @@ const turnsGhJsonIntoStateReviewDecision = () =>
           passed: 2,
           pending: 1,
           pendingNames: ["lint"],
+          pendingWorkflows: ["verify"],
           total: 4,
         },
         comments: 2,
@@ -141,6 +148,31 @@ const readsTheBehindCountFromGhApi = () =>
       );
 
       expect(behind).toBe(3);
+    }),
+  );
+
+const readsHowLongPastSuccessfulRunsTook = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(ghRunsArgs({ number: 12, repository: "masseater/msa" })).toEqual([
+        "api",
+        "repos/masseater/msa/actions/runs?status=completed&exclude_pull_requests=true&per_page=100",
+        "--jq",
+        "[.workflow_runs[] | {name, conclusion, created_at, run_started_at, updated_at}]",
+      ]);
+      const stdout = `[
+        {"conclusion":"success","created_at":"2024-05-01T00:00:00Z","name":"verify","updated_at":"2024-05-01T00:16:00Z"},
+        {"conclusion":"failure","created_at":"2024-05-01T00:00:00Z","name":"commits","updated_at":"2024-05-01T00:01:30Z"},
+        {"conclusion":"success","created_at":"2024-05-01T00:00:00Z","name":"verify","run_started_at":"2024-05-01T03:00:00Z","updated_at":"2024-05-01T03:12:00Z"}
+      ]`;
+
+      const runs = yield* runGh(execResult({ stdout })).runs({ number: 12 });
+
+      expect(runs).toEqual([
+        { durationMs: 16 * 60_000, succeeded: true, workflow: "verify" },
+        { durationMs: 90_000, succeeded: false, workflow: "commits" },
+        { durationMs: 12 * 60_000, succeeded: true, workflow: "verify" },
+      ]);
     }),
   );
 
@@ -236,6 +268,11 @@ describe("gh pull request reads", () => {
   );
 
   it("reads the behind count from gh api compare", readsTheBehindCountFromGhApi);
+
+  it(
+    "reads how long the past workflow runs took, from the start of the last attempt of a re-run",
+    readsHowLongPastSuccessfulRunsTook,
+  );
 
   it("fails with the reason when gh is not installed", failsWithTheReasonWhenGhIs);
 

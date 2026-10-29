@@ -1,3 +1,4 @@
+import type ciHistoryTypes from "./ci-history.types.ts";
 import type ghTypes from "./gh.types.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 
@@ -35,6 +36,7 @@ declare namespace watchTypes {
     startedAt: number | undefined;
     lastNotificationAt: number | undefined;
     pendingSince: number | undefined;
+    ciHistory: ciHistoryTypes.CiHistory | undefined;
     baseMovedAt: number | undefined;
   }
 

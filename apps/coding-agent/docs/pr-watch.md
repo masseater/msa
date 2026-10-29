@@ -52,12 +52,12 @@ A notification is a session message like any other: it steers a run that is alre
 After `prWatch.statusIntervalSeconds` without a change, the watch reports where the pull request stands:
 
 ```
-#74: checks running (verify), mergeable, review required
-#74: checks running (verify), base 2 behind for 5m, review required
-#74: CI stalled 10m (verify), mergeable, review required — it may be stalled; check the run or push again
+#74: checks running 12m (verify; usually 18m), mergeable, review required
+#74: checks running 3m (verify; usually 18m), base 2 behind for 5m, review required
+#74: CI stalled 31m (verify; usually 18m), mergeable, review required — it may be stalled; check the run or push again
 ```
 
-Checks pending for ten minutes or more are reported as stalled: a run GitHub never picked up and one that is waiting on something else look the same from the outside. A status report describes the state and does not start a turn, so an idle session stays idle and reads it with its next input. Any change notification restarts the wait, so a status report only arrives after a quiet interval.
+Whether checks are stalled depends on how long the repository's workflows usually take. When checks start on a head, the watch reads the repository's recent completed workflow runs (`gh api repos/<owner>/<repo>/actions/runs`) and the workflow files at the head. For each pending workflow it takes the 90th percentile of its own last 20 successful runs (of its failed ones when none succeeded), measured from when the run's last attempt started to when it finished. A workflow without finished runs of its own, such as one a pull request just added or any workflow of a repository that has never finished a run, uses its workflow file instead, so it is not held to another workflow's pace: the `timeout-minutes` of its jobs added up along the longest chain of `needs`, with GitHub's default of 360 minutes for a job that sets none; a check from no known workflow uses the longest workflow's, and a repository without workflow files uses 360 minutes. Checks pending for 1.5 times the longest of these are reported as stalled, timed from when the watch first saw checks pending on the current head, so a push restarts the clock: a run GitHub never picked up and one that is waiting on something else look the same from the outside. Until the past runs have been read the report says `past runs not read yet`; a failed read is tried again on the next poll. A status report describes the state and does not start a turn, so an idle session stays idle and reads it with its next input. Any change notification restarts the wait, so a status report only arrives after a quiet interval.
 
 ## Failures
 

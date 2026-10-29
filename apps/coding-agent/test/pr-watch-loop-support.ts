@@ -21,7 +21,15 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: {
+    cancelled: 0,
+    failed: 0,
+    passed: 0,
+    pending: 2,
+    pendingNames: ["verify"],
+    pendingWorkflows: ["verify"],
+    total: 2,
+  },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",
@@ -37,9 +45,12 @@ const pendingChecks = snapshotOf();
 const scriptedGh = (
   steps: ReadonlyArray<snapshotTypes.PrSnapshot | ghTypes.PrWatchGhError>,
   behindBy?: number,
+  history: prWatchLoopSupportTypes.ScriptedHistory = {},
 ): prWatchLoopSupportTypes.ScriptedGh => {
   const calls = { count: 0 };
   const behindCalls = { count: 0 };
+  const runsCalls = { count: 0 };
+  const runSteps = history.runs ?? [undefined];
   return {
     behindCalls,
     calls,
@@ -50,12 +61,21 @@ const scriptedGh = (
           ? Effect.fail(PrWatchGhError.make({ kind: "other", message: "no compare" }))
           : Effect.succeed(behindBy);
       },
+      runs: () => {
+        const runs = runSteps[Math.min(runsCalls.count, runSteps.length - 1)];
+        runsCalls.count += 1;
+        return runs === undefined
+          ? Effect.fail(PrWatchGhError.make({ kind: "other", message: "no runs" }))
+          : Effect.succeed(runs);
+      },
+      timeouts: () => Effect.succeed(history.timeouts ?? []),
       view: () => {
         const step = steps[Math.min(calls.count, steps.length - 1)]!;
         calls.count += 1;
         return Schema.is(PrWatchGhError)(step) ? Effect.fail(step) : Effect.succeed(step);
       },
     },
+    runsCalls,
   };
 };
 
@@ -97,6 +117,7 @@ const runPolls = (
         changes: changes.count,
         entry,
         notifications,
+        runsCalls: script.runsCalls.count,
       };
     }),
   );

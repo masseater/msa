@@ -21,7 +21,15 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: {
+    cancelled: 0,
+    failed: 0,
+    passed: 0,
+    pending: 2,
+    pendingNames: ["verify"],
+    pendingWorkflows: ["verify"],
+    total: 2,
+  },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",
@@ -47,6 +55,8 @@ const scriptedGh = (
     calls,
     gh: {
       behind: () => Effect.succeed(0),
+      runs: () => Effect.succeed([]),
+      timeouts: () => Effect.succeed([]),
       view: () => {
         const step = steps[Math.min(calls.count, steps.length - 1)]!;
         calls.count += 1;
@@ -56,7 +66,12 @@ const scriptedGh = (
   };
 };
 
-const neverGh: ghTypes.PrWatchGh = { behind: () => Effect.never, view: () => Effect.never };
+const neverGh: ghTypes.PrWatchGh = {
+  behind: () => Effect.never,
+  runs: () => Effect.never,
+  timeouts: () => Effect.never,
+  view: () => Effect.never,
+};
 
 interface HostLog {
   readonly host: watchTypes.PrWatchHost;
@@ -174,7 +189,15 @@ const reportsEachChangeOnce = () => {
 const showsAWatchedPullRequestInTheFooter = () => {
   const script = scriptedGh([
     snapshotOf({
-      checks: { cancelled: 0, failed: 1, passed: 2, pending: 0, pendingNames: [], total: 2 },
+      checks: {
+        cancelled: 0,
+        failed: 1,
+        passed: 2,
+        pending: 0,
+        pendingNames: [],
+        pendingWorkflows: [],
+        total: 2,
+      },
     }),
   ]);
   return withService(script.gh, createHost(), (service) =>
@@ -194,6 +217,8 @@ const showsABaseMoveInTheFooter = () => {
   const behind = snapshotOf({ mergeStateStatus: "BEHIND" });
   const gh: ghTypes.PrWatchGh = {
     behind: () => Effect.succeed(3),
+    runs: () => Effect.succeed([]),
+    timeouts: () => Effect.succeed([]),
     view: () => Effect.succeed(behind),
   };
   return withService(gh, createHost(), (service) =>
