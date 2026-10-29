@@ -459,6 +459,9 @@ importers:
       skills:
         specifier: 'catalog:'
         version: 1.7.1
+      srvx:
+        specifier: 'catalog:'
+        version: 1.0.5
       syncpack:
         specifier: 'catalog:'
         version: 15.3.3
