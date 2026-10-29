@@ -1,27 +1,22 @@
 import { Clock, Deferred, Effect, Option, Semaphore } from "effect";
-import type { ChatWrapper, LlamaContextSequence, LlamaModel, Token } from "node-llama-cpp";
+import type { Token } from "node-llama-cpp";
 
 import type typesModule from "../types.types.ts";
 import errorBody from "../utils/error-body.ts";
 import DownloadDisabledError from "./download-disabled-error.ts";
+import type llamaCppClassifyTypes from "./llama-cpp-classify.types.ts";
 import llamaCppPrompt from "./llama-cpp-prompt.ts";
 import llamaCppReadout from "./llama-cpp-readout.ts";
 import type nodeLlamaCppClassifyTypes from "./node-llama-cpp-classify.types.ts";
+import nodeLlamaCppEvaluate from "./node-llama-cpp-evaluate.ts";
 
 const { SYSTEM_PROMPT, renderQuestion } = llamaCppPrompt;
 const { answerFromProbabilities, labelProbabilities } = llamaCppReadout;
 const { formatProviderError, normalizeProviderError } = errorBody;
 
-const LABEL = "node-llama-cpp";
-const EVALUATION_CHUNK = 128;
+const { LABEL, nextTokenProbabilities, sharedPrefixLength } = nodeLlamaCppEvaluate;
 
-interface LoadedModel {
-  readonly model: LlamaModel;
-  readonly sequence: LlamaContextSequence;
-  readonly chatWrapper: ChatWrapper;
-  readonly lock: Semaphore.Semaphore;
-  readonly labelTokens: Map<string, Token | undefined>;
-}
+type LoadedModel = nodeLlamaCppClassifyTypes.LoadedModel;
 
 type Config = nodeLlamaCppClassifyTypes.LocalClassifierConfig;
 
@@ -166,32 +161,10 @@ function promptTokens(loaded: LoadedModel, content: string): Token[] {
   return contextText.tokenize(loaded.model.tokenizer);
 }
 
-const lastTokenProbabilities = (loaded: LoadedModel, token: Token) =>
-  Effect.gen(function* () {
-    const evaluation = loaded.sequence.evaluateWithMetadata([token], { probabilities: true });
-    const step = yield* Effect.tryPromise(() => evaluation.next());
-    yield* Effect.promise(() => evaluation.return());
-    if (step.done === true) return yield* Effect.die(new Error(`${LABEL} returned no next token`));
-    return step.value.probabilities;
-  });
-
-const nextTokenProbabilities = (loaded: LoadedModel, tokens: Token[]) =>
-  Effect.gen(function* () {
-    yield* Effect.uninterruptible(Effect.promise(() => loaded.sequence.clearHistory()));
-    const prefix = tokens.slice(0, -1);
-    for (let start = 0; start < prefix.length; start += EVALUATION_CHUNK) {
-      const chunk = prefix.slice(start, start + EVALUATION_CHUNK);
-      yield* Effect.uninterruptible(
-        Effect.promise(() => loaded.sequence.evaluateWithoutGeneratingNewTokens(chunk)),
-      );
-    }
-    const last = tokens.at(-1);
-    if (last === undefined) return yield* Effect.die(new Error(`${LABEL} got an empty prompt`));
-    return yield* Effect.uninterruptible(lastTokenProbabilities(loaded, last));
-  }).pipe(Semaphore.withPermit(loaded.lock));
-
 interface QuestionRequest {
-  readonly context: typesModule.ClassifierContext;
+  readonly rendered: llamaCppClassifyTypes.LabeledQuestion;
+  readonly prompt: Token[];
+  readonly shared: number;
   readonly id: string;
   readonly question: typesModule.ClassifierQuestion;
   readonly temperature: number;
@@ -199,19 +172,15 @@ interface QuestionRequest {
 
 const classifyQuestion = Effect.fn("classifyQuestion")(function* (
   loaded: LoadedModel,
-  { context, id, question, temperature }: QuestionRequest,
+  { rendered, prompt, shared, id, question, temperature }: QuestionRequest,
 ) {
-  const rendered = renderQuestion(context, id);
   const tokens = rendered.labels.map((label) => labelToken(loaded, label));
   const missing = rendered.labels.filter((_label, index) => tokens[index] === undefined);
   if (missing.length > 0)
     return yield* Effect.die(
       new Error(`${LABEL} cannot read labels ${missing.join(", ")} as single tokens`),
     );
-  const probabilities = yield* nextTokenProbabilities(
-    loaded,
-    promptTokens(loaded, rendered.content),
-  ).pipe(Effect.orDie);
+  const probabilities = yield* nextTokenProbabilities(loaded, prompt, shared).pipe(Effect.orDie);
   const logprobs = tokens.map((token) => Math.log(probabilities.get(token!) ?? 0));
   if (logprobs.every((logprob) => logprob === -Infinity))
     return yield* Effect.die(
@@ -237,14 +206,25 @@ const classifyAll = Effect.fn("classifyAll")(function* (
     return yield* Effect.die(
       new Error(`Temperature must be a positive number, got ${temperature}`),
     );
-  for (const id of Object.keys(context.questions)) renderQuestion(context, id);
+  const questions = Object.entries(context.questions).map(([id, question]) => ({
+    id,
+    question,
+    rendered: renderQuestion(context, id),
+  }));
   const loaded = yield* loadedNow(
     startLoad(config, model.baseUrl, model.contextWindow),
     model.baseUrl,
   );
+  const prompted = questions.map(({ id, question, rendered }) => ({
+    id,
+    prompt: promptTokens(loaded, rendered.content),
+    question,
+    rendered,
+  }));
+  const shared = sharedPrefixLength(prompted.map(({ prompt }) => prompt));
   const answers: Array<[string, typesModule.ClassifierAnswer]> = [];
-  for (const [id, question] of Object.entries(context.questions))
-    answers.push([id, yield* classifyQuestion(loaded, { context, id, question, temperature })]);
+  for (const entry of prompted)
+    answers.push([entry.id, yield* classifyQuestion(loaded, { ...entry, shared, temperature })]);
   return Object.fromEntries(answers);
 });
 
