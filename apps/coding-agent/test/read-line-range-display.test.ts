@@ -13,7 +13,7 @@ const { initTheme } = themeModule;
 
 const { makeTempDir, removePath, runTest } = testing;
 
-const { RANGE_CASES, exportViewer, writeReadSession } = readLineRangeSupport;
+const { RANGE_CASES, exportedHtml, writeReadSession } = readLineRangeSupport;
 
 const dirs = { temp: "" };
 
@@ -24,21 +24,16 @@ const formatsRawReadArguments = () => {
 };
 
 const showsStringRangesInTheHtmlExport = Effect.gen(function* () {
-  const { assistant, result, sessionPath } = yield* writeReadSession(dirs.temp);
-  const viewer = yield* exportViewer(sessionPath, dirs.temp);
-  for (const [offset, limit, range] of RANGE_CASES) {
-    expect(viewer.formatReadLineRange(offset, limit), `${offset}, ${limit}`).toBe(range);
-  }
-  expect(viewer.getTreeNodeDisplayHtml(result)).toBe(
-    '<span class="tree-role-tool">[read: notes.txt:25-37]</span>',
-  );
-  expect(viewer.renderEntry(assistant)).toContain('<span class="line-numbers">:25-37</span>');
+  const { sessionPath } = yield* writeReadSession(dirs.temp);
+  const html = yield* exportedHtml(sessionPath, dirs.temp);
+  expect(html).toContain('<span class="tree-role-tool">[read: notes.txt:25-37]</span>');
+  expect(html).toContain('<span class="line-numbers">:25-37</span>');
 });
 
 const showsEntryTimesFromTheLocalTimeFormatter = Effect.gen(function* () {
   const { assistant, sessionPath } = yield* writeReadSession(dirs.temp);
-  const viewer = yield* exportViewer(sessionPath, dirs.temp);
-  expect(viewer.renderEntry(assistant)).toContain(
+  const html = yield* exportedHtml(sessionPath, dirs.temp);
+  expect(html).toContain(
     `<div class="message-timestamp">${formatLocalTime(assistant.timestamp, "HH:mm:ss")}</div>`,
   );
 });

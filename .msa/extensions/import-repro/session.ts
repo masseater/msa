@@ -12,17 +12,12 @@ const GIST_ID_RE = /^[0-9a-fA-F]{20,}$/u;
 const GIST_URL_RE = /^https:\/\/gist\.github\.com\/(?:[^/]+\/)?([0-9a-fA-F]{20,})(?:[/#?].*)?$/u;
 const SHARE_URL_RE = /^https:\/\/msa\.dev\/session\/#([0-9a-fA-F]{20,})(?:[/#?].*)?$/u;
 const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[/#?].*)?$/u;
-const SESSION_DATA_RE = /<script id="session-data" type="application\/json">([^<]+)<\/script>/u;
+const SESSION_JSONL_RE = /href="data:application\/x-ndjson;base64,([^"]+)"/u;
 
 class ImportReproError extends Schema.TaggedError<
   ImportReproError,
   { readonly brand: unique symbol }
 >()("ImportReproError", { message: Schema.String }) {}
-
-interface ExportedSessionData {
-  header: sessionTypes.SessionHeader | null;
-  entries: Record<string, unknown>[];
-}
 
 const isPresent = (value: string | undefined): value is string =>
   value !== undefined && value !== "";
@@ -82,33 +77,11 @@ function parseSessionJsonl(raw: string): sessionTypes.DecodedSession {
 }
 
 function decodeExportedHtml(html: string): sessionTypes.DecodedSession {
-  const [, encoded] = SESSION_DATA_RE.exec(html) ?? [];
+  const [, encoded] = SESSION_JSONL_RE.exec(html) ?? [];
   if (!isPresent(encoded)) {
-    throw ImportReproError.make({ message: "HTML does not contain embedded msa session data" });
+    throw ImportReproError.make({ message: "HTML does not contain the msa session JSONL" });
   }
-
-  const sessionData = parseJson(
-    Buffer.from(encoded, "base64").toString("utf8"),
-    "embedded msa session data is not valid JSON",
-  ) as Partial<ExportedSessionData>;
-  const header = sessionData.header;
-  if (
-    header === undefined ||
-    header === null ||
-    header.type !== "session" ||
-    typeof header.id !== "string" ||
-    typeof header.cwd !== "string"
-  ) {
-    throw ImportReproError.make({
-      message: "embedded msa session data has no valid session header",
-    });
-  }
-  if (!Array.isArray(sessionData.entries)) {
-    throw ImportReproError.make({ message: "embedded msa session data has no entries array" });
-  }
-
-  const lines = [header, ...sessionData.entries].map((entry) => JSON.stringify(entry));
-  return { header, jsonl: `${lines.join("\n")}\n` };
+  return parseSessionJsonl(`${Buffer.from(encoded, "base64").toString("utf8")}\n`);
 }
 
 const session = {

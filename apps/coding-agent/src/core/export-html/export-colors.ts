@@ -90,9 +90,17 @@ function generateThemeVars(themeName?: string): string {
   return lines.join("\n      ");
 }
 
-const exportColors = {
-  deriveExportColors,
-  generateThemeVars,
+const themeCss = (templateCss: string, themeName: string | undefined): string => {
+  const colors = getResolvedThemeColors(themeName);
+  const themeExport = getThemeExportColors(themeName);
+  const derived = deriveExportColors(nonEmptyOr(colors["userMessageBg"], "#343541"));
+  return templateCss
+    .replace("{{THEME_VARS}}", generateThemeVars(themeName))
+    .replace("{{BODY_BG}}", themeExport.pageBg ?? derived.pageBg)
+    .replace("{{CONTAINER_BG}}", themeExport.cardBg ?? derived.cardBg)
+    .replace("{{INFO_BG}}", themeExport.infoBg ?? derived.infoBg);
 };
+
+const exportColors = { themeCss };
 
 export default exportColors;

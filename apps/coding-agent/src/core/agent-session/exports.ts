@@ -29,7 +29,7 @@ export default class SessionExports {
 
   exportToHtml(
     outputPath?: string,
-    options: { themeName?: string | undefined } = {},
+    options: { themeName?: string | undefined; viewedInSrcdoc?: boolean | undefined } = {},
   ): Promise<string> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -51,6 +51,7 @@ export default class SessionExports {
             outputPath,
             themeName,
             toolRenderer,
+            viewedInSrcdoc: options.viewedInSrcdoc,
           }),
         );
       }, this),

@@ -1,11 +1,11 @@
 import platform from "../../../../core/platform/index.ts";
 import type sessionManagerTypes from "../../../../core/session-manager.types.ts";
-import renderUtils from "../../../../core/tools/render-utils.ts";
+import toolCallSummaryModule from "../../../../core/tools/tool-call-summary.ts";
 import themeModule from "../../theme/theme.ts";
 import type TreeList from "../tree-list.ts";
 
 const { formatLocalTime, nowMs } = platform;
-const { formatReadLineRange, shortenPath } = renderUtils;
+const { toolCallSummary } = toolCallSummaryModule;
 const { theme } = themeModule;
 
 type MessageEntry = Extract<sessionManagerTypes.SessionEntry, { type: "message" }>;
@@ -83,49 +83,6 @@ export default class TreeEntryText {
     return formatLocalTime(timestamp, "YY/M/D HH:mm");
   }
 
-  private formatToolCall(name: string, args: Record<string, unknown>): string {
-    switch (name) {
-      case "read": {
-        const path = shortenPath(String(args["path"] || args["file_path"] || ""));
-        return `[read: ${path}${formatReadLineRange(args["offset"], args["limit"])}]`;
-      }
-      case "write": {
-        const path = shortenPath(String(args["path"] || args["file_path"] || ""));
-        return `[write: ${path}]`;
-      }
-      case "edit": {
-        const path = shortenPath(String(args["path"] || args["file_path"] || ""));
-        return `[edit: ${path}]`;
-      }
-      case "bash": {
-        const rawCmd = String(args["command"] || "");
-        const cmd = rawCmd
-          .replace(/[\n\t]/gu, " ")
-          .trim()
-          .slice(0, 50);
-        return `[bash: ${cmd}${rawCmd.length > 50 ? "..." : ""}]`;
-      }
-      case "grep": {
-        const pattern = String(args["pattern"] || "");
-        const path = shortenPath(String(args["path"] || "."));
-        return `[grep: /${pattern}/ in ${path}]`;
-      }
-      case "find": {
-        const pattern = String(args["pattern"] || "");
-        const path = shortenPath(String(args["path"] || "."));
-        return `[find: ${pattern} in ${path}]`;
-      }
-      case "ls": {
-        const path = shortenPath(String(args["path"] || "."));
-        return `[ls: ${path}]`;
-      }
-      default: {
-        const argsStr = JSON.stringify(args).slice(0, 40);
-        return `[${name}: ${argsStr}${JSON.stringify(args).length > 40 ? "..." : ""}]`;
-      }
-    }
-  }
-
   getEntryDisplayText(node: sessionManagerTypes.SessionTreeNode, isSelected: boolean): string {
     const { entry } = node;
     const result =
@@ -148,7 +105,7 @@ export default class TreeEntryText {
           : undefined;
       return toolCall === undefined
         ? theme.fg("muted", `[${toolMsg.toolName ?? "tool"}]`)
-        : theme.fg("muted", this.formatToolCall(toolCall.name, toolCall.arguments));
+        : theme.fg("muted", toolCallSummary(toolCall.name, toolCall.arguments));
     }
     if (role === "bashExecution") {
       const bashMsg = msg as { command?: string };

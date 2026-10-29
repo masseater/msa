@@ -17,7 +17,7 @@ const { initTheme, stripAnsi, theme } = tuiKit;
 
 const { createHarness } = harnessModule;
 
-const { awaited, fromJsonText, joinPath } = testing;
+const { awaited, joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -79,12 +79,11 @@ const exportedToolCallHtml = (harness: harnessTypes.Harness, dir: string) =>
         harness.session.context.exports.exportToHtml(joinPath(dir, "export.html")),
       ),
     );
-    const data =
-      /<script id="session-data" type="application\/json">([^<]*)<\/script>/u.exec(html)?.[1] ?? "";
-    const session = (yield* fromJsonText(Buffer.from(data, "base64").toString("utf8"))) as {
-      renderedTools?: Record<string, { callHtml?: string }>;
-    };
-    return session.renderedTools?.["call-1"]?.callHtml ?? "";
+    return (
+      /<div class="tool-header ansi-rendered">(.*?)<\/div><\/div>/u.exec(
+        html.slice(html.indexOf('id="tool-call-call-1"')),
+      )?.[1] ?? ""
+    );
   });
 
 const rendersThemInHtmlExportsToo = Effect.gen(function* () {

@@ -108,7 +108,13 @@ release. Add a tool name to select part of the graph. For example, run
 ## 時刻
 
 - ローカルの時刻を文字列にするのは `@msa/chord/local-time` の `format` だけにする（coding-agent からは platform の `formatLocalTime`・`formatLocalDateTime`、拡張からは `@msa/coding-agent` の `formatLocalTime`）。端末のタイムゾーンの名前とずれは同じモジュールの `zone`、ローカルの日の境目は `dayStart` で得る。
-- `Date` のローカルの getter・`toString` 系・文字列への変換、`Intl.DateTimeFormat`、Effect の `DateTime` のローカルのゾーン（`zoneMakeLocal`・`formatLocal`・`layerCurrentZoneLocal`・`withCurrentZoneLocal`・`timeZone` のない `makeZoned`）は、`tools/checks/local-time.ts` が型を見て断る。
+- `Date` のローカルの getter と `Intl.DateTimeFormat` は oxlint の `no-restricted-properties`、Effect の `DateTime` のローカルのゾーン（`zoneMakeLocal`・`formatLocal`・`layerCurrentZoneLocal`・`withCurrentZoneLocal`）は `msa/no-restricted-member` が断る。一覧は `local-time-rules.config.ts` にある。名前だけでは決められないもの（`Date` の `toString`・`toLocaleString`・文字列への変換、`new` なしの `Date()`、`timeZone` のない `makeZoned`、別名を経た `Intl.DateTimeFormat`）は、`tools/checks/local-time.ts` が型を見て断る。
+
+## ブラウザに出すもの
+
+- ブラウザ用の JS を手書きしない。ライブラリとフレームワークの機能を使い、自前で実装しない。
+- HTML の書き出しやレポートは、書き出す時点に Node 側でライブラリ（marked・highlight.js・Charts.css など）の API で描画し、開閉・切り替え・絞り込みは HTML と CSS の標準機能（`details`・`:target`・`:has()`・チェックボックスとラジオ・`resize`・`accesskey`）で作る。JS なしで作れない機能は、既存のライブラリやブラウザの標準機能で済ませる。
+- 書き出す HTML には `default-src 'none'` の CSP を付けてスクリプトを動かさない。lint の `env` に `browser` を入れないので DOM のグローバルは `no-undef` が、`javascript:` の URL は `no-script-url` が断り、出力に `<script` が無いことは書き出しのテストが確かめる。
 
 ## node の組み込み
 

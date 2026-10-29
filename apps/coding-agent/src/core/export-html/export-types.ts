@@ -23,17 +23,14 @@ declare namespace exportTypesTypes {
     outputPath?: string | undefined;
     themeName?: string | undefined;
     toolRenderer?: ToolHtmlRenderer;
-  }
-
-  interface LocalTimes {
-    entries: Record<string, string>;
-    session?: string | undefined;
+    viewedInSrcdoc?: boolean | undefined;
   }
 
   interface SessionData {
     header: ReturnType<sessionManagerTypes.SessionManager["getHeader"]>;
     entries: ReturnType<sessionManagerTypes.SessionManager["getEntries"]>;
     leafId: string | null;
+    tree: ReturnType<sessionManagerTypes.SessionManager["getTree"]>;
     systemPrompt?: string | undefined;
     tools?:
       | Array<Pick<extensionsTypesTypes.ToolDefinition, "name" | "description" | "parameters">>

@@ -53,6 +53,7 @@ const exportSession = Effect.fn("exportSessionToHtml")(function* (
       name: t.name,
       parameters: t.parameters,
     })),
+    tree: sm.getTree(),
   };
   return yield* fromMaybePromise(() => writeHtmlExport(sessionData, opts, sessionFile));
 });
@@ -72,6 +73,7 @@ const exportFile = Effect.fn("exportFromFile")(function* (
     leafId: sm.getLeafId(),
     systemPrompt: undefined,
     tools: undefined,
+    tree: sm.getTree(),
   };
   return yield* fromMaybePromise(() => writeHtmlExport(sessionData, opts, resolvedInputPath));
 });
