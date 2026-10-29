@@ -27,6 +27,7 @@ const {
   COMPLETION_STREAM,
   CREDENTIAL_HELPER,
   REPLACING_MCP_EXTENSION,
+  registeringExtension,
   RPC_DRIVER,
   RUN_CLI,
   memoryToolCallStream,
@@ -123,6 +124,7 @@ interface Layout {
   readonly agentDir: string;
   readonly bin: string;
   readonly cwd: string;
+  readonly extension: string;
   readonly lock: string;
   readonly root: string;
   readonly store: string;
@@ -136,6 +138,7 @@ const makeLayout = Effect.gen(function* () {
     agentDir,
     bin: joinPath(root, "bin"),
     cwd: joinPath(root, "project"),
+    extension: joinPath(agentDir, "extensions", "register-servers.js"),
     lock: joinPath(root, "keychain-locked"),
     mcpConfig: joinPath(agentDir, "mcp.json"),
     root,
@@ -170,6 +173,14 @@ const writeAgentFiles = (
       const extensions = joinPath(layout.agentDir, "extensions");
       yield* makeDirectory(extensions);
       yield* writeTextFile(joinPath(extensions, "other-mcp.js"), REPLACING_MCP_EXTENSION);
+    }
+    if (options.extensionServers !== undefined) {
+      yield* makeDirectory(joinPath(layout.agentDir, "extensions"));
+      const servers = yield* toJsonText(options.extensionServers(urls.sepiace));
+      yield* writeTextFile(
+        layout.extension,
+        registeringExtension(servers, options.registerOnSessionStart === true),
+      );
     }
     yield* writeJsonFile(layout.store, options.signedIn ? yield* legacySignIn(urls.sepiace) : {});
     yield* writeJsonFile(layout.mcpConfig, {
@@ -236,6 +247,8 @@ interface PrepareOptions {
   readonly memory?: Record<string, unknown>;
   readonly memoryToolRequest?: string;
   readonly replaceMcp?: boolean;
+  readonly extensionServers?: (sepiaceUrl: string) => Record<string, unknown>;
+  readonly registerOnSessionStart?: boolean;
   readonly storeFails?: boolean;
   readonly tokenRejected?: boolean;
   readonly sepiaceDown?: boolean;

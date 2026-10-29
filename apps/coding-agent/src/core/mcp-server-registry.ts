@@ -1,10 +1,19 @@
 import type mcpServersTypes from "./mcp-servers.types.ts";
+import memoryModule from "./memory/memory.ts";
+
+const { ignoredMcpServerNotice, isSepiaceServer } = memoryModule;
 
 export default class McpServerRegistry {
   private readonly servers = new Map<string, mcpServersTypes.RegisteredMcpServer>();
+  private readonly ignoredNotices: string[] = [];
   private changeListener: (() => void) | undefined;
+  private ignoreListener: ((notice: string, extensionPath: string) => void) | undefined;
 
   register(server: mcpServersTypes.RegisteredMcpServer): void {
+    if (isSepiaceServer(server.name, "url" in server.config ? server.config.url : undefined)) {
+      this.ignore(server);
+      return;
+    }
     this.servers.set(server.name, server);
     this.changeListener?.();
   }
@@ -26,7 +35,21 @@ export default class McpServerRegistry {
     }));
   }
 
+  ignored(): string[] {
+    return [...this.ignoredNotices];
+  }
+
   setChangeListener(listener: (() => void) | undefined): void {
     this.changeListener = listener;
+  }
+
+  setIgnoreListener(listener: ((notice: string, extensionPath: string) => void) | undefined): void {
+    this.ignoreListener = listener;
+  }
+
+  private ignore(server: mcpServersTypes.RegisteredMcpServer): void {
+    const notice = ignoredMcpServerNotice(server.extensionPath, server.name);
+    if (this.ignoreListener !== undefined) this.ignoreListener(notice, server.extensionPath);
+    else if (!this.ignoredNotices.includes(notice)) this.ignoredNotices.push(notice);
   }
 }

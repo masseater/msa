@@ -54,6 +54,30 @@ const ignoresMcpJsonEntriesForSepiace = Effect.gen(function* () {
   expect(yield* readTextFile(agent.mcpConfig)).toBe(before);
 });
 
+const ignoresSepiaceRegisteredByAnExtension = (registerOnSessionStart: boolean) =>
+  Effect.gen(function* () {
+    const agent = yield* setUp({
+      extensionServers: SEPIACE_ENTRIES,
+      registerOnSessionStart,
+      signedIn: true,
+    });
+    const result = yield* agent.prompt("where does the release go?");
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toContain(
+      `${agent.extension}: MCP server "sepiace" is ignored, because long-term memory connects to sepiace itself`,
+    );
+    expect(result.stderr).toContain(`${agent.extension}: MCP server "notes" is ignored`);
+    const [request = ""] = agent.model.bodies;
+    expect(request).toContain("Releases go to the tap.");
+    const tools = yield* toolNames(request);
+    expect(tools).toContain("memory");
+    expect(tools.filter((name) => name.startsWith("mcp__"))).toEqual([]);
+    const { notices, stderr } = yield* agent.rpc(["/mcp"]);
+    expect(notices, stderr).toHaveLength(1);
+    expect(notices[0]).not.toContain("sepiace");
+    expect(notices[0]).not.toContain("notes");
+  });
+
 const survivesAnExtensionReplacingMcp = Effect.gen(function* () {
   const agent = yield* setUp({
     mcpServers: SEPIACE_ENTRIES,
@@ -173,15 +197,28 @@ const memoryEnabledAloneTurnsItOff = Effect.gen(function* () {
   expect(status.stdout).toContain("Memory is off (settings: memory.enabled).");
 });
 
+describe.skipIf(process.platform === "win32")("sepiace configured as an MCP server", () => {
+  it(
+    "warns about and ignores mcp.json entries for sepiace, and passes no mcp__ tools for it",
+    () => runTest(ignoresMcpJsonEntriesForSepiace),
+    90_000,
+  );
+  it(
+    "warns about and ignores sepiace servers registered by an extension, and passes no mcp__ tools for them",
+    () => runTest(ignoresSepiaceRegisteredByAnExtension(false)),
+    90_000,
+  );
+  it(
+    "warns about and ignores sepiace servers an extension registers at session_start",
+    () => runTest(ignoresSepiaceRegisteredByAnExtension(true)),
+    90_000,
+  );
+});
+
 describe.skipIf(process.platform === "win32")("long-term memory from the msa command", () => {
   it(
     "recalls and offers the memory tool with --no-mcp",
     () => runTest(recallsWithoutMcpSupport),
-    90_000,
-  );
-  it(
-    "warns about and ignores mcp.json entries for sepiace, and passes no mcp__ tools for it",
-    () => runTest(ignoresMcpJsonEntriesForSepiace),
     90_000,
   );
   it(

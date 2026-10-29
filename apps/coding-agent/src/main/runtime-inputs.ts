@@ -46,7 +46,10 @@ function runtimeDiagnostics(
       message: `Extension package "${path}": ${warning}`,
       type: "warning" as const,
     })),
-    ...memoryNotices.map((message) => ({ message, type: "warning" as const })),
+    ...[...memoryNotices, ...extensions.runtime.mcpServers.ignored()].map((message) => ({
+      message,
+      type: "warning" as const,
+    })),
   ]);
 }
 

@@ -102,6 +102,18 @@ const REPLACING_MCP_EXTENSION = `export default function (msa) {
 }
 `;
 
+const registeringExtension = (
+  servers: string,
+  onSessionStart: boolean,
+) => `const SERVERS = ${servers};
+export default function (msa) {
+  const register = () => {
+    for (const [name, config] of Object.entries(SERVERS)) msa.registerMcpServer(name, config);
+  };
+  ${onSessionStart ? 'msa.on("session_start", register);' : "register();"}
+}
+`;
+
 const RUN_CLI = `import { spawnSync } from "node:child_process";
 const result = spawnSync(process.execPath, ["--import", process.env.MEMORY_CHECK_RESOLVER,
   process.env.MEMORY_CHECK_CLI, ...JSON.parse(process.argv.at(-1))], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -115,6 +127,7 @@ const memoryStartupScripts = {
   RPC_DRIVER,
   RUN_CLI,
   memoryToolCallStream,
+  registeringExtension,
 };
 
 export default memoryStartupScripts;
