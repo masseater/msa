@@ -1,4 +1,4 @@
-import { Effect, Fiber } from "effect";
+import { Effect } from "effect";
 
 import pullRequestFinish from "./pull-request-finish.ts";
 import pullRequestOutside from "./pull-request-outside.ts";
@@ -189,21 +189,16 @@ function sweep(runtime: runtimeTypes.Runtime): Effect.Effect<void> {
   return Effect.forEach(candidates(runtime), (task) => syncOne(runtime, task), { discard: true });
 }
 
-function start(
-  runtime: runtimeTypes.Runtime,
-  intervalMs: number = SYNC_MS,
-): Fiber.Fiber<never, never> {
-  return Effect.runFork(
-    Effect.forever(
-      Effect.sleep(intervalMs).pipe(
-        Effect.andThen(
-          Effect.suspend(() => (runtime.database.isOpen ? sweep(runtime) : Effect.void)),
-        ),
+function loop(runtime: runtimeTypes.Runtime, intervalMs: number = SYNC_MS): Effect.Effect<never> {
+  return Effect.forever(
+    Effect.sleep(intervalMs).pipe(
+      Effect.andThen(
+        Effect.suspend(() => (runtime.database.isOpen ? sweep(runtime) : Effect.void)),
       ),
     ),
   );
 }
 
-const pullRequestSync = { start, sweep };
+const pullRequestSync = { loop, sweep };
 
 export default pullRequestSync;

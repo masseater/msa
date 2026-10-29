@@ -27,8 +27,8 @@ function mergeAndSettle(
     }),
   );
   const { runtime, threadId, run, worker } = thread;
-  void Effect.runPromise(threadRuns.whileCurrent(thread, merging)).then(
-    (merged) =>
+  threadRuns.launch(thread, merging, (merged) =>
+    Effect.promise(() =>
       (merged === undefined || !threadRuns.current(thread)
         ? Promise.resolve(false)
         : runtime.settle(
@@ -41,7 +41,7 @@ function mergeAndSettle(
       ).then((settled) =>
         settled ? undefined : runtime.exclusive(pullRequestMerge.afterInterrupt(runtime, task)),
       ),
-    (error: unknown) => threadRuns.settle(thread, error),
+    ),
   );
 }
 
@@ -120,12 +120,12 @@ function judge(
     askedToRecord.delete(worker);
     return yield* decideRecorded(runtime, evidence);
   });
-  void Effect.runPromise(threadRuns.whileCurrent(thread, judging)).then(
-    (judged) =>
+  threadRuns.launch(thread, judging, (judged) =>
+    Effect.sync(() =>
       judged !== undefined && "kind" in judged
         ? unrecorded(thread, judged)
         : conclude(thread, task, judged, readBefore),
-    (error: unknown) => threadRuns.settle(thread, error),
+    ),
   );
   return true;
 }

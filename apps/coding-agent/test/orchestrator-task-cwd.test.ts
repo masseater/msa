@@ -9,7 +9,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { joinPath, makeTempDir, removePath } = testing;
+const { joinPath } = testing;
 const { LINT_CHECK, SHORTCUT_CHECK } = goalChecksSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
@@ -28,9 +28,7 @@ const refusal = (attempt: () => Promise<unknown>) =>
   );
 
 function withOutside<A, E>(body: (outside: string) => Effect.Effect<A, E>) {
-  return Effect.acquireUseRelease(makeTempDir("msa-task-cwd-"), body, (outside) =>
-    removePath(outside),
-  );
+  return harness.withTempDir("msa-task-cwd-", body);
 }
 
 const workTasks = (orchestrator: orchestratorTypes.Orchestrator) =>

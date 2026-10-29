@@ -105,10 +105,14 @@ function takeOver(
     return true;
   }
   wrapUp.sent = true;
-  void worker.run.prompting.prompt(PROMPT).then(resume.turn, (error: unknown) => {
-    fail(runtime, threadId, `wrap-up failed: ${outcomes.errorText(error)}`);
-    resume.settle(error);
-  });
+  runtime.launch(
+    Effect.promise(() =>
+      worker.run.prompting.prompt(PROMPT).then(resume.turn, (error: unknown) => {
+        fail(runtime, threadId, `wrap-up failed: ${outcomes.errorText(error)}`);
+        return resume.settle(error);
+      }),
+    ),
+  );
   return true;
 }
 

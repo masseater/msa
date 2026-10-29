@@ -1,4 +1,4 @@
-import { Effect, Fiber } from "effect";
+import { Effect } from "effect";
 
 import conditionModule from "./condition.ts";
 import errors from "./errors.ts";
@@ -65,25 +65,20 @@ function pollEffect(
   });
 }
 
-function startPolling(
-  runtime: runtimeTypes.Runtime,
-  intervalMs: number,
-): Fiber.Fiber<never, never> {
-  return Effect.runFork(
-    Effect.forever(
-      Effect.sleep(intervalMs).pipe(
-        Effect.andThen(
-          Effect.tryPromise({
-            catch: orchestratorError,
-            try: () => runtime.exclusive(pollEffect(runtime)),
-          }).pipe(Effect.ignore),
-        ),
+function pollingLoop(runtime: runtimeTypes.Runtime, intervalMs: number): Effect.Effect<never> {
+  return Effect.forever(
+    Effect.sleep(intervalMs).pipe(
+      Effect.andThen(
+        Effect.tryPromise({
+          catch: orchestratorError,
+          try: () => runtime.exclusive(pollEffect(runtime)),
+        }).pipe(Effect.ignore),
       ),
     ),
   );
 }
 
-const scheduling = { holdReviews: reviewHold.holdReviews, scheduleEffect, startPolling };
+const scheduling = { holdReviews: reviewHold.holdReviews, pollingLoop, scheduleEffect };
 
 const schedule = {
   scheduling,

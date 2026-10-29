@@ -1,4 +1,4 @@
-import { Effect, Fiber } from "effect";
+import { Effect } from "effect";
 
 import processAliveModule from "../platform/node/process-alive.ts";
 import errors from "./errors.ts";
@@ -114,20 +114,18 @@ function sweepEffect(
   });
 }
 
-function startWatchdog(runtime: runtimeTypes.Runtime): Fiber.Fiber<never, never> {
-  return Effect.runFork(
-    Effect.forever(
-      Effect.sleep(INTERVAL_MS).pipe(
-        Effect.andThen(
-          Effect.tryPromise({
-            catch: orchestratorError,
-            try: () => runtime.exclusive(sweepEffect(runtime)),
-          }).pipe(
-            Effect.flatMap((reports) =>
-              Effect.forEach(reports, (report) => report, { discard: true }),
-            ),
-            Effect.ignore,
+function watchdogLoop(runtime: runtimeTypes.Runtime): Effect.Effect<never> {
+  return Effect.forever(
+    Effect.sleep(INTERVAL_MS).pipe(
+      Effect.andThen(
+        Effect.tryPromise({
+          catch: orchestratorError,
+          try: () => runtime.exclusive(sweepEffect(runtime)),
+        }).pipe(
+          Effect.flatMap((reports) =>
+            Effect.forEach(reports, (report) => report, { discard: true }),
           ),
+          Effect.ignore,
         ),
       ),
     ),
@@ -157,7 +155,7 @@ function close(runtime: runtimeTypes.Runtime, now: number): void {
   store.releaseProject(runtime.database, runtime.options.project, currentPid());
 }
 
-const watchdog = { close, open, reportRecovered, startWatchdog };
+const watchdog = { close, loop: watchdogLoop, open, reportRecovered };
 
 const watchdogModule = {
   watchdog,

@@ -8,7 +8,7 @@ declare namespace wrapUpTypes {
 
   interface WrapUpResume {
     turn: () => void;
-    settle: (error: unknown) => void;
+    settle: (error: unknown) => Promise<unknown>;
   }
 }
 

@@ -7,7 +7,7 @@ const nowMillis: Effect.Effect<number> = Effect.map(DateTime.now, DateTime.toEpo
 function releaseThread(runtime: runtimeTypes.Runtime, threadId: string): void {
   const worker = runtime.workers.get(threadId);
   if (worker === undefined) return;
-  void worker.integrations.prWatch.close().catch(() => undefined);
+  runtime.launch(Effect.promise(() => worker.integrations.prWatch.close().catch(() => undefined)));
 }
 
 function abortThread(runtime: runtimeTypes.Runtime, threadId: string): void {
@@ -17,7 +17,8 @@ function abortThread(runtime: runtimeTypes.Runtime, threadId: string): void {
   runtime.activity.delete(threadId);
   runtime.wrapUps.delete(threadId);
   releaseThread(runtime, threadId);
-  void worker?.run.lifecycle.abort().catch(() => undefined);
+  if (worker !== undefined)
+    runtime.launch(Effect.promise(() => worker.run.lifecycle.abort().catch(() => undefined)));
 }
 
 const runtime = {

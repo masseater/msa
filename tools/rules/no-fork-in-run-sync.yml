@@ -1,0 +1,22 @@
+id: no-fork-in-run-sync
+language: typescript
+severity: error
+message: 'Effect.runSync の中で fiber を fork しない。runSync は MixedScheduler("sync") を context に入れ、fork した fiber はそれを引き継いで、runSync が戻ったあとも microtask で進む。Effect.runFork で始めて FiberSet.addUnsafe などで集める。'
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: (^|\.)runSync(Exit)?$
+    - has:
+        field: arguments
+        has:
+          stopBy: end
+          kind: call_expression
+          any:
+            - pattern: FiberSet.run($$$)
+            - pattern: FiberMap.run($$$)
+            - pattern: FiberHandle.run($$$)
+            - pattern: Effect.forkDetach($$$)
+            - pattern: Effect.forkIn($$$)
+            - pattern: Effect.forkScoped($$$)

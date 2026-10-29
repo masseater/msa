@@ -1,4 +1,4 @@
-import { Effect, type Fiber } from "effect";
+import { Effect, FiberSet, Scope } from "effect";
 
 import afterTurnModule from "./after-turn.ts";
 import backgroundModule from "./background.ts";
@@ -18,6 +18,14 @@ const { settling } = settleModule;
 const { afterTurns } = afterTurnModule;
 
 type Snapshot = ReturnType<typeof snapshots.buildSnapshot>;
+
+function fiberSet<A>(): FiberSet.FiberSet<A, never> {
+  return Effect.runSync(FiberSet.make<A, never>().pipe(Scope.provide(Scope.makeUnsafe())));
+}
+
+function forkInto<A>(set: FiberSet.FiberSet<A, never>, effect: Effect.Effect<A>): void {
+  FiberSet.addUnsafe(set, Effect.runFork(effect));
+}
 
 const EMPTY: Snapshot = {
   maxConcurrentThreads: 4,
@@ -41,11 +49,13 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly goalChecklists: runtimeTypes.Runtime["goalChecklists"] = new Map();
   readonly listeners = new Set<() => void>();
   replanning = false;
+  closing = false;
   snapshot: Snapshot = EMPTY;
   maxConcurrentThreads: number;
   private queue: Promise<void> = Promise.resolve();
   private runCount = 0;
-  private fibers: Fiber.Fiber<never, never>[] = [];
+  private readonly loops = fiberSet<never>();
+  private readonly launched = fiberSet<void>();
   private disposed: Promise<void> | undefined;
 
   constructor(options: runtimeTypes.OrchestratorOptions) {
@@ -61,8 +71,14 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
     this.maxConcurrentThreads =
       store.storedMaxConcurrent(this.database, options.project) ??
       options.defaults().maxConcurrentThreads;
-    this.fibers = background.start(this, Effect.runSync(nowMillis));
+    for (const loop of background.start(this, Effect.runSync(nowMillis))) {
+      forkInto(this.loops, loop);
+    }
     this.publish();
+  }
+
+  launch(effect: Effect.Effect<unknown>): void {
+    forkInto(this.launched, Effect.asVoid(effect));
   }
 
   nextRun(): number {
@@ -109,14 +125,21 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
     return this.disposed;
   }
 
+  private drain(): Effect.Effect<void> {
+    const queue = this.queue;
+    return Effect.flatMap(
+      Effect.promise(() => queue),
+      () => (queue === this.queue ? Effect.void : this.drain()),
+    );
+  }
+
   private close(): Promise<void> {
-    const fibers = this.fibers;
-    this.fibers = [];
+    this.closing = true;
     this.telemetry.close();
     const self = this;
     return Effect.runPromise(
       Effect.gen(function* () {
-        yield* background.stop(fibers);
+        yield* FiberSet.clear(self.loops);
         self.runs.clear();
         for (const worker of self.workers.values()) {
           yield* Effect.tryPromise({
@@ -126,6 +149,9 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
           worker.dispose();
         }
         self.workers.clear();
+        if (!self.database.isOpen) return;
+        yield* FiberSet.awaitEmpty(self.launched);
+        yield* self.drain();
         const now = yield* nowMillis;
         if (!self.database.isOpen) return;
         yield* background.close(self, now);

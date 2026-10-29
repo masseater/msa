@@ -1,4 +1,5 @@
 import type agentTypes from "@msa/agent-core/index.types";
+import { Effect } from "effect";
 
 import SessionManager from "../session-manager.ts";
 import type workerTypes from "./worker.ts";
@@ -6,9 +7,11 @@ import type workerTypes from "./worker.ts";
 export default class TranscriptCache {
   private readonly cache = new Map<string, readonly agentTypes.AgentMessage[]>();
   private readonly onLoaded: () => void;
+  private readonly launch: (effect: Effect.Effect<unknown>) => void;
 
-  constructor(onLoaded: () => void) {
+  constructor(onLoaded: () => void, launch: (effect: Effect.Effect<unknown>) => void) {
     this.onLoaded = onLoaded;
+    this.launch = launch;
   }
 
   messages(
@@ -25,7 +28,7 @@ export default class TranscriptCache {
     const cached = this.cache.get(sessionFile);
     if (cached !== undefined) return cached;
     this.cache.set(sessionFile, []);
-    void this.load(sessionFile);
+    this.launch(Effect.promise(() => this.load(sessionFile)));
     return [];
   }
 

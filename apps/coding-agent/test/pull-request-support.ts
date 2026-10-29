@@ -7,10 +7,10 @@ import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { joinPath, makeTempDir, removePath } = testing;
+const { joinPath, pathExists, pollUntil, writeTextFile } = testing;
 const { GIT, runCommand, sh, shortId } = worktreeSupport;
 const { create } = orchestratorSupport;
-const { setup, waitFor } = orchestratorHarness.harness;
+const { setup, waitFor, withTempDir } = orchestratorHarness.harness;
 
 interface Remote {
   repository: string;
@@ -19,22 +19,44 @@ interface Remote {
 }
 
 function withRemote<A, E>(body: (remote: Remote) => Effect.Effect<A, E>) {
-  return Effect.acquireUseRelease(
-    makeTempDir("msa-pull-request-"),
-    (parent) =>
-      Effect.gen(function* () {
-        const repository = joinPath(parent, "repo");
-        const origin = joinPath(parent, "origin.git");
-        yield* sh(`git init -q --bare -b main origin.git`, parent);
-        yield* importCommit(origin, "README", null);
-        yield* sh(
-          `git clone -q ${origin} repo && echo ${repository}/.git/objects > ${origin}/objects/info/alternates && echo ${origin}/objects > ${repository}/.git/objects/info/alternates`,
-          parent,
-        );
-        return yield* body({ github: new FakeGitHub(origin), origin, repository });
-      }),
-    (parent) => removePath(parent),
+  return withTempDir("msa-pull-request-", (parent) =>
+    Effect.gen(function* () {
+      const repository = joinPath(parent, "repo");
+      const origin = joinPath(parent, "origin.git");
+      yield* sh(`git init -q --bare -b main origin.git`, parent);
+      yield* importCommit(origin, "README", null);
+      yield* sh(
+        `git clone -q ${origin} repo && echo ${repository}/.git/objects > ${origin}/objects/info/alternates && echo ${origin}/objects > ${repository}/.git/objects/info/alternates`,
+        parent,
+      );
+      return yield* body({ github: new FakeGitHub(origin), origin, repository });
+    }),
   );
+}
+
+function holdBranchDeletion(repository: string, branch: string) {
+  return Effect.gen(function* () {
+    const entered = joinPath(repository, "..", "deletion-entered");
+    const gate = joinPath(repository, "..", "deletion-gate");
+    const hook = joinPath(repository, ".git", "hooks", "reference-transaction");
+    yield* writeTextFile(
+      hook,
+      [
+        "#!/bin/sh",
+        '[ "$1" = prepared ] || exit 0',
+        `grep -Eq " 0+ refs/heads/${branch}$" || exit 0`,
+        `touch ${entered}`,
+        "i=0",
+        `while [ ! -f ${gate} ]; do i=$((i + 1)); : > .git/held-$i; sleep 0.005; done`,
+        "",
+      ].join("\n"),
+    );
+    yield* sh(`chmod +x ${hook}`, repository);
+    return {
+      entered: pollUntil(pathExists(entered), 10_000, 2),
+      release: writeTextFile(gate, ""),
+    };
+  });
 }
 
 function commitAndPush(cwd: string, file: string, branch: string) {
@@ -130,6 +152,7 @@ const pullRequestSupport = {
   cleanedUp,
   commitAndPush,
   exists,
+  holdBranchDeletion,
   openedTask,
   rebaseAndPush,
   reviewed,

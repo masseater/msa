@@ -1,0 +1,34 @@
+id: no-untracked-orchestrator-launch
+language: typescript
+severity: error
+message: "orchestrator の中で処理を投げっぱなしで始めない。dispose が終わりを待てるように runtime.launch(effect) で始める（Promise は Effect.promise で包む）。void・Effect.runFork・Effect.runCallback・fork*・捨てる .then/.catch/.finally で始めた処理は、停止のあとも .git や DB に書き続ける。"
+files:
+  - apps/coding-agent/src/core/orchestrator/**
+rule:
+  any:
+    - kind: unary_expression
+      regex: ^void\b
+    - pattern: Effect.runFork($$$)
+      not:
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            pattern: FiberSet.addUnsafe($$$)
+    - pattern: Effect.runCallback($$$)
+    - pattern: Effect.forkDetach($$$)
+    - pattern: Effect.forkDaemon($$$)
+    - pattern: Effect.forkChild($$$)
+    - pattern: Effect.fork($$$)
+    - kind: expression_statement
+      has:
+        kind: call_expression
+        any:
+          - pattern: Effect.runPromise($$$)
+          - pattern: Effect.runPromiseExit($$$)
+          - has:
+              field: function
+              kind: member_expression
+              has:
+                field: property
+                regex: ^(then|catch|finally)$
