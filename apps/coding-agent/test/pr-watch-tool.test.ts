@@ -19,7 +19,15 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: {
+    cancelled: 0,
+    failed: 0,
+    passed: 0,
+    pending: 2,
+    pendingNames: ["verify"],
+    pendingWorkflows: ["verify"],
+    total: 2,
+  },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",
@@ -32,7 +40,11 @@ const snapshotOf = (
 
 const pendingChecks = snapshotOf();
 
-const neverGh: ghTypes.PrWatchGh = { behind: () => Effect.never, view: () => Effect.never };
+const neverGh: ghTypes.PrWatchGh = {
+  behind: () => Effect.never,
+  runs: () => Effect.never,
+  view: () => Effect.never,
+};
 
 const createHost = (): {
   host: watchTypes.PrWatchHost;
@@ -126,11 +138,20 @@ const stopsAWatch = () =>
 
 const listsTheWatchesWithTheirLastState = () => {
   const failed = snapshotOf({
-    checks: { cancelled: 0, failed: 1, passed: 1, pending: 0, pendingNames: [], total: 2 },
+    checks: {
+      cancelled: 0,
+      failed: 1,
+      passed: 1,
+      pending: 0,
+      pendingNames: [],
+      pendingWorkflows: [],
+      total: 2,
+    },
   });
   let polls = 0;
   const gh: ghTypes.PrWatchGh = {
     behind: () => Effect.succeed(0),
+    runs: () => Effect.succeed([]),
     view: () => {
       polls += 1;
       return Effect.succeed(polls === 1 ? pendingChecks : failed);

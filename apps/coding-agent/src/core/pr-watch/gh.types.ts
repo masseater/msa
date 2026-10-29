@@ -1,6 +1,7 @@
 import type { Effect } from "effect";
 
 import type execTypes from "../exec.types.ts";
+import type ciHistoryTypes from "./ci-history.types.ts";
 import type PrWatchGhErrorClass from "./pr-watch-gh-error.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 
@@ -16,6 +17,9 @@ declare namespace ghTypes {
       baseRefName: string,
       headRefOid: string,
     ) => Effect.Effect<number, PrWatchGhError>;
+    readonly runs: (
+      target: snapshotTypes.PrWatchTarget,
+    ) => Effect.Effect<readonly ciHistoryTypes.CiRun[], PrWatchGhError>;
   }
 
   interface PrWatchGhOptions {

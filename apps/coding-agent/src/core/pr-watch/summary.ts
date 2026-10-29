@@ -1,4 +1,6 @@
 import elapsed from "../../utils/elapsed.ts";
+import ciHistory from "./ci-history.ts";
+import type ciHistoryTypes from "./ci-history.types.ts";
 import type serviceTypes from "./service.types.ts";
 import snapshotModule from "./snapshot.ts";
 import type snapshotTypes from "./snapshot.types.ts";
@@ -6,8 +8,14 @@ import type watchTypes from "./watch.types.ts";
 
 const { isBehind, isConflicting } = snapshotModule;
 const { formatElapsed } = elapsed;
+const { stallLimit } = ciHistory;
 
-const CI_STALL_MS = 10 * 60_000;
+function stallLimitOf(entry: watchTypes.PrWatchEntry): ciHistoryTypes.CiStallLimit | undefined {
+  const runs = entry.ciHistory?.runs;
+  const checks = entry.snapshot?.checks;
+  if (runs === undefined || checks === undefined) return undefined;
+  return stallLimit(runs, checks.pendingWorkflows);
+}
 
 function reviewLabel(reviewDecision: string): string | undefined {
   switch (reviewDecision) {
@@ -32,11 +40,15 @@ function checksLabel(entry: watchTypes.PrWatchEntry, now: number): string {
   const checks = entry.snapshot?.checks;
   if (checks === undefined || checks.total === 0) return "no checks";
   if (checks.pending > 0) {
-    const names = checks.pendingNames.length > 0 ? ` (${checks.pendingNames.join(", ")})` : "";
-    if (entry.pendingSince !== undefined && now - entry.pendingSince >= CI_STALL_MS) {
-      return `CI stalled ${formatElapsed(now - entry.pendingSince)}${names}`;
-    }
-    return `checks running${names}`;
+    const limit = stallLimitOf(entry);
+    const usual =
+      limit === undefined ? "no past runs to compare" : `usually ${formatElapsed(limit.typicalMs)}`;
+    const details = [...checks.pendingNames, usual].join("; ");
+    const running =
+      entry.pendingSince === undefined ? "" : ` ${formatElapsed(now - entry.pendingSince)}`;
+    return isStalled(entry, now)
+      ? `CI stalled${running} (${details})`
+      : `checks running${running} (${details})`;
   }
   if (checks.failed > 0) return `${checks.failed} failed`;
   if (checks.cancelled > 0) return `${checks.cancelled} cancelled`;
@@ -44,10 +56,12 @@ function checksLabel(entry: watchTypes.PrWatchEntry, now: number): string {
 }
 
 function isStalled(entry: watchTypes.PrWatchEntry, now: number): boolean {
+  const limit = stallLimitOf(entry);
   return (
+    limit !== undefined &&
     entry.pendingSince !== undefined &&
     (entry.snapshot?.checks.pending ?? 0) > 0 &&
-    now - entry.pendingSince >= CI_STALL_MS
+    now - entry.pendingSince >= limit.limitMs
   );
 }
 
@@ -117,7 +131,6 @@ function describePrWatchStatus(snapshot: serviceTypes.PrWatchSnapshot): string[]
 }
 
 const summary = {
-  CI_STALL_MS,
   describePrWatchIndicator,
   describePrWatchState,
   describePrWatchStatus,

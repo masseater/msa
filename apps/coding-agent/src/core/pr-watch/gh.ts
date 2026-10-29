@@ -4,12 +4,14 @@ import errors from "../../utils/errors.ts";
 import shell from "../../utils/shell.ts";
 import execModule from "../exec.ts";
 import type execTypes from "../exec.types.ts";
+import ciHistory from "./ci-history.ts";
 import type ghTypes from "./gh.types.ts";
 import PrWatchGhError from "./pr-watch-gh-error.ts";
 import snapshotModule from "./snapshot.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 
 const { parsePrView } = snapshotModule;
+const { runsFrom } = ciHistory;
 const { execCommand } = execModule;
 const { findExecutableOnPath } = shell;
 const { toErrorMessage } = errors;
@@ -46,6 +48,15 @@ function ghCompareArgs(
     `repos/${repository}/compare/${baseRefName}...${headRefOid}`,
     "--jq",
     ".behind_by",
+  ];
+}
+function ghRunsArgs(target: snapshotTypes.PrWatchTarget): string[] {
+  const repository = target.repository ?? "{owner}/{repo}";
+  return [
+    "api",
+    `repos/${repository}/actions/runs?status=completed&exclude_pull_requests=true&per_page=100`,
+    "--jq",
+    "[.workflow_runs[] | {name, conclusion, created_at, updated_at}]",
   ];
 }
 function firstLine(text: string): string {
@@ -117,6 +128,7 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
           return missingBehindByCount();
         }),
       ),
+    runs: (target) => exec(ghRunsArgs(target)).pipe(Effect.flatMap(runsFrom)),
     view: (target) =>
       exec(ghPrViewArgs(target)).pipe(
         Effect.flatMap((result) => {
@@ -138,6 +150,7 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
 const gh = {
   ghCompareArgs,
   ghPrViewArgs,
+  ghRunsArgs,
   makeGh,
 };
 

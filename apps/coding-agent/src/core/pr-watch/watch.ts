@@ -48,6 +48,7 @@ function createPrWatchEntry(
   return {
     baseIntervalMs: intervalMs,
     baseMovedAt: undefined,
+    ciHistory: undefined,
     error: undefined,
     intervalMs,
     key: prWatchKey(target),
@@ -162,6 +163,24 @@ function readBehind(
     .pipe(Effect.option);
 }
 
+function readCiHistory(
+  options: watchTypes.PrWatchLoopOptions,
+  current: snapshotTypes.PrSnapshot,
+): Effect.Effect<void> {
+  const { entry } = options;
+  if (current.checks.pending === 0) return Effect.void;
+  if (entry.ciHistory?.headRefOid === current.headRefOid) return Effect.void;
+  return options.gh.runs(entry.target).pipe(
+    Effect.option,
+    Effect.tap((runs) =>
+      Effect.sync(() => {
+        entry.ciHistory = { headRefOid: current.headRefOid, runs: Option.getOrUndefined(runs) };
+      }),
+    ),
+    Effect.asVoid,
+  );
+}
+
 function handleSnapshot(
   options: watchTypes.PrWatchLoopOptions,
   current: snapshotTypes.PrSnapshot,
@@ -171,7 +190,8 @@ function handleSnapshot(
   entry.error = undefined;
   entry.notifiedError = undefined;
   entry.intervalMs = entry.baseIntervalMs;
-  return readBehind(options, current).pipe(
+  return readCiHistory(options, current).pipe(
+    Effect.andThen(readBehind(options, current)),
     Effect.map((behind) =>
       applySnapshot(
         entry,

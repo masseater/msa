@@ -2,6 +2,7 @@ import testing from "@msa/testing";
 import { Clock, Duration, Effect, Fiber, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
+import type ciHistoryTypes from "../src/core/pr-watch/ci-history.types.ts";
 import type ghTypes from "../src/core/pr-watch/gh.types.ts";
 import PrWatchGhError from "../src/core/pr-watch/pr-watch-gh-error.ts";
 import type snapshotTypes from "../src/core/pr-watch/snapshot.types.ts";
@@ -21,7 +22,15 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: {
+    cancelled: 0,
+    failed: 0,
+    passed: 0,
+    pending: 2,
+    pendingNames: ["verify"],
+    pendingWorkflows: ["verify"],
+    total: 2,
+  },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",
@@ -37,6 +46,7 @@ const pendingChecks = snapshotOf();
 const scriptedGh = (
   steps: ReadonlyArray<snapshotTypes.PrSnapshot | ghTypes.PrWatchGhError>,
   behindBy?: number,
+  runs?: readonly ciHistoryTypes.CiRun[],
 ): prWatchLoopSupportTypes.ScriptedGh => {
   const calls = { count: 0 };
   const behindCalls = { count: 0 };
@@ -50,6 +60,10 @@ const scriptedGh = (
           ? Effect.fail(PrWatchGhError.make({ kind: "other", message: "no compare" }))
           : Effect.succeed(behindBy);
       },
+      runs: () =>
+        runs === undefined
+          ? Effect.fail(PrWatchGhError.make({ kind: "other", message: "no runs" }))
+          : Effect.succeed(runs),
       view: () => {
         const step = steps[Math.min(calls.count, steps.length - 1)]!;
         calls.count += 1;

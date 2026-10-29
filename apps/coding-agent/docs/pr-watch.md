@@ -52,12 +52,12 @@ A notification is a session message like any other: it steers a run that is alre
 After `prWatch.statusIntervalSeconds` without a change, the watch reports where the pull request stands:
 
 ```
-#74: checks running (verify), mergeable, review required
-#74: checks running (verify), base 2 behind for 5m, review required
-#74: CI stalled 10m (verify), mergeable, review required — it may be stalled; check the run or push again
+#74: checks running 12m (verify; usually 18m), mergeable, review required
+#74: checks running 3m (verify; usually 18m), base 2 behind for 5m, review required
+#74: CI stalled 31m (verify; usually 18m), mergeable, review required — it may be stalled; check the run or push again
 ```
 
-Checks pending for ten minutes or more are reported as stalled: a run GitHub never picked up and one that is waiting on something else look the same from the outside. A status report describes the state and does not start a turn, so an idle session stays idle and reads it with its next input. Any change notification restarts the wait, so a status report only arrives after a quiet interval.
+Whether checks are stalled depends on how long the repository's workflows usually take. When checks start on a head, the watch reads the repository's recent completed workflow runs (`gh api repos/<owner>/<repo>/actions/runs`) and keeps the successful ones, or all of them when none succeeded. For each pending workflow it takes the 90th percentile of its last 20 runs, measured from when the run was created to when it finished, or of the last 20 runs of any workflow when that workflow has none. Checks pending for 1.5 times the longest of these are reported as stalled: a run GitHub never picked up and one that is waiting on something else look the same from the outside. A repository whose workflows have never finished a run has nothing to compare with, so the report says `no past runs to compare` and calls nothing stalled. A status report describes the state and does not start a turn, so an idle session stays idle and reads it with its next input. Any change notification restarts the wait, so a status report only arrives after a quiet interval.
 
 ## Failures
 
