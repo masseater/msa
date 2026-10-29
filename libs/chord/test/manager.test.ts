@@ -17,7 +17,7 @@ const { createHostManager, forkDriver, processLock } = managerModule;
 const { createHost, ipcLink, isChordError } = chord;
 
 const { makeDirectory, readText, removeAll } = platform;
-const { latch, tick } = timing;
+const { latch, pollUntil, tick } = timing;
 
 const entry = fileURLToPath(new URL("./fixtures/worker.ts", import.meta.url));
 const scratch = (name: string) => `${tmpdir()}/chord2-${process.pid}-${name}`;
@@ -135,7 +135,7 @@ const aGracefulExitStillTakesThe = Effect.gen(function* () {
   const grandchild = Number(yield* readText(file));
   assert.ok(alive(grandchild));
   yield* Effect.promise(() => manager.stop());
-  for (let i = 0; i < 50 && alive(grandchild); i++) yield* Effect.sleep(20);
+  yield* pollUntil(() => !alive(grandchild), 50, Effect.sleep(20));
   assert.ok(!alive(grandchild));
   yield* removeAll(file);
 });
@@ -163,7 +163,7 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
   };
   const manager = createHostManager({ driver: fake });
   const started = manager.start();
-  for (let i = 0; i < 20 && listeners.size === 0; i++) yield* tick;
+  yield* pollUntil(() => listeners.size !== 0, 20, tick);
   emit({ type: "ready" });
   yield* Effect.promise(() => started);
   emit({ activeCalls: 1, type: "status" });
@@ -185,7 +185,7 @@ const killsTheProcessTreeWhenA = Effect.gen(function* () {
   assert.ok(alive(grandchild));
   yield* Effect.promise(() => manager.stop());
   assert.equal((yield* Effect.promise(() => instance.exited)).signal, "SIGKILL");
-  for (let i = 0; i < 50 && alive(grandchild); i++) yield* Effect.sleep(20);
+  yield* pollUntil(() => !alive(grandchild), 50, Effect.sleep(20));
   assert.ok(!alive(grandchild));
   yield* removeAll(file);
 });
@@ -205,7 +205,7 @@ const stopsAnIdleChildWhenKeepalive = Effect.gen(function* () {
     onExit: (exit) => exits.push(exit),
   });
   yield* Effect.promise(() => manager.start());
-  for (let i = 0; i < 100 && manager.status !== "stopped"; i++) yield* Effect.sleep(20);
+  yield* pollUntil(() => manager.status === "stopped", 100, Effect.sleep(20));
   assert.equal(manager.status, "stopped");
   assert.equal(exits.length, 1);
 });

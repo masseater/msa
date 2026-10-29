@@ -13,7 +13,7 @@ const { PROTOCOL_VERSION, createHost, hostNamed, isChordError, memoryLinkPair, m
   chord;
 
 const { Counter, SessionCounter, cluster, serveCounter, serverWithWorker } = linkModule;
-const { tick } = timing;
+const { pollUntil, tick } = timing;
 
 const relaysBrowserServerWorkerTheWorker = Effect.gen(function* () {
   const c = cluster();
@@ -52,8 +52,7 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
     token: SessionCounter.description,
   });
   raw.send({ args: null, hold: 1, id: 2, member: "who", t: "call" });
-  for (let i = 0; i < 50 && !frames.some((frame) => frame.t === "result"); i++)
-    yield* Effect.sleep(5);
+  yield* pollUntil(() => frames.some((frame) => frame.t === "result"), 50, Effect.sleep(5));
   const result = frames.find((frame) => frame.t === "result");
   assert.deepEqual(result?.t === "result" ? result.value : undefined, guest);
 
@@ -70,8 +69,7 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
     token: Counter.description,
   });
   up.send({ args: null, hold: 7, id: 8, member: "who", t: "call" });
-  for (let i = 0; i < 50 && !childFrames.some((frame) => frame.t === "result"); i++)
-    yield* Effect.sleep(5);
+  yield* pollUntil(() => childFrames.some((frame) => frame.t === "result"), 50, Effect.sleep(5));
   const childResult = childFrames.find((frame) => frame.t === "result");
   assert.deepEqual(childResult?.t === "result" ? childResult.value : undefined, {
     worker: "w9",
@@ -140,7 +138,7 @@ const aBrowserDisconnectReleasesExactlyIts = Effect.gen(function* () {
   const other = two.host.hold(SessionCounter, { name: "b", session: "S1" });
   yield* Effect.promise(() => other.add(1));
   one.up.close();
-  for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* tick;
+  yield* pollUntil(() => c.log.includes("close a"), 20, tick);
   assert.ok(c.log.includes("close a"));
   assert.ok(!c.log.includes("close b"));
   assert.equal(yield* Effect.promise(() => other.add(1)), 2);
@@ -153,7 +151,7 @@ const aDeadLinkNoPongsIs = Effect.gen(function* () {
     browser.host.hold(SessionCounter, { name: "a", session: "S1" }).add(1),
   );
   browser.up.sever();
-  for (let i = 0; i < 40 && !c.log.includes("close a"); i++) yield* Effect.sleep(10);
+  yield* pollUntil(() => c.log.includes("close a"), 40, Effect.sleep(10));
   assert.ok(c.log.includes("close a"));
 });
 
@@ -196,9 +194,9 @@ const invalidateprincipalReStampsTheLinkAnd = Effect.gen(function* () {
   const counter = browser.host.hold(SessionCounter, { name: "a", session: "S1" });
   yield* Effect.promise(() => counter.add(1));
   yield* Effect.promise(() => c.server.invalidatePrincipal({ guest: "g1" }));
-  for (let i = 0; i < 20 && counter.status !== "gone"; i++) yield* tick;
+  yield* pollUntil(() => counter.status === "gone", 20, tick);
   assert.equal(counter.status, "gone");
-  for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* tick;
+  yield* pollUntil(() => c.log.includes("close a"), 20, tick);
   assert.ok(c.log.includes("close a"));
   const again = browser.host.hold(SessionCounter, { name: "a", session: "S1" });
   assert.deepEqual(yield* Effect.promise(() => again.who()), { guest: "g1", revision: 2 });

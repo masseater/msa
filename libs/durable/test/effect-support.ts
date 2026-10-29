@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Cause, type Duration, Effect, Exit, Schema } from "effect";
 
 import clockModule from "../src/clock.ts";
@@ -7,16 +8,7 @@ const { currentTimeMillis: currentTimeMillisModule } = clockModule;
 const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
 
-const pollUntil = Effect.fn("pollUntil")(function* (
-  check: Effect.Effect<boolean>,
-  attempts: number,
-  interval: Duration.Input,
-) {
-  for (let attempt = 0; !(yield* check); attempt++) {
-    if (attempt >= attempts) throw new Error("Condition was not reached");
-    yield* Effect.sleep(interval);
-  }
-});
+const { pollUntil } = testing;
 
 const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknown> =>
   Effect.exit(effect).pipe(

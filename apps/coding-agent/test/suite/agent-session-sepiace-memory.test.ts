@@ -10,7 +10,7 @@ import sepiaceMemoryFixtures from "./sepiace-memory-fixtures.ts";
 import sepiaceMemorySupport from "./sepiace-memory-support.ts";
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
-const { joinPath, makeDirectory, pathExists } = testing;
+const { joinPath, makeDirectory, pathExists, pollUntil } = testing;
 const { getMessageText, getToolResult } = harnessModule;
 const { runCleanups } = agentSessionMcpOauthHarness;
 const { openSession, startSepiace } = sepiaceMemorySupport;
@@ -125,8 +125,11 @@ const movesTheLegacyDatabaseOnce = Effect.gen(function* () {
   expect(longMemorySentences.filter((sentence) => !sentText.includes(sentence))).toEqual([]);
   expect(moved.every((request) => request.length <= 4000)).toBe(true);
   const notices = () => harness.eventsOfType("memory_status").map((event) => event.text);
-  for (let attempt = 0; attempt < 100 && notices().length === 0; attempt++)
-    yield* Effect.sleep("20 millis");
+  yield* pollUntil(
+    Effect.sync(() => notices().length > 0),
+    100,
+    "20 millis",
+  );
   expect(notices().length).toBeGreaterThan(0);
   expect(notices().some((notice) => notice.includes("ghp_"))).toBe(false);
 
@@ -170,8 +173,11 @@ const resumesWithoutResendingAPiece = Effect.gen(function* () {
   first.harness.setResponses([fauxAssistantMessage("ok")]);
   yield* Effect.promise(() => first.harness.session.run.prompting.prompt("hello"));
   const firstNotices = () => first.harness.eventsOfType("memory_status");
-  for (let attempt = 0; attempt < 100 && firstNotices().length === 0; attempt++)
-    yield* Effect.sleep("20 millis");
+  yield* pollUntil(
+    Effect.sync(() => firstNotices().length > 0),
+    100,
+    "20 millis",
+  );
   expect(failed).toBe(true);
   expect(yield* pathExists(legacy)).toBe(true);
 
@@ -192,8 +198,11 @@ const resumesWithoutResendingAPiece = Effect.gen(function* () {
   expect(count("Long note sentence 1 stays whole.")).toBe(1);
   const secondNotices = () =>
     second.harness.eventsOfType("memory_status").map((event) => event.text);
-  for (let attempt = 0; attempt < 100 && secondNotices().length === 0; attempt++)
-    yield* Effect.sleep("20 millis");
+  yield* pollUntil(
+    Effect.sync(() => secondNotices().length > 0),
+    100,
+    "20 millis",
+  );
   expect(secondNotices().some((notice) => notice.includes("m3"))).toBe(true);
 });
 

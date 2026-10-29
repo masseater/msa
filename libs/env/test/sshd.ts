@@ -1,6 +1,7 @@
 import { Socket, createServer } from "node:net";
 import { userInfo } from "node:os";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, inject } from "vite-plus/test";
 
@@ -12,6 +13,7 @@ import type platformTypes from "./platform.types.ts";
 import type sshdTypes from "./sshd.types.ts";
 
 const { Connection, acceptHostKey, connectSsh, scanHostKey } = envModule;
+const { pollUntil } = testing;
 
 const {
   localPath,
@@ -62,14 +64,7 @@ const portOpen = (port: number): Effect.Effect<boolean> =>
     socket.connect(port, "127.0.0.1");
   });
 
-const waitForPort = (port: number): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (yield* portOpen(port)) return;
-      yield* Effect.sleep(50);
-    }
-    return yield* Effect.die(new Error("sshd did not start"));
-  });
+const waitForPort = (port: number): Effect.Effect<void> => pollUntil(portOpen(port), 100, 50);
 
 const sshdConfig = (root: string, home: string, port: number): string =>
   [

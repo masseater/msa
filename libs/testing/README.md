@@ -10,7 +10,8 @@
 - `makeTempDir`・`makeTempFile`・`removeDir`・`removeDirRetrying`・`removeDirs`・`tempPath`・`tempRoot`
 - `readJsonFile`・`writeJsonFile`・`toJsonText`・`fromJsonText`（JSON は Schema で読み書きする）
 - `joinPath`・`dirnameOf`・`basenameOf`・`resolvePath`・`relativePath`・`isAbsolutePath`・`pathDelimiter`
-- `currentTimeMillis`・`nowIso`・`randomSuffix`・`awaited`・`failure`・`pollUntil`・`abortController`
+- `currentTimeMillis`・`nowIso`・`randomSuffix`・`awaited`・`failure`・`abortController`
+- `pollUntil`（条件が成り立つまで、間隔か 1 歩ぶんの Effect を挟んで確かめ直す。上限の回数は子プロセスが動いていない間だけ数える。子プロセスが動いている間は待ち続け、止まった子プロセスは testTimeout で落ちる。テストで条件を待つループは自前で書かず、これを使う）
 - `timersArmedBy`（渡した Effect から辿れる非同期リソースが張ったタイマーだけを数える）
 - `runTest`（`it` から Effect を走らせる）・`testRuntime`・`provideNode`
 - `localLlmTests`（`MSA_LOCAL_LLM_TESTS` が空でない時だけ `true`。手元の LLM を動かすテストを `it.skipIf(!localLlmTests)` にする）

@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -10,6 +11,7 @@ import environment from "./environment.ts";
 import platformModule from "./platform.ts";
 
 const { Connection, RemoteError } = connectionModule;
+const { pollUntil } = testing;
 const { openTerminal } = terminalModule;
 
 const { windows } = environment;
@@ -119,11 +121,12 @@ const foregroundJob = Effect.gen(function* () {
   yield* output.waitFor("READY");
   expect(yield* Effect.promise(() => terminal.foreground())).toBeUndefined();
   terminal.write("sleep 100\n");
-  let foreground = yield* Effect.promise(() => terminal.foreground());
-  for (let tries = 0; !isCommand(foreground) && tries < 100; tries++) {
-    yield* Effect.sleep(20);
-    foreground = yield* Effect.promise(() => terminal.foreground());
-  }
+  yield* pollUntil(
+    Effect.promise(() => terminal.foreground()).pipe(Effect.map(isCommand)),
+    100,
+    20,
+  );
+  const foreground = yield* Effect.promise(() => terminal.foreground());
   expect(foreground?.pid).toBeGreaterThan(0);
   expect(foreground?.pid).not.toBe(terminal.pid);
   if (named) expect(foreground?.name).toBe("sleep");

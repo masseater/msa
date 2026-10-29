@@ -12,7 +12,7 @@ import timing from "./fixtures/timing.ts";
 const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Greeter, greeterFacet, setup } = cluster;
-const { latch, tick } = timing;
+const { latch, pollUntil, tick } = timing;
 
 const anAbortWhileAWorkerIs = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -50,7 +50,7 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
     ),
   );
   go.open();
-  for (let i = 0; i < 50 && !log.includes("closed"); i++) yield* tick;
+  yield* pollUntil(() => log.includes("closed"), 50, tick);
   assert.deepEqual(log, ["opened", "closed"]);
   assert.equal(worker.codeVersion, codeVersion);
   modules.set("greeter", greeterFacet("v3"));
@@ -153,9 +153,9 @@ const aChildReconciledAfterItsParent = Effect.gen(function* () {
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
-  for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++) yield* tick;
+  yield* pollUntil(() => worker.codeVersion === server.codeVersion, 50, tick);
   assert.equal(worker.codeVersion, server.codeVersion);
-  for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++) yield* tick;
+  yield* pollUntil(() => worker.previousCodeVersion === undefined, 20, tick);
   assert.equal(worker.previousCodeVersion, undefined);
   const started = yield* Clock.currentTimeMillis;
   yield* Effect.promise(() =>
@@ -230,7 +230,7 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
   modules.set("greeter", greeterFacet("v2"));
   const reloading = server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
   releaseLoading();
-  for (let i = 0; i < 50 && worker.codeVersion !== 2; i++) yield* tick;
+  yield* pollUntil(() => worker.codeVersion === 2, 50, tick);
   assert.equal(worker.codeVersion, 2);
   serverLoading.open();
   const report = yield* Effect.promise(() => reloading);

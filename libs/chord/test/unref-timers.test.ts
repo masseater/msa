@@ -161,7 +161,7 @@ const keepAliveLeavesTheProcessFree = Effect.gen(function* () {
   const [, timers] = yield* timersArmedBy(
     Effect.gen(function* () {
       const started = manager.start();
-      for (let i = 0; i < 20 && listeners.size === 0; i++) yield* ticks(1);
+      yield* pollUntil(() => listeners.size !== 0, 20, ticks(1));
       emit({ type: "ready" });
       yield* Effect.promise(() => started);
       yield* ticks(3);

@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -9,6 +10,7 @@ import timing from "./timing.ts";
 const { createHost, local, method } = chord;
 
 const { tick } = timing;
+const { pollUntil } = testing;
 
 const quiet = () => createHost({ onError: () => {}, self: { kind: "host" } });
 
@@ -55,13 +57,11 @@ function greeterFacet(spec: reloadTypes.GreeterSpec): chordTypes.Facet {
 }
 
 const until = (check: () => Promise<boolean>): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 200; attempt++) {
-      if (yield* Effect.promise(() => check())) return;
-      yield* tick;
-    }
-    throw new Error("condition not reached");
-  });
+  pollUntil(
+    Effect.promise(() => check()),
+    200,
+    tick,
+  );
 
 const reload = {
   CountV1,

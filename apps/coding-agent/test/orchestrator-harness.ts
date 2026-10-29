@@ -10,7 +10,7 @@ import FakeWorker from "./fake-worker.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import reviewVerdictSupport from "./review-verdict-support.ts";
 const { InMemoryTelemetryContext } = telemetryModule;
-const { joinPath, tempRoot } = testing;
+const { joinPath, pollUntil, tempRoot } = testing;
 
 function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return {
@@ -73,13 +73,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
   return { orchestrator, reports, telemetry, workers };
 }
 function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    for (let index = 0; index < attempts; index++) {
-      if (predicate()) return;
-      yield* Effect.sleep(2);
-    }
-    throw new Error("timed out waiting for the orchestrator");
-  });
+  return pollUntil(Effect.sync(predicate), attempts, 2);
 }
 function taskStatus(orchestrator: orchestratorTypes.Orchestrator, id: string): string | undefined {
   return orchestrator.snapshot.tasks.find((task) => task.id === id)?.status;
