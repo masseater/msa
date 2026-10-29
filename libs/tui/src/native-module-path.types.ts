@@ -1,7 +1,6 @@
 declare namespace nativeModulePathTypes {
   interface NativeModuleCandidateOptions {
     moduleUrl?: string;
-    execPath?: string;
     resolvePackage?: (specifier: string) => string;
   }
 }

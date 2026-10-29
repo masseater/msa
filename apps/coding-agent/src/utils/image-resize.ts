@@ -1,15 +1,18 @@
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
+import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
 import Worker from "../core/platform/node/worker.ts";
 import imageResizeCore from "./image-resize-core.ts";
 import type imageResizeCoreTypes from "./image-resize-core.types.ts";
 import interop from "./interop.ts";
+import photon from "./photon.ts";
 
 const { IMAGE_RESIZE_WORKER_RESPONSE_TYPE, resizeImageInProcess } = imageResizeCore;
 const { awaited, awaiting } = awaitingModule;
 const { callbackPromise } = interop;
+const { isBunBinary } = config;
 
 function toTransferableBytes(input: Uint8Array): Uint8Array<ArrayBuffer> {
   return new Uint8Array(input);
@@ -34,6 +37,7 @@ interface WorkerRequest {
   inputBytes: ReturnType<typeof toTransferableBytes>;
   mimeType: string;
   options: imageResizeCoreTypes.ImageResizeOptions | undefined;
+  photonWasmPath: string | undefined;
 }
 
 function awaitWorkerResult(
@@ -65,7 +69,7 @@ function awaitWorkerResult(
   });
 }
 
-function resizeImageInWorker(
+function resizeImageWith(
   workerSpecifier: string | URL,
   inputBytes: Uint8Array,
   mimeType: string,
@@ -80,6 +84,7 @@ function resizeImageInWorker(
             inputBytes: toTransferableBytes(inputBytes),
             mimeType,
             options,
+            photonWasmPath: photon.getEmbeddedWasmPath(),
           }),
         );
       } finally {
@@ -89,40 +94,45 @@ function resizeImageInWorker(
   );
 }
 
+const BINARY_WORKER_ENTRY = "./utils/image-resize-worker.js";
+
+function resizeWorkerEntry(): string | URL {
+  if (isBunBinary) return BINARY_WORKER_ENTRY;
+  return new URL(
+    import.meta.url.endsWith(".ts") ? "./image-resize-worker.ts" : "./image-resize-worker.js",
+    import.meta.url,
+  );
+}
+
+function resizeImageInWorkerImpl(
+  inputBytes: Uint8Array,
+  mimeType: string,
+  options?: imageResizeCoreTypes.ImageResizeOptions,
+): Promise<imageResizeCoreTypes.ResizedImage | null> {
+  return resizeImageWith(resizeWorkerEntry(), inputBytes, mimeType, options);
+}
+
 function resizeImageImpl(
   inputBytes: Uint8Array,
   mimeType: string,
   options?: imageResizeCoreTypes.ImageResizeOptions,
 ): Promise<imageResizeCoreTypes.ResizedImage | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const isTypeScriptRuntime = import.meta.url.endsWith(".ts");
-      const workerUrl = new URL(
-        isTypeScriptRuntime ? "./image-resize-worker.ts" : "./image-resize-worker.js",
-        import.meta.url,
-      );
-
-      if (typeof process.versions["bun"] === "string") {
-        try {
-          return yield* awaited(
-            resizeImageInWorker(
-              "./dist/utils/image-resize-worker.js",
-              inputBytes,
-              mimeType,
-              options,
-            ),
-          );
-        } catch {}
-      }
-
-      try {
-        return yield* awaited(resizeImageInWorker(workerUrl, inputBytes, mimeType, options));
-      } catch {
-        return yield* awaited(resizeImageInProcess(inputBytes, mimeType, options));
-      }
-    }),
+  return resizeImageInWorkerImpl(inputBytes, mimeType, options).catch(() =>
+    resizeImageInProcess(inputBytes, mimeType, options),
   );
 }
+
+const resizeImageInWorker: {
+  (
+    inputBytes: Uint8Array,
+    mimeType: string,
+    options?: imageResizeCoreTypes.ImageResizeOptions,
+  ): Promise<imageResizeCoreTypes.ResizedImage | null>;
+  (
+    mimeType: string,
+    options?: imageResizeCoreTypes.ImageResizeOptions,
+  ): (inputBytes: Uint8Array) => Promise<imageResizeCoreTypes.ResizedImage | null>;
+} = dual((args: IArguments) => args[0] instanceof Uint8Array, resizeImageInWorkerImpl);
 
 const resizeImage: {
   (
@@ -148,6 +158,7 @@ function formatDimensionNote(result: imageResizeCoreTypes.ResizedImage): string 
 const imageResize = {
   formatDimensionNote,
   resizeImage,
+  resizeImageInWorker,
 };
 
 export default imageResize;

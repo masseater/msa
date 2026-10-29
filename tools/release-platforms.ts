@@ -3,15 +3,7 @@ import type releasePlatformsTypes from "./release-platforms.types.ts";
 
 const { RELEASE_PLATFORMS } = releasePlatformsData;
 
-const DIST_ENTRIES: ReadonlyArray<string> = [
-  "package.json",
-  "README.md",
-  "CHANGELOG.md",
-  "theme",
-  "docs",
-  "examples",
-  "photon_rs_bg.wasm",
-];
+const AGENT_READABLE_ENTRIES: ReadonlyArray<string> = ["README.md", "docs", "examples"];
 
 const HOST_OS: Readonly<Record<string, string>> = {
   darwin: "darwin",
@@ -35,8 +27,8 @@ const archiveRootFor = (platform: releasePlatformsTypes.ReleasePlatform): string
   platform.archive === "zip" ? "" : "msa";
 
 const releasePlatforms = {
+  AGENT_READABLE_ENTRIES,
   ARCHIVE_FLAGS,
-  DIST_ENTRIES,
   RELEASE_PLATFORMS,
   archiveFileNameFor,
   archiveRootFor,

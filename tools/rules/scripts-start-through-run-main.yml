@@ -8,6 +8,7 @@ files:
   - apps/*/scripts/**
   - libs/*/scripts/**
 ignores:
+  - tools/binary-smoke/assets-probe.ts
   - tools/binary-smoke/decide-probe.ts
   - tools/checks/lint-probe.ts
   - tools/checks/task-build-deps.ts
@@ -30,6 +31,7 @@ files:
   - apps/*/scripts/**
   - libs/*/scripts/**
 ignores:
+  - tools/binary-smoke/assets-probe.ts
   - tools/binary-smoke/decide-probe.ts
   - tools/checks/lint-probe.ts
   - tools/checks/task-build-deps.ts
@@ -52,6 +54,7 @@ files:
   - apps/*/scripts/**
   - libs/*/scripts/**
 ignores:
+  - tools/binary-smoke/assets-probe.ts
   - tools/binary-smoke/decide-probe.ts
   - tools/checks/lint-probe.ts
   - tools/checks/task-build-deps.ts

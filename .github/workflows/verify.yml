@@ -147,7 +147,7 @@ jobs:
         with:
           bun-version: 1.4.2
           no-cache: true
-      - run: vp run build-binaries linux-x64
+      - run: xvfb-run -a vp run build-binaries linux-x64
       - run: |
           mkdir extracted
           tar -xf .artifacts/binaries/msa-linux-x64.tar.gz -C extracted

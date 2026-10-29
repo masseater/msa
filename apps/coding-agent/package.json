@@ -47,7 +47,6 @@
   },
   "scripts": {
     "clean": "shx rm -rf dist",
-    "copy-binary-assets": "shx cp package.json dist/ && shx cp README.md dist/ && shx cp CHANGELOG.md dist/ && shx mkdir -p dist/theme && shx cp src/modes/interactive/theme/*.json dist/theme/ && shx cp -r docs dist/ && shx cp -r examples dist/ && shx cp node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm dist/",
     "test": "vitest --run",
     "generate:schemas": "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts"
   },

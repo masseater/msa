@@ -24,7 +24,6 @@ describe("getNativeModuleCandidates", () => {
     const nativePath = join("native", "win32", "prebuilds", "win32-arm64", "win32-platform.node");
 
     const candidates = getNativeModuleCandidates(nativePath, {
-      execPath: resolve("virtual", "node", "node.exe"),
       moduleUrl: pathToFileURL(bundledModule).href,
       resolvePackage: (specifier) => {
         assert.equal(specifier, "@msa/tui");
@@ -38,9 +37,8 @@ describe("getNativeModuleCandidates", () => {
 });
 
 describe("getNativeModuleCandidates", () => {
-  it("keeps standalone binary fallbacks when the TUI package is unavailable", () => {
+  it("falls back to paths beside the bundled module when the TUI package is unavailable", () => {
     const bundledModule = resolve("virtual", "msa", "bundle", "chunks", "chunk.js");
-    const execPath = resolve("virtual", "msa", "msa.exe");
     const nativePath = join(
       "native",
       "darwin",
@@ -50,7 +48,6 @@ describe("getNativeModuleCandidates", () => {
     );
 
     const candidates = getNativeModuleCandidates(nativePath, {
-      execPath,
       moduleUrl: pathToFileURL(bundledModule).href,
       resolvePackage: () => {
         throw new Error("not installed");
@@ -60,7 +57,6 @@ describe("getNativeModuleCandidates", () => {
     assert.deepEqual(candidates, [
       join(dirname(bundledModule), "..", nativePath),
       join(dirname(bundledModule), nativePath),
-      join(dirname(execPath), nativePath),
     ]);
   });
 });

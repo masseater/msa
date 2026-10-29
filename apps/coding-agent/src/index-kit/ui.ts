@@ -32,6 +32,7 @@ const uiKit: {
   readonly TreeSelectorComponent: typeof components.TreeSelectorComponent;
   readonly UserMessageComponent: typeof components.UserMessageComponent;
   readonly UserMessageSelectorComponent: typeof components.UserMessageSelectorComponent;
+  readonly getAvailableThemesWithPaths: typeof themeModule.getAvailableThemesWithPaths;
   readonly getLanguageFromPath: typeof themeModule.getLanguageFromPath;
   readonly getMarkdownTheme: typeof themeModule.getMarkdownTheme;
   readonly getSelectListTheme: typeof themeModule.getSelectListTheme;
@@ -74,6 +75,7 @@ const uiKit: {
   TreeSelectorComponent: components.TreeSelectorComponent,
   UserMessageComponent: components.UserMessageComponent,
   UserMessageSelectorComponent: components.UserMessageSelectorComponent,
+  getAvailableThemesWithPaths: themeModule.getAvailableThemesWithPaths,
   getLanguageFromPath: themeModule.getLanguageFromPath,
   getMarkdownTheme: themeModule.getMarkdownTheme,
   getSelectListTheme: themeModule.getSelectListTheme,

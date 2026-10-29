@@ -1,12 +1,8 @@
-import config from "../../../config.ts";
-import platformModule from "../../../core/platform/index.ts";
 import systemTheme from "./system-theme.ts";
 import themeJson from "./theme-json.ts";
 import themeState from "./theme-state.ts";
 import type themeTypes from "./theme.types.ts";
 
-const { getThemesDir } = config;
-const { join } = platformModule;
 const { SYSTEM_THEME_NAME } = systemTheme;
 const { registeredThemes } = themeState;
 
@@ -23,14 +19,13 @@ function compareThemeInfos(a: themeTypes.ThemeInfo, b: themeTypes.ThemeInfo): nu
 }
 
 function getAvailableThemesWithPaths(): themeTypes.ThemeInfo[] {
-  const themesDir = getThemesDir();
   const byName = new Map<string, themeTypes.ThemeInfo>();
   const addTheme = (themeInfo: themeTypes.ThemeInfo) => {
     if (!byName.has(themeInfo.name)) byName.set(themeInfo.name, themeInfo);
   };
   addTheme({ name: SYSTEM_THEME_NAME, path: undefined });
   for (const name of Object.keys(themeJson.getBuiltinThemes())) {
-    addTheme({ name, path: join(themesDir, `${name}.json`) });
+    addTheme({ name, path: undefined });
   }
   for (const themeInfo of getCustomThemeInfos()) {
     addTheme(themeInfo);

@@ -3,7 +3,6 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import config from "../src/config.ts";
 import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
@@ -11,7 +10,6 @@ import themeModule from "../src/modes/interactive/theme/theme.ts";
 
 const { setThemeJsonValidator } = themeModule;
 const { validateThemeJson } = themeSchema;
-const { getThemesDir } = config;
 
 const { resetCapabilitiesCache, setCapabilityOverrides } = tui;
 
@@ -27,6 +25,15 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
+
+const BUILTIN_THEMES_DIR = joinPath(
+  import.meta.dirname,
+  "..",
+  "src",
+  "modes",
+  "interactive",
+  "theme",
+);
 
 setThemeJsonValidator(validateThemeJson);
 
@@ -136,7 +143,7 @@ describe("DefaultResourceLoader theme color mode", () => {
         yield* makeDirectory(agentDir);
         yield* makeDirectory(cwd);
         themeJson = (yield* fromJsonText(
-          yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+          yield* readTextFile(joinPath(BUILTIN_THEMES_DIR, "dark.json")),
         )) as TestThemeJson;
         themeJson.name = "capability-test";
         themeJson.colors["userMessageBg"] = "#3c3544";
@@ -159,7 +166,7 @@ describe("DefaultResourceLoader theme color mode", () => {
         yield* makeDirectory(agentDir);
         yield* makeDirectory(cwd);
         themeJson = (yield* fromJsonText(
-          yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+          yield* readTextFile(joinPath(BUILTIN_THEMES_DIR, "dark.json")),
         )) as TestThemeJson;
         themeJson.name = "capability-test";
         themeJson.colors["userMessageBg"] = "#3c3544";
@@ -223,7 +230,7 @@ describe("DefaultResourceLoader theme color mode", () => {
         yield* makeDirectory(agentDir);
         yield* makeDirectory(cwd);
         themeJson = (yield* fromJsonText(
-          yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+          yield* readTextFile(joinPath(BUILTIN_THEMES_DIR, "dark.json")),
         )) as TestThemeJson;
         themeJson.name = "capability-test";
         themeJson.colors["userMessageBg"] = "#3c3544";

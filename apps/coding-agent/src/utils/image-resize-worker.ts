@@ -5,6 +5,7 @@ import nodeWorkerThreads from "../core/platform/node/worker-threads.ts";
 import errors from "./errors.ts";
 import imageResizeCore from "./image-resize-core.ts";
 import type imageResizeCoreTypes from "./image-resize-core.types.ts";
+import photon from "./photon.ts";
 
 const { parentPort } = nodeWorkerThreads;
 
@@ -16,6 +17,7 @@ interface ResizeImageWorkerRequest {
   inputBytes: Uint8Array;
   mimeType: string;
   options?: imageResizeCoreTypes.ImageResizeOptions;
+  photonWasmPath?: string | undefined;
 }
 
 function isResizeImageWorkerRequest(value: unknown): value is ResizeImageWorkerRequest {
@@ -36,6 +38,9 @@ port.once("message", (message: unknown) => {
         try {
           if (!isResizeImageWorkerRequest(message)) {
             throw new Error("Invalid image resize worker request");
+          }
+          if (message.photonWasmPath !== undefined) {
+            photon.setEmbeddedWasmPath(message.photonWasmPath);
           }
           const result = yield* awaited(
             resizeImageInProcess(message.inputBytes, message.mimeType, message.options),

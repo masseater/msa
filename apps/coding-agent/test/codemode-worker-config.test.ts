@@ -4,9 +4,9 @@ import config from "../src/config.ts";
 
 const { resolveCodemodeWorkerSpecifier } = config;
 
-const usesARelativeSourceEntrypointInBun = () => {
+const usesTheEmbeddedEntrypointInBun = () => {
   expect(resolveCodemodeWorkerSpecifier("bun-binary", "file:///B:/~BUN/root/config.js")).toBe(
-    "./dist/extensions/codemode/worker.js",
+    "./extensions/codemode/worker.js",
   );
 };
 
@@ -21,7 +21,7 @@ const usesTheMsaCodemodeWorkerWhenUnbundled = () => {
 };
 
 describe("resolveCodemodeWorkerSpecifier", () => {
-  test("uses a relative source entrypoint in Bun binaries", usesARelativeSourceEntrypointInBun);
+  test("uses the embedded entrypoint in Bun binaries", usesTheEmbeddedEntrypointInBun);
 
   test(
     "uses the emitted worker beside the bundled Node module",

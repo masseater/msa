@@ -35,7 +35,6 @@ const config = {
   getSessionsDir: configPackage.getSessionsDir,
   getSettingsPath: configPackage.getSettingsPath,
   getShareViewerUrl: configPackage.getShareViewerUrl,
-  getThemesDir: configPackage.getThemesDir,
   getToolsDir: configPackage.getToolsDir,
   getUpdateInstruction: configInstall.getUpdateInstruction,
   isBunBinary: configPackage.isBunBinary,
@@ -43,8 +42,7 @@ const config = {
   isBundledNode: configPackage.isBundledNode,
   nodeLlamaCppLoader: configPackage.nodeLlamaCppLoader,
   resolveCodemodeWorkerSpecifier: configPackage.resolveCodemodeWorkerSpecifier,
-  setEmbeddedExportTemplateCssPath: configPackage.setEmbeddedExportTemplateCssPath,
-  setEmbeddedQuickJSWasmPath: configPackage.setEmbeddedQuickJSWasmPath,
+  setEmbeddedAssets: configPackage.setEmbeddedAssets,
 };
 
 export default config;

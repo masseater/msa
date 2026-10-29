@@ -138,6 +138,7 @@ const tui = Object.freeze({
   setCapabilities: terminalCapabilities.setCapabilities,
   setCapabilityOverrides: terminalCapabilities.setCapabilityOverrides,
   setCellDimensions: terminalCapabilities.setCellDimensions,
+  setEmbeddedNativeModules: nativePlatform.setEmbeddedNativeModules,
   setImageTranscoder: image.setImageTranscoder,
   setKeybindings: keybindingsModule.setKeybindings,
   setKittyProtocolActive: keyProtocols.setKittyProtocolActive,

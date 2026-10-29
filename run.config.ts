@@ -240,13 +240,13 @@ const run: NonNullable<UserConfig["run"]> = {
       cache: false,
       command: "node tools/render-homebrew-formula.ts",
     },
+    "smoke-binary-assets": {
+      cache: false,
+      command: "node tools/smoke-binary-assets.ts",
+    },
     "smoke-binary-decide": {
       cache: false,
       command: "node tools/smoke-binary-decide.ts",
-    },
-    "smoke-binary-export": {
-      cache: false,
-      command: "node tools/smoke-binary-export.ts",
     },
     syncpack: "syncpack lint",
     test: {

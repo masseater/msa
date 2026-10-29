@@ -12,6 +12,7 @@ const COMMANDS = {
   node: { windowsShell: false },
   npm: { windowsShell: true },
   pnpm: { windowsShell: false },
+  sudo: { windowsShell: false },
   tar: { windowsShell: false },
   vp: { windowsShell: false },
   zip: { windowsShell: false },

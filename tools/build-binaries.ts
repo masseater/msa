@@ -8,8 +8,8 @@ import releasePlatforms from "./release-platforms.ts";
 import type releasePlatformsTypes from "./release-platforms.types.ts";
 
 const {
+  AGENT_READABLE_ENTRIES,
   ARCHIVE_FLAGS,
-  DIST_ENTRIES,
   RELEASE_PLATFORMS,
   archiveFileNameFor,
   archiveRootFor,
@@ -52,7 +52,7 @@ const unknownArguments = () =>
 const makeContext = () =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
-    const { repoRoot, version } = yield* workspace.loadCodingAgentPackage;
+    const { packageJsonText, repoRoot, version } = yield* workspace.loadCodingAgentPackage;
     const output = yield* scriptOutput.ScriptOutput;
     const { files: fs, path } = output;
     return {
@@ -61,11 +61,13 @@ const makeContext = () =>
       fs,
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
       output,
+      packageJsonLiteral: yield* Schema.encodeEffect(Schema.fromJsonString(Schema.String))(
+        packageJsonText,
+      ),
       path,
       platforms: requestedPlatforms(),
       repoRoot,
       skipBuild: process.argv.includes(SKIP_BUILD_FLAG),
-      tuiDir: path.join(repoRoot, "libs", "tui"),
       version,
     };
   });
@@ -120,31 +122,17 @@ const prepareWorkspace = (context: Context) =>
         cwd: context.repoRoot,
       });
     }
-    yield* runInherit({
-      args: ["run", "--no-cache", "--filter", "@msa/coding-agent", "copy-binary-assets"],
-      command: "vp",
-      cwd: context.repoRoot,
-    });
   });
 
-const copyPayload = (
-  context: Context,
-  platform: releasePlatformsTypes.ReleasePlatform,
-  payloadDir: string,
-) =>
+const copyPayload = (context: Context, payloadDir: string) =>
   Effect.gen(function* () {
-    for (const entry of DIST_ENTRIES) {
+    for (const entry of AGENT_READABLE_ENTRIES) {
       yield* copyTree(
         context,
-        context.path.join(context.codingAgentDir, "dist", entry),
+        context.path.join(context.codingAgentDir, entry),
         context.path.join(payloadDir, entry),
       );
     }
-    yield* copyTree(
-      context,
-      context.path.join(context.tuiDir, platform.prebuilds),
-      context.path.join(payloadDir, platform.prebuilds),
-    );
   });
 
 const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) =>
@@ -161,6 +149,7 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
         "--no-compile-autoload-dotenv",
         "--compile-autoload-package-json",
         "--external=node-llama-cpp",
+        `--define=MSA_PACKAGE_JSON=${context.packageJsonLiteral}`,
         `--target=${platform.bunTarget}`,
         "./dist/bun/cli.js",
         "./dist/utils/image-resize-worker.js",
@@ -170,7 +159,7 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
       command: "bun",
       cwd: context.codingAgentDir,
     });
-    yield* copyPayload(context, platform, payloadDir);
+    yield* copyPayload(context, payloadDir);
     yield* runInherit({
       args: ["tools/deploy-node-llama-cpp.ts", platform.name, payloadDir],
       command: "node",
@@ -206,23 +195,15 @@ const writeChecksums = (context: Context) =>
 const versionMatches = (expected: string, exitCode: number, reported: string) =>
   exitCode === 0 && reported === expected;
 
+const nodeSmokeTest = (context: Context, script: string, binary: string) =>
+  runInherit({ args: [script, binary], command: "node", cwd: context.repoRoot });
+
 const decideSmokeTest = (context: Context, binary: string) =>
   context.decideSmoke
-    ? runInherit({
-        args: ["tools/smoke-binary-decide.ts", binary],
-        command: "node",
-        cwd: context.repoRoot,
-      })
+    ? nodeSmokeTest(context, "tools/smoke-binary-decide.ts", binary)
     : scriptOutput.print(
         `==> skipping the node-llama-cpp decide smoke test: set ${LOCAL_LLM_TESTS_ENV}=1 to run it`,
       );
-
-const exportSmokeTest = (context: Context, binary: string) =>
-  runInherit({
-    args: ["tools/smoke-binary-export.ts", binary],
-    command: "node",
-    cwd: context.repoRoot,
-  });
 
 const smokeTest = (context: Context) =>
   Effect.gen(function* () {
@@ -257,7 +238,7 @@ const smokeTest = (context: Context) =>
     yield* scriptOutput.print(
       `==> ${platform.name} archive runs: msa --version reports ${reported}`,
     );
-    yield* exportSmokeTest(context, binary);
+    yield* nodeSmokeTest(context, "tools/smoke-binary-assets.ts", binary);
     yield* decideSmokeTest(context, binary);
   });
 

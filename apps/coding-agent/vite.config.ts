@@ -36,8 +36,6 @@ export default defineConfig({
       "copy-assets": {
         cache: outsideDist,
         command: [
-          "shx mkdir -p dist/modes/interactive/theme",
-          "shx cp src/modes/interactive/theme/*.json dist/modes/interactive/theme/",
           "shx mkdir -p dist/core/export-html",
           "shx cp src/core/export-html/template.css dist/core/export-html/",
         ],

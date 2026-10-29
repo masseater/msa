@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Build release binaries
-        run: vp run build-binaries
+        run: xvfb-run -a vp run build-binaries
         env:
           MSA_LOCAL_LLM_TESTS: "1"
 
