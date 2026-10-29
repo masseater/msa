@@ -10,7 +10,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
 const { create } = orchestratorSupport;
-const { setup } = orchestratorHarness.harness;
+const { pollUntilSettled, setup } = orchestratorHarness.harness;
 const { TASK, advance, fakeClock } = watchdogSupport;
 const { fauxAssistantMessage } = ai;
 const { usageLimited } = claudeCodeRun;
@@ -59,14 +59,8 @@ const resumeAll = (started: Started, count: number) =>
     expect(started.workers).toHaveLength(count);
   });
 
-const settledUntil = (predicate: () => boolean) =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < 100_000; attempt++) {
-      if (predicate()) return;
-      yield* advance(0);
-    }
-    throw new Error(`timed out waiting for the orchestrator: ${String(predicate)}`);
-  });
+const settledUntil = (predicate: () => boolean, idleTurns = 100_000) =>
+  pollUntilSettled(predicate, advance(0), idleTurns);
 
 const providerWaitSupport = {
   HOUR,

@@ -1,3 +1,4 @@
+import asyncResources from "./async-resources.ts";
 import effectSupport from "./effect-support.ts";
 import files from "./files.ts";
 import httpServer from "./http-server.ts";
@@ -7,7 +8,6 @@ import nodeScript from "./node-script.ts";
 import paths from "./paths.ts";
 import runtime from "./runtime.ts";
 import temp from "./temp.ts";
-import timers from "./timers.ts";
 
 const testing = {
   abortController: effectSupport.abortController,
@@ -70,8 +70,9 @@ const testing = {
   sleep: effectSupport.sleep,
   tempPath: temp.tempPath,
   tempRoot: temp.tempRoot,
-  timersArmedBy: timers.timersArmedBy,
+  timersArmedBy: asyncResources.timersArmedBy,
   toJsonText: json.toJsonText,
+  trackChildProcesses: asyncResources.trackChildProcesses,
   writeBytesFile: files.writeBytesFile,
   writeJsonFile: json.writeJsonFile,
   writeTextFile: files.writeTextFile,

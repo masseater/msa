@@ -12,6 +12,7 @@
 - `joinPath`・`dirnameOf`・`basenameOf`・`resolvePath`・`relativePath`・`isAbsolutePath`・`pathDelimiter`
 - `currentTimeMillis`・`nowIso`・`randomSuffix`・`awaited`・`failure`・`pollUntil`・`abortController`
 - `timersArmedBy`（渡した Effect から辿れる非同期リソースが張ったタイマーだけを数える）
+- `trackChildProcesses`（呼んだ後に起きた子プロセスが、ハンドルを閉じるまで動いているかを返す。待ちの上限を、子プロセスが動いていない間だけで数えるのに使う）
 - `runTest`（`it` から Effect を走らせる）・`testRuntime`・`provideNode`
 - `localLlmTests`（`MSA_LOCAL_LLM_TESTS` が空でない時だけ `true`。手元の LLM を動かすテストを `it.skipIf(!localLlmTests)` にする）
 

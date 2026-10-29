@@ -10,7 +10,9 @@ import FakeWorker from "./fake-worker.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import reviewVerdictSupport from "./review-verdict-support.ts";
 const { InMemoryTelemetryContext } = telemetryModule;
-const { joinPath, tempRoot } = testing;
+const { joinPath, tempRoot, trackChildProcesses } = testing;
+
+const childProcesses = trackChildProcesses();
 
 function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return {
@@ -72,14 +74,29 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
   onTestFinished(() => orchestrator.dispose());
   return { orchestrator, reports, telemetry, workers };
 }
-function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
+function pollUntilSettled(
+  predicate: () => boolean,
+  poll: Effect.Effect<void>,
+  idlePolls: number,
+): Effect.Effect<void> {
   return Effect.gen(function* () {
-    for (let index = 0; index < attempts; index++) {
-      if (predicate()) return;
-      yield* Effect.sleep(2);
+    let idle = 0;
+    while (!predicate()) {
+      if (childProcesses.running()) {
+        yield* poll;
+        continue;
+      }
+      if (idle >= idlePolls) {
+        throw new Error(`timed out waiting for the orchestrator: ${String(predicate)}`);
+      }
+      idle += 1;
+      yield* poll;
     }
-    throw new Error("timed out waiting for the orchestrator");
   });
+}
+
+function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
+  return pollUntilSettled(predicate, Effect.sleep(2), attempts);
 }
 function taskStatus(orchestrator: orchestratorTypes.Orchestrator, id: string): string | undefined {
   return orchestrator.snapshot.tasks.find((task) => task.id === id)?.status;
@@ -87,7 +104,7 @@ function taskStatus(orchestrator: orchestratorTypes.Orchestrator, id: string): s
 function reviews(orchestrator: orchestratorTypes.Orchestrator) {
   return orchestrator.snapshot.tasks.filter((task) => task.kind === "review");
 }
-const harness = { model, reviews, setup, taskStatus, waitFor };
+const harness = { model, pollUntilSettled, reviews, setup, taskStatus, waitFor };
 
 const orchestratorHarness = {
   MODELS,
