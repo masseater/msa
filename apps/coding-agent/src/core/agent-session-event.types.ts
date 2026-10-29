@@ -78,7 +78,8 @@ declare namespace agentSessionEventTypes {
     | { type: "pr_watch_changed"; prWatch: serviceTypes.PrWatchSnapshot }
     | { type: "orchestrator_changed" }
     | { type: "goal_status"; goal: goalTypes.GoalSnapshot | undefined }
-    | { type: "memory_status"; text: string };
+    | { type: "memory_status"; text: string }
+    | { type: "memory_recall_skipped"; reason: string };
 
   type AgentSessionEventListener = (event: AgentSessionEvent) => void;
 }

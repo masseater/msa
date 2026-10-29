@@ -1,32 +1,13 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import memoryStartupSupport from "./memory-startup-support.ts";
 
-const { closeServers, readTextFile, removeDirs, runTest } = testing;
-const { prepare, toolNames, toolResults } = memoryStartupSupport;
+const { readTextFile, runTest } = testing;
+const { toolNames, toolResults, useAgents } = memoryStartupSupport;
 
-const tempDirs: string[] = [];
-const closers: (() => Promise<void>)[] = [];
-
-afterEach(() =>
-  runTest(
-    Effect.gen(function* () {
-      for (const close of closers.splice(0)) yield* Effect.promise(close);
-      yield* closeServers;
-      yield* removeDirs(tempDirs.splice(0));
-    }),
-  ),
-);
-
-const setUp = (options: Parameters<typeof prepare>[0]) =>
-  Effect.tap(prepare(options), (agent) =>
-    Effect.sync(() => {
-      tempDirs.push(agent.root);
-      closers.push(agent.sepiace.close);
-    }),
-  );
+const setUp = useAgents();
 
 const signInsAsked = (log: readonly string[]) =>
   log.filter((line) => line.startsWith("401") || line === "register" || line === "token code");

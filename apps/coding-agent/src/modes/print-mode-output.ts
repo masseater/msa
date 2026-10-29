@@ -13,6 +13,10 @@ const { writeRawStdout } = outputGuard;
 type Mode = printModeTypes.PrintModeOptions["mode"];
 
 function writeSessionEvent(mode: Mode, event: agentSessionTypes.AgentSessionEvent): void {
+  if (event.type === "memory_recall_skipped") {
+    writeError(`Memory recall skipped: ${event.reason}`);
+    return;
+  }
   if (mode === "json") {
     writeRawStdout(`${JSON.stringify(jsonEvent.toJsonEvent(event))}\n`);
     return;

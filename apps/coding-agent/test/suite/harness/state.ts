@@ -15,7 +15,7 @@ function createSessionManager(
 function createSettingsManager(
   settings: Partial<settingsManagerTypes.Settings> | undefined,
 ): settingsManagerTypes.SettingsManager {
-  return SettingsManager.inMemory(settings);
+  return SettingsManager.inMemory({ memory: { recall: { enabled: false } }, ...settings });
 }
 
 function createMemoryConnection(

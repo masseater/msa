@@ -1,18 +1,22 @@
 import testing from "@msa/testing";
 import { Config, Effect, Schema } from "effect";
+import { afterEach } from "vite-plus/test";
 
 import memoryStartupScripts from "./memory-startup-scripts.ts";
 import mcpOauthServer from "./suite/mcp-oauth-server.ts";
 
 const {
   changeMode,
+  closeServers,
   joinPath,
   listen,
   makeDirectory,
   makeTempDir,
   pathDelimiter,
+  removeDirs,
   resolvePath,
   runNodeScript,
+  runTest,
   toJsonText,
   writeJsonFile,
   writeTextFile,
@@ -233,6 +237,9 @@ interface PrepareOptions {
   readonly memoryToolRequest?: string;
   readonly replaceMcp?: boolean;
   readonly storeFails?: boolean;
+  readonly tokenRejected?: boolean;
+  readonly sepiaceDown?: boolean;
+  readonly sepiaceHangs?: boolean;
 }
 
 const prepare = (options: PrepareOptions) =>
@@ -242,14 +249,38 @@ const prepare = (options: PrepareOptions) =>
         memory: (request) => (request.includes("release") ? "Releases go to the tap." : ""),
       }),
     );
-    sepiace.trustToken(LEGACY_TOKEN);
+    if (options.tokenRejected !== true) sepiace.trustToken(LEGACY_TOKEN);
     const model = yield* startModel(options.memoryToolRequest);
     const layout = yield* makeLayout;
     yield* writeBrowser(layout);
-    yield* writeAgentFiles(layout, { model: model.origin, sepiace: sepiace.url }, options);
+    const sepiaceUrl =
+      options.sepiaceHangs === true ? `${yield* listen(() => Effect.never)}/mcp` : sepiace.url;
+    yield* writeAgentFiles(layout, { model: model.origin, sepiace: sepiaceUrl }, options);
+    if (options.sepiaceDown === true) yield* Effect.promise(sepiace.close);
     return { ...layout, ...(yield* runners(layout)), model, sepiace };
   });
 
-const memoryStartupSupport = { prepare, toolNames, toolResults };
+const useAgents = () => {
+  const tempDirs: string[] = [];
+  const closers: (() => Promise<void>)[] = [];
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        for (const close of closers.splice(0)) yield* Effect.promise(close);
+        yield* closeServers;
+        yield* removeDirs(tempDirs.splice(0));
+      }),
+    ),
+  );
+  return (options: PrepareOptions) =>
+    Effect.tap(prepare(options), (agent) =>
+      Effect.sync(() => {
+        tempDirs.push(agent.root);
+        closers.push(agent.sepiace.close);
+      }),
+    );
+};
+
+const memoryStartupSupport = { prepare, toolNames, toolResults, useAgents };
 
 export default memoryStartupSupport;
