@@ -3,6 +3,7 @@ import { builtinModules } from "node:module";
 import type { OxlintConfig } from "vite-plus/lint";
 
 import effectRules from "./effect-rules.config.ts";
+import localTimeRules from "./local-time-rules.config.ts";
 import lintedPackages from "./tools/oxlint/workspace-packages.json" with { type: "json" };
 
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
@@ -88,8 +89,14 @@ const loopbackTestServerMembers: readonly Readonly<{
   },
 ];
 
-const restrictedProperties: readonly Readonly<{ property: string; message: string }>[] = [
+const restrictedPropertiesExceptLocalDate = [
   { message: TIMERS_ARMED_BY_THE_RUN, property: "getActiveResourcesInfo" },
+  ...localTimeRules.intlProperties,
+];
+
+const restrictedProperties = [
+  ...restrictedPropertiesExceptLocalDate,
+  ...localTimeRules.dateProperties,
 ];
 
 const restrictedImports = {
@@ -180,9 +187,6 @@ const generated = [
   "**/*.models.ts",
   "libs/ai/src/providers/data/**",
   "apps/coding-agent/src/core/export-html/template.css",
-  "apps/coding-agent/src/core/export-html/template.html",
-  "apps/coding-agent/src/core/export-html/template.js",
-  "apps/coding-agent/src/core/export-html/vendor/**",
   "apps/coding-agent/examples/extensions/doom-overlay/doom/build/**",
   "pnpm-lock.yaml",
 ];
@@ -284,6 +288,7 @@ const lintConfig = {
   requiredStack,
   restrictedImports,
   restrictedProperties,
+  restrictedPropertiesExceptLocalDate,
   strictCategories,
   strictCategoryRules,
   workspacePackages,

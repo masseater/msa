@@ -45,8 +45,7 @@ function safeUrl(value: unknown, name: string): string {
   const text = requiredString(value, name);
   if (!URL.canParse(text)) throw new Error(`Invalid ${name}`);
   const url = new URL(text);
-  if (["javascript:", "data:", "vbscript:"].includes(url.protocol))
-    throw new Error(`Invalid ${name}`);
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error(`Invalid ${name}`);
   return text;
 }
 

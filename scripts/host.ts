@@ -127,6 +127,7 @@ const runScriptWith = <ROut, E>(layer: Layer.Layer<ROut, E>) =>
 
 const host = {
   Host,
+  hostLayer,
   runScript,
   runScriptWith,
 };

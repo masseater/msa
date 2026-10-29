@@ -197,6 +197,9 @@ catalogs:
     '@modelcontextprotocol/sdk':
       specifier: 1.32.1
       version: 1.32.1
+    '@picocss/pico':
+      specifier: 2.1.1
+      version: 2.1.1
     '@secretlint/core':
       specifier: 13.0.7
       version: 13.0.7
@@ -257,6 +260,9 @@ catalogs:
     chalk:
       specifier: 6.0.0
       version: 6.0.0
+    charts.css:
+      specifier: 1.2.0
+      version: 1.2.0
     cross-spawn:
       specifier: 7.0.6
       version: 7.0.6
@@ -426,12 +432,18 @@ importers:
       '@jridgewell/remapping':
         specifier: 'catalog:'
         version: 2.3.5
+      '@picocss/pico':
+        specifier: 'catalog:'
+        version: 2.1.1
       '@types/d3-array':
         specifier: 'catalog:'
         version: 3.2.2
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
+      charts.css:
+        specifier: 'catalog:'
+        version: 1.2.0
       d3-array:
         specifier: 'catalog:'
         version: 3.2.4
@@ -2369,6 +2381,9 @@ packages:
     resolution: {integrity: sha512-G2xbfWTrbqYRhR/vfeKNMQf/sS3/ti0iKJAAkRxHuXWZH/hne/dyIb9QKk5LuR6cJLARxsL6FMoAYmfspd74MQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
+  '@picocss/pico@2.1.1':
+    resolution: {integrity: sha512-kIDugA7Ps4U+2BHxiNHmvgPIQDWPDU4IeU6TNRdvXQM1uZX+FibqDQT2xUOnnO2yq/LUHcwnGlu1hvf4KfXnMg==}
+
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
@@ -3295,6 +3310,9 @@ packages:
   chalk@6.0.0:
     resolution: {integrity: sha512-2uNTXIuTTxk7ciZgAU1BQcgnchcG0xXnrs6jzkQfj9SsRa9M2s5zE8WT96hS6KmG4MzWHSrvH43DF1m4XRkrFg==}
     engines: {node: '>=22'}
+
+  charts.css@1.2.0:
+    resolution: {integrity: sha512-/NCeCMOYZHHeS5vR/32Ubl84Ob500SGriFUxUReMYFPnBIsaBcfO91EQsRHp6/1LwraXTqizCx+iSQ7XSsy4WA==}
 
   cheminfo-types@1.16.0:
     resolution: {integrity: sha512-j0MiXFnLRVEZg3vUr7SXm6F3HuDNVE5arfQyDMiy1w2fAcuOs3QRgVsw7aOIACvr0aqbvn85cucwt+yOu64IiQ==}
@@ -6275,6 +6293,8 @@ snapshots:
 
   '@oxlint/plugins@1.88.0': {}
 
+  '@picocss/pico@2.1.1': {}
+
   '@polka/url@1.0.0-next.29': {}
 
   '@pondwader/socks5-server@1.0.10': {}
@@ -7180,6 +7200,8 @@ snapshots:
   chalk@5.6.2: {}
 
   chalk@6.0.0: {}
+
+  charts.css@1.2.0: {}
 
   cheminfo-types@1.16.0: {}
 

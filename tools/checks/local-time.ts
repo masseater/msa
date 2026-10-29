@@ -19,11 +19,11 @@ import {
   isShorthandPropertyAssignment,
   isStringLiteral,
   isTemplateSpan,
+  isVariableDeclaration,
 } from "typescript/unstable/ast/is";
 import { SymbolFlags } from "typescript/unstable/sync";
 import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/unstable/sync";
 
-import embeddedScript from "./embedded-script.ts";
 import typedProject from "./typed-project.ts";
 
 type Finding = {
@@ -46,42 +46,17 @@ const OWNERS: ReadonlySet<string> = new Set([
   "apps/coding-agent/src/utils/zip.ts",
 ]);
 
-const DATE_MEMBERS: ReadonlySet<string> = new Set([
-  "getDate",
-  "getDay",
-  "getFullYear",
-  "getHours",
-  "getMilliseconds",
-  "getMinutes",
-  "getMonth",
-  "getSeconds",
-  "getTimezoneOffset",
-  "getYear",
-  "toDateString",
-  "toLocaleDateString",
-  "toLocaleString",
-  "toLocaleTimeString",
-  "toString",
-  "toTimeString",
-]);
+const DATE_MEMBERS: ReadonlySet<string> = new Set(["toLocaleString", "toString"]);
 
 const LIB_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["Date", DATE_MEMBERS],
   ["Intl", new Set(["DateTimeFormat"])],
 ]);
 
-const EFFECT_LOCAL: ReadonlySet<string> = new Set([
-  "formatLocal",
-  "layerCurrentZoneLocal",
-  "withCurrentZoneLocal",
-  "zoneMakeLocal",
-]);
-
 const EFFECT_ZONED_MAKERS: ReadonlySet<string> = new Set(["makeZoned", "makeZonedUnsafe"]);
 
 const WATCHED: ReadonlySet<string> = new Set([
   ...DATE_MEMBERS,
-  ...EFFECT_LOCAL,
   ...EFFECT_ZONED_MAKERS,
   "Date",
   "DateTimeFormat",
@@ -103,9 +78,6 @@ const isEffectDateTime = (symbol: TsSymbol): boolean =>
 const resolveAlias = (checker: Checker, symbol: TsSymbol): TsSymbol =>
   (symbol.flags & SymbolFlags.Alias) === 0 ? symbol : checker.getAliasedSymbol(symbol);
 
-const effectProblem = (symbol: TsSymbol): string | undefined =>
-  EFFECT_LOCAL.has(symbol.name) ? `DateTime.${symbol.name} は端末のタイムゾーンを読む` : undefined;
-
 const libProblem = (symbol: TsSymbol): string | undefined => {
   const owner = symbol.getParent()?.name ?? "";
   return LIB_MEMBERS.get(owner)?.has(symbol.name) === true
@@ -113,10 +85,8 @@ const libProblem = (symbol: TsSymbol): string | undefined => {
     : undefined;
 };
 
-const symbolProblem = (symbol: TsSymbol): string | undefined => {
-  if (isEffectDateTime(symbol)) return effectProblem(symbol);
-  return isDefaultLib(symbol) ? libProblem(symbol) : undefined;
-};
+const symbolProblem = (symbol: TsSymbol): string | undefined =>
+  isDefaultLib(symbol) ? libProblem(symbol) : undefined;
 
 const nameText = (node: Node): string | undefined =>
   isIdentifier(node) || isStringLiteral(node) ? node.text : undefined;
@@ -158,8 +128,48 @@ const isSpecifier = (node: Node): boolean =>
 const isBareDateCall = (symbol: TsSymbol, node: Node): boolean =>
   symbol.name === "Date" && isDefaultLib(symbol) && callWith(node) !== undefined;
 
+const isIntl = (node: Node | undefined): boolean =>
+  node !== undefined && isIdentifier(node) && node.text === "Intl";
+
+const destructuresIntlDirectly = (node: Node): boolean => {
+  const declaration = node.parent?.parent;
+  return (
+    declaration !== undefined &&
+    isVariableDeclaration(declaration) &&
+    isIntl(declaration.initializer)
+  );
+};
+
+const propertyObject = (node: Node, parent: Node): Node | undefined =>
+  isPropertyAccessExpression(parent) && parent.name === node ? parent.expression : undefined;
+
+const elementObject = (node: Node, parent: Node): Node | undefined =>
+  isElementKey(node) && isElementAccessExpression(parent) ? parent.expression : undefined;
+
+const accessedObject = (node: Node): Node | undefined =>
+  node.parent === undefined
+    ? undefined
+    : (propertyObject(node, node.parent) ?? elementObject(node, node.parent));
+
+const bindingKeyNode = (element: BindingElement): Node | undefined =>
+  element.propertyName ?? element.name;
+
+const bindsFromIntl = (node: Node): boolean => {
+  const { parent } = node;
+  return (
+    parent !== undefined &&
+    isBindingElement(parent) &&
+    bindingKeyNode(parent) === node &&
+    destructuresIntlDirectly(parent)
+  );
+};
+
+const readsIntlDirectly = (node: Node): boolean =>
+  isIntl(accessedObject(node)) || bindsFromIntl(node);
+
 const REFERENCE_RULES: readonly ReferenceRule[] = [
   (symbol, node) => {
+    if (readsIntlDirectly(node)) return undefined;
     const detail = symbolProblem(symbol);
     return detail === undefined ? undefined : { detail, node };
   },
@@ -194,7 +204,9 @@ const bindingKey = (element: BindingElement): string | undefined => {
 };
 
 const isWatchedBinding = (node: Node): node is BindingElement =>
-  isObjectBindingElement(node) && WATCHED.has(bindingKey(node) ?? "");
+  isObjectBindingElement(node) &&
+  WATCHED.has(bindingKey(node) ?? "") &&
+  !destructuresIntlDirectly(node);
 
 const memberProblem = (checker: Checker, source: Type, key: string | undefined) => {
   const member = checker.getPropertiesOfType(source).find(({ name }) => name === key);
@@ -233,7 +245,7 @@ const OPERANDS: readonly ((node: Node) => readonly Node[])[] = [
   (node) => (isTemplateSpan(node) ? [node.expression] : []),
   (node) => (isStringConcat(node) ? [node.left, node.right] : []),
   (node) => (isStringifyingCall(node) ? [...node.arguments] : []),
-  (node) => (isElementAccessExpression(node) ? [node.expression] : []),
+  (node) => (isElementAccessExpression(node) ? [node.argumentExpression] : []),
 ];
 
 const stringifiedOperands = (node: Node): readonly Node[] =>
@@ -252,47 +264,20 @@ function stringifyHits({ checker }: Project, nodes: readonly Node[]): readonly H
   );
 }
 
-const BROWSER_SCRIPTS = "tools/checks/browser-scripts.tsconfig.json";
-
-const { SCRIPT_OWNER } = embeddedScript;
-
-const embeddedScriptHits = (_project: Project, nodes: readonly Node[]): readonly Hit[] =>
-  embeddedScript.inStrings(nodes);
-
-type HitRule = typeof namedHits;
-
-const RULES: ReadonlyMap<string, HitRule> = new Map([
-  ["named", namedHits],
-  ["binding", bindingHits],
-  ["stringify", stringifyHits],
-  ["embeddedScript", embeddedScriptHits],
-]);
+const RULES: readonly (typeof namedHits)[] = [namedHits, bindingHits, stringifyHits];
 
 const findingAt =
   (file: SourceFile, relative: string) =>
   ({ detail, node }: Hit): Finding => ({ ...locate(file, node), detail, file: relative });
 
-const scanFileWith =
-  (rules: readonly HitRule[]) =>
-  (project: Project, file: SourceFile, relative: string): readonly Finding[] => {
-    if (OWNERS.has(relative)) return [];
-    const nodes = descendants(file);
-    return rules
-      .filter((rule) => relative !== SCRIPT_OWNER || rule !== embeddedScriptHits)
-      .flatMap((rule) => rule(project, nodes))
-      .map(findingAt(file, relative));
-  };
-
-const scan = (scope: Scope, without: ReadonlySet<string> = new Set()): readonly Finding[] => {
-  const scanFile = scanFileWith(
-    [...RULES].filter(([name]) => !without.has(name)).map(([, rule]) => rule),
-  );
-  return [
-    ...scanProject(scope, scanFile),
-    ...scanProject({ ...scope, project: BROWSER_SCRIPTS }, scanFile),
-  ];
+const scanFile = (project: Project, file: SourceFile, relative: string): readonly Finding[] => {
+  if (OWNERS.has(relative)) return [];
+  const nodes = descendants(file);
+  return RULES.flatMap((rule) => rule(project, nodes)).map(findingAt(file, relative));
 };
 
-const localTimeCheck = { BROWSER_SCRIPTS, OWNERS, SCRIPT_OWNER, scan };
+const scan = (scope: Scope): readonly Finding[] => scanProject(scope, scanFile);
+
+const localTimeCheck = { OWNERS, scan };
 
 export default localTimeCheck;

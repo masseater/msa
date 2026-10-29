@@ -18,7 +18,10 @@ function withExportedHtml(
     try {
       try {
         yield* awaited(
-          session.context.exports.exportToHtml(htmlFile, { themeName: themeModule.theme.name }),
+          session.context.exports.exportToHtml(htmlFile, {
+            themeName: themeModule.theme.name,
+            viewedInSrcdoc: true,
+          }),
         );
       } catch (error: unknown) {
         const reason = error instanceof Error ? error.message : "Unknown error";

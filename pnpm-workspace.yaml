@@ -20,6 +20,7 @@ catalog:
   "@google/genai": 2.21.0
   "@jridgewell/remapping": ^2.3.5
   "@modelcontextprotocol/sdk": 1.32.1
+  "@picocss/pico": 2.1.1
   "@secretlint/core": 13.0.7
   "@secretlint/secretlint-rule-preset-recommend": 13.0.7
   "@silvia-odwyer/photon": 0.3.3
@@ -40,6 +41,7 @@ catalog:
   brace-expansion: 5.0.12
   canvas: 3.2.3
   chalk: 6.0.0
+  charts.css: 1.2.0
   cross-spawn: 7.0.6
   culori: 4.0.2
   d3-array: 3.2.4

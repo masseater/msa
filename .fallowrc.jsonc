@@ -11,7 +11,13 @@
     "apps/**",
     "libs/**",
   ],
-  "ignoreDependencies": ["@anthropic-ai/sandbox-runtime", "node-llama-cpp", "tree-sitter-bash"],
+  "ignoreDependencies": [
+    "@anthropic-ai/sandbox-runtime",
+    "@picocss/pico",
+    "charts.css",
+    "node-llama-cpp",
+    "tree-sitter-bash",
+  ],
   "audit": { "gate": "all" },
   "security": {
     "categories": {

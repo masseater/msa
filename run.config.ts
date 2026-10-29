@@ -117,6 +117,7 @@ const testScratch = [
 const sharedInputs = [
   "effect-rules.config.ts",
   "lint.config.ts",
+  "local-time-rules.config.ts",
   "package.json",
   "patches/**",
   "pnpm-lock.yaml",

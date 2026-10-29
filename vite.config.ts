@@ -1,6 +1,7 @@
 import { defineConfig } from "vite-plus";
 
 import lintConfig from "./lint.config.ts";
+import localTimeRules from "./local-time-rules.config.ts";
 import runConfig from "./run.config.ts";
 import vitestShared from "./vitest.shared.ts";
 
@@ -18,6 +19,7 @@ const {
   processEnvWriter,
   restrictedImports,
   restrictedProperties,
+  restrictedPropertiesExceptLocalDate,
   strictCategoryRules,
   workspacePackages,
 } = lintConfig;
@@ -43,7 +45,7 @@ export default defineConfig({
       correctness: "error",
       suspicious: "error",
     },
-    env: { browser: true, builtin: true, node: true },
+    env: { builtin: true, node: true },
     ignorePatterns: generated,
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
@@ -93,6 +95,16 @@ export default defineConfig({
         rules: { "effecttsgo/process-env": "off", "msa/process-env-writer": "error" },
       },
       {
+        files: withProbes([localTimeRules.owners.dateGetters]),
+        rules: {
+          "eslint/no-restricted-properties": ["error", ...restrictedPropertiesExceptLocalDate],
+        },
+      },
+      {
+        files: withProbes([localTimeRules.owners.localZone]),
+        rules: { "msa/no-restricted-member": ["error", { members: loopbackTestServerMembers }] },
+      },
+      {
         files: ["apps/coding-agent/test/fixtures/class-seal/**"],
         rules: {
           "effecttsgo/error-payload-shadows-name": "off",
@@ -127,6 +139,7 @@ export default defineConfig({
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
       "eslint/no-restricted-imports": ["error", restrictedImports],
       "eslint/no-restricted-properties": ["error", ...restrictedProperties],
+      "eslint/no-script-url": "error",
       "eslint/no-shadow": "error",
       "eslint/no-undef": "error",
       "eslint/no-underscore-dangle": "error",
@@ -138,7 +151,10 @@ export default defineConfig({
       "import/prefer-default-export": "error",
       "msa/no-builtin-module-lookup": "error",
       "msa/no-builtin-require": ["error", { modules: effectReplaceableBuiltins }],
-      "msa/no-restricted-member": ["error", { members: loopbackTestServerMembers }],
+      "msa/no-restricted-member": [
+        "error",
+        { members: [...loopbackTestServerMembers, ...localTimeRules.zoneMembers] },
+      ],
       "msa/no-sync-fs": ["error", { names: fsSyncFunctions }],
       "no-comments/disallowComments": "error",
       "node/no-top-level-await": "error",

@@ -57,6 +57,8 @@ Use `--session` when you already know the session path or ID. Use `--fork` to cr
 
 Use `/export` to write the current session as HTML or JSONL. Use `/share` to upload it as a private GitHub gist and get a viewer link.
 
+The HTML page runs no scripts. Click an entry in the sidebar tree to open its branch; the address then links to that message. Search the session with the browser's find, and get the session back as JSONL with ↓ JSONL.
+
 Review exported or shared sessions first. They can contain prompts, model responses, tool arguments, command output, file contents, and extension messages.
 
 ## Report a bug
