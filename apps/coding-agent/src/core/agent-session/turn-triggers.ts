@@ -71,7 +71,9 @@ export default class SessionTurnTriggers {
       const memory = this.session.integrations.memory.memoryInternal;
       if (memory === undefined) return messages;
       this.session.integrations.memory.migrateInBackground();
-      const recalled = yield* awaited(memory.recall(trigger.prompt));
+      const recalled = yield* awaited(
+        memory.recall(trigger.prompt, this.session.run.lifecycle.runAbort.signal),
+      );
       if (recalled.kind === "skipped")
         this.session.emit({ reason: recalled.reason, type: "memory_recall_skipped" });
       if (recalled.kind !== "recalled") return messages;

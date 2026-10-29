@@ -23,6 +23,7 @@ declare namespace mcpOauthServerTypes {
     readonly tokenRequests: URLSearchParams[];
     readonly deletes: (string | undefined)[];
     readonly stall: Set<string>;
+    readonly stallMethods: Set<string>;
     readonly stalled: StalledRequest[];
     readonly validTokens: Set<string>;
     readonly refreshTokens: Set<string>;
