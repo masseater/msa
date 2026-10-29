@@ -88,11 +88,13 @@ const htmlProperty: SiteRule = (_checker, site) =>
     ? HTML_RUNS
     : undefined;
 
-const isGlobalThis = (checker: Checker, node: Node): boolean => {
-  if (!isIdentifier(node) || node.text !== "globalThis") return false;
-  const symbol = checker.getSymbolAtLocation([node])[0];
-  return symbol !== undefined && (symbol.declarations.length === 0 || isDefaultLib(symbol));
-};
+const isBuiltinSymbol = (symbol: TsSymbol | undefined): boolean =>
+  symbol !== undefined && (symbol.declarations.length === 0 || isDefaultLib(symbol));
+
+const isGlobalThis = (checker: Checker, node: Node): boolean =>
+  isIdentifier(node) &&
+  node.text === "globalThis" &&
+  isBuiltinSymbol(checker.getSymbolAtLocation([node])[0]);
 
 const isHtmlApi = (checker: Checker, node: Node): boolean =>
   isPropertyAccessExpression(node) &&
