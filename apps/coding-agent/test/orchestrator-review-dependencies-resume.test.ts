@@ -1,4 +1,3 @@
-import testing from "@msa/testing";
 import { Clock, Effect } from "effect";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
@@ -11,12 +10,8 @@ import triageSupport from "./triage-support.ts";
 
 const { create } = orchestratorSupport;
 const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
-const { advance, fakeClock } = watchdogSupport;
+const { advance, fakeClock, settledUntil } = watchdogSupport;
 const { HOUR, MINUTE, sessionLimit } = providerWaitSupport;
-const { pollUntil } = testing;
-
-const settledUntil = (predicate: () => boolean) =>
-  pollUntil(Effect.sync(predicate), 2000, advance(1000));
 const { escalateTriage } = triageSupport;
 
 type Orchestrator = orchestratorTypes.Orchestrator;

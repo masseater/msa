@@ -12,7 +12,7 @@ const { harness } = orchestratorHarness;
 const { setup, taskStatus } = harness;
 const { read, runCommand, shortId } = worktreeSupport;
 const { commitAndPush, withRemote } = pullRequestSupport;
-const { advance, fakeClock } = watchdogSupport;
+const { advance, fakeClock, settledUntil, storedStatus } = watchdogSupport;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -65,6 +65,7 @@ const reportsThePullRequestOfATaskTheWatchdogStops = () =>
         const { orchestrator, reports, branch, number, taskId } =
           yield* carryingAPullRequest(remote);
         yield* advance(31 * 60_000);
+        yield* settledUntil(() => reports.at(-1)?.details.status === "stopped");
         expect(taskStatus(orchestrator, taskId)).toBe("stopped");
         expect(reports.at(-1)?.details).toMatchObject({ status: "stopped", taskId });
         expect(reports.at(-1)?.text).toContain(`open pull request #${number}`);
@@ -77,4 +78,40 @@ const reportsThePullRequestOfATaskTheWatchdogStops = () =>
 it(
   "reports the open pull request of a task the watchdog stops to the orchestrator",
   reportsThePullRequestOfATaskTheWatchdogStops,
+);
+
+const keepsTheLockFreeWhileTheWatchdogAsksGitHub = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        yield* fakeClock();
+        const { orchestrator, reports, number, taskId } = yield* carryingAPullRequest(remote);
+        github.hold();
+        const asked = github.calls;
+        yield* advance(31 * 60_000);
+        yield* settledUntil(
+          () => storedStatus(orchestrator, taskId) === "stopped" && github.calls > asked,
+        );
+
+        let refreshed = false;
+        void orchestrator.refresh().then(() => {
+          refreshed = true;
+          return undefined;
+        });
+        yield* settledUntil(() => refreshed);
+        expect(github.answered).toBeLessThan(github.calls);
+        expect(reports.map((report) => report.details.status)).not.toContain("stopped");
+
+        github.release();
+        yield* settledUntil(() => reports.at(-1)?.details.status === "stopped");
+        expect(reports.at(-1)?.text).toContain(`open pull request #${number}`);
+        yield* Effect.promise(() => orchestrator.dispose());
+      }),
+    ),
+  );
+
+it(
+  "keeps the orchestrator lock free while the watchdog asks GitHub about a stopped task's pull request",
+  keepsTheLockFreeWhileTheWatchdogAsksGitHub,
 );

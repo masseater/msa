@@ -20,12 +20,14 @@ function reportContent(
   assignments: readonly { taskId: string }[],
   lines: readonly string[],
   content: string,
-): string {
-  const notice = pullRequestNotice.openPullRequests(
-    runtime,
-    assignments.map((assignment) => assignment.taskId),
+): Effect.Effect<string> {
+  return Effect.map(
+    pullRequestNotice.openPullRequests(
+      runtime,
+      assignments.map((assignment) => assignment.taskId),
+    ),
+    (notice) => [...lines, ...(notice === undefined ? [] : [notice]), content].join("\n\n"),
   );
-  return [...lines, ...(notice === undefined ? [] : [notice]), content].join("\n\n");
 }
 
 function forgetRun(runtime: runtimeTypes.Runtime, threadId: string): void {
@@ -68,7 +70,7 @@ function settleEffect(
     });
     const judged = {
       ...outcome,
-      content: reportContent(runtime, assignments, applied.lines, outcome.content),
+      content: yield* reportContent(runtime, assignments, applied.lines, outcome.content),
     };
     yield* Effect.sync(() => {
       runtime.publish();

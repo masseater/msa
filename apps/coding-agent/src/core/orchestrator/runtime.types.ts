@@ -16,6 +16,8 @@ declare namespace runtimeTypes {
 
   type OrchestratorOptions = workerTypes.OrchestratorOptions;
 
+  type Write = <A>(effect: Effect.Effect<A>) => Effect.Effect<A>;
+
   interface ThreadActivity {
     messages: number;
     at: number;

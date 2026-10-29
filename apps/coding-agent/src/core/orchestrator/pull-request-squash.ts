@@ -68,11 +68,22 @@ function withTrailer(squashed: SquashMessage, nonce: string): SquashMessage {
   return { ...squashed, body: squashed.body === "" ? trailer : `${squashed.body}\n\n${trailer}` };
 }
 
-function carriesNonce(text: string, nonce: string): boolean {
+function trailerLines(text: string): string[] {
   return text
     .replaceAll("\r\n", "\n")
     .split("\n")
-    .some((line) => line.trim() === trailerOf(nonce));
+    .map((line) => line.trim());
+}
+
+function carriesNonce(text: string, nonce: string): boolean {
+  return trailerLines(text).some((line) => line === trailerOf(nonce));
+}
+
+function carriesTrailer(text: string): boolean {
+  const prefix = `${TRAILER}: `;
+  return trailerLines(text).some(
+    (line) => line.startsWith(prefix) && /^\S+$/u.test(line.slice(prefix.length)),
+  );
 }
 
 function mergeArgs(number: number, head: string, squashed: SquashMessage): readonly string[] {
@@ -150,7 +161,9 @@ function commitMessage(
 }
 
 const pullRequestSquash = {
+  TRAILER,
   carriesNonce,
+  carriesTrailer,
   commitMessage,
   ghOf,
   ghWith,

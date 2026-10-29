@@ -1,6 +1,7 @@
 import { Effect, Fiber } from "effect";
 
 import advisorWorkspace from "./advisor-workspace.ts";
+import pullRequestSync from "./pull-request-sync.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
 import triageFlow from "./triage-flow.ts";
@@ -26,6 +27,9 @@ function start(runtime: runtimeTypes.Runtime, now: number): Fiber.Fiber<never, n
     fibers.push(scheduling.startPolling(runtime, options.pollIntervalMs ?? 5000));
   }
   fibers.push(watchdog.startWatchdog(runtime));
+  if (options.pullRequestSyncMs !== null) {
+    fibers.push(pullRequestSync.start(runtime, options.pullRequestSyncMs));
+  }
   return fibers;
 }
 
