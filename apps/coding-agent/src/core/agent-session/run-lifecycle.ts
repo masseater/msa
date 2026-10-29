@@ -23,6 +23,8 @@ export default class SessionRunLifecycle {
 
   agentRunAbortRequested = false;
 
+  runAbort = new AbortController();
+
   private idleWaitPromise: Promise<void> | undefined;
 
   private resolveIdleWait: (() => void) | undefined;
@@ -98,6 +100,7 @@ export default class SessionRunLifecycle {
       awaitingWith(function* () {
         if (this.isAgentRunActive) {
           this.agentRunAbortRequested = true;
+          this.runAbort.abort();
         }
         this.session.run.retry.abortRetry();
         this.session.compaction.manual.abortCompaction();
@@ -140,6 +143,7 @@ export default class SessionRunLifecycle {
     return awaitingWith(function* () {
       this.isAgentRunActive = true;
       this.agentRunAbortRequested = false;
+      this.runAbort = new AbortController();
       if (mode === "ask") {
         this.session.tools.ask.loadoutBeforeAsk = this.session.tools.loadout.declaredToolNames();
         this.session.tools.ask.askRun = true;

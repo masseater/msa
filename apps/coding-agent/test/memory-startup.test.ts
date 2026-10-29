@@ -8,7 +8,7 @@ import memoryStartupSupport from "./memory-startup-support.ts";
 const { readTextFile, runTest } = testing;
 const { toolNames, toolResults, useAgents } = memoryStartupSupport;
 
-const { SEPIACE_ENTRIES } = memoryStartupScripts;
+const { REPLACING_MCP_EXTENSION, SEPIACE_ENTRIES } = memoryStartupScripts;
 const setUp = useAgents();
 
 const signInsAsked = (log: readonly string[]) =>
@@ -27,9 +27,9 @@ const recallsWithoutMcpSupport = Effect.gen(function* () {
 
 const survivesAnExtensionReplacingMcp = Effect.gen(function* () {
   const agent = yield* setUp({
+    extension: REPLACING_MCP_EXTENSION,
     mcpServers: SEPIACE_ENTRIES,
     memoryToolRequest: "where does the release go?",
-    replaceMcp: true,
     signedIn: true,
   });
   const result = yield* agent.prompt("where does the release go?");

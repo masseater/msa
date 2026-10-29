@@ -120,6 +120,11 @@ const handleMcp = Effect.fn("handleMcp")(function* (
   }
   const message = (yield* readJson(request)) as McpMessage;
   if (message.id === undefined) return new Response(null, { status: 202 });
+  if (state.stallMethods.has(message.method)) {
+    state.stalled.push({ path: new URL(request.url).pathname, request });
+    yield* Deferred.await(state.closing);
+    return new Response(null, { status: 503 });
+  }
   return json(
     200,
     { id: message.id, jsonrpc: "2.0", result: mcpResult(state, message, token) },
@@ -244,6 +249,7 @@ const initialState = (
   refreshTokens: new Set(),
   registrations: [],
   stall: new Set(),
+  stallMethods: new Set(),
   stalled: [],
   tokenRequests: [],
   validTokens: new Set(),
@@ -277,6 +283,7 @@ const startOAuthMcpServer = (options: mcpOauthServerTypes.ServerOptions = {}) =>
         memoryRequests: state.memoryRequests,
         registrations: state.registrations,
         stall: state.stall,
+        stallMethods: state.stallMethods,
         stalled: state.stalled,
         tokenRequests: state.tokenRequests,
         trustToken: (token: string) => state.validTokens.add(token),

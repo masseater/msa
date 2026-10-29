@@ -113,22 +113,31 @@ export default class MemoryService {
             }),
           ),
         );
-        this.lastFailure = "failure" in outcome ? outcome.failure : undefined;
+        if (!("failure" in outcome)) this.lastFailure = undefined;
+        else if (signal?.aborted !== true) this.lastFailure = outcome.failure;
         if ("failure" in outcome) throw new Error(outcome.failure);
         return outcome.reply;
       }, this),
     );
   }
 
-  private recallSkipped(): memoryTypes.RecallOutcome {
+  private recallEnded(
+    timeout: AbortSignal | undefined,
+    caller: AbortSignal | undefined,
+    failure?: string,
+  ): memoryTypes.RecallOutcome {
+    const timedOut = timeout?.aborted === true;
+    if (!timedOut && caller?.aborted === true) return { kind: "nothing" };
     const { client } = this.options;
     const problem =
       signInProblem(client) ??
       (client.state === "failed" ? (client.error ?? "failed to connect") : undefined);
-    return {
-      kind: "skipped",
-      reason: problem ?? `sepiace did not answer within ${RECALL_TIMEOUT_MS / 1000} seconds`,
-    };
+    const reason = timedOut
+      ? (problem ?? `sepiace did not answer within ${RECALL_TIMEOUT_MS / 1000} seconds`)
+      : failure === undefined
+        ? (problem ?? "sepiace is not connected")
+        : `the recall request failed: ${failure}`;
+    return { kind: "skipped", reason };
   }
 
   recall(prompt: string, signal?: AbortSignal): Promise<memoryTypes.RecallOutcome> {
@@ -136,20 +145,25 @@ export default class MemoryService {
       awaitingWith(function* () {
         const text = prompt.trim();
         if (!this.settings.recall || text === "") return { kind: "nothing" };
-        if (this.options.client.state === "needs-auth") return this.recallSkipped();
+        if (this.options.client.state === "needs-auth")
+          return this.recallEnded(undefined, undefined);
         if ((yield* awaited(findSecrets(text))).length > 0) return { kind: "nothing" };
-        const deadline = bounded(signal, RECALL_TIMEOUT_MS);
-        if (!(yield* awaited(this.options.client.ready(deadline)))) return this.recallSkipped();
+        const timeout = AbortSignal.timeout(RECALL_TIMEOUT_MS);
+        const deadline = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+        if (!(yield* awaited(this.options.client.ready(deadline))))
+          return this.recallEnded(timeout, signal);
         this.project ??= resolveProjectName(this.options.cwd);
         const request = recallRequest(text, yield* awaited(this.project));
         return yield* awaited(
           this.send(request, deadline, RECALL_TIMEOUT_MS).then(
             (reply): memoryTypes.RecallOutcome =>
               reply === "" ? { kind: "nothing" } : { kind: "recalled", text: reply },
-            (error: unknown): memoryTypes.RecallOutcome => ({
-              kind: "skipped",
-              reason: `the recall request failed: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+            (error: unknown): memoryTypes.RecallOutcome =>
+              this.recallEnded(
+                timeout,
+                signal,
+                error instanceof Error ? error.message : String(error),
+              ),
           ),
         );
       }, this),

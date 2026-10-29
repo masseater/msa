@@ -26,7 +26,6 @@ const {
   BROWSER,
   COMPLETION_STREAM,
   CREDENTIAL_HELPER,
-  REPLACING_MCP_EXTENSION,
   registeringExtension,
   RPC_DRIVER,
   RUN_CLI,
@@ -38,6 +37,8 @@ const sourceResolverUrl = new URL("../src/experimental/source-resolver.ts", impo
 
 const HELPER_SERVER_URL = "https://msa.invalid/mcp-oauth";
 const LEGACY_TOKEN = "token-saved-by-msa-mcp-login";
+const recalled = (request: string) =>
+  request.includes("release") ? "Releases go to the tap." : "";
 
 const RunResult = Schema.Struct({
   code: Schema.NullOr(Schema.Finite),
@@ -169,10 +170,10 @@ const writeAgentFiles = (
     const helper = joinPath(layout.root, "credential-helper.mjs");
     yield* writeTextFile(helper, CREDENTIAL_HELPER);
     if (options.storeFails === true) yield* writeTextFile(layout.lock, "");
-    if (options.replaceMcp === true) {
+    if (options.extension !== undefined) {
       const extensions = joinPath(layout.agentDir, "extensions");
       yield* makeDirectory(extensions);
-      yield* writeTextFile(joinPath(extensions, "other-mcp.js"), REPLACING_MCP_EXTENSION);
+      yield* writeTextFile(joinPath(extensions, "test-extension.js"), options.extension);
     }
     if (options.extensionServers !== undefined) {
       yield* makeDirectory(joinPath(layout.agentDir, "extensions"));
@@ -246,21 +247,20 @@ interface PrepareOptions {
   readonly mcpServers?: (sepiaceUrl: string) => Record<string, unknown>;
   readonly memory?: Record<string, unknown>;
   readonly memoryToolRequest?: string;
-  readonly replaceMcp?: boolean;
+  readonly extension?: string;
   readonly extensionServers?: (sepiaceUrl: string) => ReadonlyArray<readonly [string, unknown]>;
   readonly registerOnSessionStart?: boolean;
   readonly storeFails?: boolean;
   readonly tokenRejected?: boolean;
   readonly sepiaceDown?: boolean;
   readonly sepiaceHangs?: boolean;
+  readonly recall?: (request: string) => string | { readonly error: string };
 }
 
 const prepare = (options: PrepareOptions) =>
   Effect.gen(function* () {
     const sepiace = yield* Effect.promise(() =>
-      startOAuthMcpServer({
-        memory: (request) => (request.includes("release") ? "Releases go to the tap." : ""),
-      }),
+      startOAuthMcpServer({ memory: options.recall ?? recalled }),
     );
     if (options.tokenRejected !== true) sepiace.trustToken(LEGACY_TOKEN);
     const model = yield* startModel(options.memoryToolRequest);
