@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- A task reviewer asked to record the goal items after ending a review without them is told to pass the findings within the goal too, so the record it makes is accepted the first time instead of being refused for missing `findings`. The reviewer prompt, the `record_goal_items` description, and that request describe the findings in the same words
 - A task review whose reviewer recorded every goal item `met` with its evidence and no finding within the goal passes when the decision model cannot judge it (no model, a timeout, or no answer above the threshold), instead of waiting for a triage that resumes the reviewer only to get the same `undecided` verdict again. `record_goal_items` takes the findings within the goal beside the items; a record with a finding or an item without evidence stays `undecided` and goes to a triage, an `unmet` item still sends the work back, and a `fail` from the model still sends it back ([docs](docs/cli.md#tools))
 - The task reviewer, advisor, and round review prompts read as English again around the `search_sessions` hint, which had been inserted as a relative clause with a second object. The hint is one sentence from one place for all four roles (triage, advisor, task reviewer, round review), and it names the narrowing that fits the role: `taskIds` for the roles that look at a task, `rounds` for the round review, `roles` for all, and no filter for the rest of the project ([docs](docs/session-search.md))
 

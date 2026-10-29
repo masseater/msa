@@ -159,6 +159,21 @@ it("sends a review the decision model fails back to the worker even when every i
     }),
   ));
 
+it("asks a reviewer who ended without a record to record the goal items, and judges the one record it makes with its findings", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { reports, reviewer, workers } = yield* reviewing(UNDECIDED[0]![1]);
+      reviewer.completeUnrecorded("Acceptable.");
+      yield* waitFor(() => reviewer.prompts.length === 2);
+      yield* Effect.promise(() => reviewer.recordAsAsked(reviewer.prompts[1]!, ALL_MET, [FINDING]));
+      reviewer.completeUnrecorded("Acceptable, apart from the second read's test.");
+      yield* waitFor(() => runningTriage(workers) !== undefined);
+      expect(reviewer.prompts).toHaveLength(2);
+      expect(reports.at(-1)?.text).toContain("Review verdict: undecided (");
+      expect(reports.at(-1)?.text).toContain(`Findings within the goal:\n- ${FINDING}`);
+    }),
+  ));
+
 const JUDGE_AGAIN = {
   conclusion: "decided",
   decision: "Check the second read's test again, record the goal items, and end the turn.",

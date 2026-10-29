@@ -4,7 +4,9 @@ import type aiTypes from "@msa/ai/index.types";
 
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 
-const { fauxAssistantMessage } = ai;
+const { fauxAssistantMessage, validateToolArguments } = ai;
+
+type GoalItemEntry = { item: number; status: "met" | "unmet"; evidence: string };
 
 export default class FakeWorker implements orchestratorTypes.WorkerSession {
   compaction = { manual: { isCompacting: false } };
@@ -115,15 +117,49 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   }
 
   recordGoalItems(
-    items: readonly { item: number; status: "met" | "unmet"; evidence: string }[],
+    items: readonly GoalItemEntry[],
     findings: readonly string[] = [],
   ): Promise<unknown> {
-    const tool = this.tools.find((candidate) => candidate.name === "record_goal_items");
+    const tool = this.recordTool();
     if (tool === undefined)
       return Promise.reject(new Error("this thread has no record_goal_items"));
     this.recorded = true;
-    const execute = tool.execute as (callId: string, params: unknown) => Promise<unknown>;
-    return execute("call", { findings, items });
+    return tool.execute("call", { findings, items });
+  }
+
+  recordAsAsked(
+    prompt: string,
+    items: readonly GoalItemEntry[],
+    findings: readonly string[],
+  ): Promise<unknown> {
+    const offered: aiTypes.JsonObject = { findings, items };
+    const asked: aiTypes.JsonObject = Object.fromEntries(
+      Object.entries(offered).filter(([name]) => prompt.includes(name)),
+    );
+    const tool = this.recordTool();
+    if (tool === undefined)
+      return Promise.reject(new Error("this thread has no record_goal_items"));
+    try {
+      const args: unknown = validateToolArguments(tool.definition, {
+        arguments: asked,
+        id: "call",
+        name: tool.definition.name,
+        type: "toolCall",
+      });
+      this.recorded = true;
+      return tool.execute("call", args);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  private recordTool() {
+    const tool = this.tools.find((candidate) => candidate.name === "record_goal_items");
+    if (tool === undefined) return undefined;
+    return {
+      definition: tool as aiTypes.Tool,
+      execute: tool.execute as (callId: string, params: unknown) => Promise<unknown>,
+    };
   }
 
   complete(reply: string): void {
