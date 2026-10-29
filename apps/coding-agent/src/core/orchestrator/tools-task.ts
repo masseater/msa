@@ -57,7 +57,7 @@ const createSchema = Type.Object({
   opensPullRequest: Type.Optional(
     Type.Boolean({
       description:
-        "false for a task that changes no code, such as tagging and publishing a release or checking a deployment: the harness asks it for no pull request, completes it on its checks and review, and sends it back while its branch has commits the default branch lacks, is pushed, or its worktree holds uncommitted changes. Cannot go with mergeInto. Default: true, the task opens its own pull request.",
+        "false for a task that changes no code, such as tagging and publishing a release or checking a deployment: the harness asks it for no pull request, completes it on its checks and review and then removes its worktree and branch, and sends it back while its branch has commits the default branch lacks, is pushed, or its worktree holds uncommitted changes. Cannot go with mergeInto. Default: true, the task opens its own pull request.",
     }),
   ),
   round: Type.Optional(

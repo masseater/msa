@@ -57,7 +57,7 @@ const replanTaskSchema = Type.Object({
   opensPullRequest: Type.Optional(
     Type.Boolean({
       description:
-        "false for a task that changes no code: it opens no pull request, takes over none from the tasks it replaces, merges into nothing, and is sent back while its branch has commits the default branch lacks, is pushed, or its worktree holds uncommitted changes. Cannot go with mergeInto. Not inherited from the tasks it replaces. Default: true.",
+        "false for a task that changes no code: it opens no pull request, takes over none from the tasks it replaces, merges into nothing, has its worktree and branch removed once it completes, and is sent back while its branch has commits the default branch lacks, is pushed, or its worktree holds uncommitted changes. Cannot go with mergeInto. Not inherited from the tasks it replaces. Default: true.",
     }),
   ),
   round: Type.Optional(

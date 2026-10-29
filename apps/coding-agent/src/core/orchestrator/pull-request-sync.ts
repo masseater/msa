@@ -161,7 +161,7 @@ function lineOf(runtime: runtimeTypes.Runtime, settled: Settled): Effect.Effect<
     finish(
       runtime,
       task,
-      record,
+      record.branch,
       `PR #${record.number} was merged at head ${short(record.headSha)} as merge commit ${short(record.mergeCommit ?? "")}, so ${task.id} is completed, not ${task.status}.`,
     ),
     (finished) => finished.line,
