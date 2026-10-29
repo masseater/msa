@@ -96,6 +96,51 @@ it(
   handsThePullRequestToTheTaskThatReplacesIt,
 );
 
+const handsOverAPullRequestTheHarnessHasNotReadYet = () =>
+  Effect.runPromise(
+    withRemote(({ github, repository }) =>
+      Effect.gen(function* () {
+        const { orchestrator, workers } = setup({
+          cwd: repository,
+          runCommand,
+          runGh: github.runGh,
+        });
+        const task = yield* create(orchestrator, {
+          currentState: "f.txt is missing",
+          goalState: "f.txt exists on main",
+          title: "f",
+        });
+        const branch = `task/${shortId(task.id)}`;
+        const worktree = workers[0]!.cwd;
+        yield* commitAndPush(worktree, "f.txt", branch);
+        const number = yield* github.open(branch);
+        const stopped = yield* Effect.promise(() => orchestrator.stop(task.id));
+        expect(stopped.pullRequest).toBeNull();
+
+        const result = yield* Effect.promise(() =>
+          orchestrator.replan({
+            reason: "the worker stopped before its turn ended",
+            stop: false,
+            tasks: [{ from: [task.id], title: "f again" }],
+          }),
+        );
+        const heir = result.created[0]!.taskId;
+        expect(result.handedOver).toEqual([{ from: task.id, number, to: heir }]);
+        expect(result.orphaned).toEqual([]);
+        expect((yield* read(orchestrator, heir)).pullRequest?.number).toBe(number);
+
+        const head = yield* mergesInTheHeir(workers, github, worktree, branch);
+        yield* waitFor(() => taskStatus(orchestrator, heir) === "completed");
+        expect(github.merged).toMatchObject([{ number, sha: head }]);
+      }),
+    ),
+  );
+
+it(
+  "hands a pull request the worker opened before the harness read it to the task a replan creates from its task, which reviews and merges it",
+  handsOverAPullRequestTheHarnessHasNotReadYet,
+);
+
 const reportsAnOpenPullRequestNoTaskCarriesOn = () =>
   Effect.runPromise(
     withRemote(({ github, repository }) =>

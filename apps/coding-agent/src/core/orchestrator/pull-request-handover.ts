@@ -7,6 +7,16 @@ const { store } = storeModule;
 interface Handover {
   handedOver: orchestratorTypesTypes.PullRequestHandover[];
   orphaned: orchestratorTypesTypes.OrphanedPullRequest[];
+  untracked: orchestratorTypesTypes.UntrackedTask[];
+}
+
+function ranWithoutBranch(runtime: runtimeTypes.Runtime, taskId: string): boolean {
+  const task = store.getTask(runtime.database, taskId);
+  if (task === undefined || task.kind !== "work" || task.mergeInto !== null) return false;
+  const threads = store
+    .assignmentsOfTask(runtime.database, taskId)
+    .flatMap((assignment) => store.getThread(runtime.database, assignment.threadId) ?? []);
+  return threads.length > 0 && threads.every((thread) => thread.branch === null);
 }
 
 function heirOf(
@@ -26,9 +36,14 @@ function handOver(
   closed: readonly string[],
   inheritors: ReadonlyMap<string, readonly string[]>,
 ): Handover {
-  const handover: Handover = { handedOver: [], orphaned: [] };
+  const handover: Handover = { handedOver: [], orphaned: [], untracked: [] };
   for (const taskId of closed) {
     const pull = store.pullRequestOf(runtime.database, taskId);
+    if (pull === undefined && ranWithoutBranch(runtime, taskId)) {
+      const cwd = store.getTask(runtime.database, taskId)?.cwd ?? "";
+      handover.untracked.push({ cwd, taskId });
+      continue;
+    }
     if (pull === undefined || pull.state !== "OPEN") continue;
     const heir = heirOf(runtime, inheritors.get(taskId) ?? []);
     if (heir === undefined) {

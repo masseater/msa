@@ -32,7 +32,7 @@ const checksSchema = Type.Array(
   }),
   {
     description:
-      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the worker's working directory, the task's worktree and branch in a git repository, before the reviewer starts; if one gives another result, the worker gets the results back and keeps working until every check passes, and when a turn ends with exactly the same results as the turn before, the task waits for your decision. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only.",
+      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the worker's working directory, the task's worktree and branch in a git repository, before the reviewer starts; if one gives another result, the worker gets the results back and keeps working until every check passes, and when a turn ends with exactly the same results as the turn before, the task waits for your decision. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only. A task with checks needs a cwd inside a git working tree, a checkout of the repository it works on; a task elsewhere is refused.",
   },
 );
 

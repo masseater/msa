@@ -73,6 +73,13 @@ function headOf(cwd: string): Effect.Effect<string | undefined> {
   );
 }
 
+function isWorkTree(cwd: string): Effect.Effect<boolean> {
+  return Effect.map(
+    git(cwd, ["rev-parse", "--is-inside-work-tree"]),
+    (result) => result.ok && result.output === "true",
+  );
+}
+
 function hasOrigin(cwd: string): Effect.Effect<boolean> {
   return Effect.map(git(cwd, ["remote", "get-url", "origin"]), (result) => result.ok);
 }
@@ -268,7 +275,7 @@ function prepare(
   });
 }
 
-const worktrees = { branchOf, cleanUp, hasOrigin, headOf, prepare };
+const worktrees = { branchOf, cleanUp, hasOrigin, headOf, isWorkTree, prepare };
 
 const worktreeModule = {
   worktrees,

@@ -23,14 +23,14 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     const now = yield* nowMillis;
     const database = runtime.database;
     const project = runtime.options.project;
-    const { checks, mergeInto, round, states } = yield* admitTask(runtime, input);
+    const { checks, cwd, mergeInto, round, states } = yield* admitTask(runtime, input);
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
       checks,
       condition: input.condition ?? null,
       createdAt: now,
       currentState: states.currentState,
-      cwd: input.cwd ?? runtime.options.cwd,
+      cwd,
       goalState: states.goalState,
       id,
       kind: "work",

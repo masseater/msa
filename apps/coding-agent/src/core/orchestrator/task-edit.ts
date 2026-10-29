@@ -7,15 +7,14 @@ import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
 import storeModule from "./store.ts";
-import text from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { orchestratorError } = errors;
-const { requireChecks, requireStates } = text;
 const { scheduling } = schedule;
 const { actionHelpers } = actionHelpersModule;
+const { taskOf } = actionHelpers;
 
 interface DependencyEdit {
   taskIds: readonly string[];
@@ -25,18 +24,6 @@ interface DependencyEdit {
 
 function uniqueIds(ids: readonly string[]): string[] {
   return [...new Set(ids)];
-}
-
-function taskOf(
-  runtime: runtimeTypes.Runtime,
-  id: string,
-  label: string,
-): orchestratorTypesTypes.Task {
-  const task = store.getTask(runtime.database, id);
-  if (task === undefined || task.project !== runtime.options.project) {
-    throw new Error(`Unknown task in ${label}: ${id}`);
-  }
-  return task;
 }
 
 function dependencyEdit(
@@ -106,40 +93,6 @@ function setDepends(
   });
 }
 
-function setState(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.SetTaskStateInput) {
-  return Effect.gen(function* () {
-    const now = yield* nowMillis;
-    if (
-      input.currentState === undefined &&
-      input.goalState === undefined &&
-      input.checks === undefined
-    ) {
-      throw new Error("Pass the current state, the goal state, the checks, or several of them");
-    }
-    const task = yield* Effect.sync(() => taskOf(runtime, input.taskId, "taskId"));
-    if (task.kind === "review") {
-      throw new Error(`${task.id} is a round review; its states come from the round`);
-    }
-    if (task.status === "running") {
-      throw new Error(
-        `${task.id} is running. Stop it with stop_task before rewriting its states, or send_message to steer it now.`,
-      );
-    }
-    const states = requireStates(
-      `Task ${task.id}`,
-      input.currentState ?? task.currentState,
-      input.goalState ?? task.goalState,
-    );
-    const checks =
-      input.checks === undefined ? task.checks : requireChecks(`Task ${task.id}`, input.checks);
-    yield* Effect.sync(() =>
-      store.updateTask(runtime.database, task.id, { ...states, checks }, now),
-    );
-    yield* Effect.sync(() => runtime.publish());
-    return actionHelpers.taskView(runtime, task.id);
-  });
-}
-
 function setModel(
   runtime: runtimeTypes.Runtime,
   taskId: string,
@@ -170,6 +123,6 @@ function setModel(
   });
 }
 
-const taskEdit = { setDepends, setModel, setState };
+const taskEdit = { setDepends, setModel };
 
 export default taskEdit;

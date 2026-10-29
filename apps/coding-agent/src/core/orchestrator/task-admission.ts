@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import conditionModule from "./condition.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import taskCwd from "./task-cwd.ts";
 import taskTitles from "./task-titles.ts";
 import text from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
@@ -11,6 +12,7 @@ const { store } = storeModule;
 const { conditions } = conditionModule;
 const { duplicateMessage, unfinishedWithTitle } = taskTitles;
 const { requireChecks, requireMergeTarget, requireStates } = text;
+const { requireCheckableCwd } = taskCwd;
 
 const UNFINISHED_TASKS_REQUIRING_DEPENDENCIES = 3;
 
@@ -68,17 +70,19 @@ function admitTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.
   return Effect.gen(function* () {
     const states = requireStates(`Task ${input.title}`, input.currentState, input.goalState);
     const checks = requireChecks(`Task ${input.title}`, input.checks);
+    const cwd = input.cwd ?? runtime.options.cwd;
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     requireNewTitle(runtime, input);
     requireDependenciesWhenBusy(runtime, input);
     if (input.condition !== undefined) {
       yield* conditions.requireValidCondition(input.title, input.condition);
     }
+    yield* requireCheckableCwd(`Task ${input.title}`, cwd, checks);
     const round = resolveRound(runtime, input);
     const mergeInto = requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
       store.getTask(runtime.database, id),
     );
-    return { checks, mergeInto, round, states };
+    return { checks, cwd, mergeInto, round, states };
   });
 }
 

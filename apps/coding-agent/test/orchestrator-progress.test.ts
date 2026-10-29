@@ -38,13 +38,13 @@ const lintTask = (directory: string) =>
     return { ...setUp, task };
   });
 
-const keepsReturningChecksWhileTheFilesChange = (inGit: boolean) => () =>
+const keepsReturningChecksWhileTheFilesChange = () =>
   Effect.runPromise(
-    (inGit ? withRepository : withRepo)((directory) =>
+    withRepository((directory) =>
       Effect.gen(function* () {
         const { orchestrator, reports, task, workers } = yield* lintTask(directory);
         const worker = workers[0]!;
-        const edited = joinPath(worker.cwd, inGit ? "app/README" : "src.txt");
+        const edited = joinPath(worker.cwd, "app/README");
         yield* writeTextFile(joinPath(worker.cwd, "lint.txt"), "3 errors\n");
         for (let turn = 1; turn <= TURNS; turn++) {
           yield* writeTextFile(edited, `attempt ${turn}\n`);
@@ -64,13 +64,8 @@ const keepsReturningChecksWhileTheFilesChange = (inGit: boolean) => () =>
   );
 
 it(
-  "returns failing checks with the same output to a worker that rewrites a file every turn outside git and without origin, and waits for a decision only after a turn that changes no file",
-  keepsReturningChecksWhileTheFilesChange(false),
-);
-
-it(
   "returns failing checks with the same output to a worker that reworks a tracked file without committing, and waits for a decision only after a turn that changes no file",
-  keepsReturningChecksWhileTheFilesChange(true),
+  keepsReturningChecksWhileTheFilesChange,
 );
 
 function changesOf(state: State): string {

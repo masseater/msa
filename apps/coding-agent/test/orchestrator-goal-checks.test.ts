@@ -10,9 +10,9 @@ import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
 import triageSupport from "./triage-support.ts";
 
-const { joinPath, writeTextFile } = testing;
+const { joinPath, pollUntil, writeTextFile } = testing;
 const { escalateTriage } = triageSupport;
-const { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepo } = goalChecksSupport;
+const { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepository } = goalChecksSupport;
 const { orchestratorError } = errors;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
@@ -21,20 +21,21 @@ const { advance, fakeClock } = watchdogSupport;
 
 const returnsAFailingReportToTheWorker = () =>
   Effect.runPromise(
-    withRepo((directory) =>
+    withRepository((directory) =>
       Effect.gen(function* () {
         const { orchestrator, reports, workers } = setup({
           cwd: directory,
           runCommand: orchestratorCallbacks.runCommand,
         });
-        yield* writeTextFile(joinPath(directory, "lint.txt"), "3 errors\n");
-        yield* writeTextFile(joinPath(directory, "src.txt"), "class Base {}\n");
         const task = yield* create(orchestrator, {
           checks: [LINT_CHECK, SHORTCUT_CHECK],
           currentState: "lint reports 3 errors",
           goalState: "lint reports 0 errors without layering classes to dodge the rule",
           title: "lint",
         });
+        const worktree = workers[0]!.cwd;
+        yield* writeTextFile(joinPath(worktree, "lint.txt"), "3 errors\n");
+        yield* writeTextFile(joinPath(worktree, "src.txt"), "class Base {}\n");
         expect(workers[0]?.prompts[0]).toContain("`cat lint.txt` → exit 0, output matching");
 
         workers[0]?.complete("lint is clean");
@@ -47,8 +48,8 @@ const returnsAFailingReportToTheWorker = () =>
         expect(taskStatus(orchestrator, task.id)).toBe("running");
         expect(reports).toEqual([]);
 
-        yield* writeTextFile(joinPath(directory, "lint.txt"), "0 errors\n");
-        yield* writeTextFile(joinPath(directory, "src.txt"), "class layer-1 {}\n");
+        yield* writeTextFile(joinPath(worktree, "lint.txt"), "0 errors\n");
+        yield* writeTextFile(joinPath(worktree, "src.txt"), "class layer-1 {}\n");
         workers[0]?.complete("lint is clean now");
         yield* waitFor(() => workers[0]?.prompts.length === 3);
         expect(workers[0]?.prompts[2]).toContain(
@@ -56,7 +57,7 @@ const returnsAFailingReportToTheWorker = () =>
         );
         expect(workers).toHaveLength(1);
 
-        yield* writeTextFile(joinPath(directory, "src.txt"), "class Base {}\n");
+        yield* writeTextFile(joinPath(worktree, "src.txt"), "class Base {}\n");
         workers[0]?.complete("removed the layering");
         yield* waitFor(() => workers.length === 2);
         expect(workers[1]?.prompts[0]).toContain("removed the layering");
@@ -74,23 +75,24 @@ it(
 
 const asksForADecisionWhenTheChecksStopMoving = () =>
   Effect.runPromise(
-    withRepo((directory) =>
+    withRepository((directory) =>
       Effect.gen(function* () {
         const { orchestrator, reports, workers } = setup({
           cwd: directory,
           runCommand: orchestratorCallbacks.runCommand,
         });
-        yield* writeTextFile(joinPath(directory, "lint.txt"), "9 errors\n");
         const task = yield* create(orchestrator, {
           checks: [LINT_CHECK],
           currentState: "lint reports 9 errors",
           goalState: "lint reports 0 errors",
           title: "lint",
         });
+        const worktree = workers[0]!.cwd;
+        yield* writeTextFile(joinPath(worktree, "lint.txt"), "9 errors\n");
         for (let attempt = 1; attempt <= 5; attempt++) {
           workers[0]?.complete(`done, try ${attempt}`);
           yield* waitFor(() => workers[0]?.prompts.length === attempt + 1);
-          yield* writeTextFile(joinPath(directory, "lint.txt"), `${9 - attempt} errors\n`);
+          yield* writeTextFile(joinPath(worktree, "lint.txt"), `${9 - attempt} errors\n`);
         }
         expect(taskStatus(orchestrator, task.id)).toBe("running");
         expect(reports).toEqual([]);
@@ -105,7 +107,7 @@ const asksForADecisionWhenTheChecksStopMoving = () =>
         expect(reports.at(-1)?.text).toContain("exactly the same result");
         expect(reports.at(-1)?.text).toContain("4 errors");
 
-        yield* writeTextFile(joinPath(directory, "lint.txt"), "0 errors\n");
+        yield* writeTextFile(joinPath(worktree, "lint.txt"), "0 errors\n");
         yield* Effect.promise(() => orchestrator.sendMessage(task.id, "Fix the remaining four."));
         yield* waitFor(() => workers[0]?.prompts.length === 8);
         expect(workers[0]?.prompts[7]).toContain("Fix the remaining four.");
@@ -122,29 +124,31 @@ it(
 
 const deliversANoteSentWhileTheChecksRun = () =>
   Effect.runPromise(
-    Effect.gen(function* () {
-      const held = heldCommand();
-      const { orchestrator, workers } = setup({ runCommand: held.runCommand });
-      const task = yield* create(orchestrator, {
-        checks: [LINT_CHECK],
-        currentState: "lint reports 3 errors",
-        goalState: "lint reports 0 errors",
-        title: "lint",
-      });
-      workers[0]?.complete("lint is clean");
-      yield* waitFor(() => held.calls.length === 1);
-      yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
-      held.calls[0]?.release();
-      yield* waitFor(() => workers[0]?.prompts.length === 2);
-      expect(workers[0]?.prompts[1]).toContain("also keep the old API");
-      expect(workers).toHaveLength(1);
+    withRepository((directory) =>
+      Effect.gen(function* () {
+        const held = heldCommand();
+        const { orchestrator, workers } = setup({ cwd: directory, runCommand: held.runCommand });
+        const task = yield* create(orchestrator, {
+          checks: [LINT_CHECK],
+          currentState: "lint reports 3 errors",
+          goalState: "lint reports 0 errors",
+          title: "lint",
+        });
+        workers[0]?.complete("lint is clean");
+        yield* waitFor(() => held.calls.length === 1);
+        yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
+        held.calls[0]?.release();
+        yield* waitFor(() => workers[0]?.prompts.length === 2);
+        expect(workers[0]?.prompts[1]).toContain("also keep the old API");
+        expect(workers).toHaveLength(1);
 
-      workers[0]?.complete("kept the old API");
-      yield* waitFor(() => held.calls.length === 2);
-      held.calls[1]?.release();
-      yield* waitFor(() => workers.length === 2);
-      expect(workers[1]?.prompts[0]).toContain("kept the old API");
-    }),
+        workers[0]?.complete("kept the old API");
+        yield* waitFor(() => held.calls.length === 2);
+        held.calls[1]?.release();
+        yield* waitFor(() => workers.length === 2);
+        expect(workers[1]?.prompts[0]).toContain("kept the old API");
+      }),
+    ),
   );
 
 it(
@@ -154,25 +158,27 @@ it(
 
 const abortsTheChecksOfAStoppedTask = () =>
   Effect.runPromise(
-    Effect.gen(function* () {
-      const held = heldCommand();
-      const { orchestrator, workers } = setup({ runCommand: held.runCommand });
-      const task = yield* create(orchestrator, {
-        checks: [LINT_CHECK, SHORTCUT_CHECK],
-        currentState: "lint reports 3 errors",
-        goalState: "lint reports 0 errors",
-        title: "lint",
-      });
-      workers[0]?.complete("lint is clean");
-      yield* waitFor(() => held.calls.length === 1);
-      yield* Effect.promise(() => orchestrator.stop(task.id));
-      yield* waitFor(() => held.calls[0]?.signal.aborted === true);
-      yield* Effect.sleep(20);
-      expect(held.calls).toHaveLength(1);
-      const view = yield* Effect.promise(() => orchestrator.read(task.id));
-      expect(view.assignments.map((assignment) => assignment.role)).toEqual(["worker"]);
-      expect(view.status).toBe("stopped");
-    }),
+    withRepository((directory) =>
+      Effect.gen(function* () {
+        const held = heldCommand();
+        const { orchestrator, workers } = setup({ cwd: directory, runCommand: held.runCommand });
+        const task = yield* create(orchestrator, {
+          checks: [LINT_CHECK, SHORTCUT_CHECK],
+          currentState: "lint reports 3 errors",
+          goalState: "lint reports 0 errors",
+          title: "lint",
+        });
+        workers[0]?.complete("lint is clean");
+        yield* waitFor(() => held.calls.length === 1);
+        yield* Effect.promise(() => orchestrator.stop(task.id));
+        yield* waitFor(() => held.calls[0]?.signal.aborted === true);
+        yield* Effect.sleep(20);
+        expect(held.calls).toHaveLength(1);
+        const view = yield* Effect.promise(() => orchestrator.read(task.id));
+        expect(view.assignments.map((assignment) => assignment.role)).toEqual(["worker"]);
+        expect(view.status).toBe("stopped");
+      }),
+    ),
   );
 
 it(
@@ -182,31 +188,37 @@ it(
 
 const keepsAThreadAliveWhileItsChecksRun = () =>
   Effect.runPromise(
-    Effect.gen(function* () {
-      yield* fakeClock();
-      const held = heldCommand();
-      const { orchestrator, workers } = setup({ runCommand: held.runCommand });
-      try {
-        const task = yield* create(orchestrator, {
-          checks: [LINT_CHECK],
-          currentState: "lint reports 3 errors",
-          goalState: "lint reports 0 errors",
-          title: "lint",
-        });
-        workers[0]?.complete("lint is clean");
-        yield* advance(0);
-        expect(held.calls).toHaveLength(1);
-        yield* advance(2 * 60 * 60_000);
-        expect(held.calls[0]?.signal.aborted).toBe(false);
-        expect(taskStatus(orchestrator, task.id)).toBe("running");
-        held.calls[0]?.release();
-        yield* advance(1000);
-        expect(workers).toHaveLength(2);
-      } finally {
-        yield* Effect.promise(() => orchestrator.dispose());
-        vi.useRealTimers();
-      }
-    }),
+    withRepository((directory) =>
+      Effect.gen(function* () {
+        yield* fakeClock();
+        const held = heldCommand();
+        const { orchestrator, workers } = setup({ cwd: directory, runCommand: held.runCommand });
+        try {
+          const task = yield* create(orchestrator, {
+            checks: [LINT_CHECK],
+            currentState: "lint reports 3 errors",
+            goalState: "lint reports 0 errors",
+            title: "lint",
+          });
+          workers[0]?.complete("lint is clean");
+          yield* advance(0);
+          expect(held.calls).toHaveLength(1);
+          yield* advance(2 * 60 * 60_000);
+          expect(held.calls[0]?.signal.aborted).toBe(false);
+          expect(taskStatus(orchestrator, task.id)).toBe("running");
+          held.calls[0]?.release();
+          yield* pollUntil(
+            Effect.sync(() => workers.length === 2),
+            100,
+            advance(100),
+          );
+          expect(workers).toHaveLength(2);
+        } finally {
+          yield* Effect.promise(() => orchestrator.dispose());
+          vi.useRealTimers();
+        }
+      }),
+    ),
   );
 
 it(
@@ -216,41 +228,43 @@ it(
 
 const carriesChecksThroughReplanAndStateEdits = () =>
   Effect.runPromise(
-    Effect.gen(function* () {
-      const { orchestrator } = setup({ maxConcurrent: 1 });
-      yield* create(orchestrator, {
-        currentState: "something else runs",
-        goalState: "it is done",
-        title: "blocker",
-      });
-      const waiting = yield* create(orchestrator, {
-        checks: [LINT_CHECK],
-        currentState: "lint reports 3 errors",
-        goalState: "lint reports 0 errors",
-        title: "lint",
-      });
-      const edited = yield* Effect.promise(() =>
-        orchestrator.setState({ checks: [LINT_CHECK, SHORTCUT_CHECK], taskId: waiting.id }),
-      );
-      expect(edited.checks).toEqual([
-        { command: "cat lint.txt", exitCode: 0, output: "^0 errors$" },
-        { command: "grep -c 'layer-[0-9]' src.txt", exitCode: 1, output: null },
-      ]);
-      const result = yield* Effect.promise(() =>
-        orchestrator.replan({
-          keep: orchestrator.snapshot.tasks
-            .filter((task) => task.status === "running")
-            .map((task) => task.id),
-          reason: "split the lint work",
-          stop: false,
-          tasks: [{ from: [waiting.id], title: "lint again" }],
-        }),
-      );
-      const successor = orchestrator.snapshot.tasks.find(
-        (task) => task.id === result.created[0]?.taskId,
-      );
-      expect(successor?.checks).toEqual(edited.checks);
-    }),
+    withRepository((directory) =>
+      Effect.gen(function* () {
+        const { orchestrator } = setup({ cwd: directory, maxConcurrent: 1 });
+        yield* create(orchestrator, {
+          currentState: "something else runs",
+          goalState: "it is done",
+          title: "blocker",
+        });
+        const waiting = yield* create(orchestrator, {
+          checks: [LINT_CHECK],
+          currentState: "lint reports 3 errors",
+          goalState: "lint reports 0 errors",
+          title: "lint",
+        });
+        const edited = yield* Effect.promise(() =>
+          orchestrator.setState({ checks: [LINT_CHECK, SHORTCUT_CHECK], taskId: waiting.id }),
+        );
+        expect(edited.checks).toEqual([
+          { command: "cat lint.txt", exitCode: 0, output: "^0 errors$" },
+          { command: "grep -c 'layer-[0-9]' src.txt", exitCode: 1, output: null },
+        ]);
+        const result = yield* Effect.promise(() =>
+          orchestrator.replan({
+            keep: orchestrator.snapshot.tasks
+              .filter((task) => task.status === "running")
+              .map((task) => task.id),
+            reason: "split the lint work",
+            stop: false,
+            tasks: [{ from: [waiting.id], title: "lint again" }],
+          }),
+        );
+        const successor = orchestrator.snapshot.tasks.find(
+          (task) => task.id === result.created[0]?.taskId,
+        );
+        expect(successor?.checks).toEqual(edited.checks);
+      }),
+    ),
   );
 
 it(

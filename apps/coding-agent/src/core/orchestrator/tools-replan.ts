@@ -18,7 +18,12 @@ const replanTaskSchema = Type.Object({
         "What is true now, including what the tasks it replaces finished and the handoff memo says. Default: the current states of those tasks.",
     }),
   ),
-  cwd: Type.Optional(Type.String({ description: "Working directory." })),
+  cwd: Type.Optional(
+    Type.String({
+      description:
+        "Working directory: a checkout of the repository when the task has checks. Default: the cwd of the first task it replaces, or this session's.",
+    }),
+  ),
   dependsOn: Type.Optional(
     Type.Array(Type.String(), {
       description:
@@ -28,7 +33,7 @@ const replanTaskSchema = Type.Object({
   from: Type.Optional(
     Type.Array(taskIdSchema, {
       description:
-        "Existing tasks this one replaces: one to rewrite or split off, several to merge. Their states and handoff memos come along, and they are closed.",
+        "Existing tasks this one replaces: one to rewrite or split off, several to merge. Their states and handoff memos come along, and they are closed. The open pull request whose head is the branch of a task it replaces becomes this task's own when this task has no mergeInto and no pull request yet: it continues on that branch, and the harness reviews and merges that pull request. A task that ran outside a git working tree has no branch, so nothing of it is handed over; the result names it, and a pull request it opened is closed and opened again from the new task's branch.",
     }),
   ),
   goalState: Type.Optional(
