@@ -876,7 +876,7 @@
               previewHighlighted = escapeHtml(previewCode);
             }
 
-            return `<div class="tool-output expandable" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
+            return `<div class="tool-output expandable" data-toggle="expanded">
               <div class="output-preview"><pre><code class="hljs">${previewHighlighted}</code></pre>
               <div class="expand-hint">... (${remaining} more lines)</div></div>
               <div class="output-full"><pre><code class="hljs">${highlighted}</code></pre></div></div>`;
@@ -887,7 +887,7 @@
 
         // Plain text output
         if (remaining > 0) {
-          let out = '<div class="tool-output expandable" onclick="if(window.getSelection().toString())return;this.classList.toggle(\'expanded\')">';
+          let out = '<div class="tool-output expandable" data-toggle="expanded">';
           out += '<div class="output-preview">';
           for (const line of displayLines) {
             out += `<div>${escapeHtml(replaceTabs(line))}</div>`;
@@ -1053,7 +1053,7 @@
 
               if (rendered.resultHtmlCollapsed && rendered.resultHtmlExpanded && rendered.resultHtmlCollapsed !== rendered.resultHtmlExpanded) {
                 // Both collapsed and expanded differ - render expandable section
-                html += `<div class="tool-output expandable ansi-rendered" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
+                html += `<div class="tool-output expandable ansi-rendered" data-toggle="expanded">
                   <div class="output-preview">${rendered.resultHtmlCollapsed}</div>
                   <div class="output-full">${rendered.resultHtmlExpanded}</div>
                 </div>`;
@@ -1086,7 +1086,7 @@
        * Download the session data as a JSONL file.
        * Reconstructs the original format: header line + entry lines.
        */
-      window.downloadSessionJson = function() {
+      const downloadSessionJson = () => {
         // Build JSONL content: header first, then all entries
         const lines = [];
         if (header) {
@@ -1107,7 +1107,7 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      }
+      };
 
       /**
        * Build a shareable URL for a specific message.
@@ -1213,7 +1213,7 @@
               let html = `<div class="skill-user-entry" id="${entryDomId}">${copyBtnHtml}${tsHtml}`;
 
               // Skill invocation (collapsed by default, click to expand)
-              html += `<div class="skill-invocation" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
+              html += `<div class="skill-invocation" data-toggle="expanded">
                 <div class="skill-invocation-label">[skill] ${escapeHtml(skillBlock.name)}</div>
                 <div class="skill-invocation-collapsed">${escapeHtml(skillBlock.name)} (click to expand)</div>
                 <div class="skill-invocation-content markdown-content">${safeMarkedParse(skillBlock.content)}</div>
@@ -1312,7 +1312,7 @@
         }
 
         if (entry.type === 'compaction') {
-          return `<div class="compaction" id="${entryDomId}" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
+          return `<div class="compaction" id="${entryDomId}" data-toggle="expanded">
             <div class="compaction-label">[compaction]</div>
             <div class="compaction-collapsed">Compacted from ${entry.tokensBefore.toLocaleString()} tokens</div>
             <div class="compaction-content"><strong>Compacted from ${entry.tokensBefore.toLocaleString()} tokens</strong>\n\n${escapeHtml(entry.summary)}</div>
@@ -1410,7 +1410,7 @@
                 <button type="button" class="header-toggle-btn" data-action="toggle-thinking" aria-pressed="${thinkingExpanded}" title="Toggle thinking (T)">Toggle thinking</button>
                 <button type="button" class="header-toggle-btn" data-action="toggle-tools" aria-pressed="${toolOutputsExpanded}" title="Toggle tools (O)">Toggle tools</button>
                 <button type="button" class="header-toggle-btn" data-action="toggle-hidden-messages" aria-pressed="${showHiddenMessages}" title="Show custom messages marked as hidden in the terminal (H).">${showHiddenMessages ? 'Hide hidden messages' : 'Show hidden messages'}</button>
-                <button type="button" class="download-json-btn" onclick="downloadSessionJson()" title="Download session as JSONL">↓ JSONL</button>
+                <button type="button" class="download-json-btn" data-action="download-json" title="Download session as JSONL">↓ JSONL</button>
               </div>
             </div>
             <div class="header-info">
@@ -1430,7 +1430,7 @@
           if (lines.length > previewLines) {
             const preview = lines.slice(0, previewLines).join('\n');
             const remaining = lines.length - previewLines;
-            html += `<div class="system-prompt expandable" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
+            html += `<div class="system-prompt expandable" data-toggle="expanded">
               <div class="system-prompt-header">System Prompt</div>
               <div class="system-prompt-preview">${escapeHtml(preview)}</div>
               <div class="system-prompt-expand-hint">... (${remaining} more lines, click to expand)</div>
@@ -1467,7 +1467,7 @@
                   }
                   paramsHtml += `</div>`;
                 }
-                return `<div class="tool-item" onclick="if(window.getSelection().toString())return;this.classList.toggle('params-expanded')"><span class="tool-item-name">${escapeHtml(t.name)}</span> - <span class="tool-item-desc">${escapeHtml(t.description)}</span> <span class="tool-params-hint"></span><div class="tool-params-content">${paramsHtml}</div></div>`;
+                return `<div class="tool-item" data-toggle="params-expanded"><span class="tool-item-name">${escapeHtml(t.name)}</span> - <span class="tool-item-desc">${escapeHtml(t.description)}</span> <span class="tool-params-hint"></span><div class="tool-params-content">${paramsHtml}</div></div>`;
               }).join('')}
             </div>
           </div>`;
@@ -1865,7 +1865,17 @@
         document.querySelector('[data-action="toggle-hidden-messages"]')?.addEventListener('click', () => {
           setHiddenMessagesVisible(!showHiddenMessages);
         });
+        document.querySelector('[data-action="download-json"]')?.addEventListener('click', downloadSessionJson);
       };
+
+      document.addEventListener('click', (e) => {
+        if (window.getSelection()?.toString()) return;
+        let el = e.target instanceof Element ? e.target.closest('[data-toggle]') : null;
+        while (el) {
+          el.classList.toggle(el.dataset.toggle);
+          el = el.parentElement?.closest('[data-toggle]') ?? null;
+        }
+      });
 
       const isEditableTarget = (element) => {
         if (!element) return false;

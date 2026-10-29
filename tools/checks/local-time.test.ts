@@ -1,9 +1,10 @@
 import { expect, it } from "vite-plus/test";
 
+import embeddedScript from "./embedded-script.ts";
 import lintProbe from "./lint-probe.ts";
 import localTimeCheck from "./local-time.ts";
 
-const { lintAndInspectProbes, probePath, readRepoFile, repoRoot } = lintProbe;
+const { lintAndInspectProbes, listRepoFiles, probePath, readRepoFile, repoRoot } = lintProbe;
 
 const HEADER = [
   'import { DateTime } from "effect";',
@@ -62,6 +63,55 @@ const scriptProbes = Object.entries(scriptCases).map(([name, [statement, flagged
   source: `${statement}\nconsole.log(v);\n`,
 }));
 
+const extractedScript = {
+  path: "scripts/local-time-extracted-probe.js",
+  source: "console.log(new Date(0).toLocaleString());\n",
+};
+
+const TAG = "script";
+const ON = "on";
+const SCHEME = "javascript";
+const LOCALE = "new Date().toLocaleString()";
+
+const embeddedCases: Readonly<Record<string, readonly [statement: string, flagged: boolean]>> = {
+  concatScript: [`export const v = (js: string) => "<${TAG}>" + js + "</${TAG}>";`, true],
+  constantScript: [`const JS = "${LOCALE}";\nexport const v = \`<${TAG}>\${JS}</${TAG}>\`;`, true],
+  dataScript: [
+    `export const v = (json: string) => \`<${TAG} type="application/json">\${json}</${TAG}>\`;`,
+    false,
+  ],
+  handler: [`export const v = '<button ${ON}click="this.textContent=${LOCALE}">';`, true],
+  handlerConcat: [`export const v = "<button" + ' ${ON}click="${LOCALE}">';`, true],
+  schemeCheck: [`export const v = (p: string) => ["${SCHEME}:", "data:"].includes(p);`, false],
+  schemeUrl: [`export const v = '<a href="${SCHEME}:alert(${LOCALE})">';`, true],
+  srcScript: [`export const v = '<${TAG} src="https://example.com/a.js"></${TAG}>';`, false],
+  stringLocale: [`export const v = "<${TAG}>${LOCALE}</${TAG}>";`, true],
+  substitutedScript: [
+    "export const v = (js: string) => `<" + TAG + ">\n${js}\n</" + TAG + ">`;",
+    true,
+  ],
+  templateLocale: [
+    `export const v = (n: number) => \`<${TAG}>const n=\${n};${LOCALE}</${TAG}>\`;`,
+    true,
+  ],
+  typeFromVariable: [
+    `export const v = (t: string, js: string) => \`<${TAG} type="\${t}">\${js}</${TAG}>\`;`,
+    true,
+  ],
+};
+
+const embeddedProbes = Object.entries(embeddedCases).map(([name, [statement, flagged]]) => ({
+  flagged,
+  name,
+  path: probePath("scripts", `local-time-embedded-${name}`),
+  source: `${statement}\n`,
+}));
+
+const scriptOwner = {
+  path: localTimeCheck.SCRIPT_OWNER,
+  source: `export const v = (js: string) => \`<${TAG}>\${js}</${TAG}>\`;\n`,
+};
+
 const [owner] = localTimeCheck.OWNERS;
 
 it("reports every way of reading the local time zone outside the one formatter", () =>
@@ -69,21 +119,43 @@ it("reports every way of reading the local time zone outside the one formatter",
     lintAndInspectProbes(
       {
         ...Object.fromEntries(
-          [...probes, ...scriptProbes].map(({ path, source }) => [path, source]),
+          [...probes, ...scriptProbes, ...embeddedProbes, extractedScript, scriptOwner].map(
+            ({ path, source }) => [path, source],
+          ),
         ),
         [localTimeCheck.BROWSER_SCRIPTS]: browserScripts,
         [owner!]: [...HEADER, "export const v = date.getHours();", ""].join("\n"),
       },
-      (run) => localTimeCheck.scan({ files: (name) => name.startsWith(`${run}/`), root: run }),
-    ).then(({ inspected }) => {
-      const flagged = (path: string) => inspected.some((finding) => finding.file === path);
+      (run) => {
+        const scope = { files: (name: string) => name.startsWith(`${run}/`), root: run };
+        return {
+          all: localTimeCheck.scan(scope),
+          withoutEmbedded: localTimeCheck.scan(scope, new Set(["embeddedScript"])),
+        };
+      },
+    ).then(({ inspected: { all, withoutEmbedded } }) => {
+      const flaggedIn = (findings: typeof all) => (path: string) =>
+        findings.some((finding) => finding.file === path);
+      const flagged = flaggedIn(all);
+      const embedded = (found: (path: string) => boolean) =>
+        Object.fromEntries(embeddedProbes.map(({ name, path }) => [name, found(path)]));
       expect({
+        embedded: embedded(flagged),
+        embeddedWithoutRule: embedded(flaggedIn(withoutEmbedded)),
+        extracted: flagged(extractedScript.path),
         owner: flagged(owner!),
         probes: Object.fromEntries(probes.map(({ name, path }) => [name, flagged(path)])),
+        scriptOwner: flagged(scriptOwner.path),
         scripts: Object.fromEntries(scriptProbes.map(({ name, path }) => [name, flagged(path)])),
       }).toEqual({
+        embedded: Object.fromEntries(
+          embeddedProbes.map(({ flagged: value, name }) => [name, value]),
+        ),
+        embeddedWithoutRule: Object.fromEntries(embeddedProbes.map(({ name }) => [name, false])),
+        extracted: true,
         owner: false,
         probes: Object.fromEntries(probes.map(({ flagged: value, name }) => [name, value])),
+        scriptOwner: false,
         scripts: Object.fromEntries(scriptProbes.map(({ flagged: value, name }) => [name, value])),
       });
       return undefined;
@@ -101,3 +173,39 @@ it("leaves no local time string built outside the one formatter", () => {
     findings.map(({ detail, file, line, text }) => `${file}:${line} ${detail} ${text}`),
   ).toEqual([]);
 });
+
+const htmlCases: Readonly<Record<string, readonly [html: string, flagged: boolean]>> = {
+  data: [`<${TAG} id="d" type="application/json">{"a":1}</${TAG}>`, false],
+  handler: [`<div ${ON}click="${LOCALE}"></div>`, true],
+  inline: [`<${TAG}>${LOCALE}</${TAG}>`, true],
+  placeholder: [`<${TAG}>\n{{JS}}\n</${TAG}>`, false],
+  scheme: [`<a href="${SCHEME}:${LOCALE}">x</a>`, true],
+  src: [`<${TAG} src="a.js"></${TAG}>`, false],
+};
+
+it("reports browser JS written into HTML instead of a checked .js file", () => {
+  const entries = Object.entries(htmlCases);
+  expect(
+    Object.fromEntries(
+      entries.map(([name, [html]]) => [name, embeddedScript.inHtml(html).length > 0]),
+    ),
+  ).toEqual(Object.fromEntries(entries.map(([name, [, flagged]]) => [name, flagged])));
+});
+
+it("leaves no browser JS written into the repository's HTML", () =>
+  listRepoFiles("*.html")
+    .then((files) =>
+      Promise.all(
+        files
+          .filter((file) => !file.includes("/vendor/"))
+          .map((file) =>
+            readRepoFile(file).then((html) =>
+              embeddedScript.inHtml(html).map(({ detail, index }) => `${file}:${index} ${detail}`),
+            ),
+          ),
+      ),
+    )
+    .then((found) => {
+      expect(found.flat()).toEqual([]);
+      return undefined;
+    }));

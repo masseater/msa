@@ -138,10 +138,18 @@ const readRepoFile = (file: string): Promise<string> =>
     FileSystem.FileSystem.use((fs) => fs.readFileString(`${repoRoot}/${file}`)).pipe(Effect.orDie),
   );
 
+const listRepoFiles = (pattern: string): Promise<readonly string[]> =>
+  probeRuntime.runPromise(
+    captureProcess({ args: ["ls-files", "--", pattern], command: "git", cwd: repoRoot }).pipe(
+      Effect.map(({ stdout }) => stdout.split("\n").filter((line) => line !== "")),
+    ),
+  );
+
 const lintProbe = {
   codesOnLine,
   lintAndInspectProbes,
   lintProbes,
+  listRepoFiles,
   msaCodesOnLine,
   probePath,
   readRepoFile,

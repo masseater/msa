@@ -67,7 +67,7 @@
     {
       "name": "vite-plus",
       "enablers": ["vite-plus"],
-      "entryPoints": ["vite.config.ts", "tools/**/*.ts", "scripts/*.ts"],
+      "entryPoints": ["vite.config.ts", "tools/**/*.ts", "scripts/*.ts", "scripts/*.js"],
       "toolingDependencies": ["@ast-grep/cli", "eslint-plugin-no-comments"],
     },
     {
