@@ -1,11 +1,52 @@
+import mcpServersModule from "./mcp-servers.ts";
 import type mcpServersTypes from "./mcp-servers.types.ts";
+import memoryModule from "./memory/memory.ts";
+
+const { ignoredMcpServerNotice, isSepiaceServer } = memoryModule;
+const { mcpNamespace, validateMcpServerConfig } = mcpServersModule;
+
+function rawUrl(config: unknown): string | undefined {
+  if (typeof config !== "object" || config === null || !("url" in config)) return undefined;
+  return typeof config.url === "string" ? config.url : undefined;
+}
 
 export default class McpServerRegistry {
   private readonly servers = new Map<string, mcpServersTypes.RegisteredMcpServer>();
+  private readonly ignoredNotices: string[] = [];
   private changeListener: (() => void) | undefined;
+  private ignoreListener: ((notice: string, extensionPath: string) => void) | undefined;
 
-  register(server: mcpServersTypes.RegisteredMcpServer): void {
-    this.servers.set(server.name, server);
+  admit(input: {
+    name: string;
+    config: unknown;
+    extensionPath: string;
+  }): mcpServersTypes.McpServerAdmission {
+    const { name, extensionPath } = input;
+    if (isSepiaceServer(name, rawUrl(input.config))) return { extensionPath, ignored: true, name };
+    const config = validateMcpServerConfig(name, input.config);
+    if (typeof config === "string") {
+      throw new Error(`Invalid MCP server registered by extension "${extensionPath}": ${config}`);
+    }
+    const owner = this.servers.get(name)?.extensionPath;
+    if (owner !== undefined && owner !== extensionPath) {
+      throw new Error(`MCP server "${name}" is already registered by extension "${owner}"`);
+    }
+    const clash = [...this.servers.values()].find(
+      (server) => server.name !== name && mcpNamespace(server.name) === mcpNamespace(name),
+    );
+    if (clash !== undefined) {
+      throw new Error(`MCP server "${name}" conflicts with registered server "${clash.name}"`);
+    }
+    return { config: structuredClone(config), extensionPath, ignored: false, name };
+  }
+
+  register(admission: mcpServersTypes.McpServerAdmission): void {
+    if (admission.ignored) {
+      this.ignore(admission.name, admission.extensionPath);
+      return;
+    }
+    const { config, extensionPath, name } = admission;
+    this.servers.set(name, { config, extensionPath, name });
     this.changeListener?.();
   }
 
@@ -26,7 +67,22 @@ export default class McpServerRegistry {
     }));
   }
 
+  ignored(): string[] {
+    return [...this.ignoredNotices];
+  }
+
   setChangeListener(listener: (() => void) | undefined): void {
     this.changeListener = listener;
+  }
+
+  setIgnoreListener(listener: ((notice: string, extensionPath: string) => void) | undefined): void {
+    this.ignoreListener = listener;
+  }
+
+  private ignore(name: string, extensionPath: string): void {
+    this.unregister(name, extensionPath);
+    const notice = ignoredMcpServerNotice(extensionPath, name);
+    if (this.ignoreListener !== undefined) this.ignoreListener(notice, extensionPath);
+    else if (!this.ignoredNotices.includes(notice)) this.ignoredNotices.push(notice);
   }
 }

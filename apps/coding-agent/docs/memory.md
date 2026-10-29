@@ -76,4 +76,4 @@ Settings files that still hold `memory.embedding.*`, `memory.recall.limit`, or `
 
 `memory.enabled` alone turns memory on and off. With `memory.enabled: false` msa does not connect to sepiace, the `memory` tool and `/memory` are not offered, and no recall runs.
 
-`mcp.json` does not configure memory. An `mcpServers` entry named `sepiace`, or one whose `url` is on `hi.sepiace.io`, is ignored, gets a warning at startup, and is refused by `msa mcp add`; set `memory.enabled` and `memory.url` instead. The model sees only the `memory` tool, never sepiace's own tool.
+`mcp.json` does not configure memory. An `mcpServers` entry named `sepiace`, or one whose `url` is on `hi.sepiace.io`, is ignored, gets a warning at startup, and is refused by `msa mcp add`; set `memory.enabled` and `memory.url` instead. `msa.registerMcpServer()` ignores such a server from an extension too, with the same warning naming the extension's file. The model sees only the `memory` tool, never sepiace's own tool.

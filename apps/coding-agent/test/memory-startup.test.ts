@@ -2,20 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import memoryStartupScripts from "./memory-startup-scripts.ts";
 import memoryStartupSupport from "./memory-startup-support.ts";
 
 const { readTextFile, runTest } = testing;
 const { toolNames, toolResults, useAgents } = memoryStartupSupport;
 
+const { SEPIACE_ENTRIES } = memoryStartupScripts;
 const setUp = useAgents();
 
 const signInsAsked = (log: readonly string[]) =>
   log.filter((line) => line.startsWith("401") || line === "register" || line === "token code");
-
-const SEPIACE_ENTRIES = (sepiaceUrl: string) => ({
-  notes: { exposure: "direct", url: "https://hi.sepiace.io/api/v1/mcp" },
-  sepiace: { exposure: "direct", url: sepiaceUrl },
-});
 
 const recallsWithoutMcpSupport = Effect.gen(function* () {
   const agent = yield* setUp({ signedIn: true });
@@ -26,32 +23,6 @@ const recallsWithoutMcpSupport = Effect.gen(function* () {
   expect(request).toContain("Releases go to the tap.");
   expect(yield* toolNames(request)).toContain("memory");
   expect(signInsAsked(agent.sepiace.log)).toEqual([]);
-});
-
-const ignoresMcpJsonEntriesForSepiace = Effect.gen(function* () {
-  const agent = yield* setUp({ mcpServers: SEPIACE_ENTRIES, signedIn: true });
-  const result = yield* agent.prompt("where does the release go?");
-  expect(result.code, result.stderr).toBe(0);
-  expect(result.stderr).toContain('MCP server "sepiace" is ignored');
-  expect(result.stderr).toContain('MCP server "notes" is ignored');
-  const [request = ""] = agent.model.bodies;
-  expect(request).toContain("Releases go to the tap.");
-  const tools = yield* toolNames(request);
-  expect(tools).toContain("memory");
-  expect(tools.filter((name) => name.startsWith("mcp__"))).toEqual([]);
-  const listed = yield* agent.run(["mcp", "list"]);
-  expect(listed.stdout).not.toContain("sepiace");
-  expect(listed.stdout).not.toContain("notes");
-  const before = yield* readTextFile(agent.mcpConfig);
-  for (const args of [
-    ["mcp", "add", "sepiace", "--url", agent.sepiace.url],
-    ["mcp", "add", "memories", "--url", "https://hi.sepiace.io/api/v1/mcp"],
-  ]) {
-    const added = yield* agent.run(args);
-    expect(added.code).toBe(1);
-    expect(added.stderr).toContain("sepiace is long-term memory, not an MCP server");
-  }
-  expect(yield* readTextFile(agent.mcpConfig)).toBe(before);
 });
 
 const survivesAnExtensionReplacingMcp = Effect.gen(function* () {
@@ -177,11 +148,6 @@ describe.skipIf(process.platform === "win32")("long-term memory from the msa com
   it(
     "recalls and offers the memory tool with --no-mcp",
     () => runTest(recallsWithoutMcpSupport),
-    90_000,
-  );
-  it(
-    "warns about and ignores mcp.json entries for sepiace, and passes no mcp__ tools for it",
-    () => runTest(ignoresMcpJsonEntriesForSepiace),
     90_000,
   );
   it(

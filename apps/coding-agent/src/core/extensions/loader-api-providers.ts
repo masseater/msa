@@ -1,12 +1,9 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import mcpServersModule from "../mcp-servers.ts";
 import type mcpServersTypes from "../mcp-servers.types.ts";
 import type virtualModelsTypes from "../virtual-models.types.ts";
 import type loaderScopeTypes from "./loader-scope.ts";
 import type extensionsTypesTypes from "./types.types.ts";
-
-const { mcpNamespace, validateMcpServerConfig } = mcpServersModule;
 
 const providerMembers = ({
   extension,
@@ -65,24 +62,8 @@ const mcpMembers = ({
 
   registerMcpServer(name: string, config: mcpServersTypes.McpServerConfig) {
     assertActive();
-    const validated = validateMcpServerConfig(name, config);
-    if (typeof validated === "string") {
-      throw new Error(
-        `Invalid MCP server registered by extension "${extension.path}": ${validated}`,
-      );
-    }
-    const owner = runtime.mcpServers.get(name)?.extensionPath;
-    if (owner !== undefined && owner !== extension.path) {
-      throw new Error(`MCP server "${name}" is already registered by extension "${owner}"`);
-    }
-    const clash = runtime.mcpServers
-      .list()
-      .find((server) => server.name !== name && mcpNamespace(server.name) === mcpNamespace(name));
-    if (clash !== undefined) {
-      throw new Error(`MCP server "${name}" conflicts with registered server "${clash.name}"`);
-    }
-    const server = { config: structuredClone(validated), extensionPath: extension.path, name };
-    applyRuntimeChange(() => runtime.mcpServers.register(server));
+    const admission = runtime.mcpServers.admit({ config, extensionPath: extension.path, name });
+    applyRuntimeChange(() => runtime.mcpServers.register(admission));
   },
 
   unregisterMcpServer(name: string) {

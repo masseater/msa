@@ -82,6 +82,9 @@ export default class ExtensionRunner {
       void this.emit({ servers: runtime.mcpServers.list(), type: "mcp_servers_change" });
       this.reportUnhandledMcpServers();
     });
+    runtime.mcpServers.setIgnoreListener((error, extensionPath) => {
+      this.emitError({ error, event: "register_mcp_server", extensionPath });
+    });
     new ProviderBinder(runtime, this.modelRegistry, providerActions, (error) =>
       this.emitError(error),
     ).bind();
