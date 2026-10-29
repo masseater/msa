@@ -88,7 +88,25 @@ function requireMergeTarget(
       `${mergeInto} is ${target.status}; merge only into a task that has not started, since it merges the branches when it starts.`,
     );
   }
+  if (!target.opensPullRequest) {
+    throw new Error(
+      `${mergeInto} opens no pull request (opensPullRequest false), so no branch can merge into it; merge into a task that opens one.`,
+    );
+  }
   return target.id;
+}
+
+function requirePullRequestChoice(
+  label: string,
+  opensPullRequest: boolean | undefined,
+  mergeInto: string | undefined,
+): boolean {
+  if (opensPullRequest === false && mergeInto !== undefined) {
+    throw new Error(
+      `${label}: opensPullRequest false and mergeInto ${mergeInto} contradict each other; a task that merges into another adds commits to that task's pull request. Drop mergeInto for a task that changes no code, or opensPullRequest for one that does.`,
+    );
+  }
+  return opensPullRequest ?? true;
 }
 
 function pullRequestText(pull: orchestratorTypesTypes.PullRequest): string {
@@ -102,6 +120,7 @@ const text = {
   pullRequestText,
   requireChecks,
   requireMergeTarget,
+  requirePullRequestChoice,
   requireStates,
   searchQuery,
   segmentWords,

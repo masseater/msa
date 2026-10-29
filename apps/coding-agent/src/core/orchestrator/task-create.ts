@@ -23,7 +23,10 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     const now = yield* nowMillis;
     const database = runtime.database;
     const project = runtime.options.project;
-    const { checks, cwd, mergeInto, round, states } = yield* admitTask(runtime, input);
+    const { checks, cwd, mergeInto, opensPullRequest, round, states } = yield* admitTask(
+      runtime,
+      input,
+    );
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
       checks,
@@ -36,6 +39,7 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
       kind: "work",
       mergeInto,
       model: input.model ?? null,
+      opensPullRequest,
       project,
       round,
       status: "waiting",

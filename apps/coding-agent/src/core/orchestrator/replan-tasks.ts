@@ -102,6 +102,7 @@ function mergeTargetOf(
   const find = (id: string) => store.getTask(runtime.database, id);
   const project = runtime.options.project;
   if (input.mergeInto !== undefined) return requireMergeTarget(input.mergeInto, project, find);
+  if (input.opensPullRequest === false) return null;
   const own = new Set(sources.map((source) => source.id));
   const source = sources.find((task) => task.mergeInto !== null && !own.has(task.mergeInto));
   const target = source?.mergeInto ?? null;
@@ -133,6 +134,7 @@ function newTask(
     kind: "work",
     mergeInto: mergeTargetOf(runtime, input, sources, replaced),
     model: input.model ?? null,
+    opensPullRequest: input.opensPullRequest ?? true,
     project: runtime.options.project,
     round: roundFor(input, sources),
     status: "waiting",

@@ -11,7 +11,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { store } = storeModule;
 const { conditions } = conditionModule;
 const { duplicateMessage, unfinishedWithTitle } = taskTitles;
-const { requireChecks, requireMergeTarget, requireStates } = text;
+const { requireChecks, requireMergeTarget, requirePullRequestChoice, requireStates } = text;
 const { requireCheckableCwd } = taskCwd;
 
 const UNFINISHED_TASKS_REQUIRING_DEPENDENCIES = 3;
@@ -70,6 +70,11 @@ function admitTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.
   return Effect.gen(function* () {
     const states = requireStates(`Task ${input.title}`, input.currentState, input.goalState);
     const checks = requireChecks(`Task ${input.title}`, input.checks);
+    const opensPullRequest = requirePullRequestChoice(
+      `Task ${input.title}`,
+      input.opensPullRequest,
+      input.mergeInto,
+    );
     const cwd = input.cwd ?? runtime.options.cwd;
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     requireNewTitle(runtime, input);
@@ -82,7 +87,7 @@ function admitTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.
     const mergeInto = requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
       store.getTask(runtime.database, id),
     );
-    return { checks, cwd, mergeInto, round, states };
+    return { checks, cwd, mergeInto, opensPullRequest, round, states };
   });
 }
 

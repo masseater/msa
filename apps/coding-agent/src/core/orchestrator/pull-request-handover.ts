@@ -27,7 +27,9 @@ function heirOf(
     .flatMap((id) => store.getTask(runtime.database, id) ?? [])
     .find(
       (task) =>
-        task.mergeInto === null && store.pullRequestOf(runtime.database, task.id) === undefined,
+        task.mergeInto === null &&
+        task.opensPullRequest &&
+        store.pullRequestOf(runtime.database, task.id) === undefined,
     );
 }
 

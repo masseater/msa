@@ -104,6 +104,7 @@ const task = (
   kind: "work",
   mergeInto: null,
   model: null,
+  opensPullRequest: true,
   project: "project",
   round: "main",
   status,

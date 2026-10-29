@@ -151,6 +151,7 @@ const legacyReplan = Effect.gen(function* () {
     kind: "work" as const,
     mergeInto: null,
     model: null,
+    opensPullRequest: true,
     project: "project",
     round: "main",
     status,

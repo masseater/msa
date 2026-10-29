@@ -1,6 +1,7 @@
 import { Effect, Result } from "effect";
 
 import type goalCheckTextTypes from "./goal-check-text.types.ts";
+import noPullRequestModule from "./no-pull-request.ts";
 import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
 import pullRequestsModule from "./pull-requests.ts";
@@ -10,6 +11,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 import worktreeModule from "./worktree.ts";
 
 const { pullRequests } = pullRequestsModule;
+const { noPullRequest } = noPullRequestModule;
 const { problemsOf } = pullRequestProblems;
 const { outsideLine } = pullRequestOutside;
 const { worktrees } = worktreeModule;
@@ -39,6 +41,7 @@ function check(
   live: () => boolean,
 ): Effect.Effect<GateResult | undefined> {
   return Effect.gen(function* () {
+    if (!task.opensPullRequest) return yield* noPullRequest.gate(runtime, task, live);
     const owner = yield* pullRequests.ownerOf(runtime, task);
     if (owner === undefined) return undefined;
     const found = yield* Effect.result(pullRequests.current(runtime, owner));

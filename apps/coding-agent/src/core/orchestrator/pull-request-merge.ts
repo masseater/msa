@@ -222,6 +222,8 @@ function afterReview(
   live: () => boolean,
 ): Effect.Effect<MergeOutcome | undefined> {
   return Effect.gen(function* () {
+    if (!task.opensPullRequest)
+      return yield* pullRequestFinish.withoutPullRequest(runtime, task, live);
     const owner = yield* pullRequests.ownerOf(runtime, task);
     if (owner === undefined) return undefined;
     const { pollMs, waitMs } = pullRequests.ciTiming(runtime);
