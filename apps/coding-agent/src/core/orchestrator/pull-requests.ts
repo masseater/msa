@@ -191,7 +191,7 @@ function latestThreadOf(
 
 function ownerOf(runtime: runtimeTypes.Runtime, task: Task): Effect.Effect<Owner | undefined> {
   return Effect.gen(function* () {
-    if (task.kind !== "work" || task.mergeInto !== null) return undefined;
+    if (task.kind !== "work" || task.mergeInto !== null || !task.opensPullRequest) return undefined;
     const thread = latestThreadOf(runtime, task.id);
     if (thread?.branch === null || thread?.branch === undefined) return undefined;
     if (!(yield* worktrees.hasOrigin(thread.cwd))) return undefined;
@@ -241,6 +241,7 @@ const pullRequests = {
   awaitingChecks,
   ciTiming,
   current,
+  latestThreadOf,
   ownerOf,
   recordOf,
   save,

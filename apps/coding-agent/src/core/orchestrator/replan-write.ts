@@ -23,7 +23,8 @@ function relinkMerges(
   const project = runtime.options.project;
   const replaced = new Map<string, string>();
   for (const [source, tasks] of inheritors) {
-    if (tasks[0] !== undefined) replaced.set(source, tasks[0]);
+    const heir = tasks.find((id) => store.getTask(database, id)?.opensPullRequest === true);
+    if (heir !== undefined) replaced.set(source, heir);
   }
   store.unlinkMergeSources(database, [
     ...prepared.sources,

@@ -27,6 +27,7 @@ function ensureReview(
     kind: "review",
     mergeInto: null,
     model: null,
+    opensPullRequest: false,
     project,
     round,
     status: "waiting",

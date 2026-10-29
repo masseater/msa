@@ -23,6 +23,9 @@ function addTaskColumns(database: DatabaseSync): void {
 function addWorkspaceColumns(database: DatabaseSync): void {
   const tasks = columnNames(database, "tasks");
   if (!tasks.includes("merge_into")) database.exec("ALTER TABLE tasks ADD COLUMN merge_into TEXT");
+  if (!tasks.includes("opens_pull_request")) {
+    database.exec("ALTER TABLE tasks ADD COLUMN opens_pull_request INTEGER NOT NULL DEFAULT 1");
+  }
   const threads = columnNames(database, "threads");
   if (!threads.includes("branch")) database.exec("ALTER TABLE threads ADD COLUMN branch TEXT");
   if (!threads.includes("target_branch")) {

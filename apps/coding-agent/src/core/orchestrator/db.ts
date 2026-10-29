@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   status TEXT NOT NULL,
   cwd TEXT NOT NULL,
   merge_into TEXT,
+  opens_pull_request INTEGER NOT NULL DEFAULT 1,
   condition TEXT,
   model TEXT,
   thinking_level TEXT,

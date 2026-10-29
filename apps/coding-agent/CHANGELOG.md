@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `create_task` and `replan` take `opensPullRequest: false` for a work task that changes no code, such as tagging and publishing a release or checking a deployment. The harness asks such a task for no pull request and completes it on its checks and its review, and the worker is told not to commit or push. While the task's branch has commits its base lacks, is pushed to `origin`, or its worktree holds uncommitted changes, the task goes back to the worker after its turn, and after a passed review too, instead of completing. The task cannot also take `mergeInto`, no task can merge into it, and it does not take over the pull request of a task `replan` replaces. A task that leaves the field out carries its own pull request as before; `list_tasks` and `read_task` show which tasks open none ([docs](docs/cli.md#tools))
+
 ### Fixed
 
 - A task whose pull request is squash-merged at the head its review checked, with the `Msa-Merge` trailer that `msa squash-message` prints, completes whoever merged it, a task waiting in `needs-decision` included: every minute the harness reads again from GitHub the pull request of each `needs-decision`, `stopped`, or `failed` task, completes the task, removes its worktree and branches, and starts the tasks waiting on it. Such a task used to stay `needs-decision`, and `stop_task` and a `replan` drop recorded merged work as stopped and closed. A merge at another head, or one without the trailer, still leaves the task `stopped`. The report for a task that ends `stopped` or `failed` and the `replan` result read the pull request again from GitHub, by its number when the task's worktree is gone, so a pull request merged or closed meanwhile is no longer called open in "still carries open pull request" or listed under "Open pull requests no task carries on". The watchdog and this every-minute read ask GitHub outside the orchestrator's lock and take it only to record the answer, so a slow `gh` does not hold up other tasks and tools ([docs](docs/cli.md#tools))

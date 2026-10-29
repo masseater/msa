@@ -90,12 +90,14 @@ function workspaceBlock(
 ): string {
   if (workspace.branch === null) return "";
   const where = `The harness created this task's git worktree at ${workspace.cwd}, on branch ${workspace.branch}.`;
-  if (role === "reviewer") {
-    return [
-      "<workspace>",
-      `${where} The work to review is the diff of ${workspace.branch} against ${workspace.targetBranch}.`,
-      "</workspace>",
-    ].join("\n");
+  if (role === "reviewer" || workspace.opensPullRequest === false) {
+    const what =
+      workspace.opensPullRequest === false
+        ? role === "reviewer"
+          ? `This task opens no pull request and must leave ${workspace.branch} with no change against ${workspace.targetBranch}; review the work by its goal and the results it reports.`
+          : `This task opens no pull request: do not commit to ${workspace.branch}, push it, or leave uncommitted changes in the worktree. When the work is done, end your turn. The harness sends the work back when ${workspace.branch} has commits that ${workspace.targetBranch} lacks, is pushed to origin, or the worktree holds uncommitted changes. When the goal turns out to need a code change, end your turn with request_decision.`
+        : `The work to review is the diff of ${workspace.branch} against ${workspace.targetBranch}.`;
+    return ["<workspace>", `${where} ${what}`, "</workspace>"].join("\n");
   }
   const target =
     workspace.target === null
@@ -241,7 +243,8 @@ function describeTask(task: orchestratorTypesTypes.TaskView): string {
   const dependencies = task.dependsOn.length > 0 ? task.dependsOn.join(", ") : "-";
   const condition = task.condition === null ? "" : ` condition "${task.condition}"`;
   const pull = task.pullRequest === null ? "" : `; ${pullRequestText(task.pullRequest)}`;
-  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}${pull}`;
+  const opens = task.opensPullRequest ? "" : "; opens no pull request";
+  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}${opens}${pull}`;
 }
 
 function formatTaskDetail(
@@ -257,7 +260,7 @@ function formatTaskDetail(
     `Dependents: ${task.dependents.join(", ") || "-"}`,
     threads.length > 0 ? `Threads: ${threads.join(", ")}` : "Threads: -",
     task.pullRequest === null
-      ? "Pull request: -"
+      ? `Pull request: ${task.opensPullRequest ? "-" : "none, opensPullRequest false"}`
       : `Pull request: ${task.pullRequest.url} (${task.pullRequest.branch} into ${task.pullRequest.base}, ${pullRequestText(task.pullRequest)}, head ${task.pullRequest.headSha})`,
     stateBlock("current-state", task.currentState),
     stateBlock("goal-state", task.goalState),

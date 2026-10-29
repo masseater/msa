@@ -138,6 +138,7 @@ function insertTask(database: ReturnType<typeof store.openDatabase>, seed: Threa
     kind: "work",
     mergeInto: null,
     model: null,
+    opensPullRequest: true,
     project: "p",
     round: seed.round,
     status: "completed",

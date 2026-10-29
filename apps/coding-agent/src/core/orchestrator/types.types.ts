@@ -44,6 +44,7 @@ declare namespace orchestratorTypesTypes {
     status: TaskStatus;
     cwd: string;
     mergeInto: string | null;
+    opensPullRequest: boolean;
     condition: string | null;
     model: string | null;
     thinkingLevel: agentTypes.ThinkingLevel | null;
@@ -76,6 +77,7 @@ declare namespace orchestratorTypesTypes {
     targetBranch: string | null;
     target: Task | null;
     sources: readonly WorkspaceSource[];
+    opensPullRequest?: boolean;
     work?: string;
     history?: string;
   }
@@ -235,6 +237,7 @@ declare namespace orchestratorTypesTypes {
     thinkingLevel?: agentTypes.ThinkingLevel;
     cwd?: string;
     mergeInto?: string;
+    opensPullRequest?: boolean;
   }
 
   interface SetTaskDependsInput {
@@ -276,6 +279,7 @@ declare namespace orchestratorTypesTypes {
     thinkingLevel?: agentTypes.ThinkingLevel;
     cwd?: string;
     mergeInto?: string;
+    opensPullRequest?: boolean;
   }
 
   interface ReplanDropInput {

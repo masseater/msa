@@ -33,6 +33,7 @@ function task(
     kind: "work",
     mergeInto: null,
     model: "fast/flash",
+    opensPullRequest: true,
     project: "p",
     pullRequest: null,
     replan: null,

@@ -12,6 +12,7 @@ declare namespace taskStoreInternalTypes {
     closed_by?: string | null;
     cwd: string;
     merge_into: string | null;
+    opens_pull_request?: number;
     condition: string | null;
     model: string | null;
     thinking_level: string | null;

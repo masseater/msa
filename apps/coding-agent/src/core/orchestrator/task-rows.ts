@@ -22,6 +22,7 @@ function toTask(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.Tas
     kind: row.kind as orchestratorTypesTypes.TaskKind,
     mergeInto: row.merge_into,
     model: row.model,
+    opensPullRequest: (row.opens_pull_request ?? 1) !== 0,
     project: row.project,
     round: row.round,
     status: statusOf(row),
@@ -35,8 +36,8 @@ function insertTask(database: DatabaseSync, task: orchestratorTypesTypes.Task): 
   database
     .prepare(
       `INSERT INTO tasks (id, project, round, kind, title, current_state, goal_state, checks, status,
-         cwd, merge_into, condition, model, thinking_level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         cwd, merge_into, opens_pull_request, condition, model, thinking_level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       task.id,
@@ -50,6 +51,7 @@ function insertTask(database: DatabaseSync, task: orchestratorTypesTypes.Task): 
       task.status,
       task.cwd,
       task.mergeInto,
+      task.opensPullRequest ? 1 : 0,
       task.condition,
       task.model,
       task.thinkingLevel,

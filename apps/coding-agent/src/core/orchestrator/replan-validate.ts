@@ -11,7 +11,7 @@ import text from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { fail, unique } = replanSupport;
-const { requireChecks } = text;
+const { requireChecks, requirePullRequestChoice } = text;
 const { duplicateMessage, titleKey, unfinishedWithTitle } = taskTitles;
 const { checksOf, cwdOf, redirectsOf } = replanTasks;
 const { requireCheckableCwd } = taskCwd;
@@ -84,6 +84,11 @@ function validateEntries(
     }
     if (entry.input.model !== undefined) runtime.options.resolveModel(entry.input.model);
     requireChecks(`Task ${entry.input.title}`, entry.input.checks);
+    requirePullRequestChoice(
+      `Task ${entry.input.title}`,
+      entry.input.opensPullRequest,
+      entry.input.mergeInto,
+    );
     resolveRefs(entry.input.dependsOn ?? [], keys, views, "dependsOn");
   }
 }

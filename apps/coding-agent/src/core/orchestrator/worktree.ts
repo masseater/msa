@@ -251,6 +251,7 @@ function prepare(
     const unmanaged = {
       branch: null,
       cwd: task.cwd,
+      opensPullRequest: task.opensPullRequest,
       sources: [],
       target: null,
       targetBranch: null,
@@ -268,6 +269,7 @@ function prepare(
     return {
       branch,
       cwd: repository.prefix === "" ? path : platformPath.join(path, repository.prefix),
+      opensPullRequest: task.opensPullRequest,
       sources: sourcesOf(runtime, task),
       target,
       targetBranch,
@@ -275,7 +277,7 @@ function prepare(
   });
 }
 
-const worktrees = { branchOf, cleanUp, hasOrigin, headOf, isWorkTree, prepare };
+const worktrees = { branchOf, cleanUp, git, hasOrigin, headOf, isWorkTree, prepare };
 
 const worktreeModule = {
   worktrees,

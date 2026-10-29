@@ -1,5 +1,6 @@
 import { Effect, Result } from "effect";
 
+import noPullRequestModule from "./no-pull-request.ts";
 import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
@@ -133,6 +134,12 @@ function afterInterrupt(
   });
 }
 
-const pullRequestFinish = { afterInterrupt, finish, hasLiveRun, settleMerged };
+const pullRequestFinish = {
+  afterInterrupt,
+  finish,
+  hasLiveRun,
+  settleMerged,
+  withoutPullRequest: noPullRequestModule.noPullRequest.afterReview,
+};
 
 export default pullRequestFinish;
