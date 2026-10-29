@@ -6,10 +6,10 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { joinPath, makeTempDir, removePath } = testing;
+const { joinPath } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
-const { setup, taskStatus, waitFor } = harness;
+const { setup, taskStatus, waitFor, withTempDir } = harness;
 const { GIT, commitOnBranch, gatedTarget, read, runCommand, sh, shortId, withRepository } =
   worktreeSupport;
 
@@ -119,20 +119,17 @@ it(
 
 const leavesAPlainDirectoryAsItIs = () =>
   Effect.runPromise(
-    Effect.acquireUseRelease(
-      makeTempDir("msa-no-repo-"),
-      (directory) =>
-        Effect.gen(function* () {
-          const { orchestrator, workers } = setup({ cwd: directory, runCommand });
-          yield* create(orchestrator, { currentState: "a", goalState: "b", title: "plain" });
-          expect(workers[0]?.cwd).toBe(directory);
-          expect(workers[0]?.prompts[0]).not.toContain("<workspace>");
-          expect(orchestrator.snapshot.threads[0]).toMatchObject({
-            branch: null,
-            targetBranch: null,
-          });
-        }),
-      (directory) => removePath(directory),
+    withTempDir("msa-no-repo-", (directory) =>
+      Effect.gen(function* () {
+        const { orchestrator, workers } = setup({ cwd: directory, runCommand });
+        yield* create(orchestrator, { currentState: "a", goalState: "b", title: "plain" });
+        expect(workers[0]?.cwd).toBe(directory);
+        expect(workers[0]?.prompts[0]).not.toContain("<workspace>");
+        expect(orchestrator.snapshot.threads[0]).toMatchObject({
+          branch: null,
+          targetBranch: null,
+        });
+      }),
     ),
   );
 

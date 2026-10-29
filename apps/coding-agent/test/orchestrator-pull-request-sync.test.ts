@@ -11,7 +11,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { runTest } = testing;
 const { taskStatus, waitFor } = orchestratorHarness.harness;
-const { cleanedUp, commitAndPush, openedTask, withRemote } = pullRequestSupport;
+const { cleanedUp, commitAndPush, holdBranchDeletion, openedTask, withRemote } = pullRequestSupport;
 const { classifierDecide } = reviewVerdictSupport;
 const { escalateTriage } = triageSupport;
 const { read, sh } = worktreeSupport;
@@ -186,4 +186,64 @@ const keepsTheLockFreeWhileTheSyncAsksGitHub = () =>
 it(
   "keeps the orchestrator lock free while the pull request sync asks GitHub about a task waiting for a decision",
   keepsTheLockFreeWhileTheSyncAsksGitHub,
+);
+
+const disposesOnlyAfterTheCleanupTheSyncStarted = () =>
+  runTest(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github, repository } = remote;
+        const { branch, number, orchestrator, taskId, worktree } = yield* waitingForADecision(
+          remote,
+          { pullRequestSyncMs: 20 },
+        );
+        const deletion = yield* holdBranchDeletion(repository, branch);
+        yield* github.mergeOutside(number, "orchestrator-account", squashMessage(number, branch));
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+        yield* deletion.entered;
+
+        let disposed = false;
+        const disposing = orchestrator.dispose().then(() => {
+          disposed = true;
+          return undefined;
+        });
+        yield* Effect.sleep(100);
+        expect(disposed).toBe(false);
+
+        yield* deletion.release;
+        yield* Effect.promise(() => disposing);
+        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
+          local: false,
+          remote: false,
+          worktree: false,
+        });
+      }),
+    ),
+  );
+
+it(
+  "returns from dispose only after the worktree, branch, and origin branch the pull request sync started removing are gone",
+  disposesOnlyAfterTheCleanupTheSyncStarted,
+);
+
+const removesTheRepositoryAfterTheCleanupTheSyncStarted = () =>
+  runTest(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github, repository } = remote;
+        const { branch, number, orchestrator, taskId } = yield* waitingForADecision(remote, {
+          pullRequestSyncMs: 20,
+        });
+        const deletion = yield* holdBranchDeletion(repository, branch);
+        yield* github.mergeOutside(number, "orchestrator-account", squashMessage(number, branch));
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+        yield* deletion.entered;
+        yield* Effect.forkDetach(Effect.delay(deletion.release, "200 millis"));
+      }),
+    ),
+  );
+
+it(
+  "removes the test repository only after the cleanup the pull request sync started for a completed task has ended",
+  removesTheRepositoryAfterTheCleanupTheSyncStarted,
 );

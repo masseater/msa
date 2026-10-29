@@ -1,4 +1,4 @@
-import { Effect, Fiber } from "effect";
+import { Effect } from "effect";
 
 import advisorWorkspace from "./advisor-workspace.ts";
 import pullRequestSync from "./pull-request-sync.ts";
@@ -10,31 +10,31 @@ import watchdogModule from "./watchdog.ts";
 const { scheduling } = schedule;
 const { watchdog } = watchdogModule;
 
-function start(runtime: runtimeTypes.Runtime, now: number): Fiber.Fiber<never, never>[] {
+function start(runtime: runtimeTypes.Runtime, now: number): Effect.Effect<never>[] {
   const { options } = runtime;
   watchdog.open(runtime, now);
-  void runtime
-    .exclusive(
-      Effect.gen(function* () {
-        yield* advisorWorkspace.sweep(runtime);
-        yield* triageFlow.restartInterrupted(runtime);
-        watchdog.reportRecovered(runtime);
-      }),
-    )
-    .catch(() => undefined);
-  const fibers: Fiber.Fiber<never, never>[] = [];
+  runtime.launch(
+    Effect.promise(() =>
+      runtime
+        .exclusive(
+          Effect.gen(function* () {
+            yield* advisorWorkspace.sweep(runtime);
+            yield* triageFlow.restartInterrupted(runtime);
+            watchdog.reportRecovered(runtime);
+          }),
+        )
+        .catch(() => undefined),
+    ),
+  );
+  const loops: Effect.Effect<never>[] = [];
   if (options.pollIntervalMs !== null) {
-    fibers.push(scheduling.startPolling(runtime, options.pollIntervalMs ?? 5000));
+    loops.push(scheduling.pollingLoop(runtime, options.pollIntervalMs ?? 5000));
   }
-  fibers.push(watchdog.startWatchdog(runtime));
+  loops.push(watchdog.loop(runtime));
   if (options.pullRequestSyncMs !== null) {
-    fibers.push(pullRequestSync.start(runtime, options.pullRequestSyncMs));
+    loops.push(pullRequestSync.loop(runtime, options.pullRequestSyncMs));
   }
-  return fibers;
-}
-
-function stop(fibers: readonly Fiber.Fiber<never, never>[]): Effect.Effect<void> {
-  return Effect.forEach(fibers, (fiber) => Fiber.interrupt(fiber), { discard: true });
+  return loops;
 }
 
 function close(runtime: runtimeTypes.Runtime, now: number): Effect.Effect<void> {
@@ -44,7 +44,7 @@ function close(runtime: runtimeTypes.Runtime, now: number): Effect.Effect<void> 
   });
 }
 
-const background = { close, start, stop };
+const background = { close, start };
 
 const backgroundModule = {
   background,

@@ -1,18 +1,16 @@
-import testing from "@msa/testing";
 import { Effect } from "effect";
 
+import orchestratorHarness from "./orchestrator-harness.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { makeTempDir, removePath } = testing;
+const { withTempDir } = orchestratorHarness.harness;
 const { withRepository } = worktreeSupport;
 
 const LINT_CHECK = { command: "cat lint.txt", output: "^0 errors$" };
 const SHORTCUT_CHECK = { command: "grep -c 'layer-[0-9]' src.txt", exitCode: 1 };
 
 function withRepo<A, E>(body: (directory: string) => Effect.Effect<A, E>): Effect.Effect<A, E> {
-  return Effect.acquireUseRelease(makeTempDir("msa-goal-checks-"), body, (directory) =>
-    removePath(directory),
-  );
+  return withTempDir("msa-goal-checks-", body);
 }
 
 function heldCommand() {

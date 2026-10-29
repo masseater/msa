@@ -47,9 +47,8 @@ function check(round: Round, waitingSince: number | undefined): void {
       : undefined;
     return { at: yield* nowMillis, contents, results } satisfies Checked;
   });
-  void Effect.runPromise(threadRuns.whileCurrent(thread, checked)).then(
-    (done) => (done === undefined ? undefined : decide(round, done, waitingSince)),
-    (error: unknown) => threadRuns.settle(thread, error),
+  threadRuns.launch(thread, checked, (done) =>
+    Effect.sync(() => (done === undefined ? undefined : decide(round, done, waitingSince))),
   );
 }
 

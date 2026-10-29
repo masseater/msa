@@ -21,9 +21,12 @@ export default class Orchestrator {
 
   constructor(options: orchestratorTypes.OrchestratorOptions) {
     this.state = new OrchestratorState(options);
-    this.transcripts = new TranscriptCache(() => {
-      for (const listener of this.state.listeners) listener();
-    });
+    this.transcripts = new TranscriptCache(
+      () => {
+        for (const listener of this.state.listeners) listener();
+      },
+      (effect) => this.state.launch(effect),
+    );
   }
 
   get database(): OrchestratorState["database"] {

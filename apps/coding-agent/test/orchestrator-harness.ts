@@ -10,7 +10,9 @@ import FakeWorker from "./fake-worker.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import reviewVerdictSupport from "./review-verdict-support.ts";
 const { InMemoryTelemetryContext } = telemetryModule;
-const { joinPath, pollUntil, tempRoot } = testing;
+const { joinPath, makeTempDir, pathExists, pollUntil, removePath, runTest, tempRoot } = testing;
+
+const running = new Set<Orchestrator>();
 
 function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return {
@@ -28,6 +30,8 @@ function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
 }
 const MODELS = [model("sub", "fable"), model("fast", "flash"), model("fast", "tiny")];
 function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
+  const cwd = options.cwd ?? "/repo";
+  const existed = runTest(pathExists(cwd));
   const workers: FakeWorker[] = [];
   const reports: Array<{ text: string; details: orchestratorTypes.OrchestratorReport }> = [];
   const telemetry = new InMemoryTelemetryContext();
@@ -40,7 +44,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
       workers.push(worker);
       return Promise.resolve(worker);
     },
-    cwd: options.cwd ?? "/repo",
+    cwd,
     databasePath: options.databasePath ?? ":memory:",
     decide: options.decide ?? reviewVerdictSupport.passingDecide,
     defaults: () => ({
@@ -70,8 +74,41 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     telemetry,
     version: "0.0.0-test",
   });
-  onTestFinished(() => orchestrator.dispose());
+  running.add(orchestrator);
+  onTestFinished(() => runTest(finished(orchestrator, cwd, existed)));
   return { orchestrator, reports, telemetry, workers };
+}
+
+function finished(orchestrator: Orchestrator, cwd: string, existed: Promise<boolean>) {
+  return Effect.gen(function* () {
+    const removedFirst =
+      orchestrator.database.isOpen &&
+      (yield* Effect.promise(() => existed)) &&
+      !(yield* pathExists(cwd));
+    yield* disposeOne(orchestrator);
+    if (removedFirst) {
+      return yield* Effect.die(
+        new Error(
+          `${cwd} was removed while its orchestrator was running. Dispose the orchestrator first: make the directory with orchestratorHarness.harness.withTempDir.`,
+        ),
+      );
+    }
+  });
+}
+
+function disposeOne(orchestrator: Orchestrator): Effect.Effect<void> {
+  running.delete(orchestrator);
+  return Effect.promise(() => orchestrator.dispose());
+}
+
+function disposeRunning(): Effect.Effect<void> {
+  return Effect.forEach([...running], disposeOne, { discard: true });
+}
+
+function withTempDir<A, E>(prefix: string, body: (directory: string) => Effect.Effect<A, E>) {
+  return Effect.acquireUseRelease(makeTempDir(prefix), body, (directory) =>
+    Effect.andThen(disposeRunning(), removePath(directory)),
+  );
 }
 function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
   return pollUntil(Effect.sync(predicate), attempts, 2);
@@ -82,7 +119,7 @@ function taskStatus(orchestrator: orchestratorTypes.Orchestrator, id: string): s
 function reviews(orchestrator: orchestratorTypes.Orchestrator) {
   return orchestrator.snapshot.tasks.filter((task) => task.kind === "review");
 }
-const harness = { model, reviews, setup, taskStatus, waitFor };
+const harness = { disposeRunning, model, reviews, setup, taskStatus, waitFor, withTempDir };
 
 const orchestratorHarness = {
   MODELS,

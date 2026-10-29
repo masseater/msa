@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 
 import promptsModule from "./prompts.ts";
 import runtimeModule from "./runtime.ts";
@@ -50,26 +50,51 @@ function arrivedSince(thread: ThreadRun, readBefore: ReadonlySet<string>) {
     .filter((note) => !readBefore.has(note.id));
 }
 
+function settling(
+  thread: ThreadRun,
+  error: unknown,
+  verdict?: runtimeTypes.ReviewVerdict,
+  request?: runtimeTypes.DecisionAsk,
+): Effect.Effect<void> {
+  const { runtime, threadId, run, worker } = thread;
+  return Effect.asVoid(
+    Effect.promise(() => runtime.settle(threadId, run, worker, error, verdict, request)),
+  );
+}
+
 function settle(thread: ThreadRun, error: unknown, verdict?: runtimeTypes.ReviewVerdict): void {
-  void thread.runtime.settle(thread.threadId, thread.run, thread.worker, error, verdict);
+  thread.runtime.launch(settling(thread, error, verdict));
 }
 
 function askForDecision(thread: ThreadRun, request: runtimeTypes.DecisionAsk): void {
-  void thread.runtime.settle(
-    thread.threadId,
-    thread.run,
-    thread.worker,
-    undefined,
-    undefined,
-    request,
+  thread.runtime.launch(settling(thread, undefined, undefined, request));
+}
+
+function launch<A>(
+  thread: ThreadRun,
+  effect: Effect.Effect<A>,
+  next: (value: A | undefined) => Effect.Effect<unknown>,
+): void {
+  thread.runtime.launch(
+    whileCurrent(thread, effect).pipe(
+      Effect.matchCauseEffect({
+        onFailure: (cause) =>
+          Cause.hasInterruptsOnly(cause) ? Effect.void : settling(thread, Cause.squash(cause)),
+        onSuccess: next,
+      }),
+    ),
   );
 }
 
 function continueWith(thread: ThreadRun, prompt: string): void {
   const { runtime, threadId, run, worker } = thread;
-  void worker.run.prompting.prompt(prompt).then(
-    () => runtime.afterTurn(threadId, run, worker),
-    (error: unknown) => settle(thread, error),
+  runtime.launch(
+    Effect.promise(() =>
+      worker.run.prompting.prompt(prompt).then(
+        () => runtime.afterTurn(threadId, run, worker),
+        (error: unknown) => runtime.settle(threadId, run, worker, error),
+      ),
+    ),
   );
 }
 
@@ -85,6 +110,7 @@ const threadRuns = {
   continueWith,
   continueWithNotes,
   current,
+  launch,
   readIds,
   settle,
   whileCurrent,

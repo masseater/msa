@@ -20,7 +20,8 @@ export default class HostTimers {
   }
 
   #run(effect: Effect.Effect<void>): () => void {
-    const fiber = Effect.runSync(FiberSet.run(this.#fibers, effect));
+    const fiber = Effect.runFork(effect);
+    FiberSet.addUnsafe(this.#fibers, fiber);
     return () => {
       Effect.runFork(Fiber.interrupt(fiber));
     };

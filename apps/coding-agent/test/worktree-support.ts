@@ -3,8 +3,10 @@ import { Effect } from "effect";
 
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import orchestratorHarness from "./orchestrator-harness.ts";
 
-const { joinPath, makeTempDir, removePath } = testing;
+const { joinPath } = testing;
+const { withTempDir } = orchestratorHarness.harness;
 const { runCommand } = orchestratorCallbacks;
 
 const GIT = "git -c user.name=t -c user.email=t@example.invalid";
@@ -27,19 +29,16 @@ function commitOnBranch(repository: string, branch: string, message: string) {
 }
 
 function withRepository<A, E>(body: (repository: string) => Effect.Effect<A, E>) {
-  return Effect.acquireUseRelease(
-    makeTempDir("msa-worktree-"),
-    (parent) =>
-      Effect.gen(function* () {
-        const repository = joinPath(parent, "repo");
-        yield* sh(
-          `mkdir -p repo/app && echo app > repo/app/README && git -C repo init -q -b main`,
-          parent,
-        );
-        yield* sh(`git add . && ${GIT} commit -q -m init`, repository);
-        return yield* body(repository);
-      }),
-    (parent) => removePath(parent),
+  return withTempDir("msa-worktree-", (parent) =>
+    Effect.gen(function* () {
+      const repository = joinPath(parent, "repo");
+      yield* sh(
+        `mkdir -p repo/app && echo app > repo/app/README && git -C repo init -q -b main`,
+        parent,
+      );
+      yield* sh(`git add . && ${GIT} commit -q -m init`, repository);
+      return yield* body(repository);
+    }),
   );
 }
 

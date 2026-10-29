@@ -178,6 +178,10 @@ function launch(
   prompt: string,
   now: number,
 ): void {
+  if (runtime.closing) {
+    worker.dispose();
+    return;
+  }
   const run = runtime.nextRun();
   runtime.decisionRequests.delete(threadId);
   runtime.goalChecklists.delete(threadId);
@@ -194,9 +198,13 @@ function launch(
   }
   runtime.runs.set(threadId, run);
   runtime.runStartedAt.set(threadId, performance.now());
-  void worker.run.prompting.prompt(prompt).then(
-    () => runtime.afterTurn(threadId, run, worker),
-    (error: unknown) => runtime.settle(threadId, run, worker, error),
+  runtime.launch(
+    Effect.promise(() =>
+      worker.run.prompting.prompt(prompt).then(
+        () => runtime.afterTurn(threadId, run, worker),
+        (error: unknown) => runtime.settle(threadId, run, worker, error),
+      ),
+    ),
   );
 }
 

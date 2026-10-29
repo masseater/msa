@@ -23,7 +23,7 @@ function afterTurn(
 ): void {
   if (runtime.runs.get(threadId) !== run) return;
   const handled = wrapping.takeOver(runtime, threadId, worker, {
-    settle: (error: unknown) => void runtime.settle(threadId, run, worker, error),
+    settle: (error: unknown) => runtime.settle(threadId, run, worker, error),
     turn: () => afterTurn(runtime, threadId, run, worker),
   });
   if (handled) return;
@@ -36,7 +36,9 @@ function afterTurn(
   if (pending.length === 0) {
     const request = runtime.decisionRequests.get(threadId);
     if (request !== undefined) {
-      void runtime.settle(threadId, run, worker, undefined, undefined, request);
+      runtime.launch(
+        Effect.promise(() => runtime.settle(threadId, run, worker, undefined, undefined, request)),
+      );
       return;
     }
     if (!reviewJudge.judge(runtime, threadId, run, worker))
@@ -46,9 +48,13 @@ function afterTurn(
   runtime.decisionRequests.delete(threadId);
   const now = Effect.runSync(nowMillis);
   for (const note of pending) store.markNoteRead(runtime.database, note.id, threadId, now);
-  void worker.run.prompting.prompt(prompts.notesBlock(pending)).then(
-    () => afterTurn(runtime, threadId, run, worker),
-    (error: unknown) => runtime.settle(threadId, run, worker, error),
+  runtime.launch(
+    Effect.promise(() =>
+      worker.run.prompting.prompt(prompts.notesBlock(pending)).then(
+        () => afterTurn(runtime, threadId, run, worker),
+        (error: unknown) => runtime.settle(threadId, run, worker, error),
+      ),
+    ),
   );
 }
 

@@ -192,7 +192,7 @@ function cleanUp(
   task: orchestratorTypesTypes.Task,
   branch: string,
 ): Effect.Effect<string[]> {
-  return Effect.gen(function* () {
+  const removing = Effect.gen(function* () {
     const repository = yield* repositoryOf(task.cwd);
     if (repository === undefined) return [];
     const merged = store
@@ -205,6 +205,7 @@ function cleanUp(
     }
     return removed;
   });
+  return Effect.uninterruptible(removing);
 }
 
 function prepare(

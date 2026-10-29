@@ -13,7 +13,7 @@ const { sections } = orchestratorHandoffSupport;
 
 const { harness } = orchestratorHarness;
 
-const { setup, waitFor } = harness;
+const { disposeRunning, setup, waitFor } = harness;
 
 const { awaited, makeTempDir, provideNode, readTextFile, removeDirs, runTest } = testing;
 
@@ -25,7 +25,7 @@ const directory = Effect.fn("directory")(function* () {
   return created;
 });
 
-afterEach(() => runTest(removeDirs(directories.splice(0))));
+afterEach(() => runTest(Effect.andThen(disposeRunning(), removeDirs(directories.splice(0)))));
 
 const git = (cwd: string, ...args: string[]) =>
   provideNode(

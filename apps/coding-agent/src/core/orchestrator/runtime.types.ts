@@ -59,9 +59,11 @@ declare namespace runtimeTypes {
     triageConclusions: Map<string, triageTypes.Conclusion>;
     goalChecklists: Map<string, reviewChecklistTypes.Checklist>;
     replanning: boolean;
+    readonly closing: boolean;
     maxConcurrentThreads: number;
     nextRun(): number;
     exclusive<A>(effect: Effect.Effect<A, unknown>): Promise<A>;
+    launch(effect: Effect.Effect<unknown>): void;
     publish(): void;
     settle(
       threadId: string,
