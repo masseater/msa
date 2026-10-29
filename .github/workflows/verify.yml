@@ -148,8 +148,6 @@ jobs:
           bun-version: 1.4.2
           no-cache: true
       - run: vp run build-binaries linux-x64
-        env:
-          MSA_LOCAL_LLM_TESTS: "1"
       - run: |
           mkdir extracted
           tar -xf .artifacts/binaries/msa-linux-x64.tar.gz -C extracted
