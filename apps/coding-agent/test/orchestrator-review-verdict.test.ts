@@ -171,7 +171,13 @@ const JUDGE_AGAIN = {
 const undecidedReview = (decide: ReturnType<typeof classifierDecide>) =>
   Effect.gen(function* () {
     const setUp = yield* startCacheTask(decide);
-    setUp.workers[1]?.complete("Acceptable. Nothing within the goal remains.");
+    yield* Effect.promise(() =>
+      setUp.workers[1]!.recordGoalItems(
+        [{ evidence: "the diff", item: 1, status: "met" }],
+        [FINDING],
+      ),
+    );
+    setUp.workers[1]?.completeUnrecorded(`Acceptable.\n${FINDING}`);
     yield* waitFor(() => runningTriage(setUp.workers) !== undefined);
     expect(taskStatus(setUp.orchestrator, setUp.task.id)).toBe("running");
     expect(setUp.reports.at(-1)?.details).toMatchObject({ role: "reviewer", status: "waiting" });

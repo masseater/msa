@@ -8,13 +8,14 @@ declare namespace reviewChecklistTypes {
   interface Checklist {
     goalState: string;
     entries: readonly Entry[];
+    findings: readonly string[];
   }
 
   type Judgement =
     | { kind: "missing"; text: string }
     | { kind: "mismatch"; text: string }
     | { kind: "unmet"; text: string }
-    | { kind: "met"; text: string };
+    | { kind: "met"; text: string; settled: boolean };
 }
 
 export type { reviewChecklistTypes as default };

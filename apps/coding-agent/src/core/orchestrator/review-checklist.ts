@@ -18,6 +18,10 @@ type Judgement = reviewChecklistTypes.Judgement;
 
 function schemaFor(count: number) {
   return Type.Object({
+    findings: Type.Array(Type.String(), {
+      description:
+        "Every problem within the task's goal that the work still has, one entry each, including one you call minor, would not block the merge for, or would leave for a separate issue. An empty list says the report names none.",
+    }),
     items: Type.Array(
       Type.Object({
         evidence: Type.String({
@@ -74,13 +78,23 @@ function judge(goalState: string, checklist: Checklist | undefined): Judgement {
       (entry) =>
         `${entry.item}. [${entry.status}] ${items[entry.item - 1] ?? ""}\n   ${entry.evidence}`,
     );
+  const findings = checklist.findings.map((finding) => `- ${finding}`);
+  const recorded = [
+    ...lines,
+    findings.length === 0
+      ? "Findings within the goal: none."
+      : `Findings within the goal:\n${findings.join("\n")}`,
+  ].join("\n");
   const unmet = checklist.entries.filter((entry) => entry.status === "unmet").length;
-  return unmet === 0
-    ? { kind: "met", text: `Goal items: all ${items.length} met.\n${lines.join("\n")}` }
-    : {
-        kind: "unmet",
-        text: `Goal items: ${unmet} of ${items.length} unmet.\n${lines.join("\n")}`,
-      };
+  if (unmet > 0) {
+    return { kind: "unmet", text: `Goal items: ${unmet} of ${items.length} unmet.\n${recorded}` };
+  }
+  const grounded = checklist.entries.every((entry) => entry.evidence.trim() !== "");
+  return {
+    kind: "met",
+    settled: grounded && findings.length === 0,
+    text: `Goal items: all ${items.length} met.\n${recorded}`,
+  };
 }
 
 function recordTool(
@@ -91,7 +105,7 @@ function recordTool(
   const schema = schemaFor(goalItems(task.goalState).length);
   const definition: extensionsTypesTypes.ToolDefinition<typeof schema, undefined> = {
     description:
-      "Record, for every item of the task's goal state, whether the work meets it. The review passes only when every item is recorded as met; an unmet item sends the work back however the report words it.",
+      "Record, for every item of the task's goal state, whether the work meets it, and every problem within the goal the work still has. The review passes only when every item is recorded as met; an unmet item sends the work back however the report words it. When every item is met with its evidence and no finding is recorded, the review passes even if the decision model cannot judge the report.",
     execute: (_toolCallId, params) => {
       const goalState = store.getTask(runtime.database, task.id)?.goalState ?? task.goalState;
       const problem = entriesProblem(params.items, goalItems(goalState).length);
@@ -100,7 +114,11 @@ function recordTool(
           new Error(`${problem} Record each item once:\n${numbered(goalItems(goalState))}`),
         );
       }
-      runtime.goalChecklists.set(threadId, { entries: params.items, goalState });
+      runtime.goalChecklists.set(threadId, {
+        entries: params.items,
+        findings: params.findings,
+        goalState,
+      });
       const unmet = params.items.filter((entry) => entry.status === "unmet").length;
       return Promise.resolve({
         content: [
@@ -116,7 +134,7 @@ function recordTool(
     name: RECORD_GOAL_ITEMS,
     parameters: schema,
     promptGuidelines: [
-      "Before ending a review, call record_goal_items with one entry for each goal item. Mark an item met only when the work fully meets it.",
+      "Before ending a review, call record_goal_items with one entry for each goal item and every finding within the goal. Mark an item met only when the work fully meets it.",
     ],
     promptSnippet: "Record whether each goal item is met",
   };

@@ -116,13 +116,14 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
 
   recordGoalItems(
     items: readonly { item: number; status: "met" | "unmet"; evidence: string }[],
+    findings: readonly string[] = [],
   ): Promise<unknown> {
     const tool = this.tools.find((candidate) => candidate.name === "record_goal_items");
     if (tool === undefined)
       return Promise.reject(new Error("this thread has no record_goal_items"));
     this.recorded = true;
     const execute = tool.execute as (callId: string, params: unknown) => Promise<unknown>;
-    return execute("call", { items });
+    return execute("call", { findings, items });
   }
 
   complete(reply: string): void {
