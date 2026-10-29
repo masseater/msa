@@ -8,7 +8,7 @@ import schedule from "./schedule.ts";
 import startModule from "./start.ts";
 import storeModule from "./store.ts";
 
-const { nowMillis, releaseThread } = runtimeModule;
+const { abortThread, nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { scheduling } = schedule;
 const { starting } = startModule;
@@ -22,19 +22,10 @@ function stop(runtime: runtimeTypes.Runtime, taskId: string) {
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
     const thread = actionHelpers.runningThreadOf(runtime, taskId);
     if (thread !== undefined) {
-      runtime.runs.delete(thread.id);
-      releaseThread(runtime, thread.id);
-      void runtime.workers
-        .get(thread.id)
-        ?.run.lifecycle.abort()
-        .catch(() => undefined);
+      abortThread(runtime, thread.id);
       yield* Effect.sync(() => store.updateThread(database, thread.id, { status: "stopped" }, now));
     }
-    yield* Effect.sync(() => {
-      store.setTaskStatus(database, taskId, "stopped", now);
-      const review = store.reviewTaskOfRound(database, runtime.options.project, task.round);
-      if (review !== undefined) store.removeDependency(database, review.id, taskId);
-    });
+    yield* Effect.sync(() => store.setTaskStatus(database, taskId, "stopped", now));
     yield* scheduling.scheduleEffect(runtime);
     yield* Effect.sync(() => {
       runtime.publish();

@@ -4,6 +4,7 @@ import conditionModule from "./condition.ts";
 import errors from "./errors.ts";
 import type errorsTypes from "./errors.types.ts";
 import providerResumeModule from "./provider-resume.ts";
+import reviewHold from "./review-hold.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import start from "./start.ts";
@@ -23,9 +24,11 @@ function scheduleEffect(
     if (runtime.replanning) return [];
     const database = runtime.database;
     const project = runtime.options.project;
+    const now = yield* nowMillis;
+    yield* reviewHold.holdReviews(runtime, now);
     const running = store.runningThreads(database, project);
     let free = runtime.maxConcurrentThreads - running.length;
-    const started = yield* resumeDue(runtime, free, yield* nowMillis);
+    const started = yield* resumeDue(runtime, free, now);
     free -= started.length;
     for (const task of store.readyTasks(database, project, "work")) {
       if (free <= 0) break;
@@ -80,7 +83,7 @@ function startPolling(
   );
 }
 
-const scheduling = { scheduleEffect, startPolling };
+const scheduling = { holdReviews: reviewHold.holdReviews, scheduleEffect, startPolling };
 
 const schedule = {
   scheduling,

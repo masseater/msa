@@ -26,6 +26,14 @@ function uniqueIds(ids: readonly string[]): string[] {
   return [...new Set(ids)];
 }
 
+function reviewing(runtime: runtimeTypes.Runtime, taskId: string): boolean {
+  const thread = actionHelpers.runningThreadOf(runtime, taskId);
+  if (thread === undefined) return false;
+  return store
+    .assignmentsOfThread(runtime.database, thread.id)
+    .some((assignment) => assignment.taskId === taskId && assignment.role === "reviewer");
+}
+
 function dependencyEdit(
   runtime: runtimeTypes.Runtime,
   input: orchestratorTypesTypes.SetTaskDependsInput,
@@ -59,9 +67,10 @@ function dependencyEdit(
   const unfinished = dependencies
     .filter((dependency) => dependency.status !== "completed")
     .map((dependency) => dependency.id);
-  if (unfinished.length > 0) {
+  const working = running.filter((id) => !reviewing(runtime, id));
+  if (unfinished.length > 0 && working.length > 0) {
     throw new Error(
-      `${running.join(", ")} is running, so it can only gain a dependency that already finished. Stop it with stop_task to wait for ${unfinished.join(", ")}.`,
+      `${working.join(", ")} is running, so it can only gain a dependency that already finished. Stop it with stop_task to wait for ${unfinished.join(", ")}.`,
     );
   }
   return { add, remove, taskIds };

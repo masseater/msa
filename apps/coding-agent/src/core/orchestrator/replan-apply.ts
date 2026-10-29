@@ -30,6 +30,7 @@ function apply(
       write(runtime, prepared, handoffs, replanId, now),
     );
     runtime.replanning = false;
+    yield* scheduling.holdReviews(runtime, now);
     yield* Effect.sync(() => runtime.publish());
     const started =
       prepared.input.resume === false ? [] : yield* scheduling.scheduleEffect(runtime);
