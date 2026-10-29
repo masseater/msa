@@ -90,13 +90,16 @@ const replanSchema = Type.Object({
         dependsOn: Type.Array(Type.String(), { description: "Task ids or keys." }),
         taskId: taskIdSchema,
       }),
-      { description: "Replaces the dependencies of a kept task." },
+      {
+        description:
+          "Replaces the dependencies of a kept task. With stop false, a running task follows the set_task_depends rule: a running worker gains only dependencies that already finished, a running review that gains an unfinished one is stopped and waits for it, and no running task drops a dependency.",
+      },
     ),
   ),
   stop: Type.Optional(
     Type.Boolean({
       description:
-        "Default true: every running thread commits and pushes, writes a handoff memo, then stops before the plan changes. false only rewires waiting work.",
+        "Default true: every running thread commits and pushes, writes a handoff memo, then stops before the plan changes. false leaves running threads alone, so a running task's dependencies change only as set_task_depends would change them, whether through rewire or because from or drop moves them off a task it depends on.",
     }),
   ),
   tasks: Type.Optional(Type.Array(replanTaskSchema, { description: "The new plan." })),

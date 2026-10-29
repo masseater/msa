@@ -206,7 +206,7 @@ function rewire(
 }
 
 function successorsOf(
-  prepared: replanTypes.Prepared,
+  prepared: Pick<replanTypes.Prepared, "views">,
   inheritors: ReadonlyMap<string, readonly string[]>,
   closed: ReadonlySet<string>,
   source: string,
@@ -218,32 +218,53 @@ function successorsOf(
   );
 }
 
+function redirectsOf(
+  runtime: runtimeTypes.Runtime,
+  prepared: Pick<replanTypes.Prepared, "sources" | "views">,
+  inheritors: ReadonlyMap<string, readonly string[]>,
+): replanTypes.Redirect[] {
+  const database = runtime.database;
+  const closed = new Set(prepared.sources);
+  const redirects = new Map<string, { add: Set<string>; remove: Set<string> }>();
+  for (const source of prepared.sources) {
+    for (const dependentId of store.dependentsOf(database, source)) {
+      const dependent = store.getTask(database, dependentId);
+      if (dependent === undefined || closed.has(dependentId)) continue;
+      if (dependent.status === "completed") continue;
+      const redirect = redirects.get(dependentId) ?? { add: new Set(), remove: new Set() };
+      redirects.set(dependentId, redirect);
+      redirect.remove.add(source);
+      if (dependent.kind === "review") continue;
+      for (const heir of successorsOf(prepared, inheritors, closed, source)) {
+        if (heir !== dependentId) redirect.add.add(heir);
+      }
+    }
+  }
+  return [...redirects].map(([taskId, redirect]) => ({
+    add: [...redirect.add],
+    remove: [...redirect.remove],
+    taskId,
+  }));
+}
+
 function redirectDependents(
   runtime: runtimeTypes.Runtime,
   prepared: replanTypes.Prepared,
   inheritors: ReadonlyMap<string, readonly string[]>,
 ): orchestratorTypesTypes.ReplanRewired[] {
   const database = runtime.database;
-  const closed = new Set(prepared.sources);
-  const moved = new Set<string>();
-  for (const source of prepared.sources) {
-    for (const dependentId of store.dependentsOf(database, source)) {
-      const dependent = store.getTask(database, dependentId);
-      if (dependent === undefined || closed.has(dependentId)) continue;
-      if (dependent.status === "completed") continue;
-      store.removeDependency(database, dependentId, source);
-      moved.add(dependentId);
-      if (dependent.kind === "review") continue;
-      for (const heir of unique(successorsOf(prepared, inheritors, closed, source))) {
-        if (heir !== dependentId) {
-          store.addDependency(database, runtime.options.project, dependentId, heir);
-        }
-      }
+  const redirects = redirectsOf(runtime, prepared, inheritors);
+  for (const redirect of redirects) {
+    for (const source of redirect.remove) {
+      store.removeDependency(database, redirect.taskId, source);
+    }
+    for (const heir of redirect.add) {
+      store.addDependency(database, runtime.options.project, redirect.taskId, heir);
     }
   }
-  return [...moved].map((taskId) => ({
-    dependsOn: store.dependenciesOf(database, taskId),
-    taskId,
+  return redirects.map((redirect) => ({
+    dependsOn: store.dependenciesOf(database, redirect.taskId),
+    taskId: redirect.taskId,
   }));
 }
 
@@ -262,6 +283,7 @@ const replanTasks = {
   cwdOf,
   keep,
   redirectDependents,
+  redirectsOf,
   rewire,
 };
 

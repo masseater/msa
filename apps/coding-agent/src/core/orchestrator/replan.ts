@@ -16,8 +16,14 @@ const { wrapping } = wrapUp;
 const { snapshots } = snapshot;
 const { store } = storeModule;
 const { applying } = replanApply;
-const { validateClosed, validateCwds, validateEntries, validateHandling, validateTitles } =
-  replanValidate;
+const {
+  validateClosed,
+  validateCwds,
+  validateEntries,
+  validateHandling,
+  validateRunningDependencies,
+  validateTitles,
+} = replanValidate;
 
 function validateStop(
   input: orchestratorTypesTypes.ReplanInput,
@@ -86,6 +92,7 @@ function prepare(
       validateClosed(input, entries, views);
       validateTitles(input, entries, views);
       validateStop(input, entries, views);
+      validateRunningDependencies(runtime, input, entries, views);
       const threads =
         input.stop === false
           ? []

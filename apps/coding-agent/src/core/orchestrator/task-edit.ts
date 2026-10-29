@@ -3,6 +3,7 @@ import { Effect } from "effect";
 
 import actionHelpersModule from "./action-helpers.ts";
 import errors from "./errors.ts";
+import runningDependencies from "./running-dependencies.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
@@ -24,14 +25,6 @@ interface DependencyEdit {
 
 function uniqueIds(ids: readonly string[]): string[] {
   return [...new Set(ids)];
-}
-
-function reviewing(runtime: runtimeTypes.Runtime, taskId: string): boolean {
-  const thread = actionHelpers.runningThreadOf(runtime, taskId);
-  if (thread === undefined) return false;
-  return store
-    .assignmentsOfThread(runtime.database, thread.id)
-    .some((assignment) => assignment.taskId === taskId && assignment.role === "reviewer");
 }
 
 function dependencyEdit(
@@ -57,22 +50,10 @@ function dependencyEdit(
       if (task.id === dependency.id) throw new Error(`${task.id} cannot depend on itself`);
     }
   }
-  const running = tasks.filter((task) => task.status === "running").map((task) => task.id);
-  if (running.length === 0) return { add, remove, taskIds };
-  if (remove.length > 0) {
-    throw new Error(
-      `${running.join(", ")} is running. Stop it with stop_task before dropping dependencies; send_message steers it while it runs.`,
-    );
-  }
-  const unfinished = dependencies
-    .filter((dependency) => dependency.status !== "completed")
-    .map((dependency) => dependency.id);
-  const working = running.filter((id) => !reviewing(runtime, id));
-  if (unfinished.length > 0 && working.length > 0) {
-    throw new Error(
-      `${working.join(", ")} is running, so it can only gain a dependency that already finished. Stop it with stop_task to wait for ${unfinished.join(", ")}.`,
-    );
-  }
+  runningDependencies.guard(
+    runtime,
+    taskIds.map((taskId) => ({ add, remove, taskId })),
+  );
   return { add, remove, taskIds };
 }
 
