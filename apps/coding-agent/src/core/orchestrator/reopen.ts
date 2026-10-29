@@ -60,14 +60,15 @@ function reopenWorker(
   thread: orchestratorTypesTypes.Thread,
   role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<runtimeTypes.WorkerSession | undefined, runtimeTypes.OrchestratorError> {
+): Effect.Effect<runtimeTypes.WorkerSession | undefined, runtimeTypes.WorkspaceError> {
   return Effect.gen(function* () {
     const open = runtime.workers.get(thread.id);
     if (open !== undefined) return open;
     const prepared = yield* Effect.result(worktrees.prepare(runtime, task));
     if (Result.isFailure(prepared) && taskCwd.isUncheckable(prepared.failure)) {
-      yield* Effect.sync(() => refuseStart(runtime, task, role, prepared.failure.message, now));
-      return undefined;
+      const refused = prepared.failure;
+      yield* Effect.sync(() => refuseStart(runtime, task, role, refused.message, now));
+      return yield* refused;
     }
     if (Result.isFailure(prepared)) {
       yield* Effect.sync(() =>

@@ -57,7 +57,7 @@ function messageToolsA(
   return {
     send_message: tool({
       description:
-        "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a task that waits for a decision continues in the thread that stopped, with the message as the decision; a finished task reruns in a new thread.",
+        "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a task that waits for a decision continues in the thread that stopped, with the message as the decision; a finished task reruns in a new thread. When the task has checks and its cwd is no longer a git working tree, the call fails with the refusal, the task is stopped, and the way on is a replan with the task in from and cwd as a checkout.",
       label: "send message",
       name: "send_message",
       parameters: messageSchema,
@@ -146,7 +146,7 @@ function messageToolsB(
     }),
     rerun_task: tool({
       description:
-        "Run a finished, failed, or stopped task again in a new thread. Dependencies and notes apply as usual.",
+        "Run a finished, failed, or stopped task again in a new thread. Dependencies and notes apply as usual. When the task has checks and its cwd is no longer a git working tree, the call fails with the refusal, the task stays stopped, and the way on is a replan with the task in from and cwd as a checkout.",
       label: "rerun task",
       name: "rerun_task",
       parameters: taskIdObject,
@@ -184,7 +184,7 @@ function decisionTools(
   return {
     consult_advisor: tool({
       description:
-        "Start an advisor thread for a task that waits for a decision. The advisor reads the task, its decision request, its reports, and the code, looks up the user's earlier instructions and decisions with search_sessions, weighs the options, and recommends one; its report comes back to you, and the task keeps waiting for your send_message.",
+        "Start an advisor thread for a task that waits for a decision. The advisor reads the task, its decision request, its reports, and the code, looks up the user's earlier instructions and decisions with search_sessions, weighs the options, and recommends one; its report comes back to you, and the task keeps waiting for your send_message. When the task has checks and its cwd is no longer a git working tree, the call fails with the refusal, the task is stopped, and the way on is a replan with the task in from and cwd as a checkout.",
       label: "consult advisor",
       name: "consult_advisor",
       parameters: adviseSchema,

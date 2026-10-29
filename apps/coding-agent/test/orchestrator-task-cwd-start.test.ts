@@ -83,13 +83,17 @@ const refusesToStartALintTaskWhoseCwdLeftGit = () =>
           expect(threadsOf(orchestrator, lint.id)).toBe(0);
           expect(session.workers).toHaveLength(2);
 
-          const rerun = yield* Effect.promise(() => orchestrator.rerun(lint.id));
-          expect(rerun.status).toBe("stopped");
-          expect(refusalsOf(session, lint.id)).toHaveLength(2);
-          const messaged = yield* Effect.promise(() =>
-            orchestrator.sendMessage(lint.id, "try again"),
+          yield* Effect.promise(() =>
+            expect(orchestrator.rerun(lint.id)).rejects.toThrow(`Replan with ${lint.id} in from`),
           );
-          expect(messaged.status).toBe("stopped");
+          expect(taskStatus(orchestrator, lint.id)).toBe("stopped");
+          expect(refusalsOf(session, lint.id)).toHaveLength(2);
+          yield* Effect.promise(() =>
+            expect(orchestrator.sendMessage(lint.id, "try again")).rejects.toThrow(
+              `Replan with ${lint.id} in from`,
+            ),
+          );
+          expect(taskStatus(orchestrator, lint.id)).toBe("stopped");
           expect(refusalsOf(session, lint.id)).toHaveLength(3);
           expect(threadsOf(orchestrator, lint.id)).toBe(0);
           expect(session.workers).toHaveLength(2);

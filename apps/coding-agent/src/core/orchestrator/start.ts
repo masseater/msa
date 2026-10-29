@@ -86,14 +86,15 @@ function openWorkspace(
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<orchestratorTypesTypes.Workspace | undefined> {
+): Effect.Effect<orchestratorTypesTypes.Workspace | undefined, runtimeTypes.UncheckableCwd> {
   return Effect.gen(function* () {
     const prepared = yield* Effect.result(
       threadWorkspace.prepare(runtime, task, role, plan.threadId),
     );
     if (Result.isFailure(prepared) && taskCwd.isUncheckable(prepared.failure)) {
-      yield* Effect.sync(() => refuseStart(runtime, task, role, prepared.failure.message, now));
-      return undefined;
+      const refused = prepared.failure;
+      yield* Effect.sync(() => refuseStart(runtime, task, role, refused.message, now));
+      return yield* refused;
     }
     yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
     if (Result.isFailure(prepared)) {
@@ -123,7 +124,7 @@ function openWorker(
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<OpenedWorker | undefined, runtimeTypes.OrchestratorError> {
+): Effect.Effect<OpenedWorker | undefined, runtimeTypes.WorkspaceError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     const workspace = yield* openWorkspace(runtime, plan, task, role, now);
@@ -199,12 +200,12 @@ function launch(
   );
 }
 
-function launchPlan(
+function launchOrRefuse(
   runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
-): Effect.Effect<string | undefined, runtimeTypes.OrchestratorError> {
+): Effect.Effect<string | undefined, runtimeTypes.WorkspaceError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const opened = yield* openWorker(runtime, plan, task, role, now);
@@ -217,6 +218,32 @@ function launchPlan(
   });
 }
 
+function launchPlan(
+  runtime: runtimeTypes.Runtime,
+  plan: ThreadPlan,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
+): Effect.Effect<string | undefined, runtimeTypes.OrchestratorError> {
+  return launchOrRefuse(runtime, plan, task, role).pipe(
+    Effect.catchTag("UncheckableCwd", () => Effect.undefined),
+  );
+}
+
+function startOrRefuse(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
+  workerReport = "",
+  extra = "",
+): Effect.Effect<string | undefined, runtimeTypes.WorkspaceError> {
+  if (task.status === "closed") {
+    return Effect.fail(orchestratorError(closedTaskMessage(task.id)));
+  }
+  return Effect.suspend(() =>
+    launchOrRefuse(runtime, planThread(runtime, task, role, workerReport, extra), task, role),
+  );
+}
+
 function startTasks(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
@@ -224,15 +251,20 @@ function startTasks(
   workerReport = "",
   extra = "",
 ): Effect.Effect<string | undefined, runtimeTypes.OrchestratorError> {
-  if (task.status === "closed") {
-    return Effect.fail(orchestratorError(closedTaskMessage(task.id)));
-  }
-  return Effect.suspend(() =>
-    launchPlan(runtime, planThread(runtime, task, role, workerReport, extra), task, role),
+  return startOrRefuse(runtime, task, role, workerReport, extra).pipe(
+    Effect.catchTag("UncheckableCwd", () => Effect.undefined),
   );
 }
 
-const starting = { failThread, launch, launchPlan, refuseStart, startTasks, threadModel };
+const starting = {
+  failThread,
+  launch,
+  launchPlan,
+  refuseStart,
+  startOrRefuse,
+  startTasks,
+  threadModel,
+};
 
 const start = {
   starting,

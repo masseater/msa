@@ -41,7 +41,9 @@ function followUps(
     for (const ask of applied.triage) yield* startTriage(runtime, applied, ask);
     for (const item of applied.resumes) {
       yield* triageMemory.remember(runtime, item.task.id, item.ask, item.decision);
-      yield* resuming.resume(runtime, item.task, item.decision, "triage");
+      yield* resuming
+        .resume(runtime, item.task, item.decision, "triage")
+        .pipe(Effect.catchTag("UncheckableCwd", () => Effect.void));
     }
   });
 }
