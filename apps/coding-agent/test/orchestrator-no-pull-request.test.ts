@@ -19,6 +19,14 @@ const TAG_TASK = {
   title: "tag v1",
 };
 
+const expectCleanedUp = (repository: string, taskId: string) =>
+  Effect.gen(function* () {
+    const branch = `task/${shortId(taskId)}`;
+    expect(yield* sh("git worktree list --porcelain", repository)).not.toContain(branch);
+    expect(yield* sh(`git branch --list ${branch}`, repository)).toBe("");
+    expect(yield* sh(`git ls-remote --heads origin ${branch}`, repository)).toBe("");
+  });
+
 const completesWithoutAPullRequest = () =>
   Effect.runPromise(
     withRemote(({ github, repository }) =>
@@ -39,12 +47,13 @@ const completesWithoutAPullRequest = () =>
         yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
         expect(github.merged).toEqual([]);
         expect((yield* read(orchestrator, task.id)).pullRequest).toBeNull();
+        yield* expectCleanedUp(repository, task.id);
       }),
     ),
   );
 
 it(
-  "completes a task created with opensPullRequest false on its review, without asking for a pull request",
+  "completes a task created with opensPullRequest false on its review, without asking for a pull request, and removes its worktree and branch",
   completesWithoutAPullRequest,
 );
 
@@ -145,12 +154,13 @@ const replanCreatesATaskWithoutAPullRequest = () =>
         workers[1]!.complete("acceptable");
         yield* waitFor(() => taskStatus(orchestrator, id) === "completed");
         expect(github.merged).toEqual([]);
+        yield* expectCleanedUp(repository, id);
       }),
     ),
   );
 
 it(
-  "gives a task replan creates with opensPullRequest false no pull request either",
+  "gives a task replan creates with opensPullRequest false no pull request either, and removes its worktree and branch",
   replanCreatesATaskWithoutAPullRequest,
 );
 

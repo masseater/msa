@@ -10,6 +10,7 @@ import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import worktreeModule from "./worktree.ts";
 
+const { noPullRequest } = noPullRequestModule;
 const { pullRequests } = pullRequestsModule;
 const { worktrees } = worktreeModule;
 const { store } = storeModule;
@@ -23,13 +24,35 @@ type PullRequest = orchestratorTypesTypes.PullRequest;
 function finish(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
-  record: PullRequest,
-  merged: string,
+  branch: string,
+  done: string,
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
-    const removed = yield* worktrees.cleanUp(runtime, task, record.branch);
+    const removed = yield* worktrees.cleanUp(runtime, task, branch);
     const cleaned = removed.length === 0 ? "" : ` Removed ${removed.join(", ")}.`;
-    return { kind: "merged", line: `${merged}${cleaned}` };
+    return { kind: "merged", line: `${done}${cleaned}` };
+  });
+}
+
+function withoutPullRequest(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  live: () => boolean,
+): Effect.Effect<MergeOutcome | undefined> {
+  return Effect.gen(function* () {
+    const sentBack = yield* noPullRequest.afterReview(runtime, task, live);
+    if (sentBack !== undefined) return sentBack;
+    const branch = pullRequests.latestThreadOf(runtime, task.id)?.branch;
+    if (branch === null || branch === undefined) return undefined;
+    const done = `${task.id} opens no pull request, so it is completed on its checks and review.`;
+    return yield* Effect.promise(() =>
+      runtime.exclusive(
+        Effect.gen(function* () {
+          if (!live()) return undefined;
+          return yield* finish(runtime, task, branch, done);
+        }),
+      ),
+    );
   });
 }
 
@@ -46,7 +69,7 @@ function settleMerged(
     if (judged.by !== "harness") {
       return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, cwd, judged) };
     }
-    return yield* finish(runtime, task, judged.record, merged);
+    return yield* finish(runtime, task, judged.record.branch, merged);
   });
 }
 
@@ -139,7 +162,7 @@ const pullRequestFinish = {
   finish,
   hasLiveRun,
   settleMerged,
-  withoutPullRequest: noPullRequestModule.noPullRequest.afterReview,
+  withoutPullRequest,
 };
 
 export default pullRequestFinish;
