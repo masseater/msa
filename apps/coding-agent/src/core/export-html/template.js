@@ -715,7 +715,7 @@
 
         // Full render only on first call or when filter/search changes
         if (!treeRendered) {
-          container.innerHTML = '';
+          container.replaceChildren();
 
           for (const flatNode of filtered) {
             const entry = flatNode.node.entry;
@@ -739,7 +739,7 @@
 
             const content = document.createElement('span');
             content.className = 'tree-content';
-            content.innerHTML = getTreeNodeDisplayHtml(entry, flatNode.node.label);
+            content.replaceChildren(htmlFragment(getTreeNodeDisplayHtml(entry, flatNode.node.label)));
 
             div.appendChild(prefixSpan);
             div.appendChild(marker);
@@ -1101,7 +1101,7 @@
         const blob = new Blob([jsonlContent], { type: 'application/x-ndjson' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = safeUrl(url);
         a.download = `${header?.id || 'session'}.jsonl`;
         document.body.appendChild(a);
         a.click();
@@ -1169,11 +1169,11 @@
         }
 
         if (success && button) {
-          const originalHtml = button.innerHTML;
-          button.innerHTML = '✓';
+          const original = [...button.childNodes];
+          button.textContent = '✓';
           button.classList.add('copied');
           setTimeout(() => {
-            button.innerHTML = originalHtml;
+            button.replaceChildren(...original);
             button.classList.remove('copied');
           }, 1500);
         }
@@ -1503,9 +1503,7 @@
         const html = renderEntry(entry);
         if (!html) return null;
 
-        const template = document.createElement('template');
-        template.innerHTML = html;
-        const node = template.content.firstElementChild;
+        const node = htmlFragment(html).firstElementChild;
 
         // Cache the node
         if (node) {
@@ -1525,7 +1523,7 @@
 
         renderTree();
 
-        document.getElementById('header-container').innerHTML = renderHeader();
+        document.getElementById('header-container').replaceChildren(htmlFragment(renderHeader()));
         attachHeaderHandlers();
 
         // Build messages using cached DOM nodes
@@ -1539,7 +1537,7 @@
           }
         }
 
-        messagesEl.innerHTML = '';
+        messagesEl.replaceChildren();
         messagesEl.appendChild(fragment);
 
         // Cached nodes contain their initial presentation; reapply the viewer's toggle states.

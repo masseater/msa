@@ -32,10 +32,10 @@ const probePath = (dir: string, kind: string): string => `${dir}/lint-${kind}-pr
 
 const TSCONFIG_ERROR = "typescript(tsconfig-error)";
 
-const lintFiles = (files: readonly string[]) =>
+const lintFiles = (files: readonly string[], options: readonly string[]) =>
   Effect.gen(function* () {
     const { stdout } = yield* captureProcess({
-      args: ["lint", "--format=json", ...files],
+      args: ["lint", "--format=json", ...options, ...files],
       command: "vp",
       cwd: repoRoot,
     });
@@ -57,6 +57,7 @@ const probeRuntime = ManagedRuntime.make(
 
 const withProbes = <A, E, R>(
   probes: Readonly<Record<string, string>>,
+  options: readonly string[],
   use: (run: string, lint: ReturnType<typeof lintFiles>) => Effect.Effect<A, E, R>,
 ) =>
   Effect.scoped(
@@ -82,7 +83,10 @@ const withProbes = <A, E, R>(
         yield* fs.writeFileString(target, source);
       }
       const prefix = `${path.relative(repoRoot, run)}/`;
-      const lint = lintFiles(Object.keys(probes).map((file) => `${prefix}${file}`)).pipe(
+      const lint = lintFiles(
+        Object.keys(probes).map((file) => `${prefix}${file}`),
+        options,
+      ).pipe(
         Effect.map((diagnostics) =>
           diagnostics.map((diagnostic) => ({
             ...diagnostic,
@@ -96,15 +100,18 @@ const withProbes = <A, E, R>(
     }),
   );
 
-const lintProbes = (probes: Readonly<Record<string, string>>): Promise<Diagnostics> =>
-  probeRuntime.runPromise(withProbes(probes, (_run, lint) => lint));
+const lintProbes = (
+  probes: Readonly<Record<string, string>>,
+  options: readonly string[] = [],
+): Promise<Diagnostics> =>
+  probeRuntime.runPromise(withProbes(probes, options, (_run, lint) => lint));
 
 const lintAndInspectProbes = <A>(
   probes: Readonly<Record<string, string>>,
   inspect: (run: string) => A,
 ): Promise<{ readonly diagnostics: Diagnostics; readonly inspected: A }> =>
   probeRuntime.runPromise(
-    withProbes(probes, (run, lint) =>
+    withProbes(probes, [], (run, lint) =>
       Effect.all({
         diagnostics: lint,
         inspected: Effect.sync(() => inspect(run)),

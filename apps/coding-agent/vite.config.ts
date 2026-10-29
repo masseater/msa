@@ -39,7 +39,7 @@ export default defineConfig({
           "shx mkdir -p dist/modes/interactive/theme",
           "shx cp src/modes/interactive/theme/*.json dist/modes/interactive/theme/",
           "shx mkdir -p dist/core/export-html/vendor",
-          "shx cp src/core/export-html/template.html src/core/export-html/template.css src/core/export-html/template.js dist/core/export-html/",
+          "shx cp src/core/export-html/template.html src/core/export-html/template.css src/core/export-html/template.js src/core/export-html/html-fragment.js dist/core/export-html/",
           "shx cp src/core/export-html/vendor/*.js dist/core/export-html/vendor/",
         ],
       },

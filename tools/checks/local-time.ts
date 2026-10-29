@@ -20,10 +20,11 @@ import {
   isStringLiteral,
   isTemplateSpan,
 } from "typescript/unstable/ast/is";
-import { SymbolFlags } from "typescript/unstable/sync";
 import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/unstable/sync";
 
 import embeddedScript from "./embedded-script.ts";
+import htmlSinks from "./html-sinks.ts";
+import scriptSinks from "./script-sinks.ts";
 import typedProject from "./typed-project.ts";
 
 type Finding = {
@@ -37,7 +38,8 @@ type Scope = { readonly files: (name: string) => boolean; readonly root: string 
 
 type Hit = { readonly detail: string; readonly node: Node };
 
-const { descendants, locate, scanProject, typesOf } = typedProject;
+const { declaredIn, descendants, isDefaultLib, locate, resolveAlias, scanProject, typesOf } =
+  typedProject;
 
 type ReferenceRule = (symbol: TsSymbol, node: Node) => Hit | undefined;
 
@@ -92,16 +94,8 @@ const SPECIFIERS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.ImportSpecifier,
 ]);
 
-const declaredIn = (symbol: TsSymbol, file: RegExp): boolean =>
-  symbol.declarations.some(({ path }) => file.test(path));
-
-const isDefaultLib = (symbol: TsSymbol): boolean => declaredIn(symbol, /\/lib\.[\w.]+\.d\.ts$/iu);
-
 const isEffectDateTime = (symbol: TsSymbol): boolean =>
   declaredIn(symbol, /\/effect\/(?:dist|src)\/datetime\.(?:d\.)?ts$/iu);
-
-const resolveAlias = (checker: Checker, symbol: TsSymbol): TsSymbol =>
-  (symbol.flags & SymbolFlags.Alias) === 0 ? symbol : checker.getAliasedSymbol(symbol);
 
 const effectProblem = (symbol: TsSymbol): string | undefined =>
   EFFECT_LOCAL.has(symbol.name) ? `DateTime.${symbol.name} は端末のタイムゾーンを読む` : undefined;
@@ -256,6 +250,8 @@ const BROWSER_SCRIPTS = "tools/checks/browser-scripts.tsconfig.json";
 
 const { SCRIPT_OWNER } = embeddedScript;
 
+const { HTML_OWNER } = htmlSinks;
+
 const embeddedScriptHits = (_project: Project, nodes: readonly Node[]): readonly Hit[] =>
   embeddedScript.inStrings(nodes);
 
@@ -266,6 +262,9 @@ const RULES: ReadonlyMap<string, HitRule> = new Map([
   ["binding", bindingHits],
   ["stringify", stringifyHits],
   ["embeddedScript", embeddedScriptHits],
+  ["scriptSink", scriptSinks.scriptHits],
+  ["htmlSink", htmlSinks.htmlHits],
+  ["navigationSink", htmlSinks.navigationHits],
 ]);
 
 const findingAt =
@@ -279,6 +278,7 @@ const scanFileWith =
     const nodes = descendants(file);
     return rules
       .filter((rule) => relative !== SCRIPT_OWNER || rule !== embeddedScriptHits)
+      .filter((rule) => relative !== HTML_OWNER || rule !== htmlSinks.htmlHits)
       .flatMap((rule) => rule(project, nodes))
       .map(findingAt(file, relative));
   };
@@ -293,6 +293,6 @@ const scan = (scope: Scope, without: ReadonlySet<string> = new Set()): readonly 
   ];
 };
 
-const localTimeCheck = { BROWSER_SCRIPTS, OWNERS, SCRIPT_OWNER, scan };
+const localTimeCheck = { BROWSER_SCRIPTS, HTML_OWNER, OWNERS, SCRIPT_OWNER, scan };
 
 export default localTimeCheck;

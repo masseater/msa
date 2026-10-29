@@ -80,6 +80,10 @@ const embeddedCases: Readonly<Record<string, readonly [statement: string, flagge
     `export const v = (json: string) => \`<${TAG} type="application/json">\${json}</${TAG}>\`;`,
     false,
   ],
+  dataSrcScript: [
+    `export const v = '<${TAG} src="data:text/${SCHEME},${LOCALE}"></${TAG}>';`,
+    true,
+  ],
   handler: [`export const v = '<button ${ON}click="this.textContent=${LOCALE}">';`, true],
   handlerConcat: [`export const v = "<button" + ' ${ON}click="${LOCALE}">';`, true],
   schemeCheck: [`export const v = (p: string) => ["${SCHEME}:", "data:"].includes(p);`, false],
@@ -114,53 +118,62 @@ const scriptOwner = {
 
 const [owner] = localTimeCheck.OWNERS;
 
+type Probe = { readonly flagged: boolean; readonly name: string; readonly path: string };
+
+const reported = (list: readonly Probe[], isFlagged: (path: string) => boolean) =>
+  Object.fromEntries(list.map(({ name, path }) => [name, isFlagged(path)]));
+
+const expected = (list: readonly Probe[]) =>
+  Object.fromEntries(list.map(({ flagged, name }) => [name, flagged]));
+
+const unreported = (list: readonly Probe[]) =>
+  Object.fromEntries(list.map(({ name }) => [name, false]));
+
+const probeFiles = (browserScripts: string): Readonly<Record<string, string>> => ({
+  ...Object.fromEntries(
+    [...probes, ...scriptProbes, ...embeddedProbes, extractedScript, scriptOwner].map(
+      ({ path, source }) => [path, source],
+    ),
+  ),
+  [localTimeCheck.BROWSER_SCRIPTS]: browserScripts,
+  [owner!]: [...HEADER, "export const v = date.getHours();", ""].join("\n"),
+});
+
+const scansOf = (run: string) => {
+  const scope = { files: (name: string) => name.startsWith(`${run}/`), root: run };
+  return {
+    all: localTimeCheck.scan(scope),
+    withoutEmbedded: localTimeCheck.scan(scope, new Set(["embeddedScript"])),
+  };
+};
+
+const flaggedIn = (findings: ReturnType<typeof scansOf>["all"]) => (path: string) =>
+  findings.some((finding) => finding.file === path);
+
 it("reports every way of reading the local time zone outside the one formatter", () =>
-  readRepoFile(localTimeCheck.BROWSER_SCRIPTS).then((browserScripts) =>
-    lintAndInspectProbes(
-      {
-        ...Object.fromEntries(
-          [...probes, ...scriptProbes, ...embeddedProbes, extractedScript, scriptOwner].map(
-            ({ path, source }) => [path, source],
-          ),
-        ),
-        [localTimeCheck.BROWSER_SCRIPTS]: browserScripts,
-        [owner!]: [...HEADER, "export const v = date.getHours();", ""].join("\n"),
-      },
-      (run) => {
-        const scope = { files: (name: string) => name.startsWith(`${run}/`), root: run };
-        return {
-          all: localTimeCheck.scan(scope),
-          withoutEmbedded: localTimeCheck.scan(scope, new Set(["embeddedScript"])),
-        };
-      },
-    ).then(({ inspected: { all, withoutEmbedded } }) => {
-      const flaggedIn = (findings: typeof all) => (path: string) =>
-        findings.some((finding) => finding.file === path);
+  readRepoFile(localTimeCheck.BROWSER_SCRIPTS)
+    .then((browserScripts) => lintAndInspectProbes(probeFiles(browserScripts), scansOf))
+    .then(({ inspected: { all, withoutEmbedded } }) => {
       const flagged = flaggedIn(all);
-      const embedded = (found: (path: string) => boolean) =>
-        Object.fromEntries(embeddedProbes.map(({ name, path }) => [name, found(path)]));
       expect({
-        embedded: embedded(flagged),
-        embeddedWithoutRule: embedded(flaggedIn(withoutEmbedded)),
+        embedded: reported(embeddedProbes, flagged),
+        embeddedWithoutRule: reported(embeddedProbes, flaggedIn(withoutEmbedded)),
         extracted: flagged(extractedScript.path),
         owner: flagged(owner!),
-        probes: Object.fromEntries(probes.map(({ name, path }) => [name, flagged(path)])),
+        probes: reported(probes, flagged),
         scriptOwner: flagged(scriptOwner.path),
-        scripts: Object.fromEntries(scriptProbes.map(({ name, path }) => [name, flagged(path)])),
+        scripts: reported(scriptProbes, flagged),
       }).toEqual({
-        embedded: Object.fromEntries(
-          embeddedProbes.map(({ flagged: value, name }) => [name, value]),
-        ),
-        embeddedWithoutRule: Object.fromEntries(embeddedProbes.map(({ name }) => [name, false])),
+        embedded: expected(embeddedProbes),
+        embeddedWithoutRule: unreported(embeddedProbes),
         extracted: true,
         owner: false,
-        probes: Object.fromEntries(probes.map(({ flagged: value, name }) => [name, value])),
+        probes: expected(probes),
         scriptOwner: false,
-        scripts: Object.fromEntries(scriptProbes.map(({ flagged: value, name }) => [name, value])),
+        scripts: expected(scriptProbes),
       });
       return undefined;
-    }),
-  ));
+    }));
 
 it("leaves no local time string built outside the one formatter", () => {
   const root = new URL(`file://${repoRoot}/`).pathname;
@@ -176,6 +189,7 @@ it("leaves no local time string built outside the one formatter", () => {
 
 const htmlCases: Readonly<Record<string, readonly [html: string, flagged: boolean]>> = {
   data: [`<${TAG} id="d" type="application/json">{"a":1}</${TAG}>`, false],
+  dataUrl: [`<${TAG} src="data:text/${SCHEME},${LOCALE}"></${TAG}>`, true],
   handler: [`<div ${ON}click="${LOCALE}"></div>`, true],
   inline: [`<${TAG}>${LOCALE}</${TAG}>`, true],
   placeholder: [`<${TAG}>\n{{JS}}\n</${TAG}>`, false],

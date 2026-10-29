@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "typescript/unstable/ast";
-import { API } from "typescript/unstable/sync";
-import type { Checker, Project, Type } from "typescript/unstable/sync";
+import { API, SymbolFlags } from "typescript/unstable/sync";
+import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/unstable/sync";
 
 type Scope = {
   readonly files: (name: string) => boolean;
@@ -67,6 +67,22 @@ const scanProject = <F>(
   }
 };
 
-const typedProject = { descendants, locate, scanProject, typesOf };
+const declaredIn = (symbol: TsSymbol, file: RegExp): boolean =>
+  symbol.declarations.some(({ path }) => file.test(path));
+
+const isDefaultLib = (symbol: TsSymbol): boolean => declaredIn(symbol, /\/lib\.[\w.]+\.d\.ts$/iu);
+
+const resolveAlias = (checker: Checker, symbol: TsSymbol): TsSymbol =>
+  (symbol.flags & SymbolFlags.Alias) === 0 ? symbol : checker.getAliasedSymbol(symbol);
+
+const typedProject = {
+  declaredIn,
+  descendants,
+  isDefaultLib,
+  locate,
+  resolveAlias,
+  scanProject,
+  typesOf,
+};
 
 export default typedProject;

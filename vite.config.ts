@@ -101,6 +101,18 @@ export default defineConfig({
         },
       },
       {
+        files: ["libs/agent/test/utils/calculate.ts", "libs/ai/test/validation.test.ts"],
+        rules: { "eslint/no-new-func": "off" },
+      },
+      {
+        files: withProbes(["apps/*/src/**/*.js", "scripts/**/*.js"]),
+        rules: { "msa/no-prototype-write": "error" },
+      },
+      {
+        files: ["apps/coding-agent/src/core/export-html/html-fragment.js"],
+        rules: { "eslint/no-unused-vars": "off" },
+      },
+      {
         files: withProbes(["tools/oxlint/**"]),
         rules: { "msa/no-builtin-module-lookup": "off" },
       },
@@ -125,6 +137,7 @@ export default defineConfig({
     rules: {
       "eslint/no-control-regex": "error",
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
+      "eslint/no-new-func": "error",
       "eslint/no-restricted-imports": ["error", restrictedImports],
       "eslint/no-restricted-properties": ["error", ...restrictedProperties],
       "eslint/no-shadow": "error",

@@ -18,7 +18,8 @@ const MOVE = `素の .js に出し tools/checks/browser-scripts.tsconfig.json �
 
 const SCRIPT_OPEN = /<script\b([^>]*)(>?)/giu;
 
-const STATIC_DATA = /\b(?:src\s*=|type\s*=\s*["']?application\/(?:ld\+)?json\b)/iu;
+const STATIC_DATA =
+  /\b(?:src\s*=(?!\s*["']?\s*(?:data|blob):)|type\s*=\s*["']?application\/(?:ld\+)?json\b)/iu;
 
 const SCRIPT_ELEMENT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/giu;
 

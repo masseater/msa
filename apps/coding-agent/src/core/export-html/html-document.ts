@@ -21,6 +21,7 @@ const readTemplates = (templateDir: string) =>
       fs.readFileString(platform.join(templateDir, ...segments), "utf-8");
     return {
       hljsJs: yield* read("vendor", "highlight.min.js"),
+      htmlFragmentJs: yield* read("html-fragment.js"),
       markedJs: yield* read("vendor", "marked.min.js"),
       template: yield* read("template.html"),
       templateCss: yield* read("template.css"),
@@ -57,7 +58,7 @@ const generateHtml = Effect.fn("generateHtml")(function* (
   sessionData: exportTypesTypes.SessionData,
   themeName: string | undefined,
 ) {
-  const { template, templateCss, templateJs, markedJs, hljsJs } =
+  const { template, templateCss, templateJs, markedJs, hljsJs, htmlFragmentJs } =
     yield* readTemplates(getExportTemplateDir());
   const themeVars = generateThemeVars(themeName);
   const colors = getResolvedThemeColors(themeName);
@@ -77,6 +78,7 @@ const generateHtml = Effect.fn("generateHtml")(function* (
 
   return template
     .replace("{{CSS}}", css)
+    .replace("{{HTML_FRAGMENT_JS}}", htmlFragmentJs)
     .replace("{{JS}}", templateJs)
     .replace("{{SESSION_DATA}}", sessionDataBase64)
     .replace("{{MARKED_JS}}", markedJs)
