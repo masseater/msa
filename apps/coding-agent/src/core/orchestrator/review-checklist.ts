@@ -16,12 +16,16 @@ type Entry = reviewChecklistTypes.Entry;
 type Checklist = reviewChecklistTypes.Checklist;
 type Judgement = reviewChecklistTypes.Judgement;
 
+const FINDINGS =
+  "every problem within the task's goal that the work still has, one entry each, including one you call minor, would not block the merge for, or would leave for a separate issue, and an empty list when none remains";
+
+function recordInstruction(itemsOf: string): string {
+  return `call ${RECORD_GOAL_ITEMS} with items, one entry for each ${itemsOf}: met only when the work fully meets it, unmet otherwise, with what in the work shows it; and with findings: ${FINDINGS}.`;
+}
+
 function schemaFor(count: number) {
   return Type.Object({
-    findings: Type.Array(Type.String(), {
-      description:
-        "Every problem within the task's goal that the work still has, one entry each, including one you call minor, would not block the merge for, or would leave for a separate issue. An empty list says the report names none.",
-    }),
+    findings: Type.Array(Type.String(), { description: `The findings: ${FINDINGS}.` }),
     items: Type.Array(
       Type.Object({
         evidence: Type.String({
@@ -104,8 +108,7 @@ function recordTool(
 ): extensionsTypesTypes.ToolDefinition {
   const schema = schemaFor(goalItems(task.goalState).length);
   const definition: extensionsTypesTypes.ToolDefinition<typeof schema, undefined> = {
-    description:
-      "Record, for every item of the task's goal state, whether the work meets it, and every problem within the goal the work still has. The review passes only when every item is recorded as met; an unmet item sends the work back however the report words it. When every item is met with its evidence and no finding is recorded, the review passes even if the decision model cannot judge the report.",
+    description: `Record, for every item of the task's goal state, whether the work meets it, and the findings: ${FINDINGS}. The review passes only when every item is recorded as met; an unmet item sends the work back however the report words it. When every item is met with its evidence and no finding is recorded, the review passes even if the decision model cannot judge the report.`,
     execute: (_toolCallId, params) => {
       const goalState = store.getTask(runtime.database, task.id)?.goalState ?? task.goalState;
       const problem = entriesProblem(params.items, goalItems(goalState).length);
@@ -133,9 +136,7 @@ function recordTool(
     label: "record goal items",
     name: RECORD_GOAL_ITEMS,
     parameters: schema,
-    promptGuidelines: [
-      "Before ending a review, call record_goal_items with one entry for each goal item and every finding within the goal. Mark an item met only when the work fully meets it.",
-    ],
+    promptGuidelines: [`Before ending a review, ${recordInstruction("goal item")}`],
     promptSnippet: "Record whether each goal item is met",
   };
   return definition as extensionsTypesTypes.ToolDefinition;
@@ -144,12 +145,19 @@ function recordTool(
 function recordPrompt(goalState: string, judgement: Judgement): string {
   return [
     "<goal-items-not-recorded>",
-    `${judgement.text} The review cannot pass or fail without it. Call ${RECORD_GOAL_ITEMS} with one entry for each goal item below, then end your turn with your report.`,
+    `${judgement.text} The review cannot pass or fail without it. Before you end your turn with your report, ${recordInstruction("goal item below")}`,
     numbered(goalItems(goalState)),
     "</goal-items-not-recorded>",
   ].join("\n");
 }
 
-const reviewChecklist = { RECORD_GOAL_ITEMS, judge, numbered, recordPrompt, recordTool };
+const reviewChecklist = {
+  RECORD_GOAL_ITEMS,
+  judge,
+  numbered,
+  recordInstruction,
+  recordPrompt,
+  recordTool,
+};
 
 export default reviewChecklist;
