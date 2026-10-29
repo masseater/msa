@@ -23,7 +23,7 @@ const config = {
   getDebugLogPath: configPackage.getDebugLogPath,
   getDocsPath: configPackage.getDocsPath,
   getExamplesPath: configPackage.getExamplesPath,
-  getExportTemplateDir: configPackage.getExportTemplateDir,
+  getExportTemplateCssPath: configPackage.getExportTemplateCssPath,
   getModelsPath: configPackage.getModelsPath,
   getPackageDir: configPackage.getPackageDir,
   getPackageJsonPath: configPackage.getPackageJsonPath,
@@ -43,6 +43,7 @@ const config = {
   isBundledNode: configPackage.isBundledNode,
   nodeLlamaCppLoader: configPackage.nodeLlamaCppLoader,
   resolveCodemodeWorkerSpecifier: configPackage.resolveCodemodeWorkerSpecifier,
+  setEmbeddedExportTemplateCssPath: configPackage.setEmbeddedExportTemplateCssPath,
   setEmbeddedQuickJSWasmPath: configPackage.setEmbeddedQuickJSWasmPath,
 };
 

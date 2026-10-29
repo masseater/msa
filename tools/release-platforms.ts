@@ -8,7 +8,6 @@ const DIST_ENTRIES: ReadonlyArray<string> = [
   "README.md",
   "CHANGELOG.md",
   "theme",
-  "export-html",
   "docs",
   "examples",
   "photon_rs_bg.wasm",

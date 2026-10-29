@@ -222,6 +222,13 @@ const decideSmokeTest = (context: Context, binary: string) =>
         `==> skipping the node-llama-cpp decide smoke test: set ${LOCAL_LLM_TESTS_ENV}=1 to run it`,
       );
 
+const exportSmokeTest = (context: Context, binary: string) =>
+  runInherit({
+    args: ["tools/smoke-binary-export.ts", binary],
+    command: "node",
+    cwd: context.repoRoot,
+  });
+
 const smokeTest = (context: Context) =>
   Effect.gen(function* () {
     const host = hostPlatformName();
@@ -251,6 +258,7 @@ const smokeTest = (context: Context) =>
       });
     }
     yield* Console.log(`==> ${platform.name} archive runs: msa --version reports ${reported}`);
+    yield* exportSmokeTest(context, binary);
     yield* decideSmokeTest(context, binary);
   });
 
