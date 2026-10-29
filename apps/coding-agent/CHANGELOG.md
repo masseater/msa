@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-10-29
+
 ### Added
 
 - `@msa/coding-agent` exports `formatLocalTime(value, layout)`, which writes an epoch millisecond number or a date string in the terminal's time zone. `layout` takes the tokens `YYYY`, `YY`, `MM`, `M`, `DD`, `D`, `HH`, `mm` and `ss`, for example `formatLocalTime(Date.now(), "YYYY-MM-DD HH:mm:ss")`. It is the one function msa builds every local time it shows with, the session tree labels and the TUI write log names included

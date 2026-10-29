@@ -1,6 +1,6 @@
 {
   "name": "@msa/coding-agent",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Coding agent CLI with read, bash, edit, write tools and session management",
   "keywords": [
     "agent",
