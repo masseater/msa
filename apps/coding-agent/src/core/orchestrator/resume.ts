@@ -12,7 +12,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { launch, startTasks } = startModule.starting;
+const { launch, startOrRefuse } = startModule.starting;
 const { reopenTarget, reopenWorker } = reopenModule;
 const { markRead, notesFor } = threadPlanModule.threadPlans;
 
@@ -21,7 +21,7 @@ function resume(
   task: orchestratorTypesTypes.Task,
   decision: string,
   from: "orchestrator" | "triage" = "orchestrator",
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+): Effect.Effect<void, runtimeTypes.WorkspaceError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     yield* advisors.stopRunning(runtime, task.id, now);
@@ -29,7 +29,7 @@ function resume(
     const target = yield* reopenTarget(runtime, task, decision, now);
     if (target === "held") return;
     if (target === undefined) {
-      yield* startTasks(runtime, task, "worker", "", decision);
+      yield* startOrRefuse(runtime, task, "worker", "", decision);
       return;
     }
     const { thread } = target;

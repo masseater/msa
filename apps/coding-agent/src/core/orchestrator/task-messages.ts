@@ -27,7 +27,7 @@ function sendMessage(runtime: runtimeTypes.Runtime, taskId: string, message: str
       return actionHelpers.taskView(runtime, taskId);
     }
     if (task.status === "completed" || task.status === "failed" || task.status === "stopped") {
-      yield* starting.startTasks(runtime, task, "worker", "", message);
+      yield* starting.startOrRefuse(runtime, task, "worker", "", message);
       yield* Effect.sync(() => runtime.publish());
       return actionHelpers.taskView(runtime, taskId);
     }
@@ -45,7 +45,7 @@ function advise(runtime: runtimeTypes.Runtime, taskId: string, question: string)
         `${taskId} is ${task.status}; an advisor weighs the options of a task that waits for a decision`,
       );
     }
-    yield* starting.startTasks(runtime, task, "advisor", "", question);
+    yield* starting.startOrRefuse(runtime, task, "advisor", "", question);
     yield* Effect.sync(() => runtime.publish());
     return actionHelpers.taskView(runtime, taskId);
   });

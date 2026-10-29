@@ -47,7 +47,7 @@ function rerun(runtime: runtimeTypes.Runtime, taskId: string, extra = "") {
     const task = store.getTask(runtime.database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
     if (task.status === "running") throw new Error(`${taskId} is already running`);
-    yield* starting.startTasks(runtime, task, "worker", "", extra);
+    yield* starting.startOrRefuse(runtime, task, "worker", "", extra);
     yield* Effect.sync(() => runtime.publish());
     return actionHelpers.taskView(runtime, taskId);
   });
