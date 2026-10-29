@@ -85,6 +85,7 @@ function countChecks(all: readonly RollupEntryValue[]): snapshotTypes.PrCheckCou
   let cancelled = 0;
   let pending = 0;
   const pendingNames: string[] = [];
+  const pendingWorkflows = new Set<string>();
   for (const entry of entries) {
     switch (rollupOutcome(entry)) {
       case "passed":
@@ -98,13 +99,22 @@ function countChecks(all: readonly RollupEntryValue[]): snapshotTypes.PrCheckCou
         break;
       case "pending": {
         pending += 1;
+        pendingWorkflows.add(entry.workflowName ?? "");
         const name = rollupName(entry);
         if (name !== "" && pendingNames.length < PENDING_NAME_LIMIT) pendingNames.push(name);
         break;
       }
     }
   }
-  return { cancelled, failed, passed, pending, pendingNames, total: entries.length };
+  return {
+    cancelled,
+    failed,
+    passed,
+    pending,
+    pendingNames,
+    pendingWorkflows: [...pendingWorkflows],
+    total: entries.length,
+  };
 }
 
 function parsePrView(json: string): snapshotTypes.PrSnapshot | undefined {

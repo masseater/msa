@@ -4,12 +4,14 @@ import errors from "../../utils/errors.ts";
 import shell from "../../utils/shell.ts";
 import execModule from "../exec.ts";
 import type execTypes from "../exec.types.ts";
+import ciHistory from "./ci-history.ts";
 import type ghTypes from "./gh.types.ts";
 import PrWatchGhError from "./pr-watch-gh-error.ts";
 import snapshotModule from "./snapshot.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 
 const { parsePrView } = snapshotModule;
+const { runsFrom, workflowTimeout } = ciHistory;
 const { execCommand } = execModule;
 const { findExecutableOnPath } = shell;
 const { toErrorMessage } = errors;
@@ -47,6 +49,43 @@ function ghCompareArgs(
     "--jq",
     ".behind_by",
   ];
+}
+function ghRunsArgs(target: snapshotTypes.PrWatchTarget): string[] {
+  const repository = target.repository ?? "{owner}/{repo}";
+  return [
+    "api",
+    `repos/${repository}/actions/runs?status=completed&exclude_pull_requests=true&per_page=100`,
+    "--jq",
+    "[.workflow_runs[] | {name, conclusion, created_at, run_started_at, updated_at}]",
+  ];
+}
+function ghWorkflowFilesArgs(target: snapshotTypes.PrWatchTarget, headRefOid: string): string[] {
+  const repository = target.repository ?? "{owner}/{repo}";
+  return [
+    "api",
+    `repos/${repository}/contents/.github/workflows?ref=${headRefOid}`,
+    "--jq",
+    '.[] | select(.type == "file") | .path',
+  ];
+}
+function ghWorkflowFileArgs(
+  target: snapshotTypes.PrWatchTarget,
+  path: string,
+  headRefOid: string,
+): string[] {
+  const repository = target.repository ?? "{owner}/{repo}";
+  return [
+    "api",
+    "-H",
+    "Accept: application/vnd.github.raw+json",
+    `repos/${repository}/contents/${path}?ref=${headRefOid}`,
+  ];
+}
+function workflowPathsFrom(stdout: string): string[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /\.ya?ml$/u.test(line));
 }
 function firstLine(text: string): string {
   const line = text.trim().split("\n", 1)[0]?.trim() ?? "";
@@ -87,6 +126,27 @@ function ghErrorFrom(result: Pick<execTypes.ExecResult, "stdout" | "stderr">): P
       });
   }
 }
+function readTimeouts(
+  exec: (args: string[]) => Effect.Effect<execTypes.ExecResult, PrWatchGhError>,
+  target: snapshotTypes.PrWatchTarget,
+  headRefOid: string,
+): ReturnType<ghTypes.PrWatchGh["timeouts"]> {
+  return exec(ghWorkflowFilesArgs(target, headRefOid)).pipe(
+    Effect.map((result) => workflowPathsFrom(result.stdout)),
+    Effect.catchIf(
+      (error) => error.kind === "not-found",
+      () => Effect.succeed([]),
+    ),
+    Effect.flatMap((paths) =>
+      Effect.forEach(paths, (path) =>
+        exec(ghWorkflowFileArgs(target, path, headRefOid)).pipe(
+          Effect.map((result) => workflowTimeout(path, result.stdout)),
+        ),
+      ),
+    ),
+    Effect.map((timeouts) => timeouts.filter((timeout) => timeout !== undefined)),
+  );
+}
 function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
   const find = options.find ?? findExecutableOnPath;
   const run =
@@ -117,6 +177,8 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
           return missingBehindByCount();
         }),
       ),
+    runs: (target) => exec(ghRunsArgs(target)).pipe(Effect.flatMap(runsFrom)),
+    timeouts: (target, headRefOid) => readTimeouts(exec, target, headRefOid),
     view: (target) =>
       exec(ghPrViewArgs(target)).pipe(
         Effect.flatMap((result) => {
@@ -138,6 +200,9 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
 const gh = {
   ghCompareArgs,
   ghPrViewArgs,
+  ghRunsArgs,
+  ghWorkflowFileArgs,
+  ghWorkflowFilesArgs,
   makeGh,
 };
 
