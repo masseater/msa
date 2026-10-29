@@ -46,6 +46,11 @@ const sepiaceUnreachable = skippedRecall(
   "failed to connect",
 );
 
+const sepiaceNeverAnswers = skippedRecall(
+  { sepiaceHangs: true, signedIn: true },
+  "sepiace did not answer within 5 seconds",
+);
+
 const statusSaysTheSavedSignInWasRejected = Effect.gen(function* () {
   const agent = yield* setUp({ signedIn: true, tokenRejected: true });
   const status = yield* agent.run(["memory", "status"]);
@@ -72,6 +77,7 @@ describe.skipIf(process.platform === "win32")("msa -p when long-term memory is s
   it("says why when sepiace rejects the saved token", () => runTest(tokenRejected), 90_000);
   it("says why when the credential store cannot be read", () => runTest(storeUnreadable), 90_000);
   it("says why when sepiace is unreachable", () => runTest(sepiaceUnreachable), 90_000);
+  it("says why when sepiace does not answer in time", () => runTest(sepiaceNeverAnswers), 90_000);
   it(
     "says nothing when memory is off, recall is off, or recall works",
     () => runTest(saysNothingWhenMemoryIsOffOrRecalls),

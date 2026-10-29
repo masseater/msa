@@ -31,6 +31,12 @@ const describeConnection = (connection: memoryTypes.MemoryConnection) =>
       ? `not connected; ${connection.detail}`
       : `the last request failed: ${connection.detail}`;
 
+const signInProblem = (client: memoryTypes.SepiaceClient): string | undefined => {
+  if (client.rejected) return `sepiace rejected the saved sign-in; ${SIGN_IN_HINT}`;
+  if (client.state === "needs-auth") return `not signed in; ${SIGN_IN_HINT}`;
+  return undefined;
+};
+
 const untilAborted = (signal: AbortSignal): Promise<string | undefined> =>
   callbackPromise((resolve) => {
     if (signal.aborted) resolve(undefined);
@@ -75,13 +81,8 @@ export default class MemoryService {
 
   get connection(): memoryTypes.MemoryConnection {
     const { client } = this.options;
-    if (client.rejected)
-      return {
-        detail: `sepiace rejected the saved sign-in; ${SIGN_IN_HINT}`,
-        state: "missing",
-      };
-    if (client.state === "needs-auth")
-      return { detail: `not signed in; ${SIGN_IN_HINT}`, state: "missing" };
+    const signIn = signInProblem(client);
+    if (signIn !== undefined) return { detail: signIn, state: "missing" };
     if (this.lastFailure !== undefined) return { detail: this.lastFailure, state: "failing" };
     if (client.state === "failed")
       return { detail: client.error ?? "failed to connect", state: "missing" };
@@ -120,15 +121,13 @@ export default class MemoryService {
   }
 
   private recallSkipped(): memoryTypes.RecallOutcome {
-    const { connection } = this;
-    if (connection.state === "ready")
-      return { kind: "skipped", reason: "sepiace is not connected" };
+    const { client } = this.options;
+    const problem =
+      signInProblem(client) ??
+      (client.state === "failed" ? (client.error ?? "failed to connect") : undefined);
     return {
       kind: "skipped",
-      reason:
-        connection.detail === "connecting"
-          ? `sepiace did not answer within ${RECALL_TIMEOUT_MS / 1000} seconds`
-          : connection.detail,
+      reason: problem ?? `sepiace did not answer within ${RECALL_TIMEOUT_MS / 1000} seconds`,
     };
   }
 

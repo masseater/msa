@@ -239,6 +239,7 @@ interface PrepareOptions {
   readonly storeFails?: boolean;
   readonly tokenRejected?: boolean;
   readonly sepiaceDown?: boolean;
+  readonly sepiaceHangs?: boolean;
 }
 
 const prepare = (options: PrepareOptions) =>
@@ -252,7 +253,9 @@ const prepare = (options: PrepareOptions) =>
     const model = yield* startModel(options.memoryToolRequest);
     const layout = yield* makeLayout;
     yield* writeBrowser(layout);
-    yield* writeAgentFiles(layout, { model: model.origin, sepiace: sepiace.url }, options);
+    const sepiaceUrl =
+      options.sepiaceHangs === true ? `${yield* listen(() => Effect.never)}/mcp` : sepiace.url;
+    yield* writeAgentFiles(layout, { model: model.origin, sepiace: sepiaceUrl }, options);
     if (options.sepiaceDown === true) yield* Effect.promise(sepiace.close);
     return { ...layout, ...(yield* runners(layout)), model, sepiace };
   });
