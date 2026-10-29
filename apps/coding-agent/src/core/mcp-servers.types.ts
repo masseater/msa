@@ -46,6 +46,10 @@ declare namespace mcpServersTypes {
     extensionPath: string;
   }
 
+  type McpServerAdmission =
+    | (RegisteredMcpServer & { ignored: false })
+    | { name: string; extensionPath: string; ignored: true };
+
   type McpServerRegistry = (typeof McpServerRegistryClass)["prototype"];
 }
 
