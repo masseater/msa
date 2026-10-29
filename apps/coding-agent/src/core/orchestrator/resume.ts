@@ -33,14 +33,14 @@ function resume(
       return;
     }
     const { thread } = target;
+    const worker = yield* reopenWorker(runtime, task, thread, target.role, now);
+    if (worker === undefined) return;
     const notes = notesFor(runtime, task.id, thread.id);
     yield* Effect.sync(() => {
       store.updateThread(runtime.database, thread.id, { status: "running" }, now);
       store.setTaskStatus(runtime.database, task.id, "running", now);
       markRead(runtime, notes, thread.id, now);
     });
-    const worker = yield* reopenWorker(runtime, task, thread, target.role, now);
-    if (worker === undefined) return;
     const prompt = decisionPrompts.resumePrompt(target.request, decision, notes, from);
     yield* Effect.sync(() => launch(runtime, thread.id, worker, prompt, now));
   });

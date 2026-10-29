@@ -12,6 +12,8 @@ import type wrapUpTypes from "./wrap-up.types.ts";
 declare namespace runtimeTypes {
   type OrchestratorError = errorsTypes.OrchestratorError;
 
+  type WorkspaceError = errorsTypes.OrchestratorError | errorsTypes.UncheckableCwd;
+
   type WorkerSession = workerTypes.WorkerSession;
 
   type OrchestratorOptions = workerTypes.OrchestratorOptions;

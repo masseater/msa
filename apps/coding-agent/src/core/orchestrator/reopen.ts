@@ -5,13 +5,14 @@ import reviewHold from "./review-hold.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import startModule from "./start.ts";
 import storeModule from "./store.ts";
+import taskCwd from "./task-cwd.ts";
 import threadTools from "./thread-tools.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import worktreeModule from "./worktree.ts";
 
 const { orchestratorError } = errors;
 const { worktrees } = worktreeModule;
-const { failThread } = startModule.starting;
+const { failThread, refuseStart } = startModule.starting;
 const { store } = storeModule;
 const { toolsFor } = threadTools;
 
@@ -64,6 +65,10 @@ function reopenWorker(
     const open = runtime.workers.get(thread.id);
     if (open !== undefined) return open;
     const prepared = yield* Effect.result(worktrees.prepare(runtime, task));
+    if (Result.isFailure(prepared) && taskCwd.isUncheckable(prepared.failure)) {
+      yield* Effect.sync(() => refuseStart(runtime, task, role, prepared.failure.message, now));
+      return undefined;
+    }
     if (Result.isFailure(prepared)) {
       yield* Effect.sync(() =>
         failThread(runtime, thread.id, task, role, now, prepared.failure.message),

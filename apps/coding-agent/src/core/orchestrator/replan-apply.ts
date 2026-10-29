@@ -25,7 +25,7 @@ function apply(
     const now = yield* nowMillis;
     const replanId = newId("rp");
     const handoffs = yield* collect(runtime, memos);
-    yield* readPullRequests(runtime, prepared.sources);
+    const unread = yield* readPullRequests(runtime, prepared.sources);
     const { changes, handover } = yield* Effect.sync(() =>
       write(runtime, prepared, handoffs, replanId, now),
     );
@@ -46,6 +46,7 @@ function apply(
       rewired: changes.rewired,
       started,
       stopped: changes.stopped,
+      unread,
       untracked: handover.untracked,
     };
   });

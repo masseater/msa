@@ -7,6 +7,7 @@ import type replanTypes from "./replan.types.ts";
 import repoState from "./repo-state.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
 const { newId } = ids;
 const { repoStates } = repoState;
@@ -35,10 +36,11 @@ function collect(
 function readPullRequests(
   runtime: runtimeTypes.Runtime,
   taskIds: readonly string[],
-): Effect.Effect<void> {
-  return Effect.forEach(taskIds, (taskId) => pullRequestRefresh.refresh(runtime, taskId), {
-    discard: true,
-  });
+): Effect.Effect<orchestratorTypesTypes.UnreadPullRequest[]> {
+  return Effect.map(
+    Effect.forEach(taskIds, (taskId) => pullRequestRefresh.refreshOrUnread(runtime, taskId)),
+    (reads) => reads.flatMap((unread) => unread ?? []),
+  );
 }
 
 function memoBlock(

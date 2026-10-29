@@ -17,7 +17,7 @@ function prepare(
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
   threadId: string,
-): Effect.Effect<orchestratorTypesTypes.Workspace, runtimeTypes.OrchestratorError> {
+): Effect.Effect<orchestratorTypesTypes.Workspace, runtimeTypes.WorkspaceError> {
   if (role === "worker" || role === "reviewer") return worktrees.prepare(runtime, task);
   const checkout = advisorWorkspace.prepare(runtime, task, threadId);
   if (role === "advisor") return checkout;

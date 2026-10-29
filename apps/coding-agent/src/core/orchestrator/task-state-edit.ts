@@ -11,7 +11,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { requireChecks, requireStates } = text;
-const { requireCheckableCwd } = taskCwd;
+const { requireCheckableCwd, setStateRemedy } = taskCwd;
 const { actionHelpers } = actionHelpersModule;
 const { taskOf } = actionHelpers;
 
@@ -41,7 +41,9 @@ function setState(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.S
     );
     const checks =
       input.checks === undefined ? task.checks : requireChecks(`Task ${task.id}`, input.checks);
-    if (input.checks !== undefined) yield* requireCheckableCwd(`Task ${task.id}`, task.cwd, checks);
+    if (input.checks !== undefined) {
+      yield* requireCheckableCwd(`Task ${task.id}`, task.cwd, checks, setStateRemedy(task.id));
+    }
     yield* Effect.sync(() =>
       store.updateTask(runtime.database, task.id, { ...states, checks }, now),
     );

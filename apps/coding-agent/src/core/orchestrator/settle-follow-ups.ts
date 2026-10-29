@@ -32,11 +32,13 @@ function startFollowUps(
     for (const task of applied.review) {
       yield* starting.startTasks(runtime, task, "reviewer", report);
     }
+    const sentBack: string[] = [];
     for (const item of applied.sendBack) {
-      yield* starting.startTasks(runtime, item.task, "worker", "", item.prompt);
+      const threadId = yield* starting.startTasks(runtime, item.task, "worker", "", item.prompt);
+      if (threadId !== undefined) sentBack.push(item.task.id);
     }
     const scheduled = yield* scheduling.scheduleEffect(runtime);
-    return [...applied.sendBack.map((item) => item.task.id), ...scheduled];
+    return [...sentBack, ...scheduled];
   });
 }
 
