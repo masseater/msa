@@ -13,32 +13,8 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { launch, startTasks } = startModule.starting;
-const { reopenWorker } = reopenModule;
+const { reopenTarget, reopenWorker } = reopenModule;
 const { markRead, notesFor } = threadPlanModule.threadPlans;
-
-interface ResumeTarget {
-  thread: orchestratorTypesTypes.Thread;
-  role: orchestratorTypesTypes.ThreadRole;
-  request: string;
-}
-
-function resumeTarget(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.Task,
-): ResumeTarget | undefined {
-  const reports = store
-    .reportsOfTask(runtime.database, task.id)
-    .filter((report) => report.role !== "advisor" && report.role !== "triage");
-  const asked = reports.at(-1);
-  if (asked === undefined) return undefined;
-  const reviewerAsked =
-    asked.role === "reviewer" && (asked.verdict === null || asked.verdict === "undecided");
-  const source = reviewerAsked ? asked : reports.findLast((report) => report.role === "worker");
-  const thread =
-    source === undefined ? undefined : store.getThread(runtime.database, source.threadId);
-  if (thread === undefined) return undefined;
-  return { request: asked.content, role: reviewerAsked ? "reviewer" : "worker", thread };
-}
 
 function resume(
   runtime: runtimeTypes.Runtime,
@@ -50,7 +26,8 @@ function resume(
     const now = yield* nowMillis;
     yield* advisors.stopRunning(runtime, task.id, now);
     yield* Effect.sync(() => store.clearProviderResumed(runtime.database, task.id));
-    const target = resumeTarget(runtime, task);
+    const target = yield* reopenTarget(runtime, task, decision, now);
+    if (target === "held") return;
     if (target === undefined) {
       yield* startTasks(runtime, task, "worker", "", decision);
       return;

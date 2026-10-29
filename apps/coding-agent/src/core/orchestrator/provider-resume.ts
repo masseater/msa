@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import ids from "./ids.ts";
 import providerWaitModule from "./provider-wait.ts";
+import reviewHold from "./review-hold.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import start from "./start.ts";
 import storeModule from "./store.ts";
@@ -74,6 +75,14 @@ function resumeDue(
       if (!stillWaiting(runtime, task, wait)) {
         store.deleteProviderWait(runtime.database, wait.taskId);
         continue;
+      }
+      if (wait.role === "worker" && reviewHold.blockedByDependencies(runtime, task.id)) continue;
+      if (wait.role === "reviewer") {
+        const held = yield* reviewHold.holdReview(runtime, task, wait.threadId, now);
+        if (held) {
+          store.deleteProviderWait(runtime.database, wait.taskId);
+          continue;
+        }
       }
       yield* resumeTask(runtime, task, wait);
       started.push(task.id);

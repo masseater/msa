@@ -200,3 +200,22 @@ it("still refuses to give a running worker an unfinished dependency", () =>
       expect(taskStatus(orchestrator, a.id)).toBe("running");
     }),
   ));
+
+it("shows a round review held by a scheduling pass as waiting once a finished task of the round runs again", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, workers } = setup({ pollIntervalMs: 10 });
+      const a = yield* create(orchestrator, work("a"));
+      yield* finish(orchestrator, workers, a.id, 0);
+      const review = roundReview(orchestrator).id;
+      yield* waitFor(() => taskStatus(orchestrator, review) === "running");
+      const thread = runningThreadOf(orchestrator, review);
+
+      yield* Effect.promise(() => orchestrator.sendMessage(a.id, "Handle the empty input too."));
+      yield* waitFor(() => roundReview(orchestrator).status === "waiting");
+      expect(runningThreadOf(orchestrator, review)).toBeUndefined();
+      expect(orchestrator.snapshot.threads.find((item) => item.id === thread)?.status).toBe(
+        "stopped",
+      );
+    }),
+  ));
