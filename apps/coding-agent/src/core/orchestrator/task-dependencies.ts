@@ -99,7 +99,8 @@ function unfinishedDependencies(database: DatabaseSync, taskId: string): string[
     .prepare(
       `SELECT d.depends_on FROM task_dependencies d
        JOIN tasks dep ON dep.id = d.depends_on
-       WHERE d.task_id = ? AND dep.status <> 'completed' ORDER BY d.depends_on`,
+       WHERE d.task_id = ? AND (dep.status <> 'completed' OR dep.closed_by IS NOT NULL)
+       ORDER BY d.depends_on`,
     )
     .all(taskId) as unknown as { depends_on: string }[];
   return rows.map((row) => row.depends_on);

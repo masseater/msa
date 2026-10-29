@@ -125,7 +125,7 @@ function createAndReadTaskTools(
 const setTaskDependsTool = (orchestrator: orchestratorTypes.Orchestrator) =>
   tool({
     description:
-      "Add and drop the tasks one or more tasks wait for. A task that has not started changes freely; a running task only gains a dependency that already finished, because waiting for anything else means stopping it first. Cycles are rejected.",
+      "Add and drop the tasks one or more tasks wait for. A task that has not started changes freely; a running worker only gains a dependency that already finished, because waiting for anything else means stopping it first. A running review that gains an unfinished dependency is stopped and waits for it, then starts again. Cycles are rejected.",
     label: "set task dependencies",
     name: "set_task_depends",
     parameters: dependsSchema,

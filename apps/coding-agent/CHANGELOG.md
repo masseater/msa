@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- A round's closing review no longer starts while a task of the round is unfinished, and a review that is running stops when its task gains a dependency that has not finished. `stop_task` used to take the stopped task out of its round's review, so a stop followed by a `replan` that replaced the task started the review on the rest of the round, and the review then judged the replacement's unfinished pull request; a stopped task now keeps the review waiting, as `stop_task` describes, until it is rerun and completes or `replan` replaces or drops it. When `replan`, `set_task_depends`, or `create_task` gives a running review (a task's review or a round's closing review) a dependency that has not finished, the harness stops that review's thread, the task goes back to `waiting` with a report naming the dependencies, and the review starts again once they complete. A reviewer that waited out a provider limit, or that a triage decision or `send_message` continues, is held the same way instead of resuming while such a dependency is unfinished, and the answer it was given stays with the task as a note; a worker waiting out a provider limit resumes only once its dependencies finish. `/tasks` shows the hold as soon as it happens. `set_task_depends` still gives a running worker only dependencies that already finished ([docs](docs/cli.md#tools))
+
 ## [0.0.8] - 2026-10-29
 
 ### Added

@@ -10,22 +10,12 @@ import watchdogInspect from "./watchdog-inspect.ts";
 import watchdogReport from "./watchdog-report.ts";
 import type watchdogTypes from "./watchdog.types.ts";
 
-const { nowMillis, releaseThread } = runtimeModule;
+const { abortThread, nowMillis } = runtimeModule;
 const { orchestratorError } = errors;
 const { store } = storeModule;
 const { scheduling } = schedule;
 const { INTERVAL_MS, inspect } = watchdogInspect;
 const { currentPid, processAlive } = processAliveModule;
-
-function release(runtime: runtimeTypes.Runtime, threadId: string): void {
-  const worker = runtime.workers.get(threadId);
-  runtime.runs.delete(threadId);
-  runtime.runStartedAt.delete(threadId);
-  runtime.activity.delete(threadId);
-  runtime.wrapUps.delete(threadId);
-  releaseThread(runtime, threadId);
-  void worker?.run.lifecycle.abort().catch(() => undefined);
-}
 
 function resolveFinding(
   runtime: runtimeTypes.Runtime,
@@ -34,7 +24,7 @@ function resolveFinding(
 ): void {
   const database = runtime.database;
   const { thread } = finding;
-  release(runtime, thread.id);
+  abortThread(runtime, thread.id);
   store.updateThread(database, thread.id, { status: finding.threadStatus }, now);
   const assignments = store.assignmentsOfThread(database, thread.id);
   const content = `Watchdog: thread ${thread.id} stopped because ${finding.reason}.`;

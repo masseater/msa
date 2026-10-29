@@ -14,7 +14,6 @@ function reasonFor(
   free: number,
   wait: orchestratorTypesTypes.ProviderWait | undefined,
 ): orchestratorTypesTypes.WaitingReason {
-  if (wait !== undefined) return { detail: providerWaits.waitingDetail(wait), kind: "provider" };
   const unfinished = task.dependsOn.filter(
     (dependency) => byId.get(dependency)?.status !== "completed",
   );
@@ -22,6 +21,7 @@ function reasonFor(
     const titles = unfinished.map((id) => byId.get(id)?.title ?? id);
     return { detail: `waiting for ${titles.join(", ")}`, kind: "dependencies" };
   }
+  if (wait !== undefined) return { detail: providerWaits.waitingDetail(wait), kind: "provider" };
   if (task.condition !== null) return { detail: `condition: ${task.condition}`, kind: "condition" };
   if (task.kind === "review" && task.dependsOn.length === 0) {
     return { detail: "round has no work to review yet", kind: "review" };
