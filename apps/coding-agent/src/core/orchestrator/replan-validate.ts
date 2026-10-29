@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import replanSupport from "./replan-support.ts";
 import replanTasks from "./replan-tasks.ts";
 import type replanTypes from "./replan.types.ts";
+import runningDependencies from "./running-dependencies.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import taskCwd from "./task-cwd.ts";
 import taskTitles from "./task-titles.ts";
@@ -12,7 +13,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { fail, unique } = replanSupport;
 const { requireChecks } = text;
 const { duplicateMessage, titleKey, unfinishedWithTitle } = taskTitles;
-const { checksOf, cwdOf } = replanTasks;
+const { checksOf, cwdOf, redirectsOf } = replanTasks;
 const { requireCheckableCwd } = taskCwd;
 
 function assertKnown(
@@ -174,11 +175,46 @@ function validateTitles(
   }
 }
 
+function plannedInheritors(entries: readonly replanTypes.Entry[]): Map<string, string[]> {
+  const inheritors = new Map<string, string[]>();
+  for (const entry of entries) {
+    for (const source of entry.from) {
+      inheritors.set(source, [...(inheritors.get(source) ?? []), entry.key ?? entry.input.title]);
+    }
+  }
+  return inheritors;
+}
+
+function validateRunningDependencies(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.ReplanInput,
+  entries: readonly replanTypes.Entry[],
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
+): void {
+  if (input.stop !== false) return;
+  const rewired = (input.rewire ?? []).map((item) => {
+    const current = views.get(item.taskId)?.dependsOn ?? [];
+    const next = unique(item.dependsOn);
+    return {
+      add: next.filter((id) => !current.includes(id)),
+      remove: current.filter((id) => !next.includes(id)),
+      taskId: item.taskId,
+    };
+  });
+  const sources = unique([
+    ...entries.flatMap((entry) => entry.from),
+    ...(input.drop ?? []).map((item) => item.taskId),
+  ]);
+  const redirected = redirectsOf(runtime, { sources, views }, plannedInheritors(entries));
+  runningDependencies.guard(runtime, [...rewired, ...redirected]);
+}
+
 const replanValidate = {
   validateClosed,
   validateCwds,
   validateEntries,
   validateHandling,
+  validateRunningDependencies,
   validateTitles,
 };
 

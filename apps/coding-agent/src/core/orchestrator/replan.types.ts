@@ -9,6 +9,12 @@ declare namespace replanTypes {
     key: string | null;
   }
 
+  interface Redirect {
+    taskId: string;
+    add: readonly string[];
+    remove: readonly string[];
+  }
+
   interface Prepared {
     input: orchestratorTypesTypes.ReplanInput;
     entries: readonly Entry[];
