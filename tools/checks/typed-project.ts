@@ -2,7 +2,11 @@ import type { Node, SourceFile } from "typescript/unstable/ast";
 import { API } from "typescript/unstable/sync";
 import type { Project } from "typescript/unstable/sync";
 
-type Scope = { readonly files: (name: string) => boolean; readonly root: string };
+type Scope = {
+  readonly files: (name: string) => boolean;
+  readonly project?: string | undefined;
+  readonly root: string;
+};
 
 type FileScan<F> = (project: Project, file: SourceFile, relative: string) => readonly F[];
 
@@ -25,13 +29,16 @@ const locate = (file: SourceFile, node: Node): { readonly line: number; readonly
   };
 };
 
-const scanProject = <F>({ files, root }: Scope, scanFile: FileScan<F>): readonly F[] => {
+const scanProject = <F>(
+  { files, project: config = "tsconfig.json", root }: Scope,
+  scanFile: FileScan<F>,
+): readonly F[] => {
   const api = new API({ cwd: root });
   const prefix = new URL(`file://${root}/`).pathname;
   try {
-    const snapshot = api.updateSnapshot({ openProject: `${root}/tsconfig.json` } as never);
+    const snapshot = api.updateSnapshot({ openProject: `${root}/${config}` } as never);
     const [project] = snapshot.getProjects();
-    if (project === undefined) throw new Error("tsconfig.json の project を開けない");
+    if (project === undefined) throw new Error(`${config} の project を開けない`);
     return project.program
       .getSourceFileNames()
       .filter(files)

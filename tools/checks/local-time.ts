@@ -282,8 +282,13 @@ const scanFile = (project: Project, file: SourceFile, relative: string): readonl
   ].map(findingAt(file, relative));
 };
 
-const scan = (scope: Scope): readonly Finding[] => scanProject(scope, scanFile);
+const BROWSER_SCRIPTS = "tools/checks/browser-scripts.tsconfig.json";
 
-const localTimeCheck = { OWNERS, scan };
+const scan = (scope: Scope): readonly Finding[] => [
+  ...scanProject(scope, scanFile),
+  ...scanProject({ ...scope, project: BROWSER_SCRIPTS }, scanFile),
+];
+
+const localTimeCheck = { BROWSER_SCRIPTS, OWNERS, scan };
 
 export default localTimeCheck;

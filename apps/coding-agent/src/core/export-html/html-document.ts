@@ -8,7 +8,7 @@ import nodeRuntime from "../platform/runtime.ts";
 import exportColors from "./export-colors.ts";
 import type exportTypesTypes from "./export-types.ts";
 
-const { nonEmptyOr, rethrowCause } = platform;
+const { formatLocalTime, nonEmptyOr, rethrowCause } = platform;
 const { APP_NAME, getExportTemplateDir } = config;
 const { deriveExportColors, generateThemeVars } = exportColors;
 const { getResolvedThemeColors, getThemeExportColors } = themeModule;
@@ -28,8 +28,27 @@ const readTemplates = (templateDir: string) =>
     };
   });
 
+const formatIfSet = (timestamp: string | undefined, layout: string): string | undefined =>
+  timestamp === undefined || timestamp === "" ? undefined : formatLocalTime(timestamp, layout);
+
+const localTimesOf = ({
+  entries,
+  header,
+}: exportTypesTypes.SessionData): exportTypesTypes.LocalTimes => ({
+  entries: Object.fromEntries(
+    entries.flatMap(({ id, timestamp }) => {
+      const time = formatIfSet(timestamp, "HH:mm:ss");
+      return time === undefined ? [] : [[id, time]];
+    }),
+  ),
+  session: formatIfSet(header?.timestamp, "YYYY-MM-DD HH:mm:ss"),
+});
+
 const encodeSessionData = (sessionData: exportTypesTypes.SessionData) =>
-  Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(sessionData).pipe(
+  Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+    ...sessionData,
+    localTimes: localTimesOf(sessionData),
+  }).pipe(
     Effect.map((json) => Buffer.from(json).toString("base64")),
     Effect.orDie,
   );

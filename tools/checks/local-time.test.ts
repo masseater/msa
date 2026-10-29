@@ -3,7 +3,7 @@ import { expect, it } from "vite-plus/test";
 import lintProbe from "./lint-probe.ts";
 import localTimeCheck from "./local-time.ts";
 
-const { lintAndInspectProbes, probePath, repoRoot } = lintProbe;
+const { lintAndInspectProbes, probePath, readRepoFile, repoRoot } = lintProbe;
 
 const HEADER = [
   'import { DateTime } from "effect";',
@@ -47,26 +47,48 @@ const probes = Object.entries(cases).map(([name, [statement, flagged]]) => ({
   source: [...HEADER, statement, ""].join("\n"),
 }));
 
+const scriptCases: Readonly<Record<string, readonly [statement: string, flagged: boolean]>> = {
+  getTime: ["const v = new Date(0).getTime();", false],
+  localeString: ["const v = new Date(0).toLocaleString();", true],
+  localeTime: ["const date = new Date(0);\nconst v = date.toLocaleTimeString();", true],
+};
+
+const SCRIPT_DIR = "apps/coding-agent/src/core/export-html";
+
+const scriptProbes = Object.entries(scriptCases).map(([name, [statement, flagged]]) => ({
+  flagged,
+  name,
+  path: `${SCRIPT_DIR}/local-time-${name}-probe.js`,
+  source: `${statement}\nconsole.log(v);\n`,
+}));
+
 const [owner] = localTimeCheck.OWNERS;
 
 it("reports every way of reading the local time zone outside the one formatter", () =>
-  lintAndInspectProbes(
-    {
-      ...Object.fromEntries(probes.map(({ path, source }) => [path, source])),
-      [owner!]: [...HEADER, "export const v = date.getHours();", ""].join("\n"),
-    },
-    (run) => localTimeCheck.scan({ files: (name) => name.startsWith(`${run}/`), root: run }),
-  ).then(({ inspected }) => {
-    const flagged = (path: string) => inspected.some((finding) => finding.file === path);
-    expect({
-      owner: flagged(owner!),
-      probes: Object.fromEntries(probes.map(({ name, path }) => [name, flagged(path)])),
-    }).toEqual({
-      owner: false,
-      probes: Object.fromEntries(probes.map(({ flagged: value, name }) => [name, value])),
-    });
-    return undefined;
-  }));
+  readRepoFile(localTimeCheck.BROWSER_SCRIPTS).then((browserScripts) =>
+    lintAndInspectProbes(
+      {
+        ...Object.fromEntries(
+          [...probes, ...scriptProbes].map(({ path, source }) => [path, source]),
+        ),
+        [localTimeCheck.BROWSER_SCRIPTS]: browserScripts,
+        [owner!]: [...HEADER, "export const v = date.getHours();", ""].join("\n"),
+      },
+      (run) => localTimeCheck.scan({ files: (name) => name.startsWith(`${run}/`), root: run }),
+    ).then(({ inspected }) => {
+      const flagged = (path: string) => inspected.some((finding) => finding.file === path);
+      expect({
+        owner: flagged(owner!),
+        probes: Object.fromEntries(probes.map(({ name, path }) => [name, flagged(path)])),
+        scripts: Object.fromEntries(scriptProbes.map(({ name, path }) => [name, flagged(path)])),
+      }).toEqual({
+        owner: false,
+        probes: Object.fromEntries(probes.map(({ flagged: value, name }) => [name, value])),
+        scripts: Object.fromEntries(scriptProbes.map(({ flagged: value, name }) => [name, value])),
+      });
+      return undefined;
+    }),
+  ));
 
 it("leaves no local time string built outside the one formatter", () => {
   const root = new URL(`file://${repoRoot}/`).pathname;
