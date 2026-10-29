@@ -2,9 +2,9 @@ import { Effect, ManagedRuntime, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import lintConfig from "../../lint.config.ts";
-import captureProcessModule from "../capture-process.ts";
+import testProcess from "./test-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { captureProcess, processRunnerLayer } = testProcess;
 
 const { lintPlugins, strictCategories, strictCategoryRules } = lintConfig;
 

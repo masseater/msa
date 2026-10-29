@@ -73,11 +73,7 @@ const testedPackages: Readonly<Record<TestedName, TestedPackage>> = {
   codemode: { dirs: ["libs/codemode"], needs: ["testing"], project: "@msa/codemode" },
   "coding-agent": {
     dirs: ["apps/coding-agent", "scripts", "tools/class-seal"],
-    files: [
-      "tools/checks/class-extends-cases.ts",
-      "tools/oxlint/class-factories.ts",
-      "tools/run-main.ts",
-    ],
+    files: ["tools/checks/class-extends-cases.ts", "tools/oxlint/class-factories.ts"],
     needs: ["agent", "ai", "chord", "codemode", "mcp", "telemetry", "testing", "tui"],
     project: "@msa/coding-agent",
   },
@@ -202,7 +198,7 @@ const run: NonNullable<UserConfig["run"]> = {
     },
     "code-rules": {
       command:
-        "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-unawaited-test-cleanup.yml apps && ast-grep scan --rule tools/rules/no-counted-wait-loop.yml apps libs && ast-grep scan --rule tools/rules/no-untracked-orchestrator-launch.yml apps && ast-grep scan --rule tools/rules/no-fork-in-run-sync.yml apps libs tools .msa",
+        "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-unawaited-test-cleanup.yml apps && ast-grep scan --rule tools/rules/no-counted-wait-loop.yml apps libs && ast-grep scan --rule tools/rules/no-untracked-orchestrator-launch.yml apps && ast-grep scan --rule tools/rules/no-fork-in-run-sync.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-html-outside-html-document.yml apps libs scripts tools .msa && ast-grep scan --rule tools/rules/scripts-start-through-run-main.yml apps libs scripts tools",
     },
     "daemon-build": {
       cache: {

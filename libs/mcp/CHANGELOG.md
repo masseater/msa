@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `OAuthCallbackServer.listen` takes `replyPage(status, page)`, which returns the `{ status, headers, body }` of the page response, in place of `renderPage(page)`, which returned an HTML string that the server sent as `text/html`. Without `replyPage` the server still answers in plain text
 - The error classes `McpError`, `McpClientError`, `McpAbortError`, `McpConnectionClosedError`, `McpTimeoutError`, `McpHttpError`, `McpAuthRequiredError`, `McpSessionExpiredError`, `McpTransportError`, `McpForeignError`, `McpOAuthAuthorizationRequiredError`, `OAuthError`, `OAuthCallbackError`, `OAuthFlowError`, `OAuthInsecureEndpointError`, `OAuthIssuerMismatchError`, `OAuthRegistrationError` are `Schema.TaggedError` classes. `new` takes one `{...}` object of their fields; the old positional arguments moved to the static `create(...)`, and `make({...})` builds one from the fields. `_tag`, `message` and the fields keep their names and values
 - Constructing one of these errors checks its fields against the schema and throws when one does not match
 - Encoding one of these errors to JSON lists its keys in the schema's order and drops keys the schema does not declare

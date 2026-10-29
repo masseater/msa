@@ -1,13 +1,11 @@
-import { NodeServices } from "@effect/platform-node";
-import { Config, Console, Crypto, Effect, FileSystem, Layer, Path, Schema } from "effect";
-import type { PlatformError } from "effect";
-import { Hex } from "effect/encoding";
+import { Config, Effect, Layer, Schema } from "effect";
 
+import ScriptOutputError from "../libs/ai/src/utils/script-output-error.ts";
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import captureProcessModule from "./capture-process.ts";
 import codingAgentPackage from "./coding-agent-package.ts";
 import releasePlatforms from "./release-platforms.ts";
 import type releasePlatformsTypes from "./release-platforms.types.ts";
-import runMain from "./run-main.ts";
 
 const {
   ARCHIVE_FLAGS,
@@ -19,7 +17,7 @@ const {
 } = releasePlatforms;
 const { Workspace, workspaceLayer } = codingAgentPackage;
 const { captureProcess, processRunnerLayer, runInherit } = captureProcessModule;
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 const SKIP_BUILD_FLAG = "--skip-build";
@@ -35,7 +33,7 @@ class BuildBinariesError extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("BuildBinariesError", { message: Schema.String }) {}
 
-type FileSystemError = PlatformError.PlatformError;
+type FileSystemError = ScriptOutputError;
 
 const requestedPlatforms = () => {
   const requested = RELEASE_PLATFORMS.filter((platform) => process.argv.includes(platform.name));
@@ -55,13 +53,14 @@ const makeContext = () =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const { repoRoot, version } = yield* workspace.loadCodingAgentPackage;
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const output = yield* scriptOutput.ScriptOutput;
+    const { files: fs, path } = output;
     return {
       codingAgentDir: path.join(repoRoot, "apps", "coding-agent"),
       decideSmoke: yield* localLlmTests,
       fs,
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
+      output,
       path,
       platforms: requestedPlatforms(),
       repoRoot,
@@ -82,13 +81,10 @@ const copyTree: (
 ) => Effect.Effect<void, FileSystemError> = (context, source, destination) =>
   Effect.gen(function* () {
     const info = yield* context.fs.stat(source);
-    if (info.type === "Directory") {
-      yield* context.fs.makeDirectory(destination, { recursive: true });
+    if (info.isDirectory) {
+      yield* context.fs.makeDirectory(destination);
       const entries = yield* context.fs.readDirectory(source);
-      for (const entry of entries) {
-        if (SKIPPED_ENTRIES.has(entry)) {
-          continue;
-        }
+      for (const entry of entries.filter((name) => !SKIPPED_ENTRIES.has(name))) {
         yield* copyTree(
           context,
           context.path.join(source, entry),
@@ -97,8 +93,8 @@ const copyTree: (
       }
       return;
     }
-    yield* context.fs.makeDirectory(context.path.dirname(destination), { recursive: true });
-    yield* context.fs.copyFile(source, destination);
+    yield* context.fs.makeDirectory(context.path.dirname(destination));
+    yield* context.output.copyFileTo(source, destination);
   });
 
 const workDirFor = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) =>
@@ -115,9 +111,9 @@ const archivePathFor = (context: Context, platform: releasePlatformsTypes.Releas
 const prepareWorkspace = (context: Context) =>
   Effect.gen(function* () {
     if (context.skipBuild) {
-      yield* Console.log("==> skipping the workspace build (--skip-build)");
+      yield* scriptOutput.print("==> skipping the workspace build (--skip-build)");
     } else {
-      yield* Console.log("==> building workspace packages (vp run build)");
+      yield* scriptOutput.print("==> building workspace packages (vp run build)");
       yield* runInherit({
         args: ["run", "--no-cache", "build"],
         command: "vp",
@@ -154,9 +150,9 @@ const copyPayload = (
 const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) =>
   Effect.gen(function* () {
     const payloadDir = payloadDirFor(context, platform);
-    yield* context.fs.remove(workDirFor(context, platform), { force: true, recursive: true });
-    yield* context.fs.makeDirectory(payloadDir, { recursive: true });
-    yield* Console.log(`==> compiling ${platform.name} (${platform.bunTarget})`);
+    yield* context.fs.remove(workDirFor(context, platform));
+    yield* context.fs.makeDirectory(payloadDir);
+    yield* scriptOutput.print(`==> compiling ${platform.name} (${platform.bunTarget})`);
     yield* runInherit({
       args: [
         "build",
@@ -181,7 +177,7 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
       cwd: context.repoRoot,
     });
     const archivePath = archivePathFor(context, platform);
-    yield* context.fs.remove(archivePath, { force: true });
+    yield* context.fs.remove(archivePath);
     if (platform.archive === "zip") {
       yield* runInherit({ args: ["-r", "-q", archivePath, "."], command: "zip", cwd: payloadDir });
       return;
@@ -195,14 +191,13 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
 
 const writeChecksums = (context: Context) =>
   Effect.gen(function* () {
-    const crypto = yield* Crypto.Crypto;
     const lines: string[] = [];
     for (const platform of context.platforms) {
       const archivePath = archivePathFor(context, platform);
-      const digest = yield* crypto.digest("SHA-256", yield* context.fs.readFile(archivePath));
-      lines.push(`${Hex.encode(digest)}  ${context.path.basename(archivePath)}`);
+      const digest = yield* context.fs.sha256Hex(archivePath);
+      lines.push(`${digest}  ${context.path.basename(archivePath)}`);
     }
-    yield* context.fs.writeFileString(
+    yield* context.output.writeTextFile(
       context.path.join(context.outDir, "SHA256SUMS"),
       `${lines.join("\n")}\n`,
     );
@@ -218,7 +213,7 @@ const decideSmokeTest = (context: Context, binary: string) =>
         command: "node",
         cwd: context.repoRoot,
       })
-    : Console.log(
+    : scriptOutput.print(
         `==> skipping the node-llama-cpp decide smoke test: set ${LOCAL_LLM_TESTS_ENV}=1 to run it`,
       );
 
@@ -234,12 +229,14 @@ const smokeTest = (context: Context) =>
     const host = hostPlatformName();
     const platform = context.platforms.find((candidate) => candidate.name === host);
     if (platform === undefined) {
-      yield* Console.log(`==> skipping the smoke test: no ${host ?? "host"} archive in this run`);
+      yield* scriptOutput.print(
+        `==> skipping the smoke test: no ${host ?? "host"} archive in this run`,
+      );
       return;
     }
     const smokeDir = context.path.join(context.outDir, "smoke");
-    yield* context.fs.remove(smokeDir, { force: true, recursive: true });
-    yield* context.fs.makeDirectory(smokeDir, { recursive: true });
+    yield* context.fs.remove(smokeDir);
+    yield* context.fs.makeDirectory(smokeDir);
     yield* runInherit({
       args: [ARCHIVE_FLAGS[platform.archive], archivePathFor(context, platform), "-C", smokeDir],
       command: "tar",
@@ -248,7 +245,7 @@ const smokeTest = (context: Context) =>
     const binary = context.path.join(smokeDir, archiveRootFor(platform), platform.executable);
     const { exitCode, stderr, stdout } = yield* captureProcess({
       args: ["--version"],
-      command: binary,
+      command: { msaBinary: binary },
       cwd: smokeDir,
     });
     const reported = stdout.trim();
@@ -257,7 +254,9 @@ const smokeTest = (context: Context) =>
         message: `${platform.name} reported "${reported}" (exit ${exitCode}), expected ${context.version}:\n${stderr}`,
       });
     }
-    yield* Console.log(`==> ${platform.name} archive runs: msa --version reports ${reported}`);
+    yield* scriptOutput.print(
+      `==> ${platform.name} archive runs: msa --version reports ${reported}`,
+    );
     yield* exportSmokeTest(context, binary);
     yield* decideSmokeTest(context, binary);
   });
@@ -270,7 +269,7 @@ const program = Effect.gen(function* () {
     });
   }
   const context = yield* makeContext();
-  yield* Console.log(
+  yield* scriptOutput.print(
     `==> msa ${context.version} for ${context.platforms.map((platform) => platform.name).join(", ")}`,
   );
   yield* prepareWorkspace(context);
@@ -286,7 +285,7 @@ const program = Effect.gen(function* () {
       `    ${archiveFileNameFor(platform)}  ${(Number(info.size) / 1_048_576).toFixed(1)} MiB`,
     );
   }
-  yield* Console.log(
+  yield* scriptOutput.print(
     [
       `==> release assets in ${context.path.relative(context.repoRoot, context.outDir)}:`,
       ...rows,
@@ -295,6 +294,6 @@ const program = Effect.gen(function* () {
   );
 });
 
-const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer, workspaceLayer);
+const mainLayer = Layer.mergeAll(processRunnerLayer, workspaceLayer);
 
 runMainWith(program, mainLayer);

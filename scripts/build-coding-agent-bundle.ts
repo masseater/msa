@@ -1,7 +1,8 @@
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 import { build } from "esbuild";
 import type { Metafile } from "esbuild";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import codingAgentBundleChecks from "./coding-agent-bundle-checks.ts";
 import codingAgentBundleOptions from "./coding-agent-bundle-options.ts";
 import hostModule from "./host.ts";
@@ -189,12 +190,12 @@ const finish = (host: hostTypes.HostShape, layout: Layout, metafiles: ReadonlyAr
   Effect.gen(function* () {
     yield* validateExternalImports(metafiles);
     const cliPath = host.join(layout.bundleDir, "cli.js");
-    yield* host.writeText(cliPath, CLI_LAUNCHER);
+    yield* host.writeTextFile(cliPath, CLI_LAUNCHER);
     yield* host.chmod(cliPath, CLI_MODE);
     yield* host.chmod(host.join(layout.bundleDir, "rpc-entry.js"), CLI_MODE);
     const files = new Set(metafiles.flatMap((metafile) => Object.keys(metafile.outputs))).size + 1;
     const mib = (outputBytes(metafiles) + CLI_LAUNCHER.length) / (1024 * 1024);
-    yield* Console.log(
+    yield* scriptOutput.print(
       `Built ${host.relative(layout.repoRoot, layout.bundleDir)} (${files} files, ${mib.toFixed(1)} MiB)`,
     );
   });

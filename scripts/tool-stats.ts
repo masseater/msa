@@ -1,8 +1,9 @@
 import { homedir, tmpdir } from "node:os";
 
-import { Console, DateTime, Effect, Schema } from "effect";
+import { DateTime, Effect, Schema } from "effect";
 
 import openBrowserModule from "../apps/coding-agent/src/utils/open-browser.ts";
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import cliOptions from "./cli-options.ts";
 import hostModule from "./host.ts";
 import sessions from "./sessions.ts";
@@ -151,8 +152,8 @@ const program = Effect.gen(function* () {
     tools: toolRowsOf(aggregate.tools),
   });
   yield* host.makeDirectory(host.resolve(output, ".."));
-  yield* host.writeText(output, html);
-  yield* Console.log(`Wrote ${output}`);
+  yield* host.writeHtmlReport(output, html);
+  yield* scriptOutput.print(`Wrote ${output}`);
   yield* Effect.sync(() => openBrowser(output));
 });
 

@@ -1,15 +1,15 @@
 import { parseArgs } from "node:util";
 
-import { NodeServices } from "@effect/platform-node";
-import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import codingAgentPackage from "./coding-agent-package.ts";
 import releasePlatforms from "./release-platforms.ts";
-import runMain from "./run-main.ts";
 
 const { Workspace, workspaceLayer } = codingAgentPackage;
 const { RELEASE_PLATFORMS, archiveFileNameFor } = releasePlatforms;
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
+const { ScriptOutput } = scriptOutput;
 
 const DEFAULT_SUMS = [".artifacts", "binaries", "SHA256SUMS"];
 const DEFAULT_OUT = [".artifacts", "homebrew", "msa.rb"];
@@ -70,8 +70,7 @@ const makeContext = (flags: Flags) =>
       repoRoot,
       version: packageVersion,
     } = yield* workspace.loadCodingAgentPackage;
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const { description, license } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
     const version = yield* requireVersion(flags.version ?? packageVersion);
     const shortDescription = yield* requireShortDescription(description);
@@ -100,7 +99,7 @@ const parseChecksumLine = (line: string): readonly [string, string] | undefined 
 
 const readChecksums = (context: Context) =>
   Effect.gen(function* () {
-    const lines = (yield* context.fs.readFileString(context.sumsPath))
+    const lines = (yield* context.fs.readText(context.sumsPath))
       .split("\n")
       .filter((line) => line !== "");
     const linesWithEntries = lines.map((line) => ({ entry: parseChecksumLine(line), line }));
@@ -194,13 +193,13 @@ const program = Effect.gen(function* () {
   for (const platformName of PLATFORM_NAMES) {
     entries.push(yield* checksumFor(context, checksums, platformName));
   }
-  yield* context.fs.makeDirectory(context.path.dirname(context.outPath), { recursive: true });
-  yield* context.fs.writeFileString(context.outPath, renderFormula(context, entries));
-  yield* Console.log(
+  yield* context.fs.makeDirectory(context.path.dirname(context.outPath));
+  yield* (yield* ScriptOutput).writeTextFile(context.outPath, renderFormula(context, entries));
+  yield* scriptOutput.print(
     `==> wrote ${context.path.relative(context.repoRoot, context.outPath)} for msa ${context.version}`,
   );
 });
 
-const mainLayer = Layer.mergeAll(NodeServices.layer, workspaceLayer);
+const mainLayer = workspaceLayer;
 
 runMainWith(program, mainLayer);

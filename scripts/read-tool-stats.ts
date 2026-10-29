@@ -1,5 +1,6 @@
-import { Console, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import hostModule from "./host.ts";
 import jsonModule from "./json.ts";
 import readToolArgs from "./read-tool-args.ts";
@@ -33,7 +34,7 @@ const bucketKeys = (args: readToolStatsTypes.Args) =>
     };
   });
 
-const printReport = (options: {
+const report = (options: {
   readonly args: readToolStatsTypes.Args;
   readonly records: ReadonlyArray<readToolStatsTypes.ReadRecord>;
   readonly summary: ReturnType<typeof buildReadSummary>;
@@ -41,12 +42,14 @@ const printReport = (options: {
   Effect.gen(function* () {
     const { args, records, summary } = options;
     if (args.json) {
-      return yield* Console.log(
+      return yield* scriptOutput.print(
         yield* encodeIndentedJson(args.includeRecords ? { records, summary } : { summary }),
       );
     }
-    if (args.text) return yield* Console.log(buildReadTextReport(summary));
-    return yield* Console.log(buildReadHtmlReport(summary));
+    if (args.text) return yield* scriptOutput.print(buildReadTextReport(summary));
+    const host = yield* Host;
+    yield* host.writeHtmlReport(args.output, buildReadHtmlReport(summary));
+    return yield* scriptOutput.print(`Wrote ${args.output}`);
   });
 
 const program = Effect.gen(function* () {
@@ -70,7 +73,7 @@ const program = Effect.gen(function* () {
     records: filtered,
     top: args.top,
   });
-  yield* printReport({ args, records: filtered, summary });
+  yield* report({ args, records: filtered, summary });
 });
 
 runScript(program);

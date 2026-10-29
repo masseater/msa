@@ -13,6 +13,10 @@ const GIST_URL_RE = /^https:\/\/gist\.github\.com\/(?:[^/]+\/)?([0-9a-fA-F]{20,}
 const SHARE_URL_RE = /^https:\/\/msa\.dev\/session\/#([0-9a-fA-F]{20,})(?:[/#?].*)?$/u;
 const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[/#?].*)?$/u;
 const SESSION_JSONL_RE = /href="data:application\/x-ndjson;base64,([^"]+)"/u;
+const EMBEDDED_SESSION_DATA_RE = /<script id="session-data" type="application\/json">/u;
+
+const EMBEDDED_SESSION_DATA_MESSAGE =
+  'HTML is in the old export format, which embeds the session in <script id="session-data">; /ir reads only the JSONL download link that msa writes now. Re-export the session with the current msa (/export in that session, or msa --export <session.jsonl>) and import the new .html, or import the session .jsonl directly.';
 
 class ImportReproError extends Schema.TaggedError<
   ImportReproError,
@@ -78,6 +82,9 @@ function parseSessionJsonl(raw: string): sessionTypes.DecodedSession {
 
 function decodeExportedHtml(html: string): sessionTypes.DecodedSession {
   const [, encoded] = SESSION_JSONL_RE.exec(html) ?? [];
+  if (!isPresent(encoded) && EMBEDDED_SESSION_DATA_RE.test(html)) {
+    throw ImportReproError.make({ message: EMBEDDED_SESSION_DATA_MESSAGE });
+  }
   if (!isPresent(encoded)) {
     throw ImportReproError.make({ message: "HTML does not contain the msa session JSONL" });
   }

@@ -1,17 +1,17 @@
 import { homedir } from "node:os";
 
-import { NodeServices } from "@effect/platform-node";
-import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import captureProcessModule from "./capture-process.ts";
 import codingAgentPackage from "./coding-agent-package.ts";
 import releasePlatforms from "./release-platforms.ts";
-import runMain from "./run-main.ts";
 
 const { Workspace, workspaceLayer } = codingAgentPackage;
 const { RELEASE_PLATFORMS, archiveFileNameFor, hostPlatformName } = releasePlatforms;
 const { captureProcess, processRunnerLayer, runInherit } = captureProcessModule;
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
+const { ScriptOutput } = scriptOutput;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 
@@ -24,8 +24,7 @@ const makeContext = () =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const { repoRoot, version } = yield* workspace.loadCodingAgentPackage;
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const platform = RELEASE_PLATFORMS.find((candidate) => candidate.name === hostPlatformName());
     if (platform === undefined) {
       return yield* LocalInstallError.make({
@@ -57,16 +56,16 @@ type Context = Effect.Success<ReturnType<typeof makeContext>>;
 
 const install = (context: Context) =>
   Effect.gen(function* () {
-    yield* context.fs.remove(context.installDir, { force: true, recursive: true });
-    yield* context.fs.makeDirectory(context.installDir, { recursive: true });
+    yield* context.fs.remove(context.installDir);
+    yield* context.fs.makeDirectory(context.installDir);
     yield* runInherit({
       args: ["-xzf", context.archivePath, "-C", context.installDir, "--strip-components=1"],
       command: "tar",
       cwd: context.repoRoot,
     });
-    yield* context.fs.makeDirectory(context.path.dirname(context.linkPath), { recursive: true });
-    yield* context.fs.remove(context.linkPath, { force: true });
-    yield* context.fs.symlink(
+    yield* context.fs.makeDirectory(context.path.dirname(context.linkPath));
+    yield* context.fs.remove(context.linkPath);
+    yield* (yield* ScriptOutput).linkPath(
       context.path.join(context.installDir, context.executable),
       context.linkPath,
     );
@@ -76,7 +75,7 @@ const verifyInstall = (context: Context) =>
   Effect.gen(function* () {
     const { exitCode, stderr, stdout } = yield* captureProcess({
       args: ["--version"],
-      command: context.linkPath,
+      command: { msaBinary: context.linkPath },
       cwd: context.repoRoot,
     });
     const reported = stdout.trim();
@@ -85,7 +84,7 @@ const verifyInstall = (context: Context) =>
         message: `installed msa reported "${reported}" (exit ${exitCode}), expected ${context.version}:\n${stderr}`,
       });
     }
-    yield* Console.log(
+    yield* scriptOutput.print(
       `==> installed msa ${reported}: ${context.linkPath} -> ${context.path.join(context.installDir, context.executable)}`,
     );
   });
@@ -97,7 +96,7 @@ const program = Effect.gen(function* () {
     });
   }
   const context = yield* makeContext();
-  yield* Console.log(`==> installing msa ${context.version} for ${context.platformName}`);
+  yield* scriptOutput.print(`==> installing msa ${context.version} for ${context.platformName}`);
   yield* runInherit({
     args: ["run", "build-binaries", context.platformName],
     command: "vp",
@@ -107,6 +106,6 @@ const program = Effect.gen(function* () {
   yield* verifyInstall(context);
 });
 
-const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer, workspaceLayer);
+const mainLayer = Layer.mergeAll(processRunnerLayer, workspaceLayer);
 
 runMainWith(program, mainLayer);

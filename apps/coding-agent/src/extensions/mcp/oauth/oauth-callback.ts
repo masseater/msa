@@ -9,7 +9,7 @@ import type oauthTypesNs from "../oauth.types.ts";
 import McpSignInCancelledError from "../sign-in-cancelled.ts";
 
 const { awaited, awaiting } = awaitingModule;
-const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+const { oauthErrorReply, oauthSuccessReply } = oauthPage;
 const { OAuthCallbackServer } = oauth;
 
 function responseFromRedirectUrl(
@@ -75,15 +75,15 @@ function listenForCallback(
 ): Promise<oauthTypes.OAuthCallbackServer> {
   return Effect.runPromise(
     awaiting(function* () {
-      const options = {
+      const options: oauthTypes.OAuthCallbackServerOptions = {
         extraPaths,
         host: settings.host,
         path: settings.path,
         redirectHost: settings.redirectHost,
-        renderPage: (page: oauthTypes.OAuthCallbackPage) =>
+        replyPage: (status, page) =>
           page.ok
-            ? oauthSuccessHtml("Signed in to the MCP server. You may now close this page.")
-            : oauthErrorHtml(page.message, page.details),
+            ? oauthSuccessReply(status, "Signed in to the MCP server. You may now close this page.")
+            : oauthErrorReply(status, page.message, page.details),
       };
       try {
         return yield* awaited(OAuthCallbackServer.listen({ ...options, port: port ?? 0 }));

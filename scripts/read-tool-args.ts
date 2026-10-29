@@ -1,4 +1,4 @@
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
 import { Effect, Schema } from "effect";
 
@@ -8,7 +8,7 @@ import type hostTypes from "./host.types.ts";
 import type readToolArgsTypes from "./read-tool-args.types.ts";
 import scanOptionsModule from "./scan-options.ts";
 
-const { flagOption, parseCommandLine, valueOption } = cliOptions;
+const { flagOption, parseCommandLine, requiredOption, valueOption } = cliOptions;
 const { scanOptions } = scanOptionsModule;
 
 const DEFAULT_TOP = 20;
@@ -23,8 +23,9 @@ Options:
   --all-sessions         Disable the automatic since filter
   --auto-since-path <p>  Use birth time of this file for the automatic since filter
   --bucket <day|week>    Time bucket for trend chart (default: week)
-  --json                 Print JSON summary instead of HTML report
-  --text                 Print plain text report instead of HTML
+  --output <file.html>   Write the HTML report here (default: <tmpdir>/msa-read-tool-stats.html)
+  --json                 Print JSON summary instead of writing the HTML report
+  --text                 Print plain text report instead of writing the HTML report
   --include-records      Include raw records in JSON output
   -h, --help             Show this help
 `;
@@ -49,6 +50,7 @@ const defaultArgs = (host: hostTypes.HostShape): readToolArgsTypes.Args => ({
   includeRecords: false,
   json: false,
   modelFilter: undefined,
+  output: host.join(tmpdir(), "msa-read-tool-stats.html"),
   sessionsDir: host.join(homedir(), ".msa", "agent", "sessions"),
   since: undefined,
   text: false,
@@ -64,9 +66,11 @@ const parseBucket = (
     ? Effect.succeed(value)
     : Effect.fail(fail("--bucket must be day or week"));
 
-const OPTIONS: ReadonlyArray<
+const optionsOf = (
+  host: hostTypes.HostShape,
+): ReadonlyArray<
   readonly [string, cliOptionsTypes.CliOption<readToolArgsTypes.Args, ReadToolStatsError>]
-> = [
+> => [
   ...scanOptions<readToolArgsTypes.Args, ReadToolStatsError>(fail),
   [
     "--bucket",
@@ -76,6 +80,14 @@ const OPTIONS: ReadonlyArray<
       }),
     ),
   ],
+  requiredOption({
+    apply: (parsed, value) =>
+      Effect.sync(() => {
+        parsed.output = host.resolve(value);
+      }),
+    missing: (option) => fail(`Missing value for argument: ${option}`),
+    name: "--output",
+  }),
   [
     "--text",
     flagOption((parsed) => {
@@ -85,7 +97,7 @@ const OPTIONS: ReadonlyArray<
 ];
 
 const parseArgs = (host: hostTypes.HostShape) =>
-  parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
+  parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: optionsOf(host) });
 
 const readToolArgs = {
   ReadToolStatsError,

@@ -1,48 +1,21 @@
 import type { Effect, Scope, Stream } from "effect";
 
+import type htmlDocumentTypes from "../libs/ai/src/utils/html-document.types.ts";
+import type scriptOutputTypes from "../libs/ai/src/utils/script-output.types.ts";
 import type host from "./host.ts";
 
 declare namespace hostTypes {
-  interface FileInfo {
-    readonly birthtimeMs: number | undefined;
-    readonly isDirectory: boolean;
-    readonly isFile: boolean;
-    readonly mtimeMs: number | undefined;
-    readonly size: number;
-  }
+  type FileInfo = scriptOutputTypes.FileInfo;
 
-  type InputMode = "ignore" | "inherit" | "pipe";
+  type InputMode = scriptOutputTypes.InputMode;
 
-  type OutputMode = "ignore" | "inherit" | "pipe";
+  type OutputMode = scriptOutputTypes.OutputMode;
 
-  interface CommandOptions {
-    readonly args: ReadonlyArray<string>;
-    readonly command: string;
-    readonly cwd?: string;
-    readonly env?: Readonly<Record<string, string | undefined>>;
-    readonly extendEnv?: boolean;
-    readonly shell?: boolean;
-    readonly stderr?: OutputMode;
-    readonly stdin?: InputMode;
-    readonly stdout?: OutputMode;
-  }
+  type CommandOptions = scriptOutputTypes.CommandOptions;
 
-  interface CommandResult {
-    readonly exitCode: number;
-    readonly stderr: string;
-    readonly stdout: string;
-  }
+  type CommandResult = scriptOutputTypes.CommandResult;
 
-  interface RunningCommand {
-    readonly endInput: Effect.Effect<void>;
-    readonly exitCode: Effect.Effect<number>;
-    readonly kill: Effect.Effect<void>;
-    readonly stderrChunks: Stream.Stream<string>;
-    readonly stderrText: Effect.Effect<string>;
-    readonly stdoutLines: Stream.Stream<string>;
-    readonly stdoutText: Effect.Effect<string>;
-    readonly write: (text: string) => Effect.Effect<void>;
-  }
+  type RunningCommand = scriptOutputTypes.RunningCommand;
 
   interface HostShape {
     readonly basename: (path: string, suffix?: string) => string;
@@ -50,6 +23,7 @@ declare namespace hostTypes {
     readonly dirname: (path: string) => string;
     readonly exists: (path: string) => Effect.Effect<boolean>;
     readonly extname: (path: string) => string;
+    readonly interactive: boolean;
     readonly isAbsolute: (path: string) => boolean;
     readonly join: (...paths: ReadonlyArray<string>) => string;
     readonly lines: (path: string) => Stream.Stream<string>;
@@ -67,7 +41,11 @@ declare namespace hostTypes {
     readonly sep: string;
     readonly spawn: (options: CommandOptions) => Effect.Effect<RunningCommand, never, Scope.Scope>;
     readonly stat: (path: string) => Effect.Effect<FileInfo>;
-    readonly writeText: (path: string, data: string) => Effect.Effect<void>;
+    readonly writeHtmlReport: (
+      path: string,
+      document: htmlDocumentTypes.HtmlDocument,
+    ) => Effect.Effect<void>;
+    readonly writeTextFile: (path: string, data: string) => Effect.Effect<void>;
   }
 
   type Host = (typeof host.Host)["prototype"];

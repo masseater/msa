@@ -1,0 +1,281 @@
+id: no-html-outside-html-document
+language: typescript
+severity: error
+message: "HTML は @msa/ai/utils/html-document の出口で渡す。text/html の応答は htmlReply、.html のファイルは writeHtmlFile が、htmlDocument の組んだ HtmlDocument だけを受け取って出す。"
+files:
+  - apps/**
+  - libs/**
+  - scripts/**
+  - .msa/**
+  - tools/*
+ignores:
+  - libs/ai/src/utils/html-document.ts
+  - "**/test/**"
+  - "**/*.test.*"
+utils:
+  html-content-type:
+    kind: string_fragment
+    regex: (?i)text/html|application/xhtml\+xml
+  html-file-name:
+    kind: string_fragment
+    regex: (?i)(?:^|[/\\])[^\s/\\"'<>()\[\]]*\.[xs]?html?$
+  file-write:
+    kind: call_expression
+    has:
+      field: function
+      any:
+        - regex: (?:^|\.)(?:writeFile|writeFileSync|writeFileString|writeText|appendFile|appendFileSync|appendFileString|createWriteStream|outputFile|outputFileSync)$
+        - regex: ^Bun\.write$
+  names-html-file:
+    any:
+      - matches: html-file-name
+      - has:
+          matches: html-file-name
+          stopBy: end
+  html-file-write:
+    all:
+      - matches: file-write
+      - any:
+          - has:
+              field: arguments
+              has:
+                nthChild: 1
+                matches: names-html-file
+          - all:
+              - has:
+                  field: arguments
+                  has:
+                    nthChild: 1
+                    any:
+                      - kind: identifier
+                        pattern: $NAME
+                      - kind: member_expression
+                        has:
+                          field: property
+                          pattern: $NAME
+              - inside:
+                  kind: program
+                  stopBy: end
+                  has:
+                    stopBy: end
+                    any:
+                      - kind: variable_declarator
+                        all:
+                          - has:
+                              field: name
+                              pattern: $NAME
+                          - has:
+                              field: value
+                              matches: names-html-file
+                      - kind: pair
+                        all:
+                          - has:
+                              field: key
+                              pattern: $NAME
+                          - has:
+                              field: value
+                              matches: names-html-file
+                      - kind: assignment_expression
+                        all:
+                          - has:
+                              field: left
+                              any:
+                                - pattern: $NAME
+                                - has:
+                                    field: property
+                                    pattern: $NAME
+                          - has:
+                              field: right
+                              matches: names-html-file
+rule:
+  any:
+    - matches: html-content-type
+    - matches: html-file-write
+---
+id: no-html-outside-html-document-tsx
+language: tsx
+severity: error
+message: "HTML は @msa/ai/utils/html-document の出口で渡す。text/html の応答は htmlReply、.html のファイルは writeHtmlFile が、htmlDocument の組んだ HtmlDocument だけを受け取って出す。"
+files:
+  - apps/**
+  - libs/**
+  - scripts/**
+  - .msa/**
+  - tools/*
+ignores:
+  - libs/ai/src/utils/html-document.ts
+  - "**/test/**"
+  - "**/*.test.*"
+utils:
+  html-content-type:
+    kind: string_fragment
+    regex: (?i)text/html|application/xhtml\+xml
+  html-file-name:
+    kind: string_fragment
+    regex: (?i)(?:^|[/\\])[^\s/\\"'<>()\[\]]*\.[xs]?html?$
+  file-write:
+    kind: call_expression
+    has:
+      field: function
+      any:
+        - regex: (?:^|\.)(?:writeFile|writeFileSync|writeFileString|writeText|appendFile|appendFileSync|appendFileString|createWriteStream|outputFile|outputFileSync)$
+        - regex: ^Bun\.write$
+  names-html-file:
+    any:
+      - matches: html-file-name
+      - has:
+          matches: html-file-name
+          stopBy: end
+  html-file-write:
+    all:
+      - matches: file-write
+      - any:
+          - has:
+              field: arguments
+              has:
+                nthChild: 1
+                matches: names-html-file
+          - all:
+              - has:
+                  field: arguments
+                  has:
+                    nthChild: 1
+                    any:
+                      - kind: identifier
+                        pattern: $NAME
+                      - kind: member_expression
+                        has:
+                          field: property
+                          pattern: $NAME
+              - inside:
+                  kind: program
+                  stopBy: end
+                  has:
+                    stopBy: end
+                    any:
+                      - kind: variable_declarator
+                        all:
+                          - has:
+                              field: name
+                              pattern: $NAME
+                          - has:
+                              field: value
+                              matches: names-html-file
+                      - kind: pair
+                        all:
+                          - has:
+                              field: key
+                              pattern: $NAME
+                          - has:
+                              field: value
+                              matches: names-html-file
+                      - kind: assignment_expression
+                        all:
+                          - has:
+                              field: left
+                              any:
+                                - pattern: $NAME
+                                - has:
+                                    field: property
+                                    pattern: $NAME
+                          - has:
+                              field: right
+                              matches: names-html-file
+rule:
+  any:
+    - matches: html-content-type
+    - matches: html-file-write
+---
+id: no-html-outside-html-document-javascript
+language: javascript
+severity: error
+message: "HTML は @msa/ai/utils/html-document の出口で渡す。text/html の応答は htmlReply、.html のファイルは writeHtmlFile が、htmlDocument の組んだ HtmlDocument だけを受け取って出す。"
+files:
+  - apps/**
+  - libs/**
+  - scripts/**
+  - .msa/**
+  - tools/*
+ignores:
+  - libs/ai/src/utils/html-document.ts
+  - "**/test/**"
+  - "**/*.test.*"
+utils:
+  html-content-type:
+    kind: string_fragment
+    regex: (?i)text/html|application/xhtml\+xml
+  html-file-name:
+    kind: string_fragment
+    regex: (?i)(?:^|[/\\])[^\s/\\"'<>()\[\]]*\.[xs]?html?$
+  file-write:
+    kind: call_expression
+    has:
+      field: function
+      any:
+        - regex: (?:^|\.)(?:writeFile|writeFileSync|writeFileString|writeText|appendFile|appendFileSync|appendFileString|createWriteStream|outputFile|outputFileSync)$
+        - regex: ^Bun\.write$
+  names-html-file:
+    any:
+      - matches: html-file-name
+      - has:
+          matches: html-file-name
+          stopBy: end
+  html-file-write:
+    all:
+      - matches: file-write
+      - any:
+          - has:
+              field: arguments
+              has:
+                nthChild: 1
+                matches: names-html-file
+          - all:
+              - has:
+                  field: arguments
+                  has:
+                    nthChild: 1
+                    any:
+                      - kind: identifier
+                        pattern: $NAME
+                      - kind: member_expression
+                        has:
+                          field: property
+                          pattern: $NAME
+              - inside:
+                  kind: program
+                  stopBy: end
+                  has:
+                    stopBy: end
+                    any:
+                      - kind: variable_declarator
+                        all:
+                          - has:
+                              field: name
+                              pattern: $NAME
+                          - has:
+                              field: value
+                              matches: names-html-file
+                      - kind: pair
+                        all:
+                          - has:
+                              field: key
+                              pattern: $NAME
+                          - has:
+                              field: value
+                              matches: names-html-file
+                      - kind: assignment_expression
+                        all:
+                          - has:
+                              field: left
+                              any:
+                                - pattern: $NAME
+                                - has:
+                                    field: property
+                                    pattern: $NAME
+                          - has:
+                              field: right
+                              matches: names-html-file
+rule:
+  any:
+    - matches: html-content-type
+    - matches: html-file-write

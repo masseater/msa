@@ -1,12 +1,12 @@
-import { NodeServices } from "@effect/platform-node";
-import { Console, Effect, FileSystem, Layer, Path, Ref, Schema } from "effect";
+import { Effect, Ref, Schema } from "effect";
 import { serve } from "srvx";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import captureProcessModule from "./capture-process.ts";
-import runMain from "./run-main.ts";
 
 const { captureProcess, processRunnerLayer } = captureProcessModule;
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
+const { ScriptOutput } = scriptOutput;
 
 const PROBE_RESULT_FILE = "decide-probe.json";
 const PROBE_PROMPT = "decide-probe: create the probe task";
@@ -47,13 +47,12 @@ const otlpReceiver = Effect.gen(function* () {
 
 const decideSmoke = (binaryArgument: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const binary = path.resolve(binaryArgument);
-    const workDir = yield* fs.makeTempDirectoryScoped({ prefix: "msa-decide-smoke-" });
+    const workDir = yield* fs.makeTempDirectoryScoped("msa-decide-smoke-");
     const agentDir = path.join(workDir, "agent");
-    yield* fs.makeDirectory(agentDir, { recursive: true });
-    yield* fs.writeFileString(
+    yield* fs.makeDirectory(agentDir);
+    yield* (yield* ScriptOutput).writeTextFile(
       path.join(agentDir, "settings.json"),
       yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(PROBE_SETTINGS),
     );
@@ -67,11 +66,11 @@ const decideSmoke = (binaryArgument: string) =>
         "-p",
         PROBE_PROMPT,
       ],
-      command: binary,
+      command: { msaBinary: binary },
       cwd: workDir,
       env: { MSA_CODING_AGENT_DIR: agentDir, MSA_OTLP_ENDPOINT: receiver.endpoint },
     });
-    const raw = yield* fs.readFileString(path.join(workDir, PROBE_RESULT_FILE)).pipe(
+    const raw = yield* fs.readText(path.join(workDir, PROBE_RESULT_FILE)).pipe(
       Effect.mapError(() =>
         DecideSmokeError.make({
           message: `${binary} exited ${exitCode} without a review verdict:\n${stderr}`,
@@ -96,7 +95,9 @@ const program = Effect.gen(function* () {
     return yield* DecideSmokeError.make({ message: "usage: smoke-binary-decide <msa binary>" });
   }
   const verdict = yield* decideSmoke(binary);
-  yield* Console.log(`==> ${binary} decides a task review through node-llama-cpp: ${verdict}`);
+  yield* scriptOutput.print(
+    `==> ${binary} decides a task review through node-llama-cpp: ${verdict}`,
+  );
 });
 
-runMainWith(program, Layer.mergeAll(NodeServices.layer, processRunnerLayer));
+runMainWith(program, processRunnerLayer);

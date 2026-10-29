@@ -1,6 +1,6 @@
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
-import { Console, DateTime, Effect, Option, Schema } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 
 import cliOptions from "./cli-options.ts";
 import hostModule from "./host.ts";
@@ -13,7 +13,7 @@ import sessionContextSummary from "./session-context-summary.ts";
 import sessionContextWindows from "./session-context-windows.ts";
 
 const { IndentedJson } = jsonModule;
-const { Host, runScript } = hostModule;
+const { Host, print, runScript } = hostModule;
 const { flagOption, parseCommandLine, requiredOption } = cliOptions;
 const { buildSummary } = sessionContextSummary;
 const { buildHtmlReport, buildTextReport } = sessionContextReport;
@@ -33,8 +33,9 @@ Options:
   --all-cwds             Include sessions from all cwd values
   --since <iso>          Only scan session files created at or after this ISO time
   --all-sessions         Scan all sessions (default already scans all)
-  --json                 Print JSON instead of HTML report
-  --text                 Print plain text instead of HTML report
+  --output <file.html>   Write the HTML report here (default: <tmpdir>/msa-session-context-stats.html)
+  --json                 Print JSON instead of writing the HTML report
+  --text                 Print plain text instead of writing the HTML report
   -h, --help             Show this help
 `;
 
@@ -45,6 +46,7 @@ interface Args {
   json: boolean;
   modelFilter: string | undefined;
   modelPrefixes: Array<string>;
+  output: string;
   sessionsDir: string;
   since: string | undefined;
   text: boolean;
@@ -64,6 +66,7 @@ const defaultArgs = (host: sessionContextStatsTypes.HostShape): Args => ({
   json: false,
   modelFilter: undefined,
   modelPrefixes: [],
+  output: host.join(tmpdir(), "msa-session-context-stats.html"),
   sessionsDir: host.join(homedir(), ".msa", "agent", "sessions"),
   since: undefined,
   text: false,
@@ -107,6 +110,9 @@ const OPTIONS: ReadonlyArray<
   requiredValue("--model-prefix", (parsed, value) => {
     parsed.modelPrefixes.push(value);
   }),
+  requiredValue("--output", (parsed, value) => {
+    parsed.output = value;
+  }),
   requiredValue("--bash-contains", (parsed, value) => {
     parsed.bashContains.push(value);
   }),
@@ -145,9 +151,11 @@ const report = (options: {
   readonly summary: ReturnType<typeof buildSummary>;
 }) =>
   Effect.gen(function* () {
-    if (options.args.json) return yield* Console.log(yield* encodeIndentedJson(options.summary));
-    if (options.args.text) return yield* Console.log(buildTextReport(options.summary));
-    return yield* Console.log(buildHtmlReport(options.summary));
+    if (options.args.json) return yield* print(yield* encodeIndentedJson(options.summary));
+    if (options.args.text) return yield* print(buildTextReport(options.summary));
+    const host = yield* Host;
+    yield* host.writeHtmlReport(options.args.output, buildHtmlReport(options.summary));
+    return yield* print(`Wrote ${options.args.output}`);
   });
 
 const program = Effect.gen(function* () {

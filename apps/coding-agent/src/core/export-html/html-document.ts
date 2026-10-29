@@ -1,3 +1,4 @@
+import htmlDocumentModule from "@msa/ai/utils/html-document";
 import { Effect, FileSystem } from "effect";
 
 import config from "../../config.ts";
@@ -13,6 +14,7 @@ const { APP_NAME, getExportTemplateCssPath } = config;
 const { normalizePath } = paths;
 const { loadAllHighlightLanguages } = syntaxHighlight;
 const { renderPage } = renderPageModule;
+const { writeHtmlFile } = htmlDocumentModule;
 
 const generateHtml = Effect.fn("generateHtml")(function* (
   sessionData: exportTypesTypes.SessionData,
@@ -35,7 +37,7 @@ const writeExport = Effect.fn("writeExport")(function* (
     opts.outputPath !== undefined && opts.outputPath !== ""
       ? normalizePath(opts.outputPath)
       : `${APP_NAME}-session-${platform.basename(inputFile, ".jsonl")}.html`;
-  yield* FileSystem.FileSystem.use((fs) => fs.writeFileString(outputPath, html));
+  yield* FileSystem.FileSystem.use((fs) => writeHtmlFile(fs.writeFileString, outputPath, html));
   return outputPath;
 });
 

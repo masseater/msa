@@ -9,6 +9,7 @@
 ### Changed
 
 - The HTML export (`/export`, `/share`, `msa --export`) contains no JavaScript and declares a Content-Security-Policy that runs none. msa renders the Markdown, code highlighting, times, and session tree when it exports; the page switches branches when you click a tree entry (the address becomes `#entry-<id>`, a link that opens that message's branch), filters the tree with the filter buttons, expands outputs, compactions, skills, and tool parameters on click, and toggles thinking, tool outputs, and hidden messages with the header toggles or the access keys `T`, `O`, and `H` (Alt+key, or Control+Option+key on macOS). Click an image to enlarge it, drag the sidebar's corner to resize it, and download the session with ↓ JSONL. The tree filters are the ones the `/tree` view uses. The sidebar search box is gone: use the browser's find (Ctrl+F or ⌘F). The link button links to the message instead of copying a `?leafId=&targetId=` URL, which no longer selects a message, and the sidebar width is not kept across reloads
+- The pages msa opens in the browser after an OAuth sign-in (`/login` and MCP servers) declare the same Content-Security-Policy as the HTML export, which runs no scripts
 
 ### Fixed
 

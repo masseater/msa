@@ -1,11 +1,18 @@
+import htmlDocumentModule from "../libs/ai/src/utils/html-document.ts";
+import type htmlDocumentTypes from "../libs/ai/src/utils/html-document.types.ts";
 import type readToolSummaryTypes from "./read-tool-summary.types.ts";
 import reportZoneModule from "./report-zone.ts";
 import statsFormat from "./stats-format.ts";
+
+const { escapeHtml, htmlDocument } = htmlDocumentModule;
 
 const { formatInt, formatPercent } = statsFormat;
 const { REPORT_TIME_ZONE } = reportZoneModule;
 
 const CHART_WIDTH = 40;
+
+const REPORT_STYLE = `body { margin: 24px; background: #fff; color: #111; }
+pre { font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }`;
 
 const formatRate = (value: number | null): string =>
   value !== null && Number.isFinite(value) ? value.toFixed(2) : "n/a";
@@ -87,20 +94,17 @@ const reportLines = (summary: readToolSummaryTypes.ReadSummary): ReadonlyArray<s
   ];
 };
 
-const escapeHtml = (text: string): string =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
 const buildReadTextReport = (summary: readToolSummaryTypes.ReadSummary): string =>
   reportLines(summary).join("\n");
 
-const buildReadHtmlReport = (summary: readToolSummaryTypes.ReadSummary): string => `<!doctype html>
-<meta charset="utf-8">
-<title>Read tool stats</title>
-<style>
-body { margin: 24px; background: #fff; color: #111; }
-pre { font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
-</style>
-<pre>${escapeHtml(`${buildReadTextReport(summary)}\n`)}</pre>`;
+const buildReadHtmlReport = (
+  summary: readToolSummaryTypes.ReadSummary,
+): htmlDocumentTypes.HtmlDocument =>
+  htmlDocument({
+    body: `<pre>${escapeHtml(`${buildReadTextReport(summary)}\n`)}</pre>`,
+    style: REPORT_STYLE,
+    title: "Read tool stats",
+  });
 
 const readToolReport = {
   buildReadHtmlReport,

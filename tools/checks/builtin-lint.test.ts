@@ -3,10 +3,10 @@ import { Effect, Layer, ManagedRuntime } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import lintConfig from "../../lint.config.ts";
-import captureProcessModule from "../capture-process.ts";
 import lintProbe from "./lint-probe.ts";
+import testProcess from "./test-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { captureProcess, processRunnerLayer } = testProcess;
 const { lintProbes, msaCodesOnLine, probePath, repoRoot } = lintProbe;
 const { builtinModuleBases, effectReplaceableBuiltins, fsSyncFunctions } = lintConfig;
 

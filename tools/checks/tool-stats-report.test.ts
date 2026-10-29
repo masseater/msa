@@ -29,12 +29,8 @@ const report = renderReport({
 
 const runtime = ManagedRuntime.make(hostLayer);
 
-it("renders the tool stats report as HTML and CSS without scripts", () =>
+it("renders the tool stats report as HTML and CSS charts", () =>
   runtime.runPromise(report).then((html) => {
-    expect(html).not.toMatch(/<script/iu);
-    expect(html).toContain(
-      '<meta http-equiv="Content-Security-Policy" content="default-src \'none\';',
-    );
     expect(html).toContain('<table class="charts-css bar show-labels');
     expect(html).toContain('<input type="radio" name="tool" id="tool-1">');
     expect(html).toContain(

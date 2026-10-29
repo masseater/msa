@@ -1,11 +1,12 @@
-import { NodeServices } from "@effect/platform-node";
-import { Console, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
+import type scriptOutputTypes from "../libs/ai/src/utils/script-output.types.ts";
 import captureProcessModule from "./capture-process.ts";
-import runMain from "./run-main.ts";
 
 const { captureProcess, processRunnerLayer } = captureProcessModule;
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
+const { ScriptOutput } = scriptOutput;
 
 const CODING_AGENT = ["apps", "coding-agent"];
 const SESSION_FIXTURE = [...CODING_AGENT, "test", "fixtures", "before-compaction.jsonl"];
@@ -18,13 +19,13 @@ class ExportSmokeError extends Schema.TaggedError<
 
 interface Runner {
   readonly args: ReadonlyArray<string>;
-  readonly command: string;
+  readonly command: scriptOutputTypes.ScriptCommand;
+  readonly label: string;
 }
 
 const exportHtml = (workDir: string, sessionPath: string, runner: Runner, name: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const outputPath = path.join(workDir, `${name}.html`);
     const { exitCode, stderr, stdout } = yield* captureProcess({
       args: [...runner.args, "--export", sessionPath, outputPath],
@@ -34,10 +35,10 @@ const exportHtml = (workDir: string, sessionPath: string, runner: Runner, name: 
     });
     if (exitCode !== 0) {
       return yield* ExportSmokeError.make({
-        message: `${runner.command} --export exited with ${exitCode}:\n${stdout}${stderr}`,
+        message: `${runner.label} --export exited with ${exitCode}:\n${stdout}${stderr}`,
       });
     }
-    return yield* fs.readFile(outputPath);
+    return yield* fs.readBytes(outputPath);
   });
 
 const sameBytes = (left: Uint8Array, right: Uint8Array) =>
@@ -45,23 +46,22 @@ const sameBytes = (left: Uint8Array, right: Uint8Array) =>
 
 const exportSmoke = (binaryArgument: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const repoRoot = path.resolve(import.meta.dirname, "..");
     const binary = path.resolve(binaryArgument);
-    const workDir = yield* fs.makeTempDirectoryScoped({ prefix: "msa-export-smoke-" });
+    const workDir = yield* fs.makeTempDirectoryScoped("msa-export-smoke-");
     const sessionPath = path.join(workDir, "session.jsonl");
-    yield* fs.copyFile(path.join(repoRoot, ...SESSION_FIXTURE), sessionPath);
+    yield* (yield* ScriptOutput).copyFileTo(path.join(repoRoot, ...SESSION_FIXTURE), sessionPath);
     const fromBinary = yield* exportHtml(
       workDir,
       sessionPath,
-      { args: [], command: binary },
+      { args: [], command: { msaBinary: binary }, label: binary },
       "bin",
     );
     const fromNode = yield* exportHtml(
       workDir,
       sessionPath,
-      { args: [path.join(repoRoot, ...NODE_CLI)], command: "node" },
+      { args: [path.join(repoRoot, ...NODE_CLI)], command: "node", label: "node" },
       "node",
     );
     if (!sameBytes(fromBinary, fromNode)) {
@@ -78,7 +78,9 @@ const program = Effect.gen(function* () {
     return yield* ExportSmokeError.make({ message: "usage: smoke-binary-export <msa binary>" });
   }
   const bytes = yield* exportSmoke(binary);
-  yield* Console.log(`==> ${binary} --export writes the same ${bytes} bytes of HTML as node`);
+  yield* scriptOutput.print(
+    `==> ${binary} --export writes the same ${bytes} bytes of HTML as node`,
+  );
 });
 
-runMainWith(program, Layer.mergeAll(NodeServices.layer, processRunnerLayer));
+runMainWith(program, processRunnerLayer);

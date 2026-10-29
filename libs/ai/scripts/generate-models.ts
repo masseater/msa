@@ -1,6 +1,7 @@
-import { Cause, Console, Effect, ManagedRuntime } from "effect";
+import { Effect } from "effect";
 
 import type typesModule from "../src/types.types.ts";
+import scriptOutput from "../src/utils/script-output.ts";
 import assembleChatModels from "./catalog/catalog-assembly.ts";
 import buildCatalog from "./catalog/catalog-build.ts";
 import type catalogBuildTypes from "./catalog/catalog-build.types.ts";
@@ -16,13 +17,13 @@ const logStatistics = Effect.fn("logStatistics")(function* (
   chat: readonly typesModule.Model<any>[],
   catalog: catalogBuildTypes.BuiltCatalog,
 ) {
-  yield* Console.log(`\nModel Statistics:`);
-  yield* Console.log(`  Total tool-capable models: ${chat.length}`);
-  yield* Console.log(
+  yield* scriptOutput.print(`\nModel Statistics:`);
+  yield* scriptOutput.print(`  Total tool-capable models: ${chat.length}`);
+  yield* scriptOutput.print(
     `  Reasoning-capable models: ${chat.filter((model) => model.reasoning).length}`,
   );
   for (const { provider, chat: chatCount, image, classifier } of catalog.counts) {
-    yield* Console.log(
+    yield* scriptOutput.print(
       `  ${provider}: ${chatCount} chat models, ${image} image models, ${classifier} classifier models`,
     );
   }
@@ -38,15 +39,4 @@ const generateModels = Effect.gen(function* () {
   yield* logStatistics(chat, catalog);
 });
 
-ManagedRuntime.make(scriptFilesLayer).runFork(
-  generateModels.pipe(
-    Effect.catchCause((cause) =>
-      Effect.andThen(
-        Console.error(Cause.pretty(cause)),
-        Effect.sync(() => {
-          process.exitCode = 1;
-        }),
-      ),
-    ),
-  ),
-);
+scriptOutput.runMainWith(generateModels, scriptFilesLayer);

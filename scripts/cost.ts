@@ -1,5 +1,6 @@
-import { Clock, Console, DateTime, Effect, Option, Stream } from "effect";
+import { Clock, DateTime, Effect, Option, Stream } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import localTime from "../libs/chord/src/local-time.ts";
 import cliOptions from "./cli-options.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
@@ -102,8 +103,8 @@ const parseArgs = Effect.gen(function* () {
     }),
   );
   if (args === undefined) {
-    yield* Console.error("Error: both --dir and --days are required");
-    yield* Console.error("Run with --help for usage");
+    yield* scriptOutput.printError("Error: both --dir and --days are required");
+    yield* scriptOutput.printError("Run with --help for usage");
     return yield* Effect.sync(() => process.exit(1));
   }
   return args;
@@ -169,16 +170,16 @@ const reportDay = (
   providerTotals: Map<string, DayCost>,
 ) =>
   Effect.gen(function* () {
-    yield* Console.log(`\n${day}`);
-    yield* Console.log("-".repeat(40));
+    yield* scriptOutput.print(`\n${day}`);
+    yield* scriptOutput.print("-".repeat(40));
     let dayTotal = 0;
     for (const provider of [...providers.keys()].sort()) {
       const cost = providers.get(provider) ?? createDayCost();
       dayTotal += cost.total;
       mergeCost(getOrCreate(providerTotals, provider, createDayCost), cost);
-      yield* Console.log(describeCost(provider, cost));
+      yield* scriptOutput.print(describeCost(provider, cost));
     }
-    yield* Console.log(`  ${"Day total:".padEnd(15)} $${dayTotal.toFixed(4).padStart(8)}`);
+    yield* scriptOutput.print(`  ${"Day total:".padEnd(15)} $${dayTotal.toFixed(4).padStart(8)}`);
     return dayTotal;
   });
 
@@ -197,25 +198,29 @@ const reportDays = (
 const report = (args: Args, cutoffMillis: number, stats: Map<string, Map<string, DayCost>>) =>
   Effect.gen(function* () {
     if (stats.size === 0) {
-      yield* Console.log(`No sessions found in the last ${args.days} days for: ${args.directory}`);
+      yield* scriptOutput.print(
+        `No sessions found in the last ${args.days} days for: ${args.directory}`,
+      );
       return yield* Effect.sync(() => process.exit(0));
     }
-    yield* Console.log(`\nCost breakdown for: ${args.directory}`);
-    yield* Console.log(
+    yield* scriptOutput.print(`\nCost breakdown for: ${args.directory}`);
+    yield* scriptOutput.print(
       `Period: last ${args.days} days (since ${DateTime.formatIsoDateUtc(DateTime.makeUnsafe(cutoffMillis))})`,
     );
-    yield* Console.log("=".repeat(80));
+    yield* scriptOutput.print("=".repeat(80));
     const providerTotals = new Map<string, DayCost>();
     const grandTotal = yield* reportDays(stats, providerTotals);
-    yield* Console.log(`\n${"=".repeat(80)}`);
-    yield* Console.log("TOTALS BY PROVIDER");
-    yield* Console.log("-".repeat(40));
+    yield* scriptOutput.print(`\n${"=".repeat(80)}`);
+    yield* scriptOutput.print("TOTALS BY PROVIDER");
+    yield* scriptOutput.print("-".repeat(40));
     yield* Effect.forEach([...providerTotals.keys()].sort(), (provider) =>
-      Console.log(describeCost(provider, providerTotals.get(provider) ?? createDayCost())),
+      scriptOutput.print(describeCost(provider, providerTotals.get(provider) ?? createDayCost())),
     );
-    yield* Console.log("-".repeat(40));
-    yield* Console.log(`  ${"GRAND TOTAL:".padEnd(15)} $${grandTotal.toFixed(4).padStart(8)}`);
-    yield* Console.log("");
+    yield* scriptOutput.print("-".repeat(40));
+    yield* scriptOutput.print(
+      `  ${"GRAND TOTAL:".padEnd(15)} $${grandTotal.toFixed(4).padStart(8)}`,
+    );
+    yield* scriptOutput.print("");
   });
 
 const program = Effect.gen(function* () {
@@ -223,7 +228,7 @@ const program = Effect.gen(function* () {
   const args = yield* parseArgs;
   const sessionsDir = host.join(defaultSessionsBase(host), encodeSessionDir(args.directory));
   if (!(yield* host.exists(sessionsDir))) {
-    yield* Console.error(`Sessions directory not found: ${sessionsDir}`);
+    yield* scriptOutput.printError(`Sessions directory not found: ${sessionsDir}`);
     return yield* Effect.sync(() => process.exit(1));
   }
   const cutoff = localTime.dayStart(yield* Clock.currentTimeMillis, -args.days);

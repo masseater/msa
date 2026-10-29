@@ -1,14 +1,14 @@
-import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import captureProcessModule from "./capture-process.ts";
 import releasePlatforms from "./release-platforms.ts";
 import type releasePlatformsTypes from "./release-platforms.types.ts";
-import runMain from "./run-main.ts";
 
 const { processRunnerLayer, runInherit } = captureProcessModule;
 const { RELEASE_PLATFORMS } = releasePlatforms;
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
+const { ScriptOutput } = scriptOutput;
 
 const PAYLOAD_PACKAGE = "@msa/node-llama-cpp-payload";
 const DEPLOY_LEFTOVERS: ReadonlyArray<string> = [".bin", ".modules.yaml", ".pnpm"];
@@ -22,14 +22,13 @@ class DeployNodeLlamaCppError extends Schema.TaggedError<
 
 const removeTree = (target: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.remove(target, { force: true, recursive: true });
+    const { files: fs } = yield* scriptOutput.ScriptOutput;
+    yield* fs.remove(target);
   });
 
 const keepOnlyPrebuilt = (platform: releasePlatformsTypes.ReleasePlatform, prebuiltsDir: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const { prebuilt } = platform.nodeLlamaCpp;
     const installed = yield* fs.readDirectory(prebuiltsDir);
     if (!installed.includes(prebuilt)) {
@@ -44,10 +43,9 @@ const keepOnlyPrebuilt = (platform: releasePlatformsTypes.ReleasePlatform, prebu
 
 const deploy = (platform: releasePlatformsTypes.ReleasePlatform, payloadDir: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const repoRoot = path.resolve(import.meta.dirname, "..");
-    const deployDir = yield* fs.makeTempDirectoryScoped({ prefix: "msa-node-llama-cpp-" });
+    const deployDir = yield* fs.makeTempDirectoryScoped("msa-node-llama-cpp-");
     yield* runInherit({
       args: [
         "--filter",
@@ -66,7 +64,7 @@ const deploy = (platform: releasePlatformsTypes.ReleasePlatform, payloadDir: str
       yield* removeTree(path.join(modulesDir, entry));
     }
     yield* keepOnlyPrebuilt(platform, path.join(modulesDir, PREBUILT_SCOPE));
-    yield* fs.copy(modulesDir, path.join(payloadDir, "node_modules"));
+    yield* (yield* ScriptOutput).copyTreeTo(modulesDir, path.join(payloadDir, "node_modules"));
   }).pipe(Effect.scoped);
 
 const program = Effect.gen(function* () {
@@ -80,4 +78,4 @@ const program = Effect.gen(function* () {
   yield* deploy(platform, payloadDir);
 });
 
-runMainWith(program, Layer.mergeAll(NodeServices.layer, processRunnerLayer));
+runMainWith(program, processRunnerLayer);

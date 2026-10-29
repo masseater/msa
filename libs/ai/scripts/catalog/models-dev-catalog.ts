@@ -1,5 +1,6 @@
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 
+import scriptOutput from "../../src/utils/script-output.ts";
 import type modelsDevCatalogTypes from "./models-dev-catalog.types.ts";
 import directModels from "./models-dev-direct.ts";
 import openCodeModels from "./models-dev-opencode.ts";
@@ -19,7 +20,7 @@ const loadModelsDevModels = (
     const data = yield* fetchModelsDevCatalog;
     const { source, reasoning } = createModelsDevSource(data);
     const models = [...directModels(source), ...openCodeModels(source)];
-    yield* Console.log(`Loaded ${models.length} tool-capable models from models.dev`);
+    yield* scriptOutput.print(`Loaded ${models.length} tool-capable models from models.dev`);
     return { models, reasoning } satisfies modelsDevCatalogTypes.ModelsDevModels;
   }).pipe(
     withFallback({

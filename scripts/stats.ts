@@ -1,5 +1,6 @@
-import { Clock, Console, DateTime, Effect, Option, Schema, Stream } from "effect";
+import { Clock, DateTime, Effect, Option, Schema, Stream } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import localTime from "../libs/chord/src/local-time.ts";
 import cliOptions from "./cli-options.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
@@ -159,7 +160,7 @@ const formatInt = (value: number): string => Math.round(value).toLocaleString("e
 const formatCost = (value: number): string => `$${value.toFixed(4)}`;
 
 const printTotals = (label: string, totals: Totals) =>
-  Console.log(
+  scriptOutput.print(
     `${label.padEnd(16)} messages: ${String(totals.assistantMessages).padStart(5)}  sessions: ${String(totals.sessions.size).padStart(3)}  ` +
       `input: ${formatInt(totals.input).padStart(12)}  output: ${formatInt(totals.output).padStart(10)}  ` +
       `cache read: ${formatInt(totals.cacheRead).padStart(13)}  cache write: ${formatInt(totals.cacheWrite).padStart(10)}  ` +
@@ -226,12 +227,12 @@ const report = (
   collected: { readonly grandTotal: Totals; readonly stats: Map<string, DayStats> },
 ) =>
   Effect.gen(function* () {
-    yield* Console.log(`Usage for ${args.cwd}`);
-    yield* Console.log(`Sessions: ${sessionsDir}`);
-    yield* Console.log(
+    yield* scriptOutput.print(`Usage for ${args.cwd}`);
+    yield* scriptOutput.print(`Sessions: ${sessionsDir}`);
+    yield* scriptOutput.print(
       `Period: ${localTime.format(startMillis, DAY)} through ${localTime.format(endMillis - 1, DAY)} (${args.days} local days)`,
     );
-    yield* Console.log("".padEnd(160, "="));
+    yield* scriptOutput.print("".padEnd(160, "="));
     yield* Effect.forEach(
       [...collected.stats.entries()].sort(([a], [b]) => a.localeCompare(b)),
       ([day, dayStats]) =>
@@ -243,7 +244,7 @@ const report = (
           );
         }),
     );
-    yield* Console.log("".padEnd(160, "-"));
+    yield* scriptOutput.print("".padEnd(160, "-"));
     yield* printTotals("TOTAL", collected.grandTotal);
   });
 

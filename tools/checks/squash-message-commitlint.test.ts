@@ -3,9 +3,9 @@ import { Config, Effect, FileSystem, Layer, ManagedRuntime, Path, Schema } from 
 import { expect, it } from "vite-plus/test";
 import { parse } from "yaml";
 
-import captureProcessModule from "../capture-process.ts";
+import testProcess from "./test-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { captureProcess, processRunnerLayer } = testProcess;
 
 const TITLE = "fix(orchestrator): squash with the commit bodies";
 const FIRST = "a".repeat(40);
