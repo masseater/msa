@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
 
-import { Console, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import cliOptions from "./cli-options.ts";
 import editToolReport from "./edit-tool-report.ts";
 import editToolScan from "./edit-tool-scan.ts";
@@ -117,11 +118,11 @@ const program = Effect.gen(function* () {
     top: args.top,
   });
   if (args.json) {
-    return yield* Console.log(
+    return yield* scriptOutput.print(
       yield* encodeIndentedJson(args.includeRecords ? { records: filtered, summary } : { summary }),
     );
   }
-  return yield* Console.log(buildEditTextReport(summary));
+  return yield* scriptOutput.print(buildEditTextReport(summary));
 });
 
 runScript(program);

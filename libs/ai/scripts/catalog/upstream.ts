@@ -1,6 +1,7 @@
-import { Cause, Console, Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 
 import http from "../../src/utils/http.ts";
+import scriptOutput from "../../src/utils/script-output.ts";
 import type upstreamTypes from "./upstream.types.ts";
 
 const { httpRequest } = http;
@@ -21,7 +22,7 @@ const withFallback =
   <E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.catchCause(effect, (cause) =>
       Effect.andThen(
-        Console.error(`Failed to ${label}:`, Cause.pretty(cause)),
+        scriptOutput.printError(`Failed to ${label}: ${Cause.pretty(cause)}`),
         strict ? Effect.failCause(cause) : Effect.sync(fallback),
       ),
     );

@@ -1,5 +1,6 @@
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 
+import scriptOutput from "../../src/utils/script-output.ts";
 import buildOpenRouterCatalog from "../openrouter-catalog.ts";
 import type openrouterCatalogTypes from "../openrouter-catalog.types.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
@@ -9,7 +10,7 @@ import upstream from "./upstream.ts";
 const { UpstreamError, fetchJson, withFallback } = upstream;
 
 const fetchModelsDevCatalog = Effect.gen(function* () {
-  yield* Console.log("Fetching models from models.dev API...");
+  yield* scriptOutput.print("Fetching models from models.dev API...");
   return (yield* fetchJson({
     label: "models.dev API",
     url: "https://models.dev/api.json",
@@ -24,7 +25,7 @@ const fetchOpenRouterList = (query: string) =>
 
 const fetchOpenRouterModels = (strict: boolean) =>
   Effect.gen(function* () {
-    yield* Console.log("Fetching models from OpenRouter API...");
+    yield* scriptOutput.print("Fetching models from OpenRouter API...");
     const [listed, imageListed, decisionListed] = yield* Effect.all(
       [
         fetchOpenRouterList(""),
@@ -34,7 +35,7 @@ const fetchOpenRouterModels = (strict: boolean) =>
       { concurrency: "unbounded" },
     );
     const catalog = buildOpenRouterCatalog(listed, imageListed, decisionListed);
-    yield* Console.log(
+    yield* scriptOutput.print(
       `Fetched ${catalog.chat.length} tool-capable, ${catalog.images.length} image, and ${catalog.classifiers.length} classifier models from OpenRouter`,
     );
     if (strict && catalog.images.length === 0) {

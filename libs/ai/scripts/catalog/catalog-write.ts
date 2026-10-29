@@ -1,5 +1,6 @@
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 
+import scriptOutput from "../../src/utils/script-output.ts";
 import modelData from "../model-data.ts";
 import scriptFiles from "../script-files.ts";
 import type scriptFilesTypes from "../script-files.types.ts";
@@ -34,11 +35,11 @@ const stageModelData = Effect.fn("stageModelData")(function* (
     const filename = `${providerId}.json`;
     const content = yield* request.serialize(request.grouped.groups[providerId]);
     fileContents[filename] = content;
-    yield* files.writeText({ content, path: files.join(stagedDataDir, filename) });
+    yield* files.writeTextFile({ content, path: files.join(stagedDataDir, filename) });
   }
   const { structure } = request.grouped;
   const manifest = yield* createModelDataManifest(structure, fileContents, request.generatedAt);
-  yield* files.writeText({
+  yield* files.writeTextFile({
     content: yield* request.serialize(manifest),
     path: files.join(stagedDataDir, MODEL_DATA_MANIFEST_FILE),
   });
@@ -65,8 +66,8 @@ const snapshotTypeScriptCatalog = Effect.fn("snapshotTypeScriptCatalog")(functio
     for (const entry of yield* shardFiles(files, paths.providersDir))
       yield* files.remove(files.join(paths.providersDir, entry));
     for (const { entry, content } of shards)
-      yield* files.writeText({ content, path: files.join(paths.providersDir, entry) });
-    yield* files.writeText({ content: aggregator, path: paths.aggregatorPath });
+      yield* files.writeTextFile({ content, path: files.join(paths.providersDir, entry) });
+    yield* files.writeTextFile({ content: aggregator, path: paths.aggregatorPath });
   }).pipe(Effect.ignore);
   return { restore };
 });
@@ -78,7 +79,7 @@ const writeTypeScriptCatalog = Effect.fn("writeTypeScriptCatalog")(function* (
   const files = yield* ScriptFiles;
   const generated = new Set(providerIds.map(providerShardFile));
   for (const providerId of providerIds) {
-    yield* files.writeText({
+    yield* files.writeTextFile({
       content: renderProviderShard(providerId),
       path: files.join(paths.providersDir, providerShardFile(providerId)),
     });
@@ -86,8 +87,11 @@ const writeTypeScriptCatalog = Effect.fn("writeTypeScriptCatalog")(function* (
   for (const entry of yield* shardFiles(files, paths.providersDir)) {
     if (!generated.has(entry)) yield* files.remove(files.join(paths.providersDir, entry));
   }
-  yield* files.writeText({ content: renderAggregator(providerIds), path: paths.aggregatorPath });
-  yield* Console.log("Generated provider catalogs and src/models.generated.ts");
+  yield* files.writeTextFile({
+    content: renderAggregator(providerIds),
+    path: paths.aggregatorPath,
+  });
+  yield* scriptOutput.print("Generated provider catalogs and src/models.generated.ts");
 });
 
 const swapModelData = Effect.fn("swapModelData")(function* (
@@ -96,15 +100,15 @@ const swapModelData = Effect.fn("swapModelData")(function* (
 ) {
   const files = yield* ScriptFiles;
   const hadPreviousData = yield* files.exists(paths.dataDir);
-  if (hadPreviousData) yield* files.rename({ from: paths.dataDir, to: paths.previousDataDir });
+  if (hadPreviousData) yield* files.renamePath({ from: paths.dataDir, to: paths.previousDataDir });
   const restorePrevious = Effect.gen(function* () {
     yield* files.remove(paths.dataDir);
     if (hadPreviousData && (yield* files.exists(paths.previousDataDir)))
-      yield* files.rename({ from: paths.previousDataDir, to: paths.dataDir });
+      yield* files.renamePath({ from: paths.previousDataDir, to: paths.dataDir });
   }).pipe(Effect.ignore);
   yield* Effect.onError(
     Effect.andThen(
-      files.rename({ from: paths.stagedDataDir, to: paths.dataDir }),
+      files.renamePath({ from: paths.stagedDataDir, to: paths.dataDir }),
       validateGeneratedModelData(packageRoot),
     ),
     () => restorePrevious,
@@ -126,7 +130,7 @@ const replaceCatalog = Effect.fn("replaceCatalog")(function* (
       () => snapshot.restore,
     );
   }
-  yield* Console.log(
+  yield* scriptOutput.print(
     request.dataOnly
       ? "Hydrated JSON model values under src/providers/data/"
       : "Generated JSON model values under src/providers/data/",

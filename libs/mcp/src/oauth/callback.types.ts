@@ -9,6 +9,12 @@ declare namespace callbackTypes {
 
   type OAuthCallbackPage = { ok: true } | { ok: false; message: string; details?: string };
 
+  interface OAuthCallbackReply {
+    readonly status: number;
+    readonly headers: Readonly<Record<string, string>>;
+    readonly body: string;
+  }
+
   interface OAuthCallbackServerOptions {
     host?: string;
     redirectHost?: string;
@@ -16,7 +22,7 @@ declare namespace callbackTypes {
     path?: string;
     extraPaths?: string[];
     timeoutMs?: number;
-    renderPage?: (page: OAuthCallbackPage) => string;
+    replyPage?: (status: number, page: OAuthCallbackPage) => OAuthCallbackReply;
   }
 
   type OAuthCallbackServer = OAuthCallbackServerClass;

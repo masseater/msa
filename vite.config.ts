@@ -3,6 +3,7 @@ import { defineConfig } from "vite-plus";
 import lintConfig from "./lint.config.ts";
 import localTimeRules from "./local-time-rules.config.ts";
 import runConfig from "./run.config.ts";
+import scriptIoRules from "./script-io-rules.config.ts";
 import vitestShared from "./vitest.shared.ts";
 
 const {
@@ -119,6 +120,34 @@ export default defineConfig({
       {
         files: withProbes(["lint.config.ts"]),
         rules: { "msa/no-sync-fs": "off" },
+      },
+      {
+        files: withProbes(scriptIoRules.files),
+        rules: {
+          "eslint/no-restricted-globals": ["error", ...scriptIoRules.globals],
+          "eslint/no-restricted-imports": ["error", scriptIoRules.imports(restrictedImports)],
+          "eslint/no-restricted-properties": [
+            "error",
+            ...restrictedProperties,
+            ...scriptIoRules.properties,
+          ],
+        },
+      },
+      {
+        files: withProbes([scriptIoRules.testProcessOwner]),
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            scriptIoRules.imports(restrictedImports, scriptIoRules.testProcessModules),
+          ],
+        },
+      },
+      {
+        files: withProbes(scriptIoRules.testFiles),
+        rules: {
+          "eslint/no-restricted-imports": ["error", restrictedImports],
+          "eslint/no-restricted-properties": ["error", ...restrictedProperties],
+        },
       },
       {
         files: withProbes(["scripts/**"]),

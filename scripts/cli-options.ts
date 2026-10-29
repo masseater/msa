@@ -1,5 +1,6 @@
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
 
 const flagOption = <A>(set: (parsed: A) => void): cliOptionsTypes.CliOption<A, never> => ({
@@ -34,7 +35,7 @@ const helpOptions = (
   help: string,
 ): ReadonlyArray<readonly [string, cliOptionsTypes.CliOption<unknown, never>]> => {
   const option: cliOptionsTypes.CliOption<unknown, never> = {
-    apply: () => Console.log(help).pipe(Effect.andThen(Effect.sync(() => process.exit(0)))),
+    apply: () => scriptOutput.print(help).pipe(Effect.andThen(Effect.sync(() => process.exit(0)))),
     takesValue: false,
   };
   return [

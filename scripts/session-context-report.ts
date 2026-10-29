@@ -1,6 +1,13 @@
+import htmlDocumentModule from "../libs/ai/src/utils/html-document.ts";
+import type htmlDocumentTypes from "../libs/ai/src/utils/html-document.types.ts";
 import type sessionContextSummaryTypes from "./session-context-summary.types.ts";
 
+const { escapeHtml, htmlDocument } = htmlDocumentModule;
+
 const CHART_WIDTH = 40;
+
+const REPORT_STYLE = `body { margin: 24px; background: #fff; color: #111; }
+pre { font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }`;
 
 const formatInt = (value: number): string =>
   new Intl.NumberFormat("en-US").format(Math.round(value));
@@ -102,17 +109,14 @@ const buildTextReport = (summary: sessionContextSummaryTypes.Summary): string =>
   return `${lines.join("\n")}\n`;
 };
 
-const escapeHtml = (text: string): string =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-const buildHtmlReport = (summary: sessionContextSummaryTypes.Summary): string => `<!doctype html>
-<meta charset="utf-8">
-<title>Session context stats</title>
-<style>
-body { margin: 24px; background: #fff; color: #111; }
-pre { font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
-</style>
-<pre>${escapeHtml(buildTextReport(summary))}</pre>`;
+const buildHtmlReport = (
+  summary: sessionContextSummaryTypes.Summary,
+): htmlDocumentTypes.HtmlDocument =>
+  htmlDocument({
+    body: `<pre>${escapeHtml(buildTextReport(summary))}</pre>`,
+    style: REPORT_STYLE,
+    title: "Session context stats",
+  });
 
 const sessionContextReport = {
   buildHtmlReport,

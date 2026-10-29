@@ -1,8 +1,12 @@
-import { NodeServices } from "@effect/platform-node";
-import { Context, Effect, Layer, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { Context, Effect, Layer } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import type captureProcessTypes from "./capture-process.types.ts";
+
+const { ScriptOutput, scriptOutputLayer } = scriptOutput;
+
+const commandLabel = (command: captureProcessTypes.ProcessOptions["command"]) =>
+  typeof command === "string" ? command : command.msaBinary;
 
 class ProcessRunner extends Context.Service<
   ProcessRunner,
@@ -17,45 +21,29 @@ class ProcessRunner extends Context.Service<
 const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
   ProcessRunner,
   Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const spawn = (options: captureProcessTypes.ProcessOptions, inheritStdio: boolean) =>
-      spawner.spawn(
-        ChildProcess.make(options.command, options.args, {
-          cwd: options.cwd,
-          env: options.env,
-          extendEnv: true,
-          stderr: inheritStdio ? "inherit" : "pipe",
-          stdin: inheritStdio ? "inherit" : "ignore",
-          stdout: inheritStdio ? "inherit" : "pipe",
-        }),
-      );
+    const { processes } = yield* ScriptOutput;
     return ProcessRunner.of({
-      capture: (options) =>
-        Effect.gen(function* () {
-          const child = yield* spawn(options, false);
-          const [stdout, stderr, exitCode] = yield* Effect.all(
-            [
-              child.stdout.pipe(Stream.decodeText(), Stream.mkString),
-              child.stderr.pipe(Stream.decodeText(), Stream.mkString),
-              child.exitCode,
-            ],
-            { concurrency: "unbounded" },
-          );
-          return { exitCode: Number(exitCode), stderr, stdout };
-        }).pipe(Effect.scoped, Effect.orDie),
+      capture: (options) => processes.run(options),
       inherit: (options) =>
         Effect.gen(function* () {
-          const child = yield* spawn(options, true);
-          const exitCode = Number(yield* child.exitCode);
+          const child = yield* processes.spawn({
+            ...options,
+            stderr: "inherit",
+            stdin: "inherit",
+            stdout: "inherit",
+          });
+          const exitCode = yield* child.exitCode;
           if (exitCode !== 0) {
             return yield* Effect.die(
-              new Error(`${options.command} ${options.args.join(" ")} exited with ${exitCode}`),
+              new Error(
+                `${commandLabel(options.command)} ${options.args.join(" ")} exited with ${exitCode}`,
+              ),
             );
           }
-        }).pipe(Effect.scoped, Effect.orDie),
+        }).pipe(Effect.scoped),
     });
   }),
-).pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(scriptOutputLayer));
 
 const captureProcess = (
   options: captureProcessTypes.ProcessOptions,

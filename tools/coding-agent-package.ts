@@ -1,6 +1,6 @@
-import { NodeServices } from "@effect/platform-node";
-import { Context, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import type codingAgentPackageTypes from "./coding-agent-package.types.ts";
 
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
@@ -17,12 +17,11 @@ class Workspace extends Context.Service<
 const workspaceLayer: Layer.Layer<Workspace> = Layer.effect(
   Workspace,
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const repoRoot = path.resolve(import.meta.dirname, "..");
     return Workspace.of({
       loadCodingAgentPackage: Effect.gen(function* () {
-        const packageJsonText = yield* fs.readFileString(
+        const packageJsonText = yield* fs.readText(
           path.join(repoRoot, "apps", "coding-agent", "package.json"),
         );
         const { version } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
@@ -33,7 +32,7 @@ const workspaceLayer: Layer.Layer<Workspace> = Layer.effect(
       }).pipe(Effect.orDie),
     });
   }),
-).pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(scriptOutput.scriptOutputLayer));
 
 const codingAgentPackage = {
   Workspace,

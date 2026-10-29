@@ -1,6 +1,7 @@
-import { Effect, ManagedRuntime } from "effect";
+import { Effect } from "effect";
 
 import jsonCodec from "../src/utils/json-codec.ts";
+import scriptOutput from "../src/utils/script-output.ts";
 import type hydrateModelCatalogTypes from "./hydrate-model-catalog.types.ts";
 import modelDataChecks from "./model-data-checks.ts";
 import ModelDataError from "./model-data-error.ts";
@@ -86,9 +87,9 @@ const stageCatalog = Effect.fn("stageCatalog")(function* (
   const files = yield* ScriptFiles;
   yield* files.makeDirectory(stagedData);
   for (const [name, content] of Object.entries(contents))
-    yield* files.writeText({ content, path: files.join(stagedData, name) });
+    yield* files.writeTextFile({ content, path: files.join(stagedData, name) });
   const manifest = yield* createModelDataManifest(structure, contents, "1970-01-01T00:00:00.000Z");
-  yield* files.writeText({
+  yield* files.writeTextFile({
     content: `${yield* encodeJson(manifest)}\n`,
     path: files.join(stagedData, MODEL_DATA_MANIFEST_FILE),
   });
@@ -114,7 +115,7 @@ const hydrateModelCatalog = Effect.fn("hydrateModelCatalog")(function* ({
       if (validateOnly) return;
       const dataDir = files.join(providersDir, "data");
       yield* files.remove(dataDir);
-      yield* files.rename({ from: stagedData, to: dataDir });
+      yield* files.renamePath({ from: stagedData, to: dataDir });
     }),
     Effect.ignore(files.remove(stagingRoot)),
   );
@@ -124,7 +125,7 @@ if (import.meta.main) {
   const [catalogPath, ...extraArgs] = process.argv.slice(2);
   if (catalogPath === undefined || extraArgs.length > 0)
     throw new Error("Usage: node hydrate-model-catalog.ts <models.all.json>");
-  ManagedRuntime.make(scriptFilesLayer).runFork(
+  scriptOutput.runMainWith(scriptFilesLayer)(
     Effect.gen(function* () {
       const files = yield* ScriptFiles;
       yield* hydrateModelCatalog({

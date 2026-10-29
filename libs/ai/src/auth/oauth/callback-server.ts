@@ -5,14 +5,8 @@ import type localHttpServerTypes from "../../utils/local-http-server.types.ts";
 import oauthPage from "../../utils/oauth-page.ts";
 import type callbackServerTypes from "./callback-server.types.ts";
 
-const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+const { oauthErrorReply, oauthSuccessReply } = oauthPage;
 const { startLocalHttpServer } = localHttpServer;
-
-const page = (status: number, body: string): localHttpServerTypes.LocalHttpResponse => ({
-  body,
-  headers: { "cache-control": "no-store", "content-type": "text/html; charset=utf-8" },
-  status,
-});
 
 const toError = (cause: unknown): Error =>
   cause instanceof Error ? cause : new Error(String(cause));
@@ -41,12 +35,12 @@ const claim = <T>(flow: CallbackFlow<T>, code: string, reply: Reply): Effect.Eff
     const exit = yield* Effect.exit(flow.options.complete(code));
     if (Exit.isSuccess(exit)) {
       yield* reply(
-        page(200, oauthSuccessHtml(`Signed in to ${providerName}. You may now close this page.`)),
+        oauthSuccessReply(200, `Signed in to ${providerName}. You may now close this page.`),
       );
       return yield* flow.finish(exit);
     }
     const failure = toError(Cause.squash(exit.cause));
-    yield* reply(page(502, oauthErrorHtml(`${providerName} sign-in failed.`, failure.message)));
+    yield* reply(oauthErrorReply(502, `${providerName} sign-in failed.`, failure.message));
     return yield* flow.finish(Exit.die(failure));
   });
 
@@ -57,28 +51,26 @@ const handleCallback = <T>(
 ): Effect.Effect<void> => {
   const { options, state } = flow;
   if (method !== "GET" || url.pathname !== options.path) {
-    return reply(page(404, oauthErrorHtml("Callback route not found.", undefined)));
+    return reply(oauthErrorReply(404, "Callback route not found.", undefined));
   }
   if (options.state !== undefined && url.searchParams.get("state") !== options.state) {
-    return reply(page(400, oauthErrorHtml("State mismatch.", undefined)));
+    return reply(oauthErrorReply(400, "State mismatch.", undefined));
   }
   if (state.claimed || state.settled) {
-    return reply(page(409, oauthErrorHtml("This sign-in has already been handled.", undefined)));
+    return reply(oauthErrorReply(409, "This sign-in has already been handled.", undefined));
   }
   const error = url.searchParams.get("error");
   if (error !== null && error !== "") {
     const description = url.searchParams.get("error_description") ?? error;
     const failure = new Error(`${options.providerName} authorization failed: ${description}`);
     return Effect.andThen(
-      reply(
-        page(400, oauthErrorHtml(`${options.providerName} authorization failed.`, description)),
-      ),
+      reply(oauthErrorReply(400, `${options.providerName} authorization failed.`, description)),
       flow.finish(Exit.die(failure)),
     );
   }
   const code = url.searchParams.get("code");
   if (code === null || code === "") {
-    return reply(page(400, oauthErrorHtml("Missing authorization code.", undefined)));
+    return reply(oauthErrorReply(400, "Missing authorization code.", undefined));
   }
   return claim(flow, code, reply);
 };

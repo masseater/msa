@@ -1,10 +1,11 @@
 import { fileURLToPath } from "node:url";
 
-import { Console, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import type { SchemaError } from "effect/Schema";
 import type { TSchema } from "typebox";
 import { format } from "vite-plus/fmt";
 
+import scriptOutput from "../../../libs/ai/src/utils/script-output.ts";
 import hostModule from "../../../scripts/host.ts";
 import schemaArtifactsModule from "./schema-artifacts.ts";
 import type schemaArtifactsTypes from "./schema-artifacts.types.ts";
@@ -162,8 +163,8 @@ const program = Effect.gen(function* () {
     Effect.gen(function* () {
       const path = host.resolve(packageDirectory, relativePath);
       yield* host.makeDirectory(host.dirname(path));
-      yield* host.writeText(path, content);
-      yield* Console.log(`Generated apps/coding-agent/${relativePath}`);
+      yield* host.writeTextFile(path, content);
+      yield* scriptOutput.print(`Generated apps/coding-agent/${relativePath}`);
     }),
   );
 });

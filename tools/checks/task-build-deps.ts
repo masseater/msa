@@ -1,7 +1,7 @@
-import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 
-import captureProcessModule from "../capture-process.ts";
+import scriptOutput from "../../libs/ai/src/utils/script-output.ts";
+import type scriptOutputTypes from "../../libs/ai/src/utils/script-output.types.ts";
 import nodeImports from "./node-imports.ts";
 import shellSyntax from "./shell-syntax.ts";
 import type taskBuildDepsTypes from "./task-build-deps.types.ts";
@@ -82,11 +82,8 @@ const unregisteredConfigs = (host: Host, root: string, workspaces: ReadonlyArray
 const makeGraph = (scope: Scope, tasks: Tasks, grammar: Uint8Array) =>
   Effect.gen(function* () {
     const { path, root } = scope;
-    const help = yield* captureProcessModule.captureProcess({
-      args: ["--help"],
-      command: "node",
-      cwd: root,
-    });
+    const { processes } = yield* scriptOutput.ScriptOutput;
+    const help = yield* processes.run({ args: ["--help"], command: "node", cwd: root });
     yield* nodeImports.ready;
     const graph: Graph = {
       flags: nodeFlags(help.stdout),
@@ -104,28 +101,29 @@ const makeGraph = (scope: Scope, tasks: Tasks, grammar: Uint8Array) =>
     return graph;
   });
 
-const hostOf = (fs: FileSystem.FileSystem, path: Path.Path): Host => ({
+const hostOf = ({ files, path }: scriptOutputTypes.ScriptOutputShape): Host => ({
   isFile: (file) =>
-    fs.stat(file).pipe(
-      Effect.map((info) => info.type === "File"),
+    files.stat(file).pipe(
+      Effect.map((info) => info.isFile),
       Effect.orElseSucceed(() => false),
     ),
-  list: (dir) => fs.readDirectory(dir).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => [])),
+  list: (dir) =>
+    files.readDirectory(dir).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => [])),
   path,
-  read: (file) => fs.readFileString(file).pipe(Effect.orDie),
+  read: (file) => files.readText(file).pipe(Effect.orDie),
 });
 
 const collectViolations = (tasks: Tasks, rootScripts: Scripts) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const host = hostOf(fs, path);
+    const output = yield* scriptOutput.ScriptOutput;
+    const { files, path } = output;
+    const host = hostOf(output);
     const root = path.resolve(import.meta.dirname, "../..");
     const loaded = yield* loadWorkspaces(host, root);
     const workspaces = withPackageTasks({ path, root }, withRootScripts(loaded, root, rootScripts));
     const rootWorkspace = workspaces.find((workspace) => workspace.dir === root);
     if (rootWorkspace === undefined) return ["no package.json at the repository root"];
-    const grammar = yield* fs.readFile(path.resolve(root, GRAMMAR)).pipe(Effect.orDie);
+    const grammar = yield* files.readBytes(path.resolve(root, GRAMMAR)).pipe(Effect.orDie);
     const scope = { ...host, imports: new Map(), root, workspaces };
     const graph = yield* makeGraph(scope, tasks, grammar);
     const start = { built: false, cwd: root, via: [], workspace: rootWorkspace };
@@ -136,9 +134,7 @@ const collectViolations = (tasks: Tasks, rootScripts: Scripts) =>
     return [...new Set([...unregistered, ...results.flat()])];
   });
 
-const runtime = ManagedRuntime.make(
-  captureProcessModule.processRunnerLayer.pipe(Layer.provideMerge(NodeServices.layer)),
-);
+const runtime = ManagedRuntime.make(scriptOutput.scriptOutputLayer);
 
 const violationsOf = (tasks: Tasks, rootScripts: Scripts = {}): Promise<ReadonlyArray<string>> =>
   runtime.runPromise(collectViolations(tasks, rootScripts));

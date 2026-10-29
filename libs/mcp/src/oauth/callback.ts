@@ -62,7 +62,7 @@ export default class OAuthCallbackServer {
   private server: Server;
   private paths: string[];
   private timeoutMs: number;
-  private renderPage: ((page: callbackTypes.OAuthCallbackPage) => string) | undefined;
+  private replyPage: callbackTypes.OAuthCallbackServerOptions["replyPage"];
   private pending = new Map<string, PendingCallback>();
 
   private constructor(
@@ -70,13 +70,13 @@ export default class OAuthCallbackServer {
     redirectUrl: string,
     paths: string[],
     timeoutMs: number,
-    renderPage: ((page: callbackTypes.OAuthCallbackPage) => string) | undefined,
+    replyPage: callbackTypes.OAuthCallbackServerOptions["replyPage"],
   ) {
     this.server = server;
     this.redirectUrl = redirectUrl;
     this.paths = paths;
     this.timeoutMs = timeoutMs;
-    this.renderPage = renderPage;
+    this.replyPage = replyPage;
   }
 
   static listen(
@@ -102,7 +102,7 @@ export default class OAuthCallbackServer {
           `http://${bracketed}:${port}${path}`,
           [path, ...(options.extraPaths ?? [])],
           options.timeoutMs ?? 5 * 60_000,
-          options.renderPage,
+          options.replyPage,
         );
         return instance;
       }),
@@ -140,16 +140,14 @@ export default class OAuthCallbackServer {
   }
 
   private reply(status: number, page: callbackTypes.OAuthCallbackPage): Response {
-    if (this.renderPage === undefined) {
+    if (this.replyPage === undefined) {
       return new Response(plainText(page), {
         headers: { "content-type": "text/plain; charset=utf-8" },
         status,
       });
     }
-    return new Response(this.renderPage(page), {
-      headers: { "cache-control": "no-store", "content-type": "text/html; charset=utf-8" },
-      status,
-    });
+    const reply = this.replyPage(status, page);
+    return new Response(reply.body, { headers: reply.headers, status: reply.status });
   }
 
   private settle(

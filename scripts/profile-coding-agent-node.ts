@@ -1,5 +1,6 @@
-import { Config, Console, Effect, Option } from "effect";
+import { Config, Effect, Option } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import hostModule from "./host.ts";
 import type hostTypes from "./host.types.ts";
 import profileStartupArgs from "./profile-startup-args.ts";
@@ -40,14 +41,12 @@ const displayPath = (host: hostTypes.HostShape, repoRoot: string) => (path: stri
     : path;
 };
 
-const isInteractiveTerminal = (): boolean =>
-  process.stdin.isTTY === true && process.stdout.isTTY === true;
-
 const VALIDATIONS: ReadonlyArray<{
   readonly message: string;
   readonly violated: (
     options: profileStartupArgsTypes.ProfileOptions,
     runtime: profileStartupArgsTypes.Runtime,
+    interactive: boolean,
   ) => boolean;
 }> = [
   {
@@ -56,7 +55,7 @@ const VALIDATIONS: ReadonlyArray<{
   },
   {
     message: "TUI benchmark must be run from an interactive terminal.",
-    violated: (options) => options.mode === "tui" && !isInteractiveTerminal(),
+    violated: (options, _runtime, interactive) => options.mode === "tui" && !interactive,
   },
   {
     message: "--bundle only supports the Node runtime",
@@ -67,8 +66,11 @@ const VALIDATIONS: ReadonlyArray<{
 const validate = (
   options: profileStartupArgsTypes.ProfileOptions,
   runtime: profileStartupArgsTypes.Runtime,
+  interactive: boolean,
 ) => {
-  const violation = VALIDATIONS.find((validation) => validation.violated(options, runtime));
+  const violation = VALIDATIONS.find((validation) =>
+    validation.violated(options, runtime, interactive),
+  );
   return violation === undefined ? Effect.void : Effect.fail(fail(violation.message));
 };
 
@@ -124,7 +126,8 @@ const prepare = (
   Effect.gen(function* () {
     if (runtime === "node" && options.build)
       yield* runBuild({ bundle: options.bundle, host, repoRoot: paths.repoRoot });
-    if (runtime === "bun") yield* Console.log(`Using Bun runtime with ${bunEntry(options.mode)}`);
+    if (runtime === "bun")
+      yield* scriptOutput.print(`Using Bun runtime with ${bunEntry(options.mode)}`);
     yield* checkEntry(host, paths, options, runtime);
   });
 
@@ -143,7 +146,7 @@ const runAll = (base: Omit<profileStartupRunsTypes.RunParams, "measuredIndex" | 
         const measuredIndex = measuredIndexOf(runIndex, warmup);
         const params = { ...base, measuredIndex, runIndex };
         const result = yield* base.options.mode === "rpc" ? runRpc(params) : runTui(params);
-        yield* Console.log(
+        yield* scriptOutput.print(
           `[${runLabel(runIndex, measuredIndex)}] elapsed=${result.elapsedMs.toFixed(1)}ms`,
         );
         return measuredIndex === undefined ? undefined : result;
@@ -173,9 +176,9 @@ const main = Effect.gen(function* () {
   const host = yield* Host;
   const paths = makePaths(host);
   const options = yield* parseArgs(process.argv.slice(2), (path) => host.resolve(path));
-  if (options.help) return yield* Console.log(HELP);
+  if (options.help) return yield* scriptOutput.print(HELP);
   const runtime = yield* resolveRuntime(options.runtime);
-  yield* validate(options, runtime);
+  yield* validate(options, runtime, host.interactive);
   const label = options.label ?? `${options.mode}-startup`;
   const profileDir = profileDirOf({ host, paths, profileDir: options.profileDir, runtime });
   yield* prepare(host, paths, options, runtime);
@@ -197,11 +200,11 @@ const main = Effect.gen(function* () {
     },
     measured,
   );
-  yield* Effect.forEach(report, (line) => Console.log(line));
+  yield* Effect.forEach(report, (line) => scriptOutput.print(line));
 }).pipe(
   Effect.catchTag("ProfileError", (error) =>
     Effect.gen(function* () {
-      yield* Console.error(error.message);
+      yield* scriptOutput.printError(error.message);
       yield* Effect.sync(() => {
         process.exitCode = 1;
       });

@@ -1,0 +1,65 @@
+id: scripts-start-through-run-main
+language: typescript
+severity: error
+message: "scripts・tools の入口は @msa/ai/utils/script-output の runMainWith にする。テストから呼ぶ runtime は scriptOutputLayer の上に作る。"
+files:
+  - scripts/**
+  - tools/**
+  - apps/*/scripts/**
+  - libs/*/scripts/**
+ignores:
+  - tools/binary-smoke/decide-probe.ts
+  - tools/checks/lint-probe.ts
+  - tools/checks/task-build-deps.ts
+  - "**/*.test.*"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    any:
+      - regex: ^ManagedRuntime\.make$
+      - regex: (?:^|\.)(?:runMain|runPromise|runPromiseExit|runFork|runSync|runSyncExit|runCallback)$
+---
+id: scripts-start-through-run-main-tsx
+language: tsx
+severity: error
+message: "scripts・tools の入口は @msa/ai/utils/script-output の runMainWith にする。テストから呼ぶ runtime は scriptOutputLayer の上に作る。"
+files:
+  - scripts/**
+  - tools/**
+  - apps/*/scripts/**
+  - libs/*/scripts/**
+ignores:
+  - tools/binary-smoke/decide-probe.ts
+  - tools/checks/lint-probe.ts
+  - tools/checks/task-build-deps.ts
+  - "**/*.test.*"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    any:
+      - regex: ^ManagedRuntime\.make$
+      - regex: (?:^|\.)(?:runMain|runPromise|runPromiseExit|runFork|runSync|runSyncExit|runCallback)$
+---
+id: scripts-start-through-run-main-javascript
+language: javascript
+severity: error
+message: "scripts・tools の入口は @msa/ai/utils/script-output の runMainWith にする。テストから呼ぶ runtime は scriptOutputLayer の上に作る。"
+files:
+  - scripts/**
+  - tools/**
+  - apps/*/scripts/**
+  - libs/*/scripts/**
+ignores:
+  - tools/binary-smoke/decide-probe.ts
+  - tools/checks/lint-probe.ts
+  - tools/checks/task-build-deps.ts
+  - "**/*.test.*"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    any:
+      - regex: ^ManagedRuntime\.make$
+      - regex: (?:^|\.)(?:runMain|runPromise|runPromiseExit|runFork|runSync|runSyncExit|runCallback)$

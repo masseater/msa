@@ -1,3 +1,5 @@
+import htmlDocumentModule from "@msa/ai/utils/html-document";
+
 import htmlModule from "../../utils/html.ts";
 import platform from "../platform/index.ts";
 import exportColors from "./export-colors.ts";
@@ -9,6 +11,7 @@ import sessionGraphModule from "./session-graph.ts";
 import viewCssModule from "./view-css.ts";
 
 const { formatLocalTime } = platform;
+const { htmlDocument } = htmlDocumentModule;
 const { themeCss } = exportColors;
 const { escapeXml } = htmlModule;
 const { renderEntries } = renderEntryModule;
@@ -17,8 +20,7 @@ const { FILTER_MODES, renderTrees } = renderTreeModule;
 const { entryRefs, sessionGraph } = sessionGraphModule;
 const { viewCss } = viewCssModule;
 
-const CONTENT_SECURITY_POLICY =
-  "default-src 'none'; img-src data: http: https:; style-src 'unsafe-inline'; form-action 'none'";
+const IMAGE_SOURCES = ["data:", "http:", "https:"] as const;
 
 const SRCDOC_BASE = '<base href="about:srcdoc">';
 
@@ -59,24 +61,9 @@ const filterControls = (): string =>
 const sidebarOf = (trees: { readonly nodes: string; readonly status: string }): string =>
   `<aside id="sidebar"><div class="sidebar-header"><div class="sidebar-filters">${filterControls()}<label class="sidebar-close" for="sidebar-toggle" title="Close">✕</label></div></div><nav class="tree-container">${trees.nodes}</nav><div class="tree-status">${trees.status}</div></aside>`;
 
-const page = (
-  head: string,
-  css: string,
-  sidebar: string,
-  content: string,
-): string => `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-${head}<meta http-equiv="Content-Security-Policy" content="${CONTENT_SECURITY_POLICY}">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Session Export</title>
-<style>
-${css}
-</style>
-</head>
-<body>
-<input type="checkbox" id="sidebar-toggle" class="visually-hidden">
+const page = (head: string, css: string, sidebar: string, content: string) =>
+  htmlDocument({
+    body: `<input type="checkbox" id="sidebar-toggle" class="visually-hidden">
 <label id="hamburger" for="sidebar-toggle" title="Open sidebar">${HAMBURGER}</label>
 <label id="sidebar-overlay" for="sidebar-toggle"></label>
 <div id="app">
@@ -84,16 +71,18 @@ ${sidebar}
 <main id="content">
 ${content}
 </main>
-</div>
-</body>
-</html>
-`;
+</div>`,
+    head,
+    imageSources: IMAGE_SOURCES,
+    style: css,
+    title: "Session Export",
+  });
 
 const renderPage = (
   sessionData: exportTypesTypes.SessionData,
   templateCss: string,
   { themeName, viewedInSrcdoc }: exportTypesTypes.ExportOptions,
-): string => {
+) => {
   const graph = sessionGraph(sessionData);
   const refs = entryRefs(graph);
   const times = timesOf(sessionData);

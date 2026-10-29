@@ -13,9 +13,9 @@ import {
 import { expect, it } from "vite-plus/test";
 
 import httpServer from "../../libs/testing/src/http-server.ts";
-import captureProcessModule from "../capture-process.ts";
+import testProcess from "./test-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { captureProcess, processRunnerLayer } = testProcess;
 const { closeServers, encodeJson, listen } = httpServer;
 
 const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, processRunnerLayer));

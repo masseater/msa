@@ -1,9 +1,10 @@
+import type scriptOutputTypes from "../libs/ai/src/utils/script-output.types.ts";
 import type captureProcessModule from "./capture-process.ts";
 
 declare namespace captureProcessTypes {
   interface ProcessOptions {
     readonly args: ReadonlyArray<string>;
-    readonly command: string;
+    readonly command: scriptOutputTypes.ScriptCommand;
     readonly cwd: string;
     readonly env?: Readonly<Record<string, string>> | undefined;
   }

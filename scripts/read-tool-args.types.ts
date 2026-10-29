@@ -8,6 +8,7 @@ declare namespace readToolArgsTypes {
     includeRecords: boolean;
     json: boolean;
     modelFilter: string | undefined;
+    output: string;
     sessionsDir: string;
     since: string | undefined;
     text: boolean;

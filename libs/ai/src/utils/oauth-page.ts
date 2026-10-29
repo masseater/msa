@@ -1,4 +1,8 @@
-import { Function } from "effect";
+import htmlDocumentModule from "./html-document.ts";
+import type htmlDocumentTypes from "./html-document.types.ts";
+
+const { escapeHtml, htmlDocument, htmlReply } = htmlDocumentModule;
+
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" aria-hidden="true"><path fill="#F09082" d="M165.29 165.29H517.36V400H400V282.65H165.29Z"/><path fill="#4D9ABF" d="M165.29 282.65H282.65V400H400V517.36H282.65V634.72H165.29Z"/><path fill="#F1BE58" d="M517.36 400H634.72V634.72H517.36Z"/></svg>`;
 
 const PAGE_STYLE = `    :root {
@@ -58,73 +62,57 @@ const PAGE_STYLE = `    :root {
       word-break: break-word;
     }`;
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function renderPage(options: {
   title: string;
   heading: string;
   message: string;
   details?: string | undefined;
-}): string {
-  const title = escapeHtml(options.title);
-  const heading = escapeHtml(options.heading);
-  const message = escapeHtml(options.message);
+}): htmlDocumentTypes.HtmlDocument {
   const details =
     options.details !== undefined && options.details !== ""
-      ? escapeHtml(options.details)
-      : undefined;
+      ? `<div class="details">${escapeHtml(options.details)}</div>`
+      : "";
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
-  <style>
-${PAGE_STYLE}
-  </style>
-</head>
-<body>
-  <main>
-    <div class="logo">${LOGO_SVG}</div>
-    <h1>${heading}</h1>
-    <p>${message}</p>
-    ${details !== undefined && details !== "" ? `<div class="details">${details}</div>` : ""}
-  </main>
-</body>
-</html>`;
-}
-
-function oauthSuccessHtml(message: string): string {
-  return renderPage({
-    heading: "Authentication successful",
-    message,
-    title: "Authentication successful",
+  return htmlDocument({
+    body: `<main>
+  <div class="logo">${LOGO_SVG}</div>
+  <h1>${escapeHtml(options.heading)}</h1>
+  <p>${escapeHtml(options.message)}</p>
+  ${details}
+</main>`,
+    style: PAGE_STYLE,
+    title: options.title,
   });
 }
 
-const oauthErrorHtml: {
-  (details: string | undefined): (message: string) => string;
-  (message: string, details: string | undefined): string;
-} = Function.dual(2, function (message: string, details: string | undefined): string {
-  return renderPage({
-    details,
-    heading: "Authentication failed",
-    message,
-    title: "Authentication failed",
-  });
-});
+const oauthSuccessReply = (status: number, message: string): htmlDocumentTypes.HtmlReply =>
+  htmlReply(
+    status,
+    renderPage({
+      heading: "Authentication successful",
+      message,
+      title: "Authentication successful",
+    }),
+  );
+
+const oauthErrorReply = (
+  status: number,
+  message: string,
+  details?: string,
+): htmlDocumentTypes.HtmlReply =>
+  htmlReply(
+    status,
+    renderPage({
+      details,
+      heading: "Authentication failed",
+      message,
+      title: "Authentication failed",
+    }),
+  );
 
 const oauthPage = {
-  oauthErrorHtml,
-  oauthSuccessHtml,
+  oauthErrorReply,
+  oauthSuccessReply,
 };
 
 export default oauthPage;

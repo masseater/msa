@@ -14,7 +14,7 @@ const { DIRECT_TOKEN_SCOPE, RESOURCE, exchangeAuthorizationCode, refreshAccessTo
   openaiChatgptToken;
 const { getProviderEnvValue } = providerEnv;
 const { randomBytes } = cryptoModule;
-const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+const { oauthErrorReply, oauthSuccessReply } = oauthPage;
 const { startLocalHttpServer } = localHttpServer;
 const { generatePKCE } = pkce;
 
@@ -82,12 +82,6 @@ const authorizationResultFromManualInput = (
     return yield* authorizationResultFromCallback(url, expectedState);
   }).pipe(Effect.catchTag("CallbackError", (error) => Effect.die(new Error(error.message))));
 
-const html = (status: number, body: string): localHttpServerTypes.LocalHttpResponse => ({
-  body,
-  headers: { "content-type": "text/html; charset=utf-8" },
-  status,
-});
-
 interface CallbackListener {
   readonly server: localHttpServerTypes.LocalHttpServer;
   readonly result: Deferred.Deferred<AuthorizationResult>;
@@ -99,24 +93,24 @@ const handleCallback = (
   result: Deferred.Deferred<AuthorizationResult>,
 ): Effect.Effect<localHttpServerTypes.LocalHttpResponse> => {
   if (url.pathname !== CALLBACK_PATH) {
-    return Effect.succeed(html(404, oauthErrorHtml("Callback route not found.", undefined)));
+    return Effect.succeed(oauthErrorReply(404, "Callback route not found.", undefined));
   }
   const error = url.searchParams.get("error");
   if (error !== null && error !== "") {
     return Effect.as(
       Deferred.die(result, new Error(`ChatGPT authorization failed: ${error}`)),
-      html(400, oauthErrorHtml("ChatGPT was not connected.", `Error: ${error}`)),
+      oauthErrorReply(400, "ChatGPT was not connected.", `Error: ${error}`),
     );
   }
   return authorizationResultFromCallback(url, expectedState).pipe(
     Effect.flatMap((authorization) =>
       Effect.as(
         Deferred.succeed(result, authorization),
-        html(200, oauthSuccessHtml("ChatGPT authentication completed. You can close this window.")),
+        oauthSuccessReply(200, "ChatGPT authentication completed. You can close this window."),
       ),
     ),
     Effect.catchTag("CallbackError", (failure) =>
-      Effect.succeed(html(400, oauthErrorHtml(failure.message, undefined))),
+      Effect.succeed(oauthErrorReply(400, failure.message, undefined)),
     ),
   );
 };
@@ -134,7 +128,7 @@ const listenForCallback = (expectedState: string): Effect.Effect<CallbackListene
         handleCallback(request, expectedState, result).pipe(
           Effect.catchDefect(() =>
             Effect.succeed(
-              html(500, oauthErrorHtml("Internal error while processing the callback.", undefined)),
+              oauthErrorReply(500, "Internal error while processing the callback.", undefined),
             ),
           ),
           Effect.flatMap(reply),

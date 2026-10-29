@@ -1,5 +1,6 @@
-import { Console, Effect, Ref, Stream } from "effect";
+import { Effect, Ref, Stream } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import type hostTypes from "./host.types.ts";
 import profileStartupArgs from "./profile-startup-args.ts";
 import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
@@ -12,8 +13,6 @@ import type profileStartupRunsTypes from "./profile-startup-runs.types.ts";
 const { formatMs, nowMs, parseStartupTimings } = profileStartupReport;
 const { fail } = profileStartupArgs;
 const { getStateRequest, handleLine, rpcElapsed } = profileStartupRpc;
-
-const isWindows = process.platform === "win32";
 
 const BUILD_COMMANDS = (bundle: boolean) => [
   {
@@ -48,7 +47,7 @@ const runBuild = (options: {
 }) =>
   Effect.gen(function* () {
     const { bundle, host, repoRoot } = options;
-    yield* Console.log(
+    yield* scriptOutput.print(
       `Building dependencies and the ${bundle ? "bundled" : "unbundled"} coding-agent Node entrypoint...`,
     );
     const startedAt = yield* nowMs;
@@ -58,18 +57,18 @@ const runBuild = (options: {
           args: command.args,
           command: "npm",
           cwd: repoRoot,
-          shell: isWindows,
           stdin: "ignore",
         });
         if (result.exitCode === 0) return;
-        if (result.stdout.trim() !== "") yield* Console.log(withoutTrailingNewline(result.stdout));
+        if (result.stdout.trim() !== "")
+          yield* scriptOutput.print(withoutTrailingNewline(result.stdout));
         if (result.stderr.trim() !== "") {
-          yield* Console.error(withoutTrailingNewline(result.stderr));
+          yield* scriptOutput.printError(withoutTrailingNewline(result.stderr));
         }
         return yield* fail(`${command.label} failed with exit code ${result.exitCode}`);
       }),
     );
-    yield* Console.log(`Build completed in ${formatMs((yield* nowMs) - startedAt)}`);
+    yield* scriptOutput.print(`Build completed in ${formatMs((yield* nowMs) - startedAt)}`);
   });
 
 const benchmarkArgsOf = (mode: profileStartupArgsTypes.Mode): ReadonlyArray<string> =>
@@ -87,14 +86,14 @@ const runtimeCommand = (
   params: profileStartupRunsTypes.RunParams,
   mode: profileStartupArgsTypes.Mode,
   profileName: string,
-) => {
+): Pick<hostTypes.CommandOptions, "args" | "command"> => {
   const benchmarkArgs = benchmarkArgsOf(mode);
   const profileArgs = profileArgsOf(params, profileName);
   if (params.runtime === "bun") {
     return { args: [...profileArgs, params.paths.srcCli, ...benchmarkArgs], command: "bun" };
   }
   const entry = params.options.bundle ? params.paths.bundledDistCli : params.paths.distCli;
-  return { args: [...profileArgs, entry, ...benchmarkArgs], command: process.execPath };
+  return { args: [...profileArgs, entry, ...benchmarkArgs], command: "node" };
 };
 
 const OFFLINE_ENV: Readonly<Record<string, string>> = {
@@ -137,7 +136,6 @@ const spawnBenchmark = (options: {
     ...runtimeCommand(params, options.mode, options.profileName),
     cwd: params.paths.packageDir,
     env: benchmarkEnv(params, options.isolatedAgentDir),
-    shell: isWindows && params.runtime === "bun",
     stderr: "pipe",
     ...CHILD_IO[options.mode],
   });

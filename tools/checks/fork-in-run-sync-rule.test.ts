@@ -2,9 +2,9 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, ManagedRuntime, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import captureProcessModule from "../capture-process.ts";
+import testProcess from "./test-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { captureProcess, processRunnerLayer } = testProcess;
 
 const repoRoot = `${import.meta.dirname}/../..`;
 const rule = `${repoRoot}/tools/rules/no-fork-in-run-sync.yml`;

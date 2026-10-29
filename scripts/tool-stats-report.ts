@@ -2,16 +2,16 @@ import { fileURLToPath } from "node:url";
 
 import { Effect } from "effect";
 
+import htmlDocumentModule from "../libs/ai/src/utils/html-document.ts";
 import hostModule from "./host.ts";
 import toolStatsCharts from "./tool-stats-charts.ts";
 import type toolStatsReportTypes from "./tool-stats-report.types.ts";
 
 const { Host } = hostModule;
+const { htmlDocument } = htmlDocumentModule;
 const { escapeHtml, selectedHistograms, selectionCss, table, totalsChart } = toolStatsCharts;
 
 const STYLESHEETS = ["@picocss/pico/css/pico.min.css", "charts.css/dist/charts.min.css"] as const;
-
-const CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'";
 
 const REPORT_CSS = `
 .charts-css { --color: #60a5fa; font-size: 0.65rem; }
@@ -33,17 +33,7 @@ label:has(> input[type="radio"]) > input { flex-shrink: 0; margin: 0; border-col
 td { vertical-align: middle; }
 `;
 
-const head = (css: string): string => `<!doctype html>
-<html lang="en" data-theme="dark">
-<head>
-	<meta charset="utf-8">
-	<meta http-equiv="Content-Security-Policy" content="${CONTENT_SECURITY_POLICY}">
-	<title>msa Tool Stats</title>
-	<style>${css}</style>
-</head>`;
-
-const markup = (data: toolStatsReportTypes.ReportData): string => `<body>
-	<main class="container">
+const markup = (data: toolStatsReportTypes.ReportData): string => `<main class="container">
 		<h1>msa Tool Stats</h1>
 		<p>${data.files} session files from <code>${escapeHtml(data.sessionsDir)}</code>. Generated ${escapeHtml(data.generatedAt)}.</p>
 		<div class="grid">
@@ -56,9 +46,7 @@ const markup = (data: toolStatsReportTypes.ReportData): string => `<body>
 		</div>
 		<article><h2>Tools</h2>${table("tool", data.tools, data.bucketLabels)}</article>
 		<article><h2>Bash common commands (best effort)</h2>${table("bash", data.bashCommands, data.bucketLabels)}</article>
-	</main>
-</body>
-</html>`;
+</main>`;
 
 const renderReport = (data: toolStatsReportTypes.ReportData) =>
   Effect.gen(function* () {
@@ -72,7 +60,12 @@ const renderReport = (data: toolStatsReportTypes.ReportData) =>
       selectionCss("tool", data.tools),
       selectionCss("bash", data.bashCommands),
     ].join("\n");
-    return `${head(css)}\n${markup(data)}\n`;
+    return htmlDocument({
+      body: markup(data),
+      htmlAttributes: { "data-theme": "dark" },
+      style: css,
+      title: "msa Tool Stats",
+    });
   });
 
 const toolStatsReport = {

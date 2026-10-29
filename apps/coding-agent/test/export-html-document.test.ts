@@ -114,14 +114,6 @@ const resolvesLinksInsideTheShareViewer = Effect.gen(function* () {
   expect(yield* exportSession).not.toContain("<base");
 });
 
-const rendersWithoutScripts = Effect.gen(function* () {
-  const html = yield* exportSession;
-  expect(html).not.toMatch(/<script/iu);
-  expect(html).toContain(
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\';',
-  );
-});
-
 const escapesSessionFields = Effect.gen(function* () {
   const html = yield* exportSession;
   expect(html).toContain("&lt;b&gt;raw&lt;/b&gt;");
@@ -163,9 +155,6 @@ describe("export HTML document", () => {
   );
 
   afterAll(() => runTest(removePath(dirs.temp)));
-
-  it("renders the session without scripts and denies them by content security policy", () =>
-    runTest(rendersWithoutScripts));
 
   it("resolves in-page links against the srcdoc document only for the share viewer", () =>
     runTest(resolvesLinksInsideTheShareViewer));

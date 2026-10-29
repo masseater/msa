@@ -1,10 +1,8 @@
-import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, ManagedRuntime, Path, Schema } from "effect";
+import { Effect, ManagedRuntime, Schema } from "effect";
 
+import scriptOutput from "../../libs/ai/src/utils/script-output.ts";
 import lintConfig from "../../lint.config.ts";
-import captureProcessModule from "../capture-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
 const { lintProbeRoot } = lintConfig;
 
 const LintReport = Schema.fromJsonString(
@@ -34,7 +32,8 @@ const TSCONFIG_ERROR = "typescript(tsconfig-error)";
 
 const lintFiles = (files: readonly string[]) =>
   Effect.gen(function* () {
-    const { stdout } = yield* captureProcess({
+    const { processes } = yield* scriptOutput.ScriptOutput;
+    const { stdout } = yield* processes.run({
       args: ["lint", "--format=json", ...files],
       command: "vp",
       cwd: repoRoot,
@@ -51,9 +50,7 @@ const lintFiles = (files: readonly string[]) =>
     return diagnostics;
   });
 
-const probeRuntime = ManagedRuntime.make(
-  processRunnerLayer.pipe(Layer.provideMerge(NodeServices.layer)),
-);
+const probeRuntime = ManagedRuntime.make(scriptOutput.scriptOutputLayer);
 
 const withProbes = <A, E, R>(
   probes: Readonly<Record<string, string>>,
@@ -61,15 +58,14 @@ const withProbes = <A, E, R>(
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
+      const { files: fs, path, writeTextFile } = yield* scriptOutput.ScriptOutput;
       const parent = path.join(repoRoot, lintProbeRoot);
-      yield* fs.makeDirectory(parent, { recursive: true });
-      const run = yield* fs.makeTempDirectoryScoped({ directory: parent, prefix: "run-" });
+      yield* fs.makeDirectory(parent);
+      const run = yield* fs.makeTempDirectoryScoped("run-", parent);
       const project = path.join(repoRoot, "tsconfig.json");
-      const { include } = yield* Schema.decodeEffect(Project)(yield* fs.readFileString(project));
+      const { include } = yield* Schema.decodeEffect(Project)(yield* fs.readText(project));
       const toRoot = path.relative(run, repoRoot);
-      yield* fs.writeFileString(
+      yield* writeTextFile(
         path.join(run, "tsconfig.json"),
         yield* Schema.encodeEffect(Project)({
           extends: path.relative(run, project),
@@ -78,8 +74,8 @@ const withProbes = <A, E, R>(
       );
       for (const [file, source] of Object.entries(probes)) {
         const target = path.join(run, file);
-        yield* fs.makeDirectory(path.dirname(target), { recursive: true });
-        yield* fs.writeFileString(target, source);
+        yield* fs.makeDirectory(path.dirname(target));
+        yield* writeTextFile(target, source);
       }
       const prefix = `${path.relative(repoRoot, run)}/`;
       const lint = lintFiles(Object.keys(probes).map((file) => `${prefix}${file}`)).pipe(

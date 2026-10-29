@@ -1,7 +1,8 @@
 import { styleText } from "node:util";
 
-import { Console, Effect, Predicate, Ref, Result, Schema, Stream } from "effect";
+import { Effect, Predicate, Ref, Result, Schema, Stream } from "effect";
 
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import type hostTypes from "./host.types.ts";
 
 const MAX_DISPLAY_WIDTH = 100;
@@ -35,7 +36,7 @@ const flushText = (buffer: Ref.Ref<string>) =>
   Effect.gen(function* () {
     const text = yield* Ref.get(buffer);
     if (text.trim() === "") return;
-    yield* Console.log(styleText("dim", `  ${truncateLine(text, MAX_DISPLAY_WIDTH)}`));
+    yield* scriptOutput.print(styleText("dim", `  ${truncateLine(text, MAX_DISPLAY_WIDTH)}`));
     yield* Ref.set(buffer, "");
   });
 
@@ -77,7 +78,7 @@ const announceTool = (options: {
 }) =>
   Effect.andThen(
     flushText(options.buffer),
-    Console.log(styleText("cyan", `  [${options.toolName}] ${describeArgs(options.event)}`)),
+    scriptOutput.print(styleText("cyan", `  [${options.toolName}] ${describeArgs(options.event)}`)),
   );
 
 const endTurn = (buffer: Ref.Ref<string>) => Effect.andThen(flushText(buffer), Ref.set(buffer, ""));
@@ -116,7 +117,7 @@ const runSubagent = (options: {
       );
       const readStderr = child.stderrChunks.pipe(
         Stream.runForEach((chunk) =>
-          Effect.sync(() => process.stderr.write(styleText("red", chunk))),
+          scriptOutput.printError(styleText("red", chunk.replace(/\n$/u, ""))),
         ),
       );
       const [, , exitCode] = yield* Effect.all([readStdout, readStderr, child.exitCode], {
@@ -134,7 +135,7 @@ const runSubagent = (options: {
           Predicate.isString(failure["message"])
             ? failure["message"]
             : String(cause);
-        yield* Console.error(styleText("red", `  Failed to spawn msa: ${message}`));
+        yield* scriptOutput.printError(styleText("red", `  Failed to spawn msa: ${message}`));
         return false;
       }),
     ),

@@ -1,11 +1,11 @@
-import { NodeServices } from "@effect/platform-node";
 import remapping from "@jridgewell/remapping";
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 
-import runMain from "../run-main.ts";
+import scriptOutput from "../../libs/ai/src/utils/script-output.ts";
 import classSealTransform from "./transform.ts";
 
-const { runMainWith } = runMain;
+const { runMainWith } = scriptOutput;
+const { ScriptOutput } = scriptOutput;
 
 class SealDistError extends Schema.TaggedError<SealDistError, { readonly brand: unique symbol }>()(
   "SealDistError",
@@ -16,8 +16,8 @@ type Runtime = { readonly runtime: string; readonly shared: string };
 
 const sealFile = (root: string, file: string, { runtime, shared }: Runtime) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const code = yield* fs.readFileString(file);
+    const { files: fs } = yield* scriptOutput.ScriptOutput;
+    const code = yield* fs.readText(file);
     const sealed = yield* Effect.try({
       catch: (error) => SealDistError.make({ message: String(error) }),
       try: () =>
@@ -29,11 +29,11 @@ const sealFile = (root: string, file: string, { runtime, shared }: Runtime) =>
         }),
     });
     if (sealed === undefined) return;
-    yield* fs.writeFileString(file, sealed.code);
+    yield* (yield* ScriptOutput).writeTextFile(file, sealed.code);
     const mapFile = `${file}.map`;
     if (!(yield* fs.exists(mapFile))) return;
-    const previous = yield* fs.readFileString(mapFile);
-    yield* fs.writeFileString(
+    const previous = yield* fs.readText(mapFile);
+    yield* (yield* ScriptOutput).writeTextFile(
       mapFile,
       remapping([sealed.map.toString(), previous], () => null).toString(),
     );
@@ -41,7 +41,7 @@ const sealFile = (root: string, file: string, { runtime, shared }: Runtime) =>
 
 const compiledFrom = (source: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
+    const { files: fs } = yield* scriptOutput.ScriptOutput;
     return (yield* fs.readDirectory(source, { recursive: true }))
       .filter((file) => file.endsWith(".ts") && !file.endsWith(".d.ts"))
       .map((file) => file.replace(/\.ts$/u, ".js"));
@@ -49,8 +49,7 @@ const compiledFrom = (source: string) =>
 
 const sealDist = (root: string, source: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+    const { files: fs, path } = yield* scriptOutput.ScriptOutput;
     const runtime = path.join(root, "core", "platform", "node", "class-seal.js");
     const shared = path.join(root, "core", "platform", "node", "class-seal-tui.js");
     const candidates = (yield* compiledFrom(source)).map((file) => path.join(root, file));
@@ -62,7 +61,7 @@ const sealDist = (root: string, source: string) =>
       concurrency: 16,
       discard: true,
     });
-    yield* Console.log(`class-seal: ${files.length} files`);
+    yield* scriptOutput.print(`class-seal: ${files.length} files`);
   });
 
 const program = Effect.gen(function* () {
@@ -72,4 +71,4 @@ const program = Effect.gen(function* () {
   yield* sealDist(root, source);
 });
 
-runMainWith(program, NodeServices.layer);
+runMainWith(program, Layer.empty);

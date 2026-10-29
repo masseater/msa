@@ -1,8 +1,7 @@
-import { NodeServices } from "@effect/platform-node";
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
-import { Effect, FileSystem, ManagedRuntime, Path, Schedule, Schema } from "effect";
+import { Effect, ManagedRuntime, Schedule, Schema } from "effect";
 
 const CLASSIFIER = { id: "decide-probe", provider: "local" } as const;
 const PROBE_PROMPT = "decide-probe: create the probe task";
@@ -12,7 +11,11 @@ const VERDICT_POLLS = 600;
 const REVIEWER_OPENING = "You are reviewing work another thread just did";
 const VERDICT = /Review verdict: (?:pass|fail|undecided) \([^\n]*?\)\./u;
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
+import scriptOutput from "../../libs/ai/src/utils/script-output.ts";
+
+const { ScriptOutput } = scriptOutput;
+
+const runtime = ManagedRuntime.make(scriptOutput.scriptOutputLayer);
 
 const EMPTY: aiTypes.Message = { content: "", role: "user", timestamp: 0 };
 
@@ -25,21 +28,20 @@ const firstUserText = (context: aiTypes.TranscriptContext): string =>
   textOf(context.messages.find((message) => message.role === "user") ?? EMPTY);
 
 const resultFile = Effect.gen(function* () {
-  const path = yield* Path.Path;
+  const { path } = yield* scriptOutput.ScriptOutput;
   return path.resolve(PROBE_RESULT_FILE);
 });
 
 const writeVerdict = (verdict: string) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.writeFileString(
+    yield* (yield* ScriptOutput).writeTextFile(
       yield* resultFile,
       yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({ verdict }),
     );
   });
 
 const verdictWritten = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
+  const { files: fs } = yield* scriptOutput.ScriptOutput;
   yield* fs.exists(yield* resultFile).pipe(
     Effect.repeat({
       schedule: Schedule.spaced("500 millis"),
@@ -101,7 +103,7 @@ const reply = (context: aiTypes.TranscriptContext): aiTypes.AssistantMessage => 
 const decideProbe = (msa: codingAgentTypes.ExtensionAPI) => {
   const fixture = runtime.runSync(
     Effect.gen(function* () {
-      const path = yield* Path.Path;
+      const { path } = yield* scriptOutput.ScriptOutput;
       return path.join(import.meta.dirname, ...FIXTURE);
     }),
   );

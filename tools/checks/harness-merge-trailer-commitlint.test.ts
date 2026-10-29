@@ -4,9 +4,9 @@ import { expect, it } from "vite-plus/test";
 
 import pullRequestSquashModule from "../../apps/coding-agent/src/core/orchestrator/pull-request-squash.ts";
 import squashMessageModule from "../../apps/coding-agent/src/core/orchestrator/squash-message.ts";
-import captureProcessModule from "../capture-process.ts";
+import testProcess from "./test-process.ts";
 
-const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { captureProcess, processRunnerLayer } = testProcess;
 const { pullRequestSquash } = pullRequestSquashModule;
 const { textOf } = squashMessageModule;
 

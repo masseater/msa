@@ -1,10 +1,11 @@
 import { homedir } from "node:os";
 import { styleText } from "node:util";
 
-import { Console, Effect, Predicate } from "effect";
+import { Effect, Predicate } from "effect";
 
 import type sessionManagerTypes from "../apps/coding-agent/src/core/session-manager.types.ts";
 import sessionFormat from "../apps/coding-agent/src/core/session-manager/session-format.ts";
+import scriptOutput from "../libs/ai/src/utils/script-output.ts";
 import hostModule from "./host.ts";
 import type hostTypes from "./host.types.ts";
 import sessionTranscriptsAgent from "./session-transcripts-agent.ts";
@@ -94,7 +95,7 @@ const collectTranscripts = (host: hostTypes.HostShape, sessionDir: string) =>
   Effect.gen(function* () {
     const names = yield* host.readDirectory(sessionDir);
     const sessionFiles = [...names.filter((name) => name.endsWith(".jsonl"))].sort();
-    yield* Console.log(`Found ${sessionFiles.length} session files in ${sessionDir}`);
+    yield* scriptOutput.print(`Found ${sessionFiles.length} session files in ${sessionDir}`);
     const transcripts = yield* Effect.forEach(sessionFiles, (file) =>
       Effect.gen(function* () {
         const messages = yield* parseSession(host, host.join(sessionDir, file));
@@ -140,9 +141,11 @@ const writeChunk = (options: {
   Effect.gen(function* () {
     const { chunk, host } = options;
     const filename = transcriptFileName(options.index);
-    yield* host.writeText(host.join(options.outputDir, filename), chunk.content);
+    yield* host.writeTextFile(host.join(options.outputDir, filename), chunk.content);
     const written = `Wrote ${filename} (${chunk.content.length} chars)`;
-    yield* Console.log(chunk.oversized ? styleText("yellow", `${written} - oversized`) : written);
+    yield* scriptOutput.print(
+      chunk.oversized ? styleText("yellow", `${written} - oversized`) : written,
+    );
     return filename;
   });
 
@@ -155,7 +158,7 @@ const writeTranscriptFiles = (
     const outputFiles = yield* Effect.forEach(chunkTranscripts(transcripts), (chunk, index) =>
       writeChunk({ chunk, host, index, outputDir }),
     );
-    yield* Console.log(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
+    yield* scriptOutput.print(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
     return outputFiles;
   });
 
@@ -182,7 +185,7 @@ const reportOutcome = (options: {
     if (options.success && (yield* options.host.exists(options.output))) {
       return yield* options.written;
     }
-    return yield* Console.error(
+    return yield* scriptOutput.printError(
       options.success ? styleText("yellow", options.missing) : styleText("red", options.failed),
     );
   });
@@ -199,7 +202,7 @@ const analyzeFile = (options: {
     const filePath = host.join(outputDir, file);
     const summaryPath = host.join(outputDir, summaryFile);
     const fileContent = yield* host.readText(filePath);
-    yield* Console.log(`Analyzing ${file} (${fileContent.length} chars)...`);
+    yield* scriptOutput.print(`Analyzing ${file} (${fileContent.length} chars)...`);
     const lineCount = fileContent.split("\n").length;
     const success = yield* runSubagent({
       cwd: outputDir,
@@ -212,7 +215,7 @@ const analyzeFile = (options: {
       missing: `  Agent finished but did not write ${summaryFile}`,
       output: summaryPath,
       success,
-      written: Console.log(styleText("green", `  -> ${summaryFile}`)),
+      written: scriptOutput.print(styleText("green", `  -> ${summaryFile}`)),
     });
   });
 
@@ -225,13 +228,15 @@ const aggregate = (options: {
     const { agentsMdFiles, host, outputDir } = options;
     const names = yield* host.readDirectory(outputDir);
     const summaryFiles = [...names.filter((name) => name.endsWith(".summary.txt"))].sort();
-    yield* Console.log("\n=== Individual Analysis Complete ===");
-    yield* Console.log(`Created ${summaryFiles.length} summary files`);
+    yield* scriptOutput.print("\n=== Individual Analysis Complete ===");
+    yield* scriptOutput.print(`Created ${summaryFiles.length} summary files`);
     if (summaryFiles.length === 0) {
-      yield* Console.log(styleText("yellow", "No summary files created. Nothing to aggregate."));
+      yield* scriptOutput.print(
+        styleText("yellow", "No summary files created. Nothing to aggregate."),
+      );
       return;
     }
-    yield* Console.log("\nAggregating findings into final summary...");
+    yield* scriptOutput.print("\nAggregating findings into final summary...");
     const finalSummaryPath = host.join(outputDir, "FINAL-SUMMARY.txt");
     const success = yield* runSubagent({
       cwd: outputDir,
@@ -249,8 +254,8 @@ const aggregate = (options: {
       output: finalSummaryPath,
       success,
       written: Effect.andThen(
-        Console.log(styleText("green", "\n=== Final Summary Created ===")),
-        Console.log(styleText("green", `  ${finalSummaryPath}`)),
+        scriptOutput.print(styleText("green", "\n=== Final Summary Created ===")),
+        scriptOutput.print(styleText("green", `  ${finalSummaryPath}`)),
       ),
     });
   });
@@ -261,23 +266,23 @@ const program = Effect.gen(function* () {
   yield* host.makeDirectory(args.outputDir);
   const sessionDir = host.join(homedir(), ".msa/agent/sessions", cwdToSessionDir(host, args.cwd));
   if (!(yield* host.exists(sessionDir))) {
-    yield* Console.error(`No sessions found for ${args.cwd}`);
-    yield* Console.error(`Expected: ${sessionDir}`);
+    yield* scriptOutput.printError(`No sessions found for ${args.cwd}`);
+    yield* scriptOutput.printError(`Expected: ${sessionDir}`);
     return yield* Effect.sync(() => process.exit(1));
   }
   const transcripts = yield* collectTranscripts(host, sessionDir);
   if (transcripts.length === 0) {
-    yield* Console.error("No transcripts found");
+    yield* scriptOutput.printError("No transcripts found");
     return yield* Effect.sync(() => process.exit(1));
   }
   const outputFiles = yield* writeTranscriptFiles(host, args.outputDir, transcripts);
   if (!args.analyze) {
-    yield* Console.log("\nRun with --analyze to spawn msa subagents for pattern analysis.");
+    yield* scriptOutput.print("\nRun with --analyze to spawn msa subagents for pattern analysis.");
     return;
   }
   const { agentsMdFiles, section } = yield* agentsMdSectionFor(host, args.cwd);
   const prompt = analysisPrompt(section);
-  yield* Console.log("\nSpawning subagents for analysis...");
+  yield* scriptOutput.print("\nSpawning subagents for analysis...");
   yield* Effect.forEach(outputFiles, (file) =>
     analyzeFile({ file, host, outputDir: args.outputDir, prompt }),
   );

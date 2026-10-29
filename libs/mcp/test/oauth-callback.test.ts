@@ -54,9 +54,13 @@ const pages: oauthTypes.OAuthCallbackPage[] = [];
 
 const rendersPages = withCallback(
   {
-    renderPage: (page) => {
+    replyPage: (status, page) => {
       pages.push(page);
-      return page.ok ? "<p>ok</p>" : `<p>${page.message}</p>`;
+      return {
+        body: page.ok ? "<p>ok</p>" : `<p>${page.message}</p>`,
+        headers: { "content-type": "text/html; charset=utf-8" },
+        status,
+      };
     },
   },
   (callback) =>
@@ -93,6 +97,6 @@ describe("OAuthCallbackServer pages", () => {
   it("renders plain text by default", () => Effect.runPromise(rendersPlainText));
   it("rejects a response on another path than the expected one", () =>
     Effect.runPromise(rejectsOtherPath));
-  it("renders pages through renderPage", () => Effect.runPromise(rendersPages));
+  it("replies with the pages replyPage builds", () => Effect.runPromise(rendersPages));
   it("fails to listen on a port that is already taken", () => Effect.runPromise(rejectsTakenPort));
 });

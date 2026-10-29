@@ -27,7 +27,7 @@ const failureMessage = <A, E extends { readonly message: string }, R>(
 const AGGREGATOR_SOURCE = 'import testProviderModels from "./providers/test-provider.models.ts";\n';
 
 const writeFile = (path: string, content: string) =>
-  ScriptFiles.use((files) => files.writeText({ content, path }));
+  ScriptFiles.use((files) => files.writeTextFile({ content, path }));
 
 const readFile = (path: string) => ScriptFiles.use((files) => files.readText(path));
 
