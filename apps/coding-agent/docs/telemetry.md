@@ -31,6 +31,15 @@ podman machine init
 
 At startup msa looks for a container named `msa-grafana-lgtm`. It reuses a running one, starts a stopped one, and creates a missing one from `docker.io/grafana/otel-lgtm:latest`. When `podman ps` fails because the podman machine is down, msa runs `podman machine start` first. The work runs in the background, so startup does not wait for it, and telemetry begins once the collector answers; the first creation also pulls the image.
 
+When the orchestrator judges a review, it waits at most 15 seconds for the default decision model (`local/liquid-d1-3b`, see `decision.model` in [settings](settings.md)). On macOS with a GPU the first pull does not push that judgement past the limit; on Linux without a GPU the judgement goes past the limit with or without the pull. Time one review judgement took:
+
+| Machine                                        | Without podman | During the first pull |
+| ---------------------------------------------- | -------------- | --------------------- |
+| macOS, podman machine (applehv, 5 CPUs)        | 1.99–4.60 s    | 1.98–2.05 s           |
+| Linux without a GPU (4 vCPUs, rootless podman) | 27.5–27.8 s    | 32.1–41.9 s           |
+
+On macOS the image is unpacked inside the podman machine while the model runs on the host GPU. On a Linux machine without a GPU the pull slows the judgement, but the model alone already takes longer than 15 seconds, so those judgements end undecided with or without podman.
+
 The container publishes these ports on `127.0.0.1`:
 
 | Port | Service              |
