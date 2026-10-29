@@ -8,6 +8,20 @@ const { fauxAssistantMessage, validateToolArguments } = ai;
 
 type GoalItemEntry = { item: number; status: "met" | "unmet"; evidence: string };
 
+function argumentsNamed(prompt: string, toolName: string): ReadonlySet<string> {
+  const start = prompt.indexOf(`call ${toolName} `);
+  if (start === -1) return new Set();
+  const rest = prompt.slice(start + `call ${toolName} `.length);
+  const end = rest.search(/\.(\s|$)/u);
+  const sentence = end === -1 ? rest : rest.slice(0, end);
+  return new Set(sentence.split(/[^\w-]+/u).filter((word) => word !== ""));
+}
+
+function requiredOf(schema: object): ReadonlySet<string> {
+  if (!("required" in schema) || !Array.isArray(schema.required)) return new Set();
+  return new Set(schema.required.filter((name): name is string => typeof name === "string"));
+}
+
 export default class FakeWorker implements orchestratorTypes.WorkerSession {
   compaction = { manual: { isCompacting: false } };
   cwd: string;
@@ -132,13 +146,15 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
     items: readonly GoalItemEntry[],
     findings: readonly string[],
   ): Promise<unknown> {
-    const offered: aiTypes.JsonObject = { findings, items };
-    const asked: aiTypes.JsonObject = Object.fromEntries(
-      Object.entries(offered).filter(([name]) => prompt.includes(name)),
-    );
     const tool = this.recordTool();
     if (tool === undefined)
       return Promise.reject(new Error("this thread has no record_goal_items"));
+    const offered: aiTypes.JsonObject = { findings, items };
+    const named = argumentsNamed(prompt, tool.definition.name);
+    const required = requiredOf(tool.definition.parameters);
+    const asked: aiTypes.JsonObject = Object.fromEntries(
+      Object.entries(offered).filter(([name]) => required.has(name) && named.has(name)),
+    );
     try {
       const args: unknown = validateToolArguments(tool.definition, {
         arguments: asked,
