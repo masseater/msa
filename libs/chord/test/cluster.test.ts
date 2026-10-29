@@ -11,7 +11,7 @@ import timing from "./fixtures/timing.ts";
 const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Greeter, GreeterV2, ServerGreeter, greeterFacet, setup } = cluster;
-const { latch, tick } = timing;
+const { latch, pollUntil, tick } = timing;
 
 const preparesEveryHostCommitsTheServer = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -42,7 +42,7 @@ const preparesEveryHostCommitsTheServer = Effect.gen(function* () {
   go.open();
   assert.equal(yield* Effect.promise(() => pinned), "v1 p");
   assert.equal(shapes.length, 1, "one shape push at the commit");
-  for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++) yield* tick;
+  yield* pollUntil(() => worker.previousCodeVersion === undefined, 20, tick);
   assert.equal(server.previousCodeVersion, undefined);
   assert.equal(worker.previousCodeVersion, undefined);
 });
@@ -119,7 +119,7 @@ const coldWorkerIsReconciled = (server: chordTypes.Host, services: Context.Conte
     const [down, up] = memoryLinkPair();
     server.accept(down, { kind: "host", name: "session:cold", principal: { worker: "cold" } });
     cold.connect(up, { principal: { kind: "server" } });
-    for (let i = 0; i < 20 && old.status !== "gone"; i++) yield* tick;
+    yield* pollUntil(() => old.status === "gone", 20, tick);
     assert.equal(old.status, "gone");
     assert.equal(cold.codeVersion, server.codeVersion);
     yield* Effect.promise(() => cold.close());
@@ -175,7 +175,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
   yield* Effect.promise(() =>
     server.reload([], { remoteRemove: { "session:": ["greeter"] }, remove: ["greeter"] }),
   );
-  for (let i = 0; i < 20 && child.status !== "gone"; i++) yield* tick;
+  yield* pollUntil(() => child.status === "gone", 20, tick);
   assert.equal(onServer.status, "gone");
   assert.equal(child.status, "gone");
 
@@ -222,7 +222,7 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
   viewer.onShape((shape) => shapes.push(shape.contract));
   modules.set("greeter", greeterFacet("v2"));
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
-  for (let i = 0; i < 20 && shapes.length === 0; i++) yield* tick;
+  yield* pollUntil(() => shapes.length !== 0, 20, tick);
   assert.equal(shapes.length, 1, "one shape push at the commit");
   assert.equal(yield* Effect.promise(() => viewer.greet("b")), "v2 b");
 
@@ -235,7 +235,7 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
       })),
   });
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
-  for (let i = 0; i < 20 && viewer.status !== "gone"; i++) yield* tick;
+  yield* pollUntil(() => viewer.status === "gone", 20, tick);
   assert.equal(viewer.status, "gone");
   assert.ok(isChordError(viewer.error, "upgrade_required"));
 });

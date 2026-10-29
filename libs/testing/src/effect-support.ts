@@ -10,9 +10,11 @@ import {
   Exit,
 } from "effect";
 
+import childProcesses from "./child-processes.ts";
 import type effectSupportTypes from "./effect-support.types.ts";
 import runtime from "./runtime.ts";
 
+const { childProcessesRunning } = childProcesses;
 const { provideNode, runTest, runTestSync } = runtime;
 
 const clock = Context.get(Context.empty(), Clock.Clock);
@@ -63,11 +65,16 @@ const sleep = (duration: Duration.Input): Effect.Effect<void> => Effect.sleep(du
 const pollUntil = Effect.fn("pollUntil")(function* (
   check: Effect.Effect<boolean>,
   attempts: number,
-  interval: Duration.Input,
+  interval: Duration.Input | Effect.Effect<void>,
 ) {
-  for (let attempt = 0; !(yield* check); attempt++) {
-    if (attempt >= attempts) throw new Error("Condition was not reached");
-    yield* Effect.sleep(interval);
+  const step = Effect.isEffect(interval) ? interval : Effect.sleep(interval);
+  let idle = 0;
+  while (!(yield* check)) {
+    if (!childProcessesRunning()) {
+      if (idle >= attempts) throw new Error("Condition was not reached");
+      idle += 1;
+    }
+    yield* step;
   }
 });
 

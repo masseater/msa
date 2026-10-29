@@ -13,7 +13,7 @@ const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 const { NodeExecutionEnv } = node;
 const { getOrThrow } = envModule;
 
-const { abortController, awaited, toJsonText } = effectSupport;
+const { abortController, awaited, pollUntil, toJsonText } = effectSupport;
 const {
   abortedContext,
   cleanUpEnvTests,
@@ -230,8 +230,7 @@ describe("NodeExecutionEnv shell", () => {
               undefined,
               withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
             );
-            for (let attempt = 0; attempt < 100 && !(yield* pathExists(pidFile)); attempt++)
-              yield* Effect.sleep(10);
+            yield* pollUntil(pathExists(pidFile), 100, 10);
             expect(yield* pathExists(pidFile)).toBe(true);
 
             controller.abort();

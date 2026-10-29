@@ -9,7 +9,7 @@ import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
 
-const { awaited } = testing;
+const { awaited, pollUntil } = testing;
 
 const { bindModeFake } = interactiveModeFake;
 
@@ -40,14 +40,11 @@ const subscribesBeforeReplacementSessionStartHandlers2Setup = () =>
   });
 
 const untilAnswered = (events: readonly string[]) =>
-  Effect.gen(function* () {
-    for (
-      let attempt = 0;
-      attempt < 250 && !events.includes("message_end:assistant:assistant from start");
-      attempt++
-    )
-      yield* Effect.sleep("20 millis");
-  });
+  pollUntil(
+    Effect.sync(() => events.includes("message_end:assistant:assistant from start")),
+    250,
+    "20 millis",
+  );
 
 const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* () {
   const { events, harness, runPromise } =

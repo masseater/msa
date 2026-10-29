@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import memory from "../../src/core/memory/memory.ts";
 import DatabaseSync from "../../src/core/platform/node/sqlite.ts";
 
-const { pathExists } = testing;
+const { pathExists, pollUntil } = testing;
 const { MEMORY_RECALL_MESSAGE_TYPE } = memory;
 
 const fakeGitHubToken = () => `ghp_${"a".repeat(36)}`;
@@ -53,8 +53,7 @@ const operationOf = (request: string): "forget" | "recall" | "save" => {
 
 const waitForFile = (path: string) =>
   Effect.gen(function* () {
-    for (let attempt = 0; attempt < 100 && !(yield* pathExists(path)); attempt++)
-      yield* Effect.sleep("50 millis");
+    yield* pollUntil(pathExists(path), 100, "50 millis");
     return yield* pathExists(path);
   });
 

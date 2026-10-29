@@ -17,7 +17,7 @@ const { zlibCompression } = chordNode;
 const zlibLinks = { compression: zlibCompression };
 
 const { Big, large } = linkModule;
-const { tick } = timing;
+const { pollUntil, tick } = timing;
 
 const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -55,7 +55,7 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
   const big = browser.hold(Big, {});
   assert.deepEqual(yield* Effect.promise(() => big.echo(large("c"))), large("c"));
   big.notes.subscribe(() => {});
-  for (let i = 0; i < 100 && big.notes.value === undefined; i++) yield* Effect.sleep(5);
+  yield* pollUntil(() => big.notes.value !== undefined, 100, Effect.sleep(5));
   assert.deepEqual(big.notes.value, large("a"));
 });
 
@@ -66,7 +66,7 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   a.send({ id: 1, t: "result", value: large("v") });
   a.send({ id: 2, t: "result", value: ["small"] });
   a.send({ as: "snap", hold: 3, m: "notes", t: "state", value: large("s") });
-  for (let i = 0; i < 50 && frames.length < 3; i++) yield* tick;
+  yield* pollUntil(() => frames.length >= 3, 50, tick);
   const [packed, small, snap] = frames;
   assert(packed?.t === "result" && packed.value instanceof Packed);
   assert.deepEqual(unpack(packed.value), large("v"));
@@ -79,7 +79,7 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   const forwarded: chordTypes.Frame[] = [];
   d.receive((frame) => forwarded.push(frame));
   c.send({ ...packed, id: 9 });
-  for (let i = 0; i < 50 && forwarded.length < 1; i++) yield* tick;
+  yield* pollUntil(() => forwarded.length >= 1, 50, tick);
   const relayed = forwarded[0];
   assert(relayed?.t === "result" && relayed.value instanceof Packed);
   assert.deepEqual(relayed.value.bytes, packed.value.bytes);

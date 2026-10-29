@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import delta from "../../src/delta/index.ts";
@@ -9,6 +10,7 @@ import timing from "./timing.ts";
 const { track } = delta;
 
 const { tick } = timing;
+const { pollUntil } = testing;
 
 const retainedSettledObjects: object[] = [];
 const retainedLargePrepared: object[] = [];
@@ -16,13 +18,16 @@ const retainedSettledChanges: object[] = [];
 
 const collect = (ref: WeakRef<object>): Effect.Effect<void> =>
   Effect.gen(function* () {
-    assert.ok(global.gc, "worker requires --expose-gc");
-    for (let attempt = 0; attempt < 30; attempt++) {
-      yield* tick;
-      global.gc();
-      if (ref.deref() === undefined) return;
-    }
-    assert.fail("released change data is still retained");
+    const { gc } = global;
+    assert.ok(gc, "worker requires --expose-gc");
+    yield* pollUntil(
+      Effect.sync(() => {
+        gc();
+        return ref.deref() === undefined;
+      }),
+      30,
+      tick,
+    );
   });
 
 function abortedPayload(

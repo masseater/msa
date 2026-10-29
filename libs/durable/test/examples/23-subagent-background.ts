@@ -5,6 +5,7 @@ import openai from "@msa/ai/providers/openai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
+import testing from "@msa/testing";
 import { Console, Effect } from "effect";
 
 import example23SubagentBackgroundKit from "./23-subagent-background-kit.ts";
@@ -144,9 +145,7 @@ const settle = Effect.fn("settle")(function* ({ harness, root }: Session) {
   yield* Effect.sleep(50);
 });
 
-const until = Effect.fn("until")(function* (check: Effect.Effect<boolean>) {
-  for (let tries = 0; tries < 1000 && !(yield* check); tries++) yield* Effect.sleep(10);
-});
+const until = (check: Effect.Effect<boolean>) => testing.pollUntil(check, 1000, 10);
 
 const working = ({ harness, root }: Session, name: string): Effect.Effect<boolean> =>
   Effect.gen(function* () {

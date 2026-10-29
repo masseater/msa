@@ -13,7 +13,7 @@ import type timingTypes from "./fixtures/timing.types.ts";
 const { createHost, hostNamed, local, memoryLinkPair, method, remote } = chord;
 
 const { Ping, dropping, greeterFacet } = cluster;
-const { latch, tick } = timing;
+const { latch, pollUntil, tick } = timing;
 
 const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -61,7 +61,7 @@ const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
   assert.equal(answer, "pong");
   loading.open();
   yield* Effect.promise(() => reloading);
-  for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++) yield* tick;
+  yield* pollUntil(() => worker.codeVersion === server.codeVersion, 50, tick);
   assert.equal(worker.codeVersion, server.codeVersion);
 });
 
@@ -101,7 +101,7 @@ const aReconnectingChildBehindItsParent = Effect.gen(function* () {
   server.accept(down2, { kind: "host", name: "session:S1", principal: { worker: "w" } });
   const started = yield* Clock.currentTimeMillis;
   worker.connect(up2, { principal: { kind: "server" } });
-  for (let i = 0; i < 400 && worker.codeVersion !== server.codeVersion; i++) yield* Effect.sleep(5);
+  yield* pollUntil(() => worker.codeVersion === server.codeVersion, 400, Effect.sleep(5));
   assert.equal(worker.codeVersion, server.codeVersion);
   const elapsed = (yield* Clock.currentTimeMillis) - started;
   assert.ok(elapsed < 2000, `reconciled after ${elapsed} ms`);
@@ -197,7 +197,7 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
   const browser = connectGuestBrowser(server);
   const call = browser.hold(Slow, {}).wait();
   call.catch(() => {});
-  for (let i = 0; i < 50 && log.length === 0 && worker.codeVersion === 0; i++) yield* tick;
+  yield* pollUntil(() => !(log.length === 0 && worker.codeVersion === 0), 50, tick);
   yield* Effect.sleep(10);
   yield* Effect.promise(() => server.reload([storeFacet(2)]));
   yield* Effect.promise(() => server.reload([storeFacet(3)], { retireDeadline: 20 }));
@@ -208,7 +208,7 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
     ),
   ).pipe(Effect.timeoutOrElse({ duration: 2000, orElse: () => Effect.succeed("pending") }));
   assert.equal(settled, "rejected", "the browser's call is cancelled with its root");
-  for (let i = 0; i < 50 && !log.includes("worker aborted"); i++) yield* tick;
+  yield* pollUntil(() => log.includes("worker aborted"), 50, tick);
   assert.deepEqual(
     log.filter((entry) => entry === "cancel sent" || entry === "server closes 1"),
     ["cancel sent", "server closes 1"],

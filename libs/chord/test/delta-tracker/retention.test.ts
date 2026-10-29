@@ -10,7 +10,12 @@ const { runNode } = platform;
 const validatesRetention = (scenario: string) =>
   Effect.gen(function* () {
     const child = yield* runNode(
-      ["--expose-gc", fileURLToPath(new URL("./retention.worker.ts", import.meta.url)), scenario],
+      [
+        "--conditions=source",
+        "--expose-gc",
+        fileURLToPath(new URL("./retention.worker.ts", import.meta.url)),
+        scenario,
+      ],
       { timeout: "60 seconds" },
     );
     expect(child.status, `${child.stdout}\n${child.stderr}`).toBe(0);

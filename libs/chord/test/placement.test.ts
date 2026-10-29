@@ -20,7 +20,7 @@ const {
   remote,
 } = chord;
 
-const { tick } = timing;
+const { pollUntil, tick } = timing;
 
 const Note = remote("t.note", {
   host: hostFamily("session:", "session"),
@@ -135,12 +135,11 @@ const aHostRefusesAHoldIts = Effect.gen(function* () {
           t: "hello",
         });
         raw.send({ at: target, id: 1, input, t: "hold", token: Note.description });
-        for (
-          let i = 0;
-          i < 50 && !frames.some((frame) => frame.t === "shape" || frame.t === "gone");
-          i++
-        )
-          yield* tick;
+        yield* pollUntil(
+          () => frames.some((frame) => frame.t === "shape" || frame.t === "gone"),
+          50,
+          tick,
+        );
         return frames.find((frame) => frame.t === "shape" || frame.t === "gone");
       }),
     );

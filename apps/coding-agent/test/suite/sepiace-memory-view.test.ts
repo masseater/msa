@@ -1,4 +1,5 @@
 import ai from "@msa/ai";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +10,7 @@ import agentSessionMcpOauthHarness from "./agent-session-mcp-oauth-harness.ts";
 import sepiaceMemorySupport from "./sepiace-memory-support.ts";
 
 const { fauxAssistantMessage } = ai;
+const { pollUntil } = testing;
 const { initTheme } = themeModule;
 const { stripAnsi } = ansi;
 const { runCleanups } = agentSessionMcpOauthHarness;
@@ -72,8 +74,11 @@ const sendsARequestTypedIntoTheView = Effect.gen(function* () {
   view.handleInput(ENTER);
   type("Forget the old address.");
   view.handleInput(ENTER);
-  for (let attempt = 0; attempt < 100 && !screen().includes("got: "); attempt++)
-    yield* Effect.sleep("20 millis");
+  yield* pollUntil(
+    Effect.sync(() => screen().includes("got: ")),
+    100,
+    "20 millis",
+  );
   expect(server.memoryRequests).toEqual(["Forget the old address."]);
   expect(screen()).toContain("got: Forget the old address.");
 });
@@ -93,8 +98,11 @@ const scrollsThroughALongReply = Effect.gen(function* () {
   view.handleInput(ENTER);
   type("long");
   view.handleInput(ENTER);
-  for (let attempt = 0; attempt < 100 && !screen().includes("reply line 1"); attempt++)
-    yield* Effect.sleep("20 millis");
+  yield* pollUntil(
+    Effect.sync(() => screen().includes("reply line 1")),
+    100,
+    "20 millis",
+  );
   expect(screen()).toContain("reply line 1\n");
   expect(screen()).not.toContain("reply line 80");
   for (let page = 0; page < 10; page++) view.handleInput(PAGE_DOWN);
@@ -103,8 +111,11 @@ const scrollsThroughALongReply = Effect.gen(function* () {
 
 const waitForScreen = (screen: () => string, text: string) =>
   Effect.gen(function* () {
-    for (let attempt = 0; attempt < 250 && !screen().includes(text); attempt++)
-      yield* Effect.sleep("20 millis");
+    yield* pollUntil(
+      Effect.sync(() => screen().includes(text)),
+      250,
+      "20 millis",
+    );
     return screen();
   });
 

@@ -201,7 +201,7 @@ const run: NonNullable<UserConfig["run"]> = {
     },
     "code-rules": {
       command:
-        "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-unawaited-test-cleanup.yml apps",
+        "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-unawaited-test-cleanup.yml apps && ast-grep scan --rule tools/rules/no-counted-wait-loop.yml apps libs",
     },
     "daemon-build": {
       cache: {

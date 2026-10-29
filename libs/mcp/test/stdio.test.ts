@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 
+import testing from "@msa/testing";
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +8,7 @@ import mcp from "../src/index.ts";
 import type mcpTypes from "../src/index.types.ts";
 
 const { McpClient, StdioTransport } = mcp;
+const { pollUntil } = testing;
 
 const fixture = fileURLToPath(new URL("./fixtures/stdio-server.mjs", import.meta.url));
 const stubborn = fileURLToPath(new URL("./fixtures/stubborn-server.mjs", import.meta.url));
@@ -44,14 +46,16 @@ const connectsAndCapturesStderr = Effect.gen(function* () {
   expect(client.connectionState).toBe("closed");
 });
 
+const GRANDCHILD = /grandchild (\d+)/u;
+
 const waitForGrandchild = (transport: mcpTypes.StdioTransport) =>
   Effect.gen(function* () {
-    for (let i = 0; i < 100; i++) {
-      const match = /grandchild (\d+)/u.exec(transport.stderr);
-      if (match !== null) return Number(match[1]);
-      yield* Effect.sleep("10 millis");
-    }
-    return undefined;
+    yield* pollUntil(
+      Effect.sync(() => GRANDCHILD.test(transport.stderr)),
+      100,
+      "10 millis",
+    );
+    return Number(GRANDCHILD.exec(transport.stderr)?.[1]);
   });
 
 const killsStubbornServer = Effect.gen(function* () {
@@ -68,12 +72,12 @@ const killsStubbornServer = Effect.gen(function* () {
   const startedAt = yield* Clock.currentTimeMillis;
   yield* Effect.promise(() => client.close());
   expect((yield* Clock.currentTimeMillis) - startedAt).toBeLessThan(5_000);
-  let alive = true;
-  for (let i = 0; i < 100 && alive; i++) {
-    alive = isAlive(grandchild as number);
-    if (alive) yield* Effect.sleep("20 millis");
-  }
-  expect(alive).toBe(false);
+  yield* pollUntil(
+    Effect.sync(() => !isAlive(grandchild)),
+    100,
+    "20 millis",
+  );
+  expect(isAlive(grandchild)).toBe(false);
 });
 
 describe("StdioTransport", () => {

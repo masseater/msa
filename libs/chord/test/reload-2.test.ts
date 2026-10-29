@@ -12,7 +12,7 @@ import timing from "./fixtures/timing.ts";
 const { isChordError } = chord;
 
 const { CountV1, Greeter, greeterFacet, quiet } = reloadModule;
-const { abortOf, latch, tick } = timing;
+const { abortOf, latch, pollUntil, tick } = timing;
 
 const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -177,7 +177,7 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
   yield* tick;
   yield* Effect.promise(() => host.reload([facet(3)], { retireDeadline: 20 }));
   assert.equal(yield* Effect.promise(() => old), "wait");
-  for (let i = 0; i < 50 && !log.includes("close 1"); i++) yield* tick;
+  yield* pollUntil(() => log.includes("close 1"), 50, tick);
   assert.deepEqual(log, ["aborted, conn 1", "close 1"]);
   hold.open();
   assert.equal(yield* Effect.promise(() => current), "held on 2, aborted false");
@@ -208,7 +208,7 @@ const aKeptResourceClosesWithThe = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => ref.greet("x")), "c x");
   assert.deepEqual(log, [], "kept, not reopened");
   ref.release();
-  for (let i = 0; i < 10 && log.length === 0; i++) yield* tick;
+  yield* pollUntil(() => log.length !== 0, 10, tick);
   assert.deepEqual(log, ["close by c"]);
 });
 

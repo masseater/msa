@@ -21,7 +21,7 @@ const {
   webSocketLink,
 } = chord;
 
-const { latch } = timing;
+const { latch, pollUntil } = timing;
 const { zlibCompression } = chordNode;
 
 const Board = remote("t.board", {
@@ -99,7 +99,7 @@ const stampsAcceptedBrowser = (port: number) =>
     board.notes.subscribe((value) => seen.push(value));
     yield* Effect.promise(() => board.add("hello"));
     assert.deepEqual(yield* Effect.promise(() => board.who()), { guest: "web" });
-    for (let i = 0; i < 50 && board.notes.value?.length !== 1; i++) yield* Effect.sleep(5);
+    yield* pollUntil(() => board.notes.value?.length === 1, 50, Effect.sleep(5));
     assert.deepEqual(board.notes.value, ["hello"]);
     assert.deepEqual(seen.at(-1), ["hello"]);
     yield* Effect.promise(() => browser.close());
@@ -162,7 +162,7 @@ const deliversPackedPayloads = (url: string, notes: string[]) =>
     const board = browser.hold(Board, {});
     assert.deepEqual(yield* Effect.promise(() => board.who()), notes);
     board.notes.subscribe(() => {});
-    for (let i = 0; i < 100 && board.notes.value === undefined; i++) yield* Effect.sleep(5);
+    yield* pollUntil(() => board.notes.value !== undefined, 100, Effect.sleep(5));
     assert.deepEqual(board.notes.value, notes);
     assert(binary.length >= 2, "the result and the snapshot came as binary messages");
     const frames = binary.map(

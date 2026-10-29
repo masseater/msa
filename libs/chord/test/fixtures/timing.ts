@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-
+import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -20,10 +19,7 @@ const pollUntil: {
 } = dual(
   3,
   (check: () => boolean, attempts: number, step: Effect.Effect<void>): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      for (let attempt = 0; attempt < attempts && !check(); attempt++) yield* step;
-      assert.ok(check(), "condition not reached");
-    }),
+    testing.pollUntil(Effect.sync(check), attempts, step),
 );
 
 const latch = <T = void>(): timingTypes.Latch<T> => {

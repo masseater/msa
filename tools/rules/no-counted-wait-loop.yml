@@ -1,0 +1,48 @@
+id: no-counted-wait-loop
+language: typescript
+severity: error
+message: "条件が成り立つまで回数を数えて待つループを自前で書かず、@msa/testing の pollUntil（間隔か 1 歩ぶんの Effect を渡せる）を使う。pollUntil は子プロセスが動いている間を回数に数えないので、子プロセスが遅いだけで待ちが尽きることがない。"
+files:
+  - apps/*/test/**
+  - libs/*/test/**
+  - libs/*/src/testing/**
+utils:
+  waits:
+    has:
+      stopBy: end
+      any:
+        - kind: yield_expression
+          regex: ^yield\*\s*(Effect\.(sleep|yieldNow)|TestClock\.adjust|sleep|delay|pause|advance|ticks?|nextImmediate|step)\b
+        - kind: await_expression
+          regex: ^await\s+(sleep|delay|pause|setTimeoutPromise|new Promise)\b
+  exits-early:
+    has:
+      stopBy: end
+      any:
+        - kind: return_statement
+        - kind: break_statement
+  counts:
+    has:
+      stopBy: end
+      kind: update_expression
+rule:
+  any:
+    - all:
+        - kind: for_statement
+        - has:
+            field: condition
+            kind: binary_expression
+        - matches: waits
+        - any:
+            - has:
+                field: condition
+                stopBy: end
+                kind: binary_expression
+                regex: "&&"
+            - matches: exits-early
+    - all:
+        - any:
+            - kind: while_statement
+            - kind: do_statement
+        - matches: waits
+        - matches: counts

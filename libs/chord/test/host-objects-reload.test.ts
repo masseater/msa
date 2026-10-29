@@ -15,7 +15,7 @@ const { createHost, isChordError, local, memoryLinkPair, method } = chord;
 
 const { Read, ReadV1, ReadV2, SwitchV1, SwitchV2, SwitchV3, readerV1, readerV2, switchFacets } =
   hostObjectsReload;
-const { tick } = timing;
+const { pollUntil, tick } = timing;
 
 const theHostSReferenceToA = Effect.gen(function* () {
   const errors: unknown[] = [];
@@ -239,7 +239,7 @@ const aReloadThatChangesAType = Effect.gen(function* () {
     yield* Effect.promise(() => host.ready());
     assert.deepEqual(log, ["open host"], "created by the reload that made it a host object");
     yield* Effect.promise(() => host.reload([facet("referenced")]));
-    for (let i = 0; i < 50 && log.length < 2; i++) yield* Effect.sleep(5);
+    yield* pollUntil(() => log.length >= 2, 50, Effect.sleep(5));
     assert.deepEqual(log, ["open host", "close"], "nobody else references it: disposed");
   }).pipe(Effect.ensuring(Effect.promise(() => host.close())));
 });
