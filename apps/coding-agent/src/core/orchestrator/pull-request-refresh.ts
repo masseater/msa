@@ -19,24 +19,33 @@ function heldByAnother(runtime: runtimeTypes.Runtime, taskId: string, branch: st
     .some((pull) => pull.branch === branch && pull.taskId !== taskId);
 }
 
+interface Read {
+  pull: PullView | undefined;
+  unread?: Omit<orchestratorTypesTypes.UnreadPullRequest, "taskId"> | undefined;
+}
+
 function readCurrent(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   recorded: PullRequest | undefined,
-): Effect.Effect<PullView | undefined> {
+): Effect.Effect<Read> {
   return Effect.gen(function* () {
+    let unread: Read["unread"];
     const owner = yield* pullRequests.ownerOf(runtime, task);
     if (owner !== undefined) {
-      if (heldByAnother(runtime, task.id, owner.branch)) return undefined;
+      if (heldByAnother(runtime, task.id, owner.branch)) return { pull: undefined };
       const found = yield* Effect.result(pullRequests.current(runtime, owner));
-      if (Result.isSuccess(found) && found.success !== undefined) return found.success;
+      if (Result.isSuccess(found) && found.success !== undefined) return { pull: found.success };
+      if (Result.isFailure(found)) {
+        unread = { branch: owner.branch, error: found.failure.message };
+      }
     }
-    if (recorded === undefined || recorded.state !== "OPEN") return undefined;
+    if (recorded === undefined || recorded.state !== "OPEN") return { pull: undefined, unread };
     const viewed = yield* Effect.result(pullRequests.view(runtime, task.cwd, recorded.number));
     if (Result.isFailure(viewed) || viewed.success.headRefName !== recorded.branch) {
-      return undefined;
+      return { pull: undefined };
     }
-    return viewed.success;
+    return { pull: viewed.success };
   });
 }
 
@@ -47,18 +56,19 @@ function refreshWhen(
   taskId: string,
   wanted: (pull: PullView) => boolean,
   write: runtimeTypes.Write = inPlace,
-): Effect.Effect<PullRequest | undefined> {
+): Effect.Effect<{ record: PullRequest | undefined; unread: Read["unread"] }> {
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, taskId);
-    if (task === undefined) return undefined;
+    if (task === undefined) return { record: undefined, unread: undefined };
     const recorded = store.pullRequestOf(runtime.database, task.id);
-    const pull = yield* readCurrent(runtime, task, recorded);
-    if (pull === undefined || !wanted(pull)) return recorded;
+    const { pull, unread } = yield* readCurrent(runtime, task, recorded);
+    if (pull === undefined || !wanted(pull)) return { record: recorded, unread };
     const verified = recorded?.number === pull.number ? recorded.verified : null;
     const now = yield* nowMillis;
-    return yield* write(
+    const record = yield* write(
       Effect.sync(() => pullRequests.save(runtime, task.id, pull, verified, now, true)),
     );
+    return { record, unread: undefined };
   });
 }
 
@@ -67,7 +77,20 @@ function refresh(
   taskId: string,
   write: runtimeTypes.Write = inPlace,
 ): Effect.Effect<PullRequest | undefined> {
-  return refreshWhen(runtime, taskId, () => true, write);
+  return Effect.map(
+    refreshWhen(runtime, taskId, () => true, write),
+    (read) => read.record,
+  );
+}
+
+function refreshOrUnread(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+): Effect.Effect<orchestratorTypesTypes.UnreadPullRequest | undefined> {
+  return Effect.map(
+    refreshWhen(runtime, taskId, () => true),
+    ({ unread }) => (unread === undefined ? undefined : { ...unread, taskId }),
+  );
 }
 
 function refreshEnd(
@@ -75,9 +98,12 @@ function refreshEnd(
   taskId: string,
   write: runtimeTypes.Write = inPlace,
 ): Effect.Effect<PullRequest | undefined> {
-  return refreshWhen(runtime, taskId, (pull) => pull.state.toUpperCase() !== "OPEN", write);
+  return Effect.map(
+    refreshWhen(runtime, taskId, (pull) => pull.state.toUpperCase() !== "OPEN", write),
+    (read) => read.record,
+  );
 }
 
-const pullRequestRefresh = { refresh, refreshEnd };
+const pullRequestRefresh = { refresh, refreshEnd, refreshOrUnread };
 
 export default pullRequestRefresh;

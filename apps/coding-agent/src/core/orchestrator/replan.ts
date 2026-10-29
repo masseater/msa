@@ -128,6 +128,7 @@ function abortedResult(reason: string): orchestratorTypesTypes.ReplanResult {
     rewired: [],
     started: [],
     stopped: [],
+    unread: [],
     untracked: [],
   };
 }

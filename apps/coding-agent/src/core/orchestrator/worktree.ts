@@ -1,40 +1,21 @@
 import { Effect } from "effect";
 
-import exec from "../exec.ts";
 import platformPath from "../platform/path.ts";
 import errors from "./errors.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import taskCwd from "./task-cwd.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
+import worktreeGit from "./worktree-git.ts";
 
 const { orchestratorError } = errors;
-const { execCommand } = exec;
 const { store } = storeModule;
-
-const GIT_TIMEOUT_MS = 60_000;
-
-interface GitResult {
-  ok: boolean;
-  output: string;
-}
+const { git, hasOrigin, headOf, isWorkTree } = worktreeGit;
 
 interface Repository {
   commonDir: string;
   root: string;
   prefix: string;
-}
-
-function git(cwd: string, args: readonly string[]): Effect.Effect<GitResult> {
-  return Effect.tryPromise({
-    catch: orchestratorError,
-    try: () => execCommand("git", [...args], cwd, { timeout: GIT_TIMEOUT_MS }),
-  }).pipe(
-    Effect.map((result) => ({
-      ok: result.code === 0,
-      output: (result.code === 0 ? result.stdout : result.stderr).trim(),
-    })),
-    Effect.orElseSucceed(() => ({ ok: false, output: "" })),
-  );
 }
 
 function required(
@@ -65,23 +46,6 @@ function worktreePath(repository: Repository, branch: string): string {
     platformPath.dirname(repository.root),
     `${platformPath.basename(repository.root)}-${branch.replace(/^task\//u, "").replaceAll("/", "-")}`,
   );
-}
-
-function headOf(cwd: string): Effect.Effect<string | undefined> {
-  return Effect.map(git(cwd, ["rev-parse", "HEAD"]), (result) =>
-    result.ok ? result.output : undefined,
-  );
-}
-
-function isWorkTree(cwd: string): Effect.Effect<boolean> {
-  return Effect.map(
-    git(cwd, ["rev-parse", "--is-inside-work-tree"]),
-    (result) => result.ok && result.output === "true",
-  );
-}
-
-function hasOrigin(cwd: string): Effect.Effect<boolean> {
-  return Effect.map(git(cwd, ["remote", "get-url", "origin"]), (result) => result.ok);
 }
 
 function repositoryOf(cwd: string): Effect.Effect<Repository | undefined> {
@@ -246,8 +210,9 @@ function cleanUp(
 function prepare(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
-): Effect.Effect<orchestratorTypesTypes.Workspace, runtimeTypes.OrchestratorError> {
+): Effect.Effect<orchestratorTypesTypes.Workspace, runtimeTypes.WorkspaceError> {
   return Effect.gen(function* () {
+    yield* taskCwd.requireStartable(task);
     const unmanaged = {
       branch: null,
       cwd: task.cwd,

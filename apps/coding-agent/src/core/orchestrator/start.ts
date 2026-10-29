@@ -4,6 +4,7 @@ import errors from "./errors.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import taskCwd from "./task-cwd.ts";
 import threadPlanModule from "./thread-plan.ts";
 import threadTools from "./thread-tools.ts";
 import threadWorkspace from "./thread-workspace.ts";
@@ -29,6 +30,18 @@ function failThread(
   store.setTaskStatus(runtime.database, task.id, "failed", now);
   runtime.publish();
   runtime.options.report(message, { role, started: [], status: "failed", taskId: task.id });
+}
+
+function refuseStart(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
+  message: string,
+  now: number,
+): void {
+  store.setTaskStatus(runtime.database, task.id, "stopped", now);
+  runtime.publish();
+  runtime.options.report(message, { role, started: [], status: "stopped", taskId: task.id });
 }
 
 function insertRunningThread(
@@ -78,6 +91,11 @@ function openWorkspace(
     const prepared = yield* Effect.result(
       threadWorkspace.prepare(runtime, task, role, plan.threadId),
     );
+    if (Result.isFailure(prepared) && taskCwd.isUncheckable(prepared.failure)) {
+      yield* Effect.sync(() => refuseStart(runtime, task, role, prepared.failure.message, now));
+      return undefined;
+    }
+    yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
     if (Result.isFailure(prepared)) {
       yield* Effect.sync(() =>
         failThread(runtime, plan.threadId, task, role, now, prepared.failure.message),
@@ -108,7 +126,6 @@ function openWorker(
 ): Effect.Effect<OpenedWorker | undefined, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
-    yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
     const workspace = yield* openWorkspace(runtime, plan, task, role, now);
     if (workspace === undefined) return undefined;
     const telemetry = runtime.telemetry.threadStarted(
@@ -215,7 +232,7 @@ function startTasks(
   );
 }
 
-const starting = { failThread, launch, launchPlan, startTasks, threadModel };
+const starting = { failThread, launch, launchPlan, refuseStart, startTasks, threadModel };
 
 const start = {
   starting,

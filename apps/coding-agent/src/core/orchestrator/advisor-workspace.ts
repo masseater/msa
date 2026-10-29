@@ -95,7 +95,7 @@ function prepare(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   threadId: string,
-): Effect.Effect<orchestratorTypesTypes.Workspace, runtimeTypes.OrchestratorError> {
+): Effect.Effect<orchestratorTypesTypes.Workspace, runtimeTypes.WorkspaceError> {
   return Effect.gen(function* () {
     const source = yield* worktrees.prepare(runtime, task);
     const snapshot = yield* worktreeSnapshot.take(source.cwd);

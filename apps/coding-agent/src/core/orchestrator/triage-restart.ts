@@ -17,7 +17,7 @@ function launchTriage(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   ask: triageTypes.Ask,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+): Effect.Effect<boolean, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const earlier = yield* triageMemory.earlier(runtime, ask);
     const threadId = yield* starting.startTasks(
@@ -28,7 +28,9 @@ function launchTriage(
       triagePrompts.requestBlocks(ask.request, earlier),
     );
     const now = yield* nowMillis;
-    if (threadId !== undefined) store.saveTriageAsk(runtime.database, threadId, ask, now);
+    if (threadId === undefined) return false;
+    store.saveTriageAsk(runtime.database, threadId, ask, now);
+    return true;
   });
 }
 

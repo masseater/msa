@@ -26,21 +26,24 @@ function stillWaiting(
   return task.status === "waiting";
 }
 
+const isId = (threadId: string | undefined): boolean => threadId !== undefined;
+
 function startOver(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   wait: orchestratorTypesTypes.ProviderWait,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
-  if (wait.role !== "triage") return Effect.asVoid(starting.startTasks(runtime, task, wait.role));
+): Effect.Effect<boolean, runtimeTypes.OrchestratorError> {
+  if (wait.role !== "triage")
+    return Effect.map(starting.startTasks(runtime, task, wait.role), isId);
   const ask = store.takeTriageAsk(runtime.database, wait.threadId);
-  return ask === undefined ? Effect.void : triageRestart.launchTriage(runtime, task, ask);
+  return ask === undefined ? Effect.succeed(false) : triageRestart.launchTriage(runtime, task, ask);
 }
 
 function resumeTask(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   wait: orchestratorTypesTypes.ProviderWait,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+): Effect.Effect<boolean, runtimeTypes.OrchestratorError> {
   const { database } = runtime;
   store.deleteProviderWait(database, wait.taskId);
   store.markProviderResumed(database, task.id, wait.reason);
@@ -59,7 +62,7 @@ function resumeTask(
     sessionFile: wait.sessionFile,
     threadId,
   };
-  return Effect.asVoid(starting.launchPlan(runtime, plan, task, wait.role));
+  return Effect.map(starting.launchPlan(runtime, plan, task, wait.role), isId);
 }
 
 function resumeDue(
@@ -84,8 +87,7 @@ function resumeDue(
           continue;
         }
       }
-      yield* resumeTask(runtime, task, wait);
-      started.push(task.id);
+      if (yield* resumeTask(runtime, task, wait)) started.push(task.id);
     }
     return started;
   });

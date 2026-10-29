@@ -32,13 +32,13 @@ function scheduleEffect(
     free -= started.length;
     for (const task of store.readyTasks(database, project, "work")) {
       if (free <= 0) break;
-      yield* starting.startTasks(runtime, task, "worker");
+      if ((yield* starting.startTasks(runtime, task, "worker")) === undefined) continue;
       started.push(task.id);
       free--;
     }
     for (const review of store.readyTasks(database, project, "review")) {
       if (free <= 0) break;
-      yield* starting.startTasks(runtime, review, "reviewer");
+      if ((yield* starting.startTasks(runtime, review, "reviewer")) === undefined) continue;
       started.push(review.id);
       free--;
     }

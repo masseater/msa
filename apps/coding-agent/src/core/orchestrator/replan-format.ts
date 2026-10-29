@@ -51,6 +51,10 @@ function pullRequestLines(result: ReplanResult): string[] {
       "Closed tasks that ran outside a git working tree (they had no branch, so the harness tracked no pull request of theirs and hands none over; close any pull request one of them opened, and a task that continues its work opens its own pull request from its own branch)",
       result.untracked.map((item) => `${item.taskId} in ${item.cwd}`),
     ),
+    ...section(
+      "Pull requests of closed tasks that GitHub did not answer for (the harness could not tell whether one is open, so it handed none over; look at the branch, close an open pull request there, and a task that continues its work opens its own pull request from its own branch)",
+      result.unread.map((item) => `${item.taskId} on ${item.branch}: ${item.error}`),
+    ),
   ];
 }
 
