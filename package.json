@@ -5,19 +5,17 @@
   "type": "module",
   "scripts": {
     "clean": "vp run -r clean",
-    "build": "vp run -r --concurrency-limit 1 build",
+    "build": "vp run -r --cache --concurrency-limit 1 build",
     "build:offline": "vp run --filter @msa/ai build:offline && vp run --filter '!msa-monorepo' --filter '!@msa/ai' --concurrency-limit 1 build",
     "build:native:darwin": "vp run --filter @msa/tui build:native:darwin",
     "build:native:linux": "vp run --filter @msa/tui build:native:linux",
     "build:native:win32": "vp run --filter @msa/tui build:native:win32",
-    "fallow": "fallow --skip dupes --fail-on-issues --quiet --format compact && fallow dead-code --no-production --fail-on-issues --quiet --format compact && fallow dead-code --no-production --quiet --format json | jq -e '[.prop_drilling_chains, .thin_wrappers, .duplicate_prop_shapes] | all(length == 0)' > /dev/null && fallow dupes --fail-on-issues --quiet --format compact && fallow security --fail-on-issues --quiet",
     "generate:models": "vp run --filter @msa/ai generate-models",
     "hydrate:model-data": "vp run --filter @msa/ai hydrate-model-data",
     "generate:model-catalog": "vp run --filter @msa/ai generate-model-catalog",
     "eval": "vp run --filter @msa/evals eval",
     "profile:tui": "node scripts/profile-coding-agent-node.ts --mode tui",
     "profile:rpc": "node scripts/profile-coding-agent-node.ts --mode rpc",
-    "test:mcp-conformance": "node --import ./apps/coding-agent/src/experimental/source-resolver.ts apps/coding-agent/test/mcp-conformance/run.ts",
     "prepare": "vp config --no-agent && effect-tsgo patch --oxlint && skills experimental_install --force"
   },
   "devDependencies": {

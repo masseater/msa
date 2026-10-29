@@ -21,6 +21,10 @@ declare namespace taskCommandTypes {
     readonly recursive: boolean;
   }
 
+  type TaskCommand = string | ReadonlyArray<string>;
+
+  type TaskEntry = TaskCommand | { readonly command: TaskCommand };
+
   interface PackageEntry {
     readonly exports: Readonly<Record<string, ExportTarget>> | undefined;
     readonly main: string | undefined;

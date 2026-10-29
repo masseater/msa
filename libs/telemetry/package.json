@@ -49,7 +49,6 @@
   },
   "scripts": {
     "clean": "shx rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
     "test": "vitest --run"
   },
   "dependencies": {

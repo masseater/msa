@@ -11,6 +11,7 @@ declare namespace taskBuildDepsTypes {
     readonly command: string;
     readonly cwd: string;
     readonly dependsOn: ReadonlyArray<string>;
+    readonly inputs?: ReadonlyArray<string> | undefined;
   }
 
   type Tasks = Readonly<Record<string, TaskDef>>;
@@ -46,6 +47,7 @@ declare namespace taskBuildDepsTypes {
   interface Step {
     readonly built: boolean;
     readonly cwd: string;
+    readonly inputs?: ReadonlyArray<string> | undefined;
     readonly via: ReadonlyArray<string>;
     readonly workspace: Workspace;
   }
@@ -70,6 +72,7 @@ declare namespace taskBuildDepsTypes {
 
   interface VitestRun {
     readonly cwd: string;
+    readonly inputs?: ReadonlyArray<string> | undefined;
     readonly projects: ReadonlyArray<string>;
   }
 

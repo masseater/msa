@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  verify:
+  checks:
+    name: checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,11 +23,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
-          sudo ln -s "$(which fdfind)" /usr/local/bin/fd
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           node-version-file: .node-version
@@ -35,23 +31,103 @@ jobs:
             - args: ['--frozen-lockfile']
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          enable-cache: false
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+          enable-cache: true
+          cache-dependency-glob: run.config.ts
+          ignore-nothing-to-cache: true
+      - id: task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          toolchain: 1.96.0
-          components: rustfmt, clippy
-          build-warnings: ""
-          cache-workspaces: libs/env/daemon
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-          cache: false
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vite-task-${{ runner.os }}-${{ runner.arch }}-checks-
       - name: Hydrate model data
         run: vp run hydrate:model-data
-      - run: vp run --log grouped verify
+      - run: vp run --log grouped checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: success() || failure()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+
+  test:
+    name: test ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: fd-find ripgrep
+          version: "1"
+      - run: sudo ln -s "$(which fdfind)" /usr/local/bin/fd
+      - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
+        with:
+          node-version-file: .node-version
+          run-install: false
+      - id: store-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-store-test-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: vp install --frozen-lockfile --filter '!@msa/web'
+      - if: steps.store-cache.outputs.cache-hit != 'true' && matrix.shard == 1
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/share/pnpm/store
+          key: ${{ steps.store-cache.outputs.cache-primary-key }}
+      - id: task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-test-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vite-task-${{ runner.os }}-${{ runner.arch }}-test-${{ matrix.shard }}-
+      - id: module-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vitest-cache
+          key: vitest-modules-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vitest-modules-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Hydrate model data
+        run: vp run hydrate:model-data
+      - run: vp run --log labeled test-deps
+      - run: bash test.sh
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ github.token }}
           MSA_LOCAL_LLM_TESTS: "1"
+          MSA_TEST_SHARD: ${{ matrix.shard }}/10
+      - if: success() || failure()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+      - if: success() || failure()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vitest-cache
+          key: ${{ steps.module-cache.outputs.cache-primary-key }}
+
+  verify:
+    needs: [checks, test]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - env:
+          CHECKS: ${{ needs.checks.result }}
+          TEST: ${{ needs.test.result }}
+        run: |
+          echo "checks=$CHECKS test=$TEST"
+          [ "$CHECKS" = success ] && [ "$TEST" = success ]
 
   binary:
     runs-on: ubuntu-latest
@@ -117,7 +193,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
   ci-telemetry:
-    needs: [verify, binary, deploy]
+    needs: [checks, test, verify, binary, deploy]
     if: always()
     runs-on: ubuntu-latest
     permissions:

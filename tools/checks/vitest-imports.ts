@@ -2,12 +2,16 @@ import { Effect, Result } from "effect";
 import { createVitest } from "vite-plus/test/node";
 import type { TestProject } from "vite-plus/test/node";
 
+import inputPatterns from "./input-patterns.ts";
 import type vitestImportsTypes from "./vitest-imports.types.ts";
+
+const { coverageOf } = inputPatterns;
 
 type Options = vitestImportsTypes.Options;
 type Problems = Effect.Effect<ReadonlyArray<string>>;
 
 interface Visit {
+  readonly covers: ((file: string) => boolean) | undefined;
   readonly mocked: ReadonlySet<string>;
   readonly options: Options;
   readonly project: TestProject;
@@ -24,6 +28,7 @@ const entriesOf = (project: TestProject) =>
     Effect.promise(() => project.globTestFiles()),
     ({ testFiles }) => [
       ...testFiles,
+      ...asArray(project.vite.config.configFile),
       ...asArray(project.config.setupFiles),
       ...asArray(project.config.globalSetup),
     ],
@@ -75,6 +80,13 @@ function follow(visit: Visit, spec: string, importer: string): Problems {
   });
 }
 
+const uncovered = (visit: Visit, file: string): ReadonlyArray<string> =>
+  visit.covers === undefined ||
+  !isSource(visit.options, file) ||
+  visit.covers(visit.options.relative(file))
+    ? []
+    : [`${visit.options.relative(file)} is imported but is not in the cache inputs of the task`];
+
 const visitKey = (visit: Visit, file: string): string =>
   `${[...visit.mocked].toSorted().join(",")}|${file}`;
 
@@ -87,34 +99,38 @@ function visitFile(visit: Visit, file: string): Problems {
     const imports = yield* visit.options.importsOf(file, text);
     const followed = yield* Effect.forEach(imports.specs, (spec) => follow(visit, spec, file));
     const children = yield* visit.options.childProblems(file, text);
-    return [...imports.problems, ...followed.flat(), ...children];
+    return [...uncovered(visit, file), ...imports.problems, ...followed.flat(), ...children];
   });
 }
 
-const visitEntry = (options: Options, project: TestProject, seen: Set<string>, entry: string) =>
-  Effect.flatMap(options.readText(entry), (text) =>
+type Walk = Pick<Visit, "covers" | "options" | "project" | "seen">;
+
+const visitEntry = (walk: Walk, entry: string) =>
+  Effect.flatMap(walk.options.readText(entry), (text) =>
     visitFile(
       {
+        ...walk,
         mocked: new Set([...text.matchAll(MOCK_WITH_FACTORY)].map((match) => match[1] ?? "")),
-        options,
-        project,
-        seen,
       },
       entry,
     ),
   );
 
-const projectProblems = (options: Options, project: TestProject): Problems =>
+const projectProblems = (
+  options: Options,
+  covers: Visit["covers"],
+  project: TestProject,
+): Problems =>
   Effect.gen(function* () {
-    const seen = new Set<string>();
+    const walk = { covers, options, project, seen: new Set<string>() };
     const entries = yield* entriesOf(project);
-    const problems = yield* Effect.forEach(entries, (entry) =>
-      visitEntry(options, project, seen, entry),
-    );
+    const problems = yield* Effect.forEach(entries, (entry) => visitEntry(walk, entry), {
+      concurrency: 8,
+    });
     return problems.flat().map((problem) => `[${project.name}] ${problem}`);
   });
 
-const violations = (options: Options): Problems =>
+const walkProjects = (options: Options, covers: Visit["covers"]): Problems =>
   Effect.acquireUseRelease(
     Effect.promise(() =>
       createVitest({
@@ -126,11 +142,19 @@ const violations = (options: Options): Problems =>
     ),
     (vitest) =>
       Effect.map(
-        Effect.forEach(vitest.projects, (project) => projectProblems(options, project)),
+        Effect.forEach(vitest.projects, (project) => projectProblems(options, covers, project)),
         (problems) => problems.flat(),
       ),
     (vitest) => Effect.promise(() => vitest.close()),
   );
+
+const violations = (options: Options): Problems => {
+  if (options.inputs === undefined) return walkProjects(options, undefined);
+  const coverage = coverageOf(options.inputs);
+  return "problem" in coverage
+    ? Effect.succeed([coverage.problem])
+    : walkProjects(options, coverage.covers);
+};
 
 const vitestImports = { violations };
 

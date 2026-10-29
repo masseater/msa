@@ -31,6 +31,7 @@ const READS_NO_DIST: ReadonlyArray<ReadonlyArray<string>> = [
   ["syncpack"],
   ["test"],
   ["uvx"],
+  ["vp", "check"],
   ["vp", "pm", "audit"],
 ];
 const NODE_OPTIONS = "NODE_OPTIONS";
@@ -133,7 +134,7 @@ function vpTest(call: Call): Effect.Effect<Checked> {
   const projects = vitestProjects(args[0] === "run" ? args.slice(1) : args, []);
   if (typeof projects === "string")
     return refuse(call, `${projects} is not a vp test option this check knows`);
-  const run = { cwd: call.step.cwd, projects };
+  const run = { cwd: call.step.cwd, inputs: call.step.inputs, projects };
   return Effect.map(call.graph.walkVitest(run, labelOf(call.step, call.text)), (problems) =>
     ok(call.step, problems),
   );
