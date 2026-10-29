@@ -67,12 +67,16 @@ function getThemesDir(): string {
   return join(packageDir, sourceLayout(packageDir), "modes", "interactive", "theme");
 }
 
-function getExportTemplateDir(): string {
-  if (isBunBinary) {
-    return join(getPackageDir(), "export-html");
-  }
+let exportTemplateCssPath: string | undefined;
+
+function setEmbeddedExportTemplateCssPath(path: string): void {
+  exportTemplateCssPath = path;
+}
+
+function getExportTemplateCssPath(): string {
+  if (exportTemplateCssPath !== undefined) return exportTemplateCssPath;
   const packageDir = getPackageDir();
-  return join(packageDir, sourceLayout(packageDir), "core", "export-html");
+  return join(packageDir, sourceLayout(packageDir), "core", "export-html", "template.css");
 }
 
 function nodeLlamaCppLoader(): (() => ReturnType<typeof importNodeLlamaCppAt>) | undefined {
@@ -268,7 +272,7 @@ const configPackage = {
   getDebugLogPath,
   getDocsPath,
   getExamplesPath,
-  getExportTemplateDir,
+  getExportTemplateCssPath,
   getModelsPath,
   getPackageDir,
   getPackageJsonPath,
@@ -287,6 +291,7 @@ const configPackage = {
   moduleFilename,
   nodeLlamaCppLoader,
   resolveCodemodeWorkerSpecifier,
+  setEmbeddedExportTemplateCssPath,
   setEmbeddedQuickJSWasmPath,
 };
 

@@ -9,7 +9,7 @@ import type exportTypesTypes from "./export-types.ts";
 import renderPageModule from "./render-page.ts";
 
 const { rethrowCause } = platform;
-const { APP_NAME, getExportTemplateDir } = config;
+const { APP_NAME, getExportTemplateCssPath } = config;
 const { normalizePath } = paths;
 const { loadAllHighlightLanguages } = syntaxHighlight;
 const { renderPage } = renderPageModule;
@@ -19,7 +19,7 @@ const generateHtml = Effect.fn("generateHtml")(function* (
   opts: exportTypesTypes.ExportOptions,
 ) {
   const templateCss = yield* FileSystem.FileSystem.use((fs) =>
-    fs.readFileString(platform.join(getExportTemplateDir(), "template.css"), "utf-8"),
+    fs.readFileString(getExportTemplateCssPath(), "utf-8"),
   );
   yield* Effect.promise(() => loadAllHighlightLanguages());
   return renderPage(sessionData, templateCss, opts);

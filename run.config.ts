@@ -248,6 +248,10 @@ const run: NonNullable<UserConfig["run"]> = {
       cache: false,
       command: "node tools/smoke-binary-decide.ts",
     },
+    "smoke-binary-export": {
+      cache: false,
+      command: "node tools/smoke-binary-export.ts",
+    },
     syncpack: "syncpack lint",
     test: {
       command: [],
