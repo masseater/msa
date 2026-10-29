@@ -16,7 +16,8 @@ const { wrapping } = wrapUp;
 const { snapshots } = snapshot;
 const { store } = storeModule;
 const { applying } = replanApply;
-const { validateClosed, validateEntries, validateHandling, validateTitles } = replanValidate;
+const { validateClosed, validateCwds, validateEntries, validateHandling, validateTitles } =
+  replanValidate;
 
 function validateStop(
   input: orchestratorTypesTypes.ReplanInput,
@@ -68,15 +69,19 @@ function prepare(
         .taskViews(runtime.database, runtime.options.project)
         .map((task) => [task.id, task] as const),
     );
-    return yield* Effect.sync(() => {
+    const entries = (input.tasks ?? []).map((task) => ({
+      from: unique(task.from ?? []),
+      input: task,
+      key: task.key ?? null,
+    }));
+    yield* Effect.sync(() => {
       if (runtime.replanning) throw fail("A replan is already running");
       if (input.reason.trim() === "") throw fail("A replan needs a reason");
-      const entries = (input.tasks ?? []).map((task) => ({
-        from: unique(task.from ?? []),
-        input: task,
-        key: task.key ?? null,
-      }));
       validateEntries(runtime, entries, views);
+    });
+    yield* validateCwds(runtime, entries, views);
+    return yield* Effect.sync(() => {
+      if (runtime.replanning) throw fail("A replan is already running");
       validateHandling(input, entries, views);
       validateClosed(input, entries, views);
       validateTitles(input, entries, views);
@@ -116,6 +121,7 @@ function abortedResult(reason: string): orchestratorTypesTypes.ReplanResult {
     rewired: [],
     started: [],
     stopped: [],
+    untracked: [],
   };
 }
 

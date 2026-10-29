@@ -1,7 +1,10 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
+import worktreeSupport from "./worktree-support.ts";
+
 const { makeTempDir, removePath } = testing;
+const { withRepository } = worktreeSupport;
 
 const LINT_CHECK = { command: "cat lint.txt", output: "^0 errors$" };
 const SHORTCUT_CHECK = { command: "grep -c 'layer-[0-9]' src.txt", exitCode: 1 };
@@ -24,6 +27,6 @@ function heldCommand() {
   return { calls, runCommand };
 }
 
-const goalChecksSupport = { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepo };
+const goalChecksSupport = { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepo, withRepository };
 
 export default goalChecksSupport;

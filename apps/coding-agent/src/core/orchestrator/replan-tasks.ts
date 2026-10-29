@@ -67,6 +67,23 @@ function inheritedChecks(
   return [...byKey.values()];
 }
 
+function checksOf(
+  input: orchestratorTypesTypes.ReplanTaskInput,
+  sources: readonly orchestratorTypesTypes.Task[],
+): orchestratorTypesTypes.TaskCheck[] {
+  return input.checks === undefined
+    ? inheritedChecks(sources)
+    : requireChecks(`Task ${input.title}`, input.checks);
+}
+
+function cwdOf(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.ReplanTaskInput,
+  sources: readonly orchestratorTypesTypes.Task[],
+): string {
+  return input.cwd ?? sources[0]?.cwd ?? runtime.options.cwd;
+}
+
 function roundFor(
   input: orchestratorTypesTypes.ReplanTaskInput,
   sources: readonly orchestratorTypesTypes.Task[],
@@ -106,14 +123,11 @@ function newTask(
   now: number,
 ): orchestratorTypesTypes.Task {
   return {
-    checks:
-      input.checks === undefined
-        ? inheritedChecks(sources)
-        : requireChecks(`Task ${input.title}`, input.checks),
+    checks: checksOf(input, sources),
     condition: null,
     createdAt: now,
     currentState: input.currentState ?? inherited(sources, (source) => source.currentState),
-    cwd: input.cwd ?? sources[0]?.cwd ?? runtime.options.cwd,
+    cwd: cwdOf(runtime, input, sources),
     goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
     id: newId("t"),
     kind: "work",
@@ -241,6 +255,14 @@ function keep(runtime: runtimeTypes.Runtime, prepared: replanTypes.Prepared, now
   }
 }
 
-const replanTasks = { closeDropped, createTasks, keep, redirectDependents, rewire };
+const replanTasks = {
+  checksOf,
+  closeDropped,
+  createTasks,
+  cwdOf,
+  keep,
+  redirectDependents,
+  rewire,
+};
 
 export default replanTasks;

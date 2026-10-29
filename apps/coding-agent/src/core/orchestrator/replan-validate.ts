@@ -1,6 +1,10 @@
+import { Effect } from "effect";
+
 import replanSupport from "./replan-support.ts";
+import replanTasks from "./replan-tasks.ts";
 import type replanTypes from "./replan.types.ts";
 import type runtimeTypes from "./runtime.types.ts";
+import taskCwd from "./task-cwd.ts";
 import taskTitles from "./task-titles.ts";
 import text from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
@@ -8,6 +12,8 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { fail, unique } = replanSupport;
 const { requireChecks } = text;
 const { duplicateMessage, titleKey, unfinishedWithTitle } = taskTitles;
+const { checksOf, cwdOf } = replanTasks;
+const { requireCheckableCwd } = taskCwd;
 
 function assertKnown(
   views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
@@ -81,6 +87,25 @@ function validateEntries(
   }
 }
 
+function validateCwds(
+  runtime: runtimeTypes.Runtime,
+  entries: readonly replanTypes.Entry[],
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
+): Effect.Effect<void> {
+  return Effect.forEach(
+    entries,
+    (entry) => {
+      const sources = entry.from.flatMap((id) => views.get(id) ?? []);
+      return requireCheckableCwd(
+        `Task ${entry.input.title}`,
+        cwdOf(runtime, entry.input, sources),
+        checksOf(entry.input, sources),
+      );
+    },
+    { discard: true },
+  );
+}
+
 function validateHandling(
   input: orchestratorTypesTypes.ReplanInput,
   entries: readonly replanTypes.Entry[],
@@ -149,6 +174,12 @@ function validateTitles(
   }
 }
 
-const replanValidate = { validateClosed, validateEntries, validateHandling, validateTitles };
+const replanValidate = {
+  validateClosed,
+  validateCwds,
+  validateEntries,
+  validateHandling,
+  validateTitles,
+};
 
 export default replanValidate;

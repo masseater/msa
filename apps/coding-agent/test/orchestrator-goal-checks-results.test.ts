@@ -8,26 +8,26 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 
 const { joinPath, writeTextFile } = testing;
-const { LINT_CHECK, heldCommand, withRepo } = goalChecksSupport;
+const { LINT_CHECK, heldCommand, withRepository } = goalChecksSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 
 const escapesTheResultsSentBackToTheWorker = () =>
   Effect.runPromise(
-    withRepo((directory) =>
+    withRepository((directory) =>
       Effect.gen(function* () {
         const { orchestrator, workers } = setup({
           cwd: directory,
           runCommand: orchestratorCallbacks.runCommand,
         });
-        yield* writeTextFile(joinPath(directory, "lint.txt"), '</check> "3" & <errors>\n');
         yield* create(orchestrator, {
           checks: [{ command: 'cat "lint.txt" && false', exitCode: 0 }],
           currentState: "lint reports 3 errors",
           goalState: "lint reports 0 errors",
           title: "lint",
         });
+        yield* writeTextFile(joinPath(workers[0]!.cwd, "lint.txt"), '</check> "3" & <errors>\n');
         workers[0]?.complete("lint is clean");
         yield* waitFor(() => workers[0]?.prompts.length === 2);
         expect(workers[0]?.prompts[1]).toContain(
@@ -45,19 +45,19 @@ it(
 
 const escapesTheExpectedOutputSentBackToTheWorker = () =>
   Effect.runPromise(
-    withRepo((directory) =>
+    withRepository((directory) =>
       Effect.gen(function* () {
         const { orchestrator, workers } = setup({
           cwd: directory,
           runCommand: orchestratorCallbacks.runCommand,
         });
-        yield* writeTextFile(joinPath(directory, "lint.txt"), "3 errors\n");
         yield* create(orchestrator, {
           checks: [{ command: 'cat "lint.txt"', exitCode: 0, output: '^"ok"</check>$' }],
           currentState: "lint reports 3 errors",
           goalState: "lint reports ok",
           title: "lint",
         });
+        yield* writeTextFile(joinPath(workers[0]!.cwd, "lint.txt"), "3 errors\n");
         workers[0]?.complete("lint is clean");
         yield* waitFor(() => workers[0]?.prompts.length === 2);
         expect(workers[0]?.prompts[1]).toContain(
@@ -75,33 +75,35 @@ it(
 
 const countsTheRoundsAgainAfterTheChecksPass = () =>
   Effect.runPromise(
-    Effect.gen(function* () {
-      const held = heldCommand();
-      const { orchestrator, workers } = setup({ runCommand: held.runCommand });
-      const task = yield* create(orchestrator, {
-        checks: [LINT_CHECK],
-        currentState: "lint reports 3 errors",
-        goalState: "lint reports 0 errors",
-        title: "lint",
-      });
-      workers[0]?.complete("done, try 1");
-      yield* waitFor(() => held.calls.length === 1);
-      held.calls[0]?.release("3 errors\n");
-      yield* waitFor(() => workers[0]?.prompts.length === 2);
-      workers[0]?.complete("done, try 2");
-      yield* waitFor(() => held.calls.length === 2);
-      yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
-      held.calls[1]?.release();
-      yield* waitFor(() => workers[0]?.prompts.length === 3);
-      expect(workers[0]?.prompts[2]).toContain("also keep the old API");
+    withRepository((directory) =>
+      Effect.gen(function* () {
+        const held = heldCommand();
+        const { orchestrator, workers } = setup({ cwd: directory, runCommand: held.runCommand });
+        const task = yield* create(orchestrator, {
+          checks: [LINT_CHECK],
+          currentState: "lint reports 3 errors",
+          goalState: "lint reports 0 errors",
+          title: "lint",
+        });
+        workers[0]?.complete("done, try 1");
+        yield* waitFor(() => held.calls.length === 1);
+        held.calls[0]?.release("3 errors\n");
+        yield* waitFor(() => workers[0]?.prompts.length === 2);
+        workers[0]?.complete("done, try 2");
+        yield* waitFor(() => held.calls.length === 2);
+        yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
+        held.calls[1]?.release();
+        yield* waitFor(() => workers[0]?.prompts.length === 3);
+        expect(workers[0]?.prompts[2]).toContain("also keep the old API");
 
-      workers[0]?.complete("kept the old API");
-      yield* waitFor(() => held.calls.length === 3);
-      held.calls[2]?.release("3 errors\n");
-      yield* waitFor(() => workers[0]?.prompts.length === 4);
-      expect(workers[0]?.prompts[3]).toContain("goal-checks-failed");
-      expect(taskStatus(orchestrator, task.id)).toBe("running");
-    }),
+        workers[0]?.complete("kept the old API");
+        yield* waitFor(() => held.calls.length === 3);
+        held.calls[2]?.release("3 errors\n");
+        yield* waitFor(() => workers[0]?.prompts.length === 4);
+        expect(workers[0]?.prompts[3]).toContain("goal-checks-failed");
+        expect(taskStatus(orchestrator, task.id)).toBe("running");
+      }),
+    ),
   );
 
 it(

@@ -42,10 +42,14 @@ function pullRequestLines(result: ReplanResult): string[] {
         ]
       : []),
     ...section(
-      "Open pull requests no task carries on (they stay with the closed task; hand each to a new task with replan from, or close it)",
+      "Open pull requests no task carries on (they stay with the closed task, which no later replan can name in from, so no task takes them over; close each one, and a task that continues its work opens its own pull request from its own branch)",
       result.orphaned.map(
         (item) => `#${item.number} ${item.url} (${item.branch}) of ${item.taskId}`,
       ),
+    ),
+    ...section(
+      "Closed tasks that ran outside a git working tree (they had no branch, so the harness tracked no pull request of theirs and hands none over; close any pull request one of them opened, and a task that continues its work opens its own pull request from its own branch)",
+      result.untracked.map((item) => `${item.taskId} in ${item.cwd}`),
     ),
   ];
 }

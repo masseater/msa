@@ -13,7 +13,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { scheduling } = schedule;
 const { newId } = ids;
 const { nowMillis } = runtimeModule;
-const { collect } = replanHandoffs;
+const { collect, readPullRequests } = replanHandoffs;
 const { write } = replanWrite;
 
 function apply(
@@ -25,6 +25,7 @@ function apply(
     const now = yield* nowMillis;
     const replanId = newId("rp");
     const handoffs = yield* collect(runtime, memos);
+    yield* readPullRequests(runtime, prepared.sources);
     const { changes, handover } = yield* Effect.sync(() =>
       write(runtime, prepared, handoffs, replanId, now),
     );
@@ -44,6 +45,7 @@ function apply(
       rewired: changes.rewired,
       started,
       stopped: changes.stopped,
+      untracked: handover.untracked,
     };
   });
 }

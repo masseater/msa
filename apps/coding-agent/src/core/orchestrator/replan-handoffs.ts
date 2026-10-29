@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import ids from "./ids.ts";
+import pullRequestsModule from "./pull-requests.ts";
 import type replanApplyInternalTypes from "./replan-apply-internal.types.ts";
 import type replanTypes from "./replan.types.ts";
 import repoState from "./repo-state.ts";
@@ -10,6 +11,7 @@ import storeModule from "./store.ts";
 const { newId } = ids;
 const { repoStates } = repoState;
 const { store } = storeModule;
+const { pullRequests } = pullRequestsModule;
 
 function collect(
   runtime: runtimeTypes.Runtime,
@@ -28,6 +30,15 @@ function collect(
       }
     }
     return handoffs;
+  });
+}
+
+function readPullRequests(
+  runtime: runtimeTypes.Runtime,
+  taskIds: readonly string[],
+): Effect.Effect<void> {
+  return Effect.forEach(taskIds, (taskId) => pullRequests.refresh(runtime, taskId), {
+    discard: true,
   });
 }
 
@@ -91,6 +102,6 @@ function writeHandoffs(
   }
 }
 
-const replanHandoffs = { collect, writeHandoffs, writeReport };
+const replanHandoffs = { collect, readPullRequests, writeHandoffs, writeReport };
 
 export default replanHandoffs;

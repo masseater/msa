@@ -14,6 +14,18 @@ function taskView(runtime: runtimeTypes.Runtime, id: string): orchestratorTypesT
   return found;
 }
 
+function taskOf(
+  runtime: runtimeTypes.Runtime,
+  id: string,
+  label: string,
+): orchestratorTypesTypes.Task {
+  const task = store.getTask(runtime.database, id);
+  if (task === undefined || task.project !== runtime.options.project) {
+    throw new Error(`Unknown task in ${label}: ${id}`);
+  }
+  return task;
+}
+
 function runningThreadOf(runtime: runtimeTypes.Runtime, taskId: string) {
   for (const assignment of store.assignmentsOfTask(runtime.database, taskId)) {
     const thread = store.getThread(runtime.database, assignment.threadId);
@@ -31,7 +43,7 @@ function appliesTo(
   return note.taskIds.includes(task.id);
 }
 
-const actionHelpers = { appliesTo, runningThreadOf, taskView };
+const actionHelpers = { appliesTo, runningThreadOf, taskOf, taskView };
 
 const actionHelpersModule = {
   actionHelpers,

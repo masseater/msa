@@ -154,6 +154,11 @@ declare namespace orchestratorTypesTypes {
     branch: string;
   }
 
+  interface UntrackedTask {
+    taskId: string;
+    cwd: string;
+  }
+
   interface TaskView extends Task {
     dependsOn: readonly string[];
     dependents: readonly string[];
@@ -323,6 +328,7 @@ declare namespace orchestratorTypesTypes {
     aborted: string | null;
     handedOver: readonly PullRequestHandover[];
     orphaned: readonly OrphanedPullRequest[];
+    untracked: readonly UntrackedTask[];
     stopped: readonly ReplanStopped[];
     created: readonly ReplanCreated[];
     dropped: readonly ReplanDropped[];

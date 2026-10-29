@@ -32,7 +32,12 @@ const createSchema = Type.Object({
     description:
       "What is true now: the code as it stands, the failing check, what already exists. Facts, not steps.",
   }),
-  cwd: Type.Optional(Type.String({ description: "Working directory. Default: this session's." })),
+  cwd: Type.Optional(
+    Type.String({
+      description:
+        "Working directory: a checkout of the repository when the task has checks. Default: this session's.",
+    }),
+  ),
   dependsOn: Type.Optional(
     Type.Array(taskIdSchema, {
       description:
