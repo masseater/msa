@@ -17,11 +17,15 @@ const { scheduling } = schedule;
 const { INTERVAL_MS, inspect } = watchdogInspect;
 const { currentPid, processAlive } = processAliveModule;
 
+function locked(runtime: runtimeTypes.Runtime): runtimeTypes.Write {
+  return (effect) => Effect.promise(() => runtime.exclusive(effect));
+}
+
 function resolveFinding(
   runtime: runtimeTypes.Runtime,
   finding: watchdogTypes.Finding,
   now: number,
-): void {
+): Effect.Effect<void> {
   const database = runtime.database;
   const { thread } = finding;
   abortThread(runtime, thread.id);
@@ -43,20 +47,23 @@ function resolveFinding(
     store.setTaskStatus(database, assignment.taskId, finding.taskStatus, now);
   }
   const first = assignments[0];
-  runtime.options.report(
+  const taskIds = assignments.map((assignment) => assignment.taskId);
+  return Effect.map(
     watchdogReport.findingText(
       runtime,
       thread.id,
-      assignments.map((assignment) => assignment.taskId),
+      taskIds,
       finding.taskStatus,
       content,
+      locked(runtime),
     ),
-    {
-      role: first?.role ?? "worker",
-      started: [],
-      status: finding.taskStatus,
-      taskId: first?.taskId ?? thread.id,
-    },
+    (text) =>
+      runtime.options.report(text, {
+        role: first?.role ?? "worker",
+        started: [],
+        status: finding.taskStatus,
+        taskId: first?.taskId ?? thread.id,
+      }),
   );
 }
 
@@ -64,16 +71,15 @@ function resolveTaskWithoutThread(
   runtime: runtimeTypes.Runtime,
   taskId: string,
   now: number,
-): void {
+): Effect.Effect<void> {
   const task = store.getTask(runtime.database, taskId);
-  if (task === undefined) return;
+  if (task === undefined) return Effect.void;
   store.setTaskStatus(runtime.database, taskId, "stopped", now);
-  runtime.options.report(watchdogReport.threadlessText(runtime, taskId, now - task.updatedAt), {
-    role: "worker",
-    started: [],
-    status: "stopped",
-    taskId,
-  });
+  return Effect.map(
+    watchdogReport.threadlessText(runtime, taskId, now - task.updatedAt, locked(runtime)),
+    (text) =>
+      runtime.options.report(text, { role: "worker", started: [], status: "stopped", taskId }),
+  );
 }
 
 function recoverElsewhere(runtime: runtimeTypes.Runtime, now: number): number {
@@ -91,19 +97,20 @@ function recoverElsewhere(runtime: runtimeTypes.Runtime, now: number): number {
   return dead.length;
 }
 
-function sweepEffect(runtime: runtimeTypes.Runtime) {
+function sweepEffect(
+  runtime: runtimeTypes.Runtime,
+): Effect.Effect<Effect.Effect<void>[], runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
-    const changed = yield* Effect.sync(() => {
-      const findings = inspect(runtime, now);
-      for (const finding of findings) resolveFinding(runtime, finding, now);
-      const taskIds = store.runningTasksWithoutThread(runtime.database, runtime.options.project);
-      for (const taskId of taskIds) resolveTaskWithoutThread(runtime, taskId, now);
-      return findings.length + taskIds.length + recoverElsewhere(runtime, now);
-    });
-    if (changed === 0) return;
+    const findings = inspect(runtime, now);
+    const reports = findings.map((finding) => resolveFinding(runtime, finding, now));
+    const taskIds = store.runningTasksWithoutThread(runtime.database, runtime.options.project);
+    reports.push(...taskIds.map((taskId) => resolveTaskWithoutThread(runtime, taskId, now)));
+    const changed = findings.length + taskIds.length + recoverElsewhere(runtime, now);
+    if (changed === 0) return reports;
     yield* scheduling.scheduleEffect(runtime);
     yield* Effect.sync(() => runtime.publish());
+    return reports;
   });
 }
 
@@ -115,7 +122,12 @@ function startWatchdog(runtime: runtimeTypes.Runtime): Fiber.Fiber<never, never>
           Effect.tryPromise({
             catch: orchestratorError,
             try: () => runtime.exclusive(sweepEffect(runtime)),
-          }).pipe(Effect.ignore),
+          }).pipe(
+            Effect.flatMap((reports) =>
+              Effect.forEach(reports, (report) => report, { discard: true }),
+            ),
+            Effect.ignore,
+          ),
         ),
       ),
     ),

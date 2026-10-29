@@ -9,6 +9,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { short } = pullRequestProblems;
 const { pullRequestSquash } = pullRequestSquashModule;
+const { trailerOf } = pullRequestSquash;
 const { store } = storeModule;
 
 const MergedBy = Schema.fromJsonString(
@@ -32,6 +33,49 @@ function rememberInStore(runtime: runtimeTypes.Runtime, taskId: string) {
   };
 }
 
+function unreviewedHead(record: PullRequest): string {
+  const reviewed = record.verified?.sha;
+  return reviewed === undefined
+    ? `it was merged at head ${short(record.headSha)}, and no review had checked a head of it`
+    : `it was merged at head ${short(record.headSha)}, not at the head ${short(reviewed)} its review checked`;
+}
+
+const NO_REQUEST =
+  "the harness had no merge request of its own pending for this pull request: it had sent none, or GitHub refused the one it sent";
+
+function outsideReason(record: PullRequest, mergeCommit: string, reviewed: boolean): string {
+  const { harnessNonce } = record;
+  const first =
+    harnessNonce === null
+      ? NO_REQUEST
+      : `the message of merge commit ${short(mergeCommit)} does not carry the trailer ${trailerOf(harnessNonce)} that the harness put in its own merge request`;
+  if (!reviewed) return `${first}, and ${unreviewedHead(record)}`;
+  return `${first}, and though it was merged at head ${short(record.headSha)}, the head its review checked, the message of merge commit ${short(mergeCommit)} carries no other ${pullRequestSquash.TRAILER} trailer from the harness's squash message`;
+}
+
+function earlyJudgement(record: PullRequest, reviewed: boolean): Judgement | undefined {
+  const { harnessCommit, harnessNonce, mergeCommit } = record;
+  if (harnessCommit !== null && (mergeCommit === null || mergeCommit === harnessCommit)) {
+    return { by: "harness", record };
+  }
+  if (reviewed) return undefined;
+  if (harnessCommit !== null) {
+    return {
+      by: "outside",
+      reason: `GitHub answered the harness's merge request with merge commit ${short(harnessCommit)}, but the pull request was merged as ${short(mergeCommit ?? "")}`,
+      record,
+    };
+  }
+  if (harnessNonce === null) {
+    return {
+      by: "outside",
+      reason: `${NO_REQUEST}, and ${unreviewedHead(record)}`,
+      record,
+    };
+  }
+  return undefined;
+}
+
 function judgeMerge(
   runtime: runtimeTypes.Runtime,
   cwd: string,
@@ -40,25 +84,10 @@ function judgeMerge(
 ): Effect.Effect<Judgement | undefined> {
   return Effect.gen(function* () {
     if (record.state !== "MERGED") return undefined;
+    const reviewed = record.verified !== null && record.verified.sha === record.headSha;
+    const early = earlyJudgement(record, reviewed);
+    if (early !== undefined) return early;
     const { harnessCommit, harnessNonce, mergeCommit } = record;
-    if (harnessCommit !== null && (mergeCommit === null || mergeCommit === harnessCommit)) {
-      return { by: "harness", record };
-    }
-    if (harnessCommit !== null) {
-      return {
-        by: "outside",
-        reason: `GitHub answered the harness's merge request with merge commit ${short(harnessCommit)}, but the pull request was merged as ${short(mergeCommit ?? "")}`,
-        record,
-      };
-    }
-    if (harnessNonce === null) {
-      return {
-        by: "outside",
-        reason:
-          "the harness had no merge request of its own pending for this pull request: it had sent none, or GitHub refused the one it sent",
-        record,
-      };
-    }
     if (mergeCommit === null) {
       return { by: "unread", reason: "gh did not report the merge commit", record };
     }
@@ -68,10 +97,14 @@ function judgeMerge(
     if (Result.isFailure(message)) {
       return { by: "unread", reason: message.failure, record };
     }
-    if (!pullRequestSquash.carriesNonce(message.success, harnessNonce)) {
+    const own =
+      harnessCommit === null &&
+      harnessNonce !== null &&
+      pullRequestSquash.carriesNonce(message.success, harnessNonce);
+    if (!own && !(reviewed && pullRequestSquash.carriesTrailer(message.success))) {
       return {
         by: "outside",
-        reason: `the message of merge commit ${short(mergeCommit)} does not carry the trailer ${pullRequestSquash.trailerOf(harnessNonce)} that the harness put in its own merge request`,
+        reason: outsideReason(record, mergeCommit, reviewed),
         record,
       };
     }

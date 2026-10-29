@@ -228,12 +228,12 @@ export default class FakeGitHub {
     pull.autoMergeBy = login;
   }
 
-  mergeOutside(number: number, login: string): Effect.Effect<string> {
+  mergeOutside(number: number, login: string, message?: string): Effect.Effect<string> {
     return Effect.gen({ self: this }, function* () {
       const pull = this.pulls.find((candidate) => candidate.number === number);
       if (pull === undefined) throw new Error(`no pull request #${number}`);
       yield* this.sync(pull);
-      return yield* this.land(pull, login);
+      return yield* this.land(pull, login, message);
     });
   }
 

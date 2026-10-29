@@ -53,6 +53,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     handoffDirectory: options.handoffDirectory ?? joinPath(tempRoot(), "msa-orchestrator-handoffs"),
     pollIntervalMs: options.pollIntervalMs ?? null,
     project: options.project ?? "project",
+    pullRequestSyncMs: options.pullRequestSyncMs ?? null,
     report: (text, details) => reports.push({ details, text }),
     resolveModel: (reference) => {
       const found = MODELS.find(

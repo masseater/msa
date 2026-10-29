@@ -265,8 +265,11 @@ const recordsNothingFromACheckThatOutlivedItsRun = () =>
         const inFlight = github.calls + 1;
         yield* waitFor(() => github.calls >= inFlight);
         github.ci.set(yield* github.head(branch), "failure");
-        yield* Effect.promise(() => orchestrator.stop(taskId));
+        const asked = github.calls + 1;
+        const stopped = orchestrator.stop(taskId);
+        yield* waitFor(() => github.calls >= asked);
         github.release();
+        yield* Effect.promise(() => stopped);
         yield* waitFor(() => github.answered === github.calls);
         yield* Effect.sleep(20);
 

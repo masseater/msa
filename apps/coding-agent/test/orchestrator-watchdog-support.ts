@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
@@ -29,6 +30,9 @@ const advance = (ms: number) =>
     }
   });
 
+const settledUntil = (predicate: () => boolean) =>
+  testing.pollUntil(Effect.sync(predicate), 2000, advance(1000));
+
 const storedStatus = (orchestrator: Orchestrator, taskId: string) =>
   (
     orchestrator.database.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId) as {
@@ -42,6 +46,6 @@ const TASK = {
   title: "cache reads",
 };
 
-const watchdogSupport = { TASK, advance, fakeClock, storedStatus };
+const watchdogSupport = { TASK, advance, fakeClock, settledUntil, storedStatus };
 
 export default watchdogSupport;

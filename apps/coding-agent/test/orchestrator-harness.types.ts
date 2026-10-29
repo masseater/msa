@@ -5,6 +5,7 @@ declare namespace orchestratorHarnessTypes {
   interface HarnessOptions {
     maxConcurrent?: number;
     pollIntervalMs?: number | null;
+    pullRequestSyncMs?: number | null;
     ciPollMs?: number;
     ciWaitMs?: number;
     ciAppearMs?: number;

@@ -133,6 +133,6 @@ function afterInterrupt(
   });
 }
 
-const pullRequestFinish = { afterInterrupt, settleMerged };
+const pullRequestFinish = { afterInterrupt, finish, hasLiveRun, settleMerged };
 
 export default pullRequestFinish;

@@ -5,7 +5,7 @@ import actionsModule from "./actions.ts";
 import handoffModule from "./handoff.ts";
 import OrchestratorState from "./orchestrator-state.ts";
 import type orchestratorTypes from "./orchestrator.types.ts";
-import pullRequestsModule from "./pull-requests.ts";
+import pullRequestRefresh from "./pull-request-refresh.ts";
 import replanModule from "./replan.ts";
 import storeModule from "./store.ts";
 import TranscriptCache from "./transcripts.ts";
@@ -14,7 +14,6 @@ const { handoffs } = handoffModule;
 const { store } = storeModule;
 const { actions } = actionsModule;
 const { replan } = replanModule;
-const { pullRequests } = pullRequestsModule;
 
 export default class Orchestrator {
   private readonly state: OrchestratorState;
@@ -71,7 +70,7 @@ export default class Orchestrator {
   }
 
   read(id: string): Promise<orchestratorTypes.TaskView> {
-    return Effect.runPromise(pullRequests.refresh(this.state, id))
+    return Effect.runPromise(pullRequestRefresh.refresh(this.state, id))
       .then(() => this.refresh())
       .then(() => {
         const found = this.snapshot.tasks.find((task) => task.id === id);

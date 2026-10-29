@@ -27,9 +27,9 @@ function stop(runtime: runtimeTypes.Runtime, taskId: string) {
     }
     yield* Effect.sync(() => store.setTaskStatus(database, taskId, "stopped", now));
     yield* scheduling.scheduleEffect(runtime);
+    const notice = yield* pullRequestNotice.openPullRequests(runtime, [taskId]);
     yield* Effect.sync(() => {
       runtime.publish();
-      const notice = pullRequestNotice.openPullRequests(runtime, [taskId]);
       if (notice === undefined) return;
       runtime.options.report(`${task.title} (${taskId}) stopped.\n\n${notice}`, {
         role: "worker",

@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import elapsedModule from "../../utils/elapsed.ts";
 import pullRequestNotice from "./pull-request-notice.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -16,9 +18,11 @@ function joined(
   runtime: runtimeTypes.Runtime,
   taskIds: readonly string[],
   lines: readonly string[],
-): string {
-  const notice = pullRequestNotice.openPullRequests(runtime, taskIds);
-  return [...lines, ...(notice === undefined ? [] : [notice])].join("\n\n");
+  write: runtimeTypes.Write,
+): Effect.Effect<string> {
+  return Effect.map(pullRequestNotice.openPullRequests(runtime, taskIds, write), (notice) =>
+    [...lines, ...(notice === undefined ? [] : [notice])].join("\n\n"),
+  );
 }
 
 function findingText(
@@ -27,15 +31,26 @@ function findingText(
   taskIds: readonly string[],
   status: string,
   content: string,
-): string {
+  write: runtimeTypes.Write,
+): Effect.Effect<string> {
   const tasks = taskIds.map((taskId) => taskLabel(runtime, taskId));
-  return joined(runtime, taskIds, [
-    `${tasks.length > 0 ? tasks.join(", ") : `Thread ${threadId}`} ${status}.`,
-    `${content} Rerun the task to continue.`,
-  ]);
+  return joined(
+    runtime,
+    taskIds,
+    [
+      `${tasks.length > 0 ? tasks.join(", ") : `Thread ${threadId}`} ${status}.`,
+      `${content} Rerun the task to continue.`,
+    ],
+    write,
+  );
 }
 
-function threadlessText(runtime: runtimeTypes.Runtime, taskId: string, idleMs: number): string {
+function threadlessText(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+  idleMs: number,
+  write: runtimeTypes.Write,
+): Effect.Effect<string> {
   return joined(
     runtime,
     [taskId],
@@ -43,6 +58,7 @@ function threadlessText(runtime: runtimeTypes.Runtime, taskId: string, idleMs: n
       `${taskLabel(runtime, taskId)} stopped.`,
       `Watchdog: the task was running with no running thread for ${formatElapsed(idleMs)}. Rerun the task to continue.`,
     ],
+    write,
   );
 }
 

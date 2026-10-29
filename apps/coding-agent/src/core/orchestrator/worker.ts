@@ -96,6 +96,8 @@ declare namespace workerTypes {
     runGh: (args: readonly string[], cwd: string) => Promise<GhResult>;
     pollIntervalMs?: number | null;
 
+    pullRequestSyncMs?: number | null;
+
     ciPollMs?: number;
 
     ciWaitMs?: number | undefined;
