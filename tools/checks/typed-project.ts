@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "typescript/unstable/ast";
 import { API } from "typescript/unstable/sync";
-import type { Project } from "typescript/unstable/sync";
+import type { Checker, Project, Type } from "typescript/unstable/sync";
 
 type Scope = {
   readonly files: (name: string) => boolean;
@@ -29,6 +29,23 @@ const locate = (file: SourceFile, node: Node): { readonly line: number; readonly
   };
 };
 
+const typeOf = (checker: Checker, node: Node): Type | undefined => {
+  try {
+    return checker.getTypeAtLocation(node);
+  } catch {
+    return undefined;
+  }
+};
+
+const typesOf = (checker: Checker, nodes: readonly Node[]): readonly (Type | undefined)[] => {
+  if (nodes.length === 0) return [];
+  try {
+    return checker.getTypeAtLocation(nodes);
+  } catch {
+    return nodes.map((node) => typeOf(checker, node));
+  }
+};
+
 const scanProject = <F>(
   { files, project: config = "tsconfig.json", root }: Scope,
   scanFile: FileScan<F>,
@@ -50,6 +67,6 @@ const scanProject = <F>(
   }
 };
 
-const typedProject = { descendants, locate, scanProject };
+const typedProject = { descendants, locate, scanProject, typesOf };
 
 export default typedProject;

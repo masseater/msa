@@ -1,8 +1,10 @@
 import { Effect, Schema } from "effect";
 
+import inlineScriptModule from "./inline-script.ts";
 import json from "./json.ts";
 import type toolStatsReportTypes from "./tool-stats-report.types.ts";
 
+const { inlineScript } = inlineScriptModule;
 const { Json } = json;
 
 const HEAD = `<!doctype html>
@@ -49,44 +51,14 @@ const markup = (
 		</section>
 	</main>`;
 
-const chartScript = (serialized: string): string => `	<script>
-		const data=${serialized};
-		function fmt(n){return Math.round(n).toLocaleString()}
-		function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-		function table(rows,el){
-			document.getElementById(el).innerHTML='<table class="w-full text-sm"><thead class="text-zinc-400"><tr><th class="text-left p-2">Name</th><th class="text-right p-2">Calls</th><th class="text-right p-2">Results</th><th class="text-right p-2">Est. tokens</th><th class="text-right p-2">Avg/result</th><th class="text-left p-2 w-64">Histogram</th></tr></thead><tbody>'+rows.map((r,i)=>'<tr class="border-t border-zinc-800 hover:bg-zinc-800/50 cursor-pointer" data-row="'+i+'"><td class="p-2 font-mono">'+esc(r.name)+'</td><td class="p-2 text-right">'+fmt(r.calls)+'</td><td class="p-2 text-right">'+fmt(r.results??r.samples.length)+'</td><td class="p-2 text-right">'+fmt(r.estimatedTokens)+'</td><td class="p-2 text-right">'+fmt(r.avg)+'</td><td class="p-2"><canvas id="'+el+'Hist'+i+'" height="34"></canvas></td></tr>').join('')+'</tbody></table>';
-			rows.forEach((r,i)=>new Chart(document.getElementById(el+'Hist'+i),{type:'bar',data:{labels:data.bucketLabels,datasets:[{data:r.histogram,label:r.name,backgroundColor:'#60a5fa'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:(items)=>data.bucketLabels[items[0].dataIndex]+' tokens'}}},scales:{x:{display:false},y:{display:false}}}}));
-			document.querySelectorAll('#'+el+' tr[data-row]').forEach(row=>row.addEventListener('click',()=>document.getElementById(el==='tools'?'toolSelect':'bashSelect').value=row.dataset.row,document.getElementById(el==='tools'?'toolSelect':'bashSelect').dispatchEvent(new Event('change'))));
-		}
-		function fillSelect(id,rows){document.getElementById(id).innerHTML=rows.map((r,i)=>'<option value="'+i+'">'+esc(r.name)+'</option>').join('')}
-		function summary(r){return fmt(r.calls)+' calls, '+fmt(r.results??r.samples.length)+' results, '+fmt(r.estimatedTokens)+' estimated result tokens, '+fmt(r.avg)+' avg/result'}
-		function singleHistogram(canvasId,summaryId,selectId,rows){
-			let chart;
-			function update(){
-				const row=rows[Number(document.getElementById(selectId).value)]??rows[0];
-				document.getElementById(summaryId).textContent=row?summary(row):'No data';
-				if(chart)chart.destroy();
-				chart=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels:data.bucketLabels,datasets:[{label:row?.name??'',data:row?.histogram??[],backgroundColor:'#60a5fa'}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{title:(items)=>data.bucketLabels[items[0].dataIndex]+' tokens',label:(item)=>fmt(item.raw)+' results'}}},scales:{y:{beginAtZero:true,title:{display:true,text:'result count'}},x:{title:{display:true,text:'estimated tokens/result'}}}}});
-			}
-			document.getElementById(selectId).addEventListener('change',update);
-			update();
-		}
-		table(data.tools,'tools');
-		table(data.bashCommands,'bash');
-		fillSelect('toolSelect',data.tools);
-		fillSelect('bashSelect',data.bashCommands);
-		singleHistogram('toolHistogram','toolSummary','toolSelect',data.tools);
-		singleHistogram('bashHistogram','bashSummary','bashSelect',data.bashCommands);
-		new Chart(document.getElementById('tokens'),{type:'bar',data:{labels:data.tools.map(r=>r.name),datasets:[{label:'estimated tokens',data:data.tools.map(r=>r.estimatedTokens)}]},options:{plugins:{legend:{display:false}}}});
-		new Chart(document.getElementById('calls'),{type:'bar',data:{labels:data.tools.map(r=>r.name),datasets:[{label:'calls',data:data.tools.map(r=>r.calls)}]},options:{plugins:{legend:{display:false}}}});
-	</script>`;
-
 const renderReport = (data: toolStatsReportTypes.ReportData) =>
   Effect.gen(function* () {
-    const serialized = yield* Schema.encodeEffect(Json)(data);
+    const script = yield* inlineScript(`${import.meta.dirname}/tool-stats-report.js`);
+    const serialized = (yield* Schema.encodeEffect(Json)(data)).replaceAll("<", String.raw`\u003c`);
     return `${HEAD}
 ${markup(data)}
-${chartScript(serialized)}
+	<script id="report-data" type="application/json">${serialized}</script>
+	${script}
 </body>
 </html>`;
   });

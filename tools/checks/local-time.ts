@@ -23,6 +23,7 @@ import {
 import { SymbolFlags } from "typescript/unstable/sync";
 import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/unstable/sync";
 
+import embeddedScript from "./embedded-script.ts";
 import typedProject from "./typed-project.ts";
 
 type Finding = {
@@ -36,7 +37,7 @@ type Scope = { readonly files: (name: string) => boolean; readonly root: string 
 
 type Hit = { readonly detail: string; readonly node: Node };
 
-const { descendants, locate, scanProject } = typedProject;
+const { descendants, locate, scanProject, typesOf } = typedProject;
 
 type ReferenceRule = (symbol: TsSymbol, node: Node) => Hit | undefined;
 
@@ -238,23 +239,6 @@ const OPERANDS: readonly ((node: Node) => readonly Node[])[] = [
 const stringifiedOperands = (node: Node): readonly Node[] =>
   OPERANDS.flatMap((operands) => operands(node));
 
-const typeOf = (checker: Checker, node: Node): Type | undefined => {
-  try {
-    return checker.getTypeAtLocation(node);
-  } catch {
-    return undefined;
-  }
-};
-
-const typesOf = (checker: Checker, nodes: readonly Node[]): readonly (Type | undefined)[] => {
-  if (nodes.length === 0) return [];
-  try {
-    return checker.getTypeAtLocation(nodes);
-  } catch {
-    return nodes.map((node) => typeOf(checker, node));
-  }
-};
-
 const isDateType = (checker: Checker, type: Type | undefined): boolean =>
   type !== undefined && checker.typeToString(type) === "Date";
 
@@ -268,27 +252,47 @@ function stringifyHits({ checker }: Project, nodes: readonly Node[]): readonly H
   );
 }
 
+const BROWSER_SCRIPTS = "tools/checks/browser-scripts.tsconfig.json";
+
+const { SCRIPT_OWNER } = embeddedScript;
+
+const embeddedScriptHits = (_project: Project, nodes: readonly Node[]): readonly Hit[] =>
+  embeddedScript.inStrings(nodes);
+
+type HitRule = typeof namedHits;
+
+const RULES: ReadonlyMap<string, HitRule> = new Map([
+  ["named", namedHits],
+  ["binding", bindingHits],
+  ["stringify", stringifyHits],
+  ["embeddedScript", embeddedScriptHits],
+]);
+
 const findingAt =
   (file: SourceFile, relative: string) =>
   ({ detail, node }: Hit): Finding => ({ ...locate(file, node), detail, file: relative });
 
-const scanFile = (project: Project, file: SourceFile, relative: string): readonly Finding[] => {
-  if (OWNERS.has(relative)) return [];
-  const nodes = descendants(file);
+const scanFileWith =
+  (rules: readonly HitRule[]) =>
+  (project: Project, file: SourceFile, relative: string): readonly Finding[] => {
+    if (OWNERS.has(relative)) return [];
+    const nodes = descendants(file);
+    return rules
+      .filter((rule) => relative !== SCRIPT_OWNER || rule !== embeddedScriptHits)
+      .flatMap((rule) => rule(project, nodes))
+      .map(findingAt(file, relative));
+  };
+
+const scan = (scope: Scope, without: ReadonlySet<string> = new Set()): readonly Finding[] => {
+  const scanFile = scanFileWith(
+    [...RULES].filter(([name]) => !without.has(name)).map(([, rule]) => rule),
+  );
   return [
-    ...namedHits(project, nodes),
-    ...bindingHits(project, nodes),
-    ...stringifyHits(project, nodes),
-  ].map(findingAt(file, relative));
+    ...scanProject(scope, scanFile),
+    ...scanProject({ ...scope, project: BROWSER_SCRIPTS }, scanFile),
+  ];
 };
 
-const BROWSER_SCRIPTS = "tools/checks/browser-scripts.tsconfig.json";
-
-const scan = (scope: Scope): readonly Finding[] => [
-  ...scanProject(scope, scanFile),
-  ...scanProject({ ...scope, project: BROWSER_SCRIPTS }, scanFile),
-];
-
-const localTimeCheck = { BROWSER_SCRIPTS, OWNERS, scan };
+const localTimeCheck = { BROWSER_SCRIPTS, OWNERS, SCRIPT_OWNER, scan };
 
 export default localTimeCheck;
