@@ -739,7 +739,7 @@
 
             const content = document.createElement('span');
             content.className = 'tree-content';
-            content.replaceChildren(htmlFragment(getTreeNodeDisplayHtml(entry, flatNode.node.label)));
+            content.replaceChildren(globalThis.msaHtml.htmlFragment(getTreeNodeDisplayHtml(entry, flatNode.node.label)));
 
             div.appendChild(prefixSpan);
             div.appendChild(marker);
@@ -1101,7 +1101,7 @@
         const blob = new Blob([jsonlContent], { type: 'application/x-ndjson' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = safeUrl(url);
+        a.href = globalThis.msaHtml.safeUrl(url);
         a.download = `${header?.id || 'session'}.jsonl`;
         document.body.appendChild(a);
         a.click();
@@ -1503,7 +1503,7 @@
         const html = renderEntry(entry);
         if (!html) return null;
 
-        const node = htmlFragment(html).firstElementChild;
+        const node = globalThis.msaHtml.htmlFragment(html).firstElementChild;
 
         // Cache the node
         if (node) {
@@ -1523,7 +1523,7 @@
 
         renderTree();
 
-        document.getElementById('header-container').replaceChildren(htmlFragment(renderHeader()));
+        document.getElementById('header-container').replaceChildren(globalThis.msaHtml.htmlFragment(renderHeader()));
         attachHeaderHandlers();
 
         // Build messages using cached DOM nodes

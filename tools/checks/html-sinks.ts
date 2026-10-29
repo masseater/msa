@@ -1,5 +1,9 @@
 import type { Node } from "typescript/unstable/ast";
-import { isCallExpression, isIdentifier } from "typescript/unstable/ast/is";
+import {
+  isCallExpression,
+  isIdentifier,
+  isPropertyAccessExpression,
+} from "typescript/unstable/ast/is";
 import type { Checker, Project, Symbol as TsSymbol } from "typescript/unstable/sync";
 
 import sinkSites from "./sink-sites.ts";
@@ -14,7 +18,7 @@ type Site = sinkSitesTypes.Site;
 
 type SiteRule = sinkSitesTypes.SiteRule;
 
-const { declaredIn } = typedProject;
+const { isDefaultLib } = typedProject;
 
 const {
   ATTRIBUTE_NAME_AT,
@@ -31,11 +35,11 @@ const {
 
 const HTML_OWNER = "apps/coding-agent/src/core/export-html/html-fragment.js";
 
-const HTML_OWNER_FILE = /\/apps\/coding-agent\/src\/core\/export-html\/html-fragment\.js$/u;
+const HTML_API = "msaHtml";
 
-const HTML_RUNS = `HTML を文字列から作る API は、中の script や on* 属性をブラウザで JS として動かし、その JS は検査に入らない。${HTML_OWNER} の htmlFragment で DOM にしてから replaceChildren などで入れる`;
+const HTML_RUNS = `HTML を文字列から作る API は、中の script や on* 属性をブラウザで JS として動かし、その JS は検査に入らない。${HTML_OWNER} が置く globalThis.${HTML_API}.htmlFragment で DOM にしてから replaceChildren などで入れる`;
 
-const NAVIGATION_RUNS = `javascript スキームの URL に移る行き先に入れた文字列は、ブラウザで JS として動き、検査に入らない。${HTML_OWNER} の safeUrl(...) を通した値だけを入れる`;
+const NAVIGATION_RUNS = `javascript スキームの URL に移る行き先に入れた文字列は、ブラウザで JS として動き、検査に入らない。${HTML_OWNER} が置く globalThis.${HTML_API}.safeUrl(...) を通した値だけを入れる`;
 
 const HTML_PROPERTIES: ReadonlySet<string> = new Set(["innerHTML", "outerHTML", "srcdoc"]);
 
@@ -84,16 +88,22 @@ const htmlProperty: SiteRule = (_checker, site) =>
     ? HTML_RUNS
     : undefined;
 
-const calleeName = (value: Node): Node | undefined =>
-  isCallExpression(value) && isIdentifier(value.expression) ? value.expression : undefined;
-
-const isOwnerSafeUrl = (symbol: TsSymbol | undefined): boolean =>
-  symbol !== undefined && symbol.name === "safeUrl" && declaredIn(symbol, HTML_OWNER_FILE);
-
-const isSafeUrl = (checker: Checker, value: Node): boolean => {
-  const callee = calleeName(value);
-  return callee !== undefined && isOwnerSafeUrl(checker.getSymbolAtLocation([callee])[0]);
+const isGlobalThis = (checker: Checker, node: Node): boolean => {
+  if (!isIdentifier(node) || node.text !== "globalThis") return false;
+  const symbol = checker.getSymbolAtLocation([node])[0];
+  return symbol !== undefined && (symbol.declarations.length === 0 || isDefaultLib(symbol));
 };
+
+const isHtmlApi = (checker: Checker, node: Node): boolean =>
+  isPropertyAccessExpression(node) &&
+  node.name.text === HTML_API &&
+  isGlobalThis(checker, node.expression);
+
+const isSafeUrl = (checker: Checker, value: Node): boolean =>
+  isCallExpression(value) &&
+  isPropertyAccessExpression(value.expression) &&
+  value.expression.name.text === "safeUrl" &&
+  isHtmlApi(checker, value.expression.expression);
 
 const navigationValue = (site: Site): Node | undefined =>
   isAssignment(site) ? site.values[0] : (argumentAt(site, URL_ATTRIBUTE_AT) ?? site.values[0]);

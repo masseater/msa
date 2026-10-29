@@ -29,8 +29,13 @@ const NAVIGATION_SINK = ["navigationSink"];
 type SinkCase = readonly [statement: string, rules: readonly string[]];
 
 const sinkCases: Readonly<Record<string, SinkCase>> = {
+  anchorBareSafeUrl: [`document.createElement("a").href = safeUrl(${JS_URL});`, NAVIGATION_SINK],
   anchorHref: [`document.createElement("a").href = ${JS_URL};`, NAVIGATION_SINK],
-  anchorSafeUrl: [`document.createElement("a").href = safeUrl(${JS_URL});`, []],
+  anchorSafeUrl: [`document.createElement("a").href = globalThis.msaHtml.safeUrl(${JS_URL});`, []],
+  anchorShadowedSafeUrl: [
+    `function go(globalThis) {\n  document.createElement("a").href = globalThis.msaHtml.safeUrl(${JS_URL});\n}\ngo({ msaHtml: { safeUrl: String } });`,
+    NAVIGATION_SINK,
+  ],
   appendHTMLUnsafe: [`document.body.appendHTMLUnsafe(${HANDLER_HTML});`, HTML_SINK],
   areaHref: [`document.createElement("area").href = ${JS_URL};`, NAVIGATION_SINK],
   attrValue: [`document.body.getAttributeNode("title").value = "${LOCALE}";`, SCRIPT_SINK],
@@ -60,7 +65,10 @@ const sinkCases: Readonly<Record<string, SinkCase>> = {
   formAction: [`document.createElement("form").action = ${JS_URL};`, NAVIGATION_SINK],
   frameSrc: [`document.createElement("frame").src = ${JS_URL};`, NAVIGATION_SINK],
   handlerProperty: [`document.body.${ON}click = "${LOCALE}";`, SCRIPT_SINK],
-  htmlFragment: [`document.body.replaceChildren(htmlFragment(${HANDLER_HTML}));`, []],
+  htmlFragment: [
+    `document.body.replaceChildren(globalThis.msaHtml.htmlFragment(${HANDLER_HTML}));`,
+    [],
+  ],
   iframeSrc: [`document.createElement("iframe").src = ${JS_URL};`, NAVIGATION_SINK],
   iframeSrcdoc: [`document.createElement("iframe").srcdoc = ${HANDLER_HTML};`, HTML_SINK],
   imageSrc: ['document.createElement("img").src = "a.png";', []],

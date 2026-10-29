@@ -64,3 +64,7 @@ function htmlFragment(html) {
   template.innerHTML = String(html);
   return disarm(template.content);
 }
+
+Object.defineProperty(globalThis, "msaHtml", {
+  value: Object.freeze({ htmlFragment, safeUrl }),
+});

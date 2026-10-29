@@ -109,10 +109,6 @@ export default defineConfig({
         rules: { "msa/no-prototype-write": "error" },
       },
       {
-        files: ["apps/coding-agent/src/core/export-html/html-fragment.js"],
-        rules: { "eslint/no-unused-vars": "off" },
-      },
-      {
         files: withProbes(["tools/oxlint/**"]),
         rules: { "msa/no-builtin-module-lookup": "off" },
       },
