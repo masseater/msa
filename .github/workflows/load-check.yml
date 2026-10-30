@@ -1,0 +1,54 @@
+name: load-check
+
+on:
+  push:
+    branches: ["tmp/kd-load-*"]
+
+permissions: {}
+
+jobs:
+  suite:
+    name: coding-agent under load ${{ matrix.run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: fd-find ripgrep
+          version: "1"
+      - run: sudo ln -s "$(which fdfind)" /usr/local/bin/fd
+      - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
+        with:
+          node-version-file: .node-version
+          run-install: false
+      - run: vp install --frozen-lockfile --filter '!@msa/web'
+      - run: vp run hydrate:model-data
+      - run: vp run --log labeled test-deps
+      - name: Fill every CPU and run the whole coding-agent suite
+        run: |
+          nproc
+          for i in $(seq "$(nproc)"); do (while :; do :; done) >/dev/null 2>&1 </dev/null & done
+          root="$(mktemp -d)"
+          mkdir -p "$root/home/.config" "$root/tmp" "$root/cache/npm"
+          cd apps/coding-agent
+          start=$(date +%s)
+          set +e
+          env -i PATH="$PATH" PWD="$PWD" HOME="$root/home" TMPDIR="$root/tmp" TMP="$root/tmp" TEMP="$root/tmp" \
+            XDG_CONFIG_HOME="$root/home/.config" XDG_CACHE_HOME="$root/cache" LANG=C LC_ALL=C TZ=UTC \
+            GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$(type -P false)" \
+            GIT_EDITOR=true GIT_SEQUENCE_EDITOR=true NPM_CONFIG_USERCONFIG="$root/npm-userconfig" \
+            NPM_CONFIG_GLOBALCONFIG="$root/npm-globalconfig" NPM_CONFIG_CACHE="$root/cache/npm" FORCE_COLOR=0 CI=true \
+            vp test --run
+          code=$?
+          echo "suite exit=$code seconds=$(( $(date +%s) - start ))"
+          uptime
+          exit $code
