@@ -42,10 +42,20 @@ const other = {
   module: "src/extensions/codemode/tool",
 };
 
-it("transforms every other module of src", () => {
-  const sealed = classSealTransform.sealModule("export const value = 1;\n", other);
+it("transforms every other module of src that defines a class", () => {
+  const sealed = classSealTransform.sealModule("export class C {}\n", other);
   expect(sealed?.code.startsWith(`import ${classSealTransform.RUNTIME} from`)).toBe(true);
   expect(sealed?.code).not.toContain(classSealTransform.SHARED);
+});
+
+it("leaves a module of src without the word class as it is", () => {
+  expect(classSealTransform.sealModule("export const value = 1;\n", other)).toBeUndefined();
+});
+
+it("stops the build when any module of src uses the name the check reserves", () => {
+  expect(() =>
+    classSealTransform.sealModule(`export const ${classSealTransform.RUNTIME} = 1;\n`, other),
+  ).toThrow("ソースに書かない");
 });
 
 it("hands the startup list of tui bases to every check in a module that imports tui", () => {
@@ -61,7 +71,7 @@ it("hands the startup list of tui bases to every check in a module that imports 
 
 it("leaves the tui list out of a module that imports only the types of tui", () => {
   const sealed = classSealTransform.sealModule(
-    'import type tui from "@msa/tui";\nexport type T = typeof tui;\n',
+    'import type tui from "@msa/tui";\nexport type T = typeof tui;\nexport class C {}\n',
     other,
   );
   expect(sealed?.code).not.toContain(classSealTransform.SHARED);

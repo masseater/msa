@@ -10,8 +10,6 @@ const { store } = storeModule;
 const { prompts } = promptsModule;
 const { nowMillis } = runtimeModule;
 
-const RUN_POLL_MS = 100;
-
 type ThreadRun = threadRunTypes.ThreadRun;
 
 function current(thread: ThreadRun): boolean {
@@ -28,14 +26,20 @@ function whileCurrent<A>(
   thread: ThreadRun,
   effect: Effect.Effect<A>,
 ): Effect.Effect<A | undefined> {
-  const ended = Effect.gen(function* () {
-    while (current(thread)) {
-      yield* markActive(thread);
-      yield* Effect.sleep(thread.runtime.options.runPollMs ?? RUN_POLL_MS);
-    }
-    return undefined;
+  const { runtime, threadId } = thread;
+  return Effect.suspend(() => {
+    if (!current(thread)) return Effect.undefined;
+    const ended = Effect.as(runtime.runEnded(threadId), undefined);
+    return Effect.acquireUseRelease(
+      Effect.sync(() => runtime.harnessWork.add(threadId)),
+      () => Effect.race(effect, ended),
+      () =>
+        Effect.suspend(() => {
+          runtime.harnessWork.delete(threadId);
+          return current(thread) ? markActive(thread) : Effect.void;
+        }),
+    );
   });
-  return Effect.race(effect, ended);
 }
 
 function readIds(thread: ThreadRun): Set<string> {

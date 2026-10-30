@@ -7,8 +7,19 @@ import sessionSearch from "../src/core/session-search/session-search.ts";
 import type sessionSearchTypes from "../src/core/session-search/session-search.types.ts";
 import fixture from "./session-search-fixture.ts";
 
-const { awaited, currentTimeMillis, fromJsonText, joinPath, removeDirs, runNodeScript, runTest } =
-  testing;
+const {
+  awaited,
+  currentTimeMillis,
+  fromJsonText,
+  joinPath,
+  makeTempDir,
+  pathExists,
+  pollUntil,
+  removeDirs,
+  runNodeScript,
+  runTest,
+  writeTextFile,
+} = testing;
 const { header, indexVersionDirectory, makeLocations, user, writeSession } = fixture;
 
 const directories: string[] = [];
@@ -22,12 +33,23 @@ const SEARCH_MILLIS = 6000;
 const searchModule = new URL("../src/core/session-search/session-search.ts", import.meta.url).href;
 const sourceResolver = new URL("../src/experimental/source-resolver.ts", import.meta.url).href;
 
-const APPEND_AND_SEARCH = `
+const START_TOGETHER = `
+const { existsSync, readFileSync, writeFileSync } = await import("node:fs");
+const { join } = await import("node:path");
+const startTogether = async () => {
+  writeFileSync(join(process.env.START_DIRECTORY, "ready-" + process.env.WORKER), "");
+  const go = join(process.env.START_DIRECTORY, "go");
+  while (!existsSync(go)) await new Promise((resolve) => setTimeout(resolve, 5));
+  return Number(readFileSync(go, "utf8"));
+};
+`;
+
+const APPEND_AND_SEARCH = `${START_TOGETHER}
 const { appendFileSync } = await import("node:fs");
 const locations = JSON.parse(process.env.SEARCH_LOCATIONS);
 const search = (await import(process.env.SEARCH_MODULE)).default;
 const files = [process.env.OWN_FILE, process.env.SHARED_FILE];
-const until = Number(process.env.UNTIL);
+const until = await startTogether();
 const letters = (count) => {
   let text = "";
   do {
@@ -52,12 +74,10 @@ while (Date.now() < until) {
 console.log(JSON.stringify({ missed, searches }));
 `;
 
-const WATCH_THE_INDEX = `
-const { readFileSync } = await import("node:fs");
-const { join } = await import("node:path");
+const WATCH_THE_INDEX = `${START_TOGETHER}
 const { DatabaseSync } = await import("node:sqlite");
 const directory = process.env.INDEX_DIRECTORY;
-const until = Number(process.env.UNTIL);
+const until = await startTogether();
 const opened = new Map();
 const seen = new Map();
 const moves = [];
@@ -99,7 +119,7 @@ const seed = Effect.fn("seed")(function* (locations: sessionSearchTypes.Location
   }
 });
 
-const searcher = (locations: sessionSearchTypes.Locations, worker: number, until: number) =>
+const searcher = (locations: sessionSearchTypes.Locations, worker: number, start: string) =>
   Effect.gen(function* () {
     const result = yield* runNodeScript(APPEND_AND_SEARCH, {
       env: {
@@ -109,7 +129,7 @@ const searcher = (locations: sessionSearchTypes.Locations, worker: number, until
         SEARCH_LOCATIONS: yield* testing.toJsonText(locations),
         SEARCH_MODULE: searchModule,
         SHARED_FILE: sessionFile(locations, "shared"),
-        UNTIL: String(until),
+        START_DIRECTORY: start,
         WORKER: `w${worker}`,
       },
       nodeArgs: ["--import", sourceResolver],
@@ -119,10 +139,14 @@ const searcher = (locations: sessionSearchTypes.Locations, worker: number, until
     return (yield* fromJsonText(result.stdout)) as Outcome;
   });
 
-const watcher = (locations: sessionSearchTypes.Locations, until: number) =>
+const watcher = (locations: sessionSearchTypes.Locations, start: string) =>
   Effect.gen(function* () {
     const result = yield* runNodeScript(WATCH_THE_INDEX, {
-      env: { INDEX_DIRECTORY: indexVersionDirectory(locations), UNTIL: String(until) },
+      env: {
+        INDEX_DIRECTORY: indexVersionDirectory(locations),
+        START_DIRECTORY: start,
+        WORKER: "watcher",
+      },
       timeout: "60 seconds",
     });
     expect(result.code, result.stderr).toBe(0);
@@ -135,14 +159,29 @@ const findsWhatEachProcessAppendedRightBeforeItsSearch = () =>
       const locations = yield* makeLocations(directories);
       yield* seed(locations);
       yield* awaited(sessionSearch.refresh(locations));
-      const until = currentTimeMillis() + SEARCH_MILLIS;
+      const start = yield* makeTempDir("msa-session-search-start-");
+      directories.push(start);
+      const ready = (name: string) => pathExists(joinPath(start, `ready-${name}`));
+      const startOnceAllAreReady = Effect.gen(function* () {
+        const names = [
+          "watcher",
+          ...Array.from({ length: PROCESSES }, (_, worker) => `w${worker}`),
+        ];
+        yield* pollUntil(
+          Effect.map(Effect.forEach(names, ready), (all) => all.every(Boolean)),
+          50,
+          10,
+        );
+        yield* writeTextFile(joinPath(start, "go"), String(currentTimeMillis() + SEARCH_MILLIS));
+      });
       const [movedBack, outcomes] = yield* Effect.all(
         [
-          watcher(locations, until),
+          watcher(locations, start),
           Effect.all(
-            Array.from({ length: PROCESSES }, (_, worker) => searcher(locations, worker, until)),
+            Array.from({ length: PROCESSES }, (_, worker) => searcher(locations, worker, start)),
             { concurrency: "unbounded" },
           ),
+          startOnceAllAreReady,
         ],
         { concurrency: "unbounded" },
       );

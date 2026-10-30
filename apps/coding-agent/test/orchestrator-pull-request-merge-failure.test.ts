@@ -91,10 +91,7 @@ const completesWhenTheRunEndsRightAfterTheMerge = () =>
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github } = remote;
-        const { orchestrator, workers, branch, number, taskId, worktree } = yield* reviewed(
-          remote,
-          { runPollMs: 60_000 },
-        );
+        const { orchestrator, workers, branch, number, taskId, worktree } = yield* reviewed(remote);
         let stopping: Promise<unknown> | undefined;
         const unsubscribe = orchestrator.onChange(() => {
           const task = orchestrator.snapshot.tasks.find((candidate) => candidate.id === taskId);

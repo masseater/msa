@@ -12,8 +12,7 @@ function releaseThread(runtime: runtimeTypes.Runtime, threadId: string): void {
 
 function abortThread(runtime: runtimeTypes.Runtime, threadId: string): void {
   const worker = runtime.workers.get(threadId);
-  runtime.runs.delete(threadId);
-  runtime.runStartedAt.delete(threadId);
+  runtime.endRun(threadId);
   runtime.activity.delete(threadId);
   runtime.wrapUps.delete(threadId);
   releaseThread(runtime, threadId);

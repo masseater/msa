@@ -95,8 +95,10 @@ const parse = (code: string, filename: string) => {
   return parsed.program;
 };
 
+const CLASS_WORD = /\bclass\b/u;
+
 const countClasses = (code: string, filename: string): number =>
-  classesIn(parse(code, filename)).length;
+  CLASS_WORD.test(code) ? classesIn(parse(code, filename)).length : 0;
 
 const slice = (code: string, span: Span): string => code.slice(span.start, span.end);
 
@@ -211,8 +213,15 @@ const assertStandalone = (code: string, filename: string): void => {
     throw new Error(`${filename}: class の検査を掛けない入口から src の module を import しない`);
 };
 
+const mayDefineClass = (code: string, filename: string): boolean => {
+  if (code.includes(RUNTIME))
+    throw new Error(`${filename}: ${RUNTIME} は class の検査が使う名前なので、ソースに書かない`);
+  return CLASS_WORD.test(code);
+};
+
 const sealModule = (code: string, target: Target): Sealed | undefined => {
-  if (!STANDALONE.has(target.module)) return sealClasses(code, target);
+  if (!STANDALONE.has(target.module))
+    return mayDefineClass(code, target.filename) ? sealClasses(code, target) : undefined;
   assertStandalone(code, target.filename);
   return undefined;
 };

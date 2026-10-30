@@ -69,7 +69,7 @@ function inspectOwn(
       threadStatus: "stopped",
     };
   }
-  if (worker.compaction.manual.isCompacting) return undefined;
+  if (worker.compaction.manual.isCompacting || runtime.harnessWork.has(thread.id)) return undefined;
   const since = now - (runtime.activity.get(thread.id)?.at ?? thread.createdAt);
   const turn = stoppedTurn(worker);
   if (turn !== undefined && !worker.isStreaming && !worker.run.retry.isRetrying) {

@@ -8,7 +8,6 @@ const { taskStatus, waitFor } = orchestratorHarness.harness;
 const { exists, reviewed, withRemote } = pullRequestSupport;
 
 const REFUSED = { code: 1, stderr: "gh: Base branch was modified. (HTTP 405)", stdout: "" };
-const RUN_POLL_MS = 2_000;
 const RERUN_WAIT_MS = 1_000;
 
 function rerunWorktreeExists(workers: readonly { cwd: string; prompts: string[] }[], cwd: string) {
@@ -48,7 +47,7 @@ const harnessMergeThenStopAndRerun = () =>
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github, repository } = remote;
-        const run = yield* reviewed(remote, { runPollMs: RUN_POLL_MS });
+        const run = yield* reviewed(remote);
         const { orchestrator, workers, head, number, taskId } = run;
         let rerun: Promise<unknown> | undefined;
         github.beforeMerge = Effect.gen(function* () {

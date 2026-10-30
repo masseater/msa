@@ -196,8 +196,7 @@ function launch(
       runtime.publish();
     });
   }
-  runtime.runs.set(threadId, run);
-  runtime.runStartedAt.set(threadId, performance.now());
+  runtime.beginRun(threadId, run);
   runtime.launch(
     Effect.promise(() =>
       worker.run.prompting.prompt(prompt).then(

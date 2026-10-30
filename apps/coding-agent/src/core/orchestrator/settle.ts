@@ -31,8 +31,7 @@ function reportContent(
 }
 
 function forgetRun(runtime: runtimeTypes.Runtime, threadId: string): void {
-  runtime.runs.delete(threadId);
-  runtime.runStartedAt.delete(threadId);
+  runtime.endRun(threadId);
   runtime.decisionRequests.delete(threadId);
   runtime.goalChecklists.delete(threadId);
   releaseThread(runtime, threadId);

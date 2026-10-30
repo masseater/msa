@@ -51,8 +51,9 @@ declare namespace runtimeTypes {
     options: OrchestratorOptions;
     telemetry: telemetryTypesNs.OrchestratorTelemetry;
     workers: Map<string, workerTypes.WorkerSession>;
-    runs: Map<string, number>;
-    runStartedAt: Map<string, number>;
+    readonly runs: ReadonlyMap<string, number>;
+    readonly runStartedAt: ReadonlyMap<string, number>;
+    readonly harnessWork: Set<string>;
     activity: Map<string, ThreadActivity>;
     wrapUps: Map<string, wrapUpTypes.WrapUp>;
     decisionRequests: Map<string, DecisionAsk>;
@@ -62,6 +63,9 @@ declare namespace runtimeTypes {
     readonly closing: boolean;
     maxConcurrentThreads: number;
     nextRun(): number;
+    beginRun(threadId: string, run: number): void;
+    endRun(threadId: string): void;
+    runEnded(threadId: string): Effect.Effect<void>;
     exclusive<A>(effect: Effect.Effect<A, unknown>): Promise<A>;
     launch(effect: Effect.Effect<unknown>): void;
     publish(): void;

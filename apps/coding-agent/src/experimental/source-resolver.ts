@@ -7,9 +7,16 @@ import platformPath from "../core/platform/path.ts";
 const { registerHooks } = nodeModuleHooks;
 const { fileURLToPath, pathToFileURL } = nodeUrl;
 
-const { firstRegularFileForModuleHook, readTextForModuleHook } = moduleHookFiles;
+const {
+  cachedForModuleHook,
+  compileCacheForModuleHook,
+  digestForModuleHook,
+  firstRegularFileForModuleHook,
+  readTextForModuleHook,
+  sourcesInForModuleHook,
+} = moduleHookFiles;
 
-const { extname, resolve, sep } = platformPath;
+const { extname, join, resolve, sep } = platformPath;
 
 interface TsConfig {
   readonly compilerOptions?: {
@@ -29,6 +36,12 @@ const packageRoot = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/
 const sourceRoot = `${packageRoot}/src/`;
 const classSealRuntime = `${sourceRoot}core/platform/node/class-seal.ts`;
 const classSealTui = `${sourceRoot}core/platform/node/class-seal-tui.ts`;
+const compileCache = compileCacheForModuleHook();
+const sealCache = compileCache === undefined ? undefined : join(compileCache, "msa-class-seal");
+const sealVersion = digestForModuleHook([
+  process.version,
+  ...sourcesInForModuleHook(join(repositoryRoot, "tools/class-seal"), ".ts"),
+]);
 const tsconfigPath = resolve(repositoryRoot, "tsconfig.json");
 const tsconfig = JSON.parse(readTextForModuleHook(tsconfigPath)) as TsConfig;
 const paths = tsconfig.compilerOptions?.paths;
@@ -58,17 +71,11 @@ registerHooks({
     const file = fileURLToPath(url);
     if (!isSealedSource(file) || loaded.source === undefined || loaded.source === null)
       return loaded;
-    const sealed = classSealTransform.sealModule(sourceText(loaded.source), {
-      filename: file,
-      module: classSealTransform.moduleOf(packageRoot, file),
-      runtime: classSealTransform.relativeSpecifier(file, classSealRuntime),
-      shared: classSealTransform.relativeSpecifier(file, classSealTui),
-    });
-    if (sealed === undefined) return loaded;
-    const map = Buffer.from(sealed.map.toString()).toString("base64");
+    const text = sourceText(loaded.source);
+    const key = digestForModuleHook([sealVersion, file, text]);
     return {
       ...loaded,
-      source: `${sealed.code}\n//# sourceMappingURL=data:application/json;base64,${map}\n`,
+      source: cachedForModuleHook(sealCache, key, () => sealedSource(file, text)),
     };
   },
   resolve(specifier, context, nextResolve) {
@@ -91,6 +98,18 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+
+function sealedSource(file: string, text: string): string {
+  const sealed = classSealTransform.sealModule(text, {
+    filename: file,
+    module: classSealTransform.moduleOf(packageRoot, file),
+    runtime: classSealTransform.relativeSpecifier(file, classSealRuntime),
+    shared: classSealTransform.relativeSpecifier(file, classSealTui),
+  });
+  if (sealed === undefined) return text;
+  const map = Buffer.from(sealed.map.toString()).toString("base64");
+  return `${sealed.code}\n//# sourceMappingURL=data:application/json;base64,${map}\n`;
+}
 
 function sourceText(source: string | ArrayBuffer | NodeJS.TypedArray): string {
   return typeof source === "string" ? source : new TextDecoder().decode(source);

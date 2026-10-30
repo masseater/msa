@@ -124,17 +124,18 @@ const truncatesOutputToTheTokenBudget = Effect.gen(function* () {
 
 const formatsOutputAtTheItemLimit = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => setup3());
-  const startedAt = performance.now();
+  const startedAt = process.cpuUsage();
   const result = yield* Effect.promise(() =>
     runCodemode(harness, 'for (let i = 0; i < 100000; i++) text("");'),
   );
-  const elapsed = performance.now() - startedAt;
+  const used = process.cpuUsage(startedAt);
+  const cpuMillis = (used.user + used.system) / 1000;
   yield* removePath(
     (result.details as unknown as codingAgentTypes.CodemodeToolDetails).fullOutputPath ?? "",
   );
   expect(result.isError).toBe(false);
   expect(resultText(result)).toContain("==> text 100000/100000 <==");
-  expect(elapsed).toBeLessThan(5000);
+  expect(cpuMillis).toBeLessThan(5000);
 });
 
 const resolvesBashCallsToStructuredResults = Effect.gen(function* () {

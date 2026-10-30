@@ -63,8 +63,7 @@ function stopped(runtime: runtimeTypes.Runtime, threadId: string, memo: string, 
     });
     store.setTaskStatus(database, assignment.taskId, "stopped", now);
   }
-  runtime.runs.delete(threadId);
-  runtime.runStartedAt.delete(threadId);
+  runtime.endRun(threadId);
   releaseThread(runtime, threadId);
   runtime.publish();
 }

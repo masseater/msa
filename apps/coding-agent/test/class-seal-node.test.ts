@@ -16,10 +16,8 @@ const sourceResolver = `${packageRoot}/src/experimental/source-resolver.ts`;
 
 const loadAllScript = (layout: Layout, modules: readonly string[]): string =>
   [
-    `const { default: seal } = await import(${JSON.stringify(layout("src/core/platform/node/class-seal"))});`,
-    "await Promise.all([",
-    ...modules.map((module) => `  import(${JSON.stringify(layout(module))}),`),
-    "]);",
+    `import seal from ${JSON.stringify(layout("src/core/platform/node/class-seal"))};`,
+    ...modules.map((module) => `import ${JSON.stringify(layout(module))};`),
     "process.stdout.write(JSON.stringify(Object.fromEntries(seal.sealedModules())));",
   ].join("\n");
 

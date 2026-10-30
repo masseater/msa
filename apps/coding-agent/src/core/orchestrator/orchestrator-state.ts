@@ -1,4 +1,4 @@
-import { Effect, FiberSet, Scope } from "effect";
+import { Deferred, Effect, Exit, FiberSet, Scope } from "effect";
 
 import afterTurnModule from "./after-turn.ts";
 import backgroundModule from "./background.ts";
@@ -40,8 +40,9 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly options: runtimeTypes.OrchestratorOptions;
   readonly telemetry: OrchestratorTelemetry;
   readonly workers = new Map<string, runtimeTypes.WorkerSession>();
-  readonly runs = new Map<string, number>();
-  readonly runStartedAt = new Map<string, number>();
+  readonly runs: ReadonlyMap<string, number>;
+  readonly runStartedAt: ReadonlyMap<string, number>;
+  readonly harnessWork = new Set<string>();
   readonly activity = new Map<string, runtimeTypes.ThreadActivity>();
   readonly wrapUps = new Map<string, wrapUpTypes.WrapUp>();
   readonly decisionRequests: runtimeTypes.Runtime["decisionRequests"] = new Map();
@@ -54,11 +55,16 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   maxConcurrentThreads: number;
   private queue: Promise<void> = Promise.resolve();
   private runCount = 0;
+  private readonly liveRuns = new Map<string, number>();
+  private readonly startedAt = new Map<string, number>();
+  private readonly runEnds = new Map<string, Deferred.Deferred<void>>();
   private readonly loops = fiberSet<never>();
   private readonly launched = fiberSet<void>();
   private disposed: Promise<void> | undefined;
 
   constructor(options: runtimeTypes.OrchestratorOptions) {
+    this.runs = this.liveRuns;
+    this.runStartedAt = this.startedAt;
     this.telemetry = new OrchestratorTelemetry(options.telemetry);
     this.options = {
       ...options,
@@ -84,6 +90,26 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   nextRun(): number {
     this.runCount += 1;
     return this.runCount;
+  }
+
+  beginRun(threadId: string, run: number): void {
+    this.endRun(threadId);
+    this.liveRuns.set(threadId, run);
+    this.startedAt.set(threadId, performance.now());
+    this.runEnds.set(threadId, Deferred.makeUnsafe<void>());
+  }
+
+  endRun(threadId: string): void {
+    this.liveRuns.delete(threadId);
+    this.startedAt.delete(threadId);
+    const ended = this.runEnds.get(threadId);
+    this.runEnds.delete(threadId);
+    if (ended !== undefined) Deferred.doneUnsafe(ended, Exit.void);
+  }
+
+  runEnded(threadId: string): Effect.Effect<void> {
+    const ended = this.runEnds.get(threadId);
+    return ended === undefined ? Effect.void : Deferred.await(ended);
   }
 
   exclusive<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
@@ -140,7 +166,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
     return Effect.runPromise(
       Effect.gen(function* () {
         yield* FiberSet.clear(self.loops);
-        self.runs.clear();
+        for (const threadId of [...self.runs.keys()]) self.endRun(threadId);
         for (const worker of self.workers.values()) {
           yield* Effect.tryPromise({
             catch: () => undefined,
