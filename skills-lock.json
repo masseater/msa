@@ -5,55 +5,49 @@
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/dont-it-yourself/SKILL.md",
-      "computedHash": "405f61af56e2078db613619a057b9cc55d37b62ac3bb71b30dedc97fa0d56ea3"
+      "computedHash": "47ecdfe43b3588ab063428c5c3e8a236b870873be6e79595697d24d1559d46a0"
     },
     "how-to-use-react": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/how-to-use-react/SKILL.md",
-      "computedHash": "d0b10c40aa3245b3d8d363f19f4d4b29b9ce17880d3ad71d1715e71ef01ee790"
+      "computedHash": "5767f86e33b1b4db993adce95de704047b40c6aaa31fe4ff0dcd456a028056af"
     },
     "humanity-and-humanness": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/humanity-and-humanness/SKILL.md",
-      "computedHash": "a8289ec03ddeb6c2a14a613279be0ed4a6415cd7976bb3815f9d69e66101cdfd"
+      "computedHash": "58d5f038b1b020e9f238f6bfcdcefaf17f2da5d3c78bb0d11285c53bb3c779a9"
     },
     "integrate": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/integrate/SKILL.md",
-      "computedHash": "09964308929f006e16387f9e685218477758273304d120625b419b13b6e0b6ee"
+      "computedHash": "6d759eb082562d3c3a5efeefab8c6be612a1252bca521ad6ee11c1caff84eba9"
     },
     "measure-dont-guess": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/measure-dont-guess/SKILL.md",
-      "computedHash": "072fe6856a8d7930fcbd7dcd6695fa8505817124ecc017701874df4486bbd4e6"
+      "computedHash": "d11db14de46d4f650f9f434f57c7078120f63ea5f1409d6718bb176b406405c5"
     },
-    "poteto-principles": {
+    "project-checklist": {
       "source": "masseater/skills",
       "sourceType": "github",
-      "skillPath": "skills/poteto-principles/SKILL.md",
-      "computedHash": "7e02bce662c2910661263c4cf815f1c80a7f200bea7d4b6292fbd1708d82eec5"
-    },
-    "setup-template": {
-      "source": "masseater/skills",
-      "sourceType": "github",
-      "skillPath": "skills/setup-template/SKILL.md",
-      "computedHash": "16f6fecdc1cc5a69f8a7216256109ce8f87160b0bfdc47d906534bd7cd71bcb6"
+      "skillPath": "skills/project-checklist/SKILL.md",
+      "computedHash": "16b31583521b66890ddad0060ecb47056475660eff97c3662fb292302e8b4130"
     },
     "skill-authoring": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/skill-authoring/SKILL.md",
-      "computedHash": "192e04dcd46414904923fe3d62e429ed42caa3cd86906713cc05f8a6c28fcee0"
+      "computedHash": "789b48d77260d3239acfb0a944862cde456bea1ba55d3a4a80bf22236d8fd8fa"
     },
     "writing": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "skills/writing/SKILL.md",
-      "computedHash": "4348accb08d48b89cc8711da88d615878dfaae027c1f4796cfdd36cf431d34fa"
+      "computedHash": "4eab9c3ec33f76cda2cb6a4b3496295b506e3c91cade779df153277c9f175c96"
     }
   }
 }
