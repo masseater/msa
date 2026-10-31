@@ -164,7 +164,7 @@ function latin1Case(): void {
         const { env } = yield* startX11(t);
         yield* setClipboard({ env, input: Buffer.from("café £ÿ", "latin1"), target: "STRING" });
         const result = yield* readClipboard("getText", env);
-        assert.equal(result.ok, true, result.error);
+        assert.equal(result.ok, true, result.error ?? "clipboard read failed");
         assert.equal(result.value, "café £ÿ");
       }),
     ));
@@ -178,7 +178,7 @@ function refusedTargetsCase(compiled: nativeClipboardLinuxHelpersTypes.CompiledF
         const command = join(compiled.directory(), "x11-test");
         yield* startServer({ args: ["direct-text"], command, env, t });
         const result = yield* readClipboard("getText", env);
-        assert.equal(result.ok, true, result.error);
+        assert.equal(result.ok, true, result.error ?? "clipboard read failed");
         assert.equal(result.value, "café 日本語");
       }),
     ));
@@ -211,7 +211,7 @@ function unicodeTransferCase(): void {
           Effect.gen(function* () {
             yield* setClipboard({ env, input: bytes, target });
             const result = yield* readClipboard(method, env);
-            assert.equal(result.ok, true, result.error);
+            assert.equal(result.ok, true, result.error ?? "clipboard read failed");
             assert.equal(result.length, bytes.length);
             assert.equal(result.hash, yield* sha256Hex(bytes));
           }),
