@@ -5,7 +5,7 @@ import type cryptoTypes from "./crypto.types.ts";
 const webCrypto = Crypto.make({
   digest: (algorithm, data) =>
     Effect.map(
-      Effect.promise(() => globalThis.crypto.subtle.digest(algorithm, data)),
+      Effect.promise(() => globalThis.crypto.subtle.digest(algorithm, new Uint8Array(data))),
       (digested) => new Uint8Array(digested),
     ),
   randomBytes: (size) => globalThis.crypto.getRandomValues(new Uint8Array(size)),

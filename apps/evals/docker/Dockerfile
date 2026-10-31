@@ -1,4 +1,4 @@
-FROM node:24-slim AS builder
+FROM node:26-slim AS builder
 WORKDIR /work
 RUN npm install -g pnpm@12.10.1 vite-plus@1.1.0
 # Build against an ephemeral copy of the repository. Only outputs staged under
@@ -25,7 +25,7 @@ RUN rm -rf \
     /opt/evaluator/install/node_modules/@msa/coding-agent/docs \
     /opt/evaluator/install/node_modules/@msa/coding-agent/examples
 
-FROM node:24-slim AS evaluator
+FROM node:26-slim AS evaluator
 COPY --from=builder /opt/evaluator/root /repo
 WORKDIR /repo/apps/evals
 # Vitest starts as root so it can load evaluator code. Before prompting the
