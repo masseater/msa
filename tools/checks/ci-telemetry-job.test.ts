@@ -55,7 +55,9 @@ const collectProblems = Effect.gen(function* () {
     }),
   );
   const script = yield* fs.readFile(path.join(root, SCRIPT));
-  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", script));
+  const digest = yield* Effect.promise(() =>
+    crypto.subtle.digest("SHA-256", new Uint8Array(script)),
+  );
   const scriptProblems =
     Buffer.from(digest).toString("hex") === SCRIPT_SHA256
       ? []
