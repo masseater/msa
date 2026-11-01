@@ -28,7 +28,7 @@ vp install
 ./scripts/msa-dev.sh
 ```
 
-msa requires Node.js 22.19 or newer. State lives in `~/.msa/agent`.
+msa requires Node.js 26 or newer. State lives in `~/.msa/agent`.
 
 Start msa in the directory where you want it to work:
 

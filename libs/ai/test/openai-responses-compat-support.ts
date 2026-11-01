@@ -11,11 +11,7 @@ const { normalizeContext } = compatModule;
 
 const { chooseModel, usesApi } = modelChoice;
 
-type CapturedHeaders =
-  | Headers
-  | string[][]
-  | Record<string, string | readonly string[]>
-  | undefined;
+type CapturedHeaders = RequestInit["headers"];
 
 interface CapturedResponsesPayload {
   readonly [field: string]: unknown;
@@ -28,15 +24,7 @@ interface CapturedResponsesPayload {
 const responsesModel = chooseModel("openai", "Responses", usesApi("openai-responses"));
 
 function getHeader(headers: CapturedHeaders, name: string): string | null {
-  if (headers === undefined) return null;
-  if (headers instanceof Headers) return headers.get(name);
-  const lowerName = name.toLowerCase();
-  if (Array.isArray(headers)) {
-    return headers.find(([key]) => key?.toLowerCase() === lowerName)?.[1] ?? null;
-  }
-  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === lowerName);
-  if (entry === undefined) return null;
-  return typeof entry[1] === "string" ? entry[1] : entry[1].join(", ");
+  return headers === undefined ? null : new Headers(headers).get(name);
 }
 
 const respondWith = (body: string) => {

@@ -6,7 +6,7 @@ For native Windows setup, read [Windows Setup](windows.md). For Android, read [T
 
 ## 1. Install msa
 
-msa runs from a checkout of this repository and requires Node.js 22.19 or newer:
+msa runs from a checkout of this repository and requires Node.js 26 or newer:
 
 ```bash
 git clone https://github.com/masseater/msa
