@@ -383,10 +383,11 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             .github/scripts/ci-telemetry.sh
+            .github/scripts/cloudflare-token.sh
             apps/web/app-name.ts
           sparse-checkout-cone-mode: false
+      - if: github.ref == 'refs/heads/main'
+        run: .github/scripts/cloudflare-token.sh
       - run: .github/scripts/ci-telemetry.sh
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ github.token }}
