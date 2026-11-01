@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
   echo "::notice::Cloudflare is not configured; skipping CI telemetry"
   exit 0
 fi
