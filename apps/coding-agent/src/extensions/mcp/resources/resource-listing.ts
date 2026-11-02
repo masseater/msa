@@ -71,8 +71,8 @@ function listPage<T extends Item>(
     awaiting(function* () {
       const result = yield* awaited(page(server, cursor, requestOptions(server, signal)));
       return {
-        server: server.name,
         [key]: result.items.filter(visible).map((item) => listed(server.name, item)),
+        server: server.name,
         ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
       };
     }),

@@ -17,6 +17,8 @@ const LOOPBACK_TEST_SERVER =
   "テスト用の HTTP サーバーは @msa/testing の listen・serveLoopback で 127.0.0.1 に立てる";
 
 const requiredStack: Readonly<Record<string, readonly string[]>> = {
+  [EFFECT_ONLY_HTTP]: ["axios", "ky", "ofetch", "got", "node-fetch"],
+  [EFFECT_ONLY_TRACING]: ["@opentelemetry/*", "dd-trace", "newrelic"],
   [EFFECT_ONLY_UTILS]: [
     "zod",
     "yup",
@@ -42,8 +44,6 @@ const requiredStack: Readonly<Record<string, readonly string[]>> = {
     "ts-results",
     "purify-ts",
   ],
-  [EFFECT_ONLY_HTTP]: ["axios", "ky", "ofetch", "got", "node-fetch"],
-  [EFFECT_ONLY_TRACING]: ["@opentelemetry/*", "dd-trace", "newrelic"],
 };
 
 const requiredStackEntries = Object.entries(requiredStack).flatMap(([message, modules]) =>

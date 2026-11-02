@@ -182,7 +182,7 @@ const run: NonNullable<UserConfig["run"]> = {
       cache: false,
       command: "node tools/build-binaries.ts",
     },
-    check: "vp check",
+    check: "vp check --deny-warnings",
     checks: {
       command: [],
       dependsOn: [

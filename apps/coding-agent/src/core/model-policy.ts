@@ -150,8 +150,8 @@ function addModelPolicyPattern(
   const exists = policy[kind].some((entry) => entry.toLowerCase() === lower);
   return {
     ...policy,
-    [other]: withoutOther,
     [kind]: exists ? policy[kind] : [...policy[kind], text],
+    [other]: withoutOther,
   };
 }
 

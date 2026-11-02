@@ -87,15 +87,17 @@ const spawnProcess = (
       stdout: "pipe",
       windowsHide: false,
     }).pipe(
-      Effect.map((handle): platformTypes.SpawnedProcess => ({
-        exitCode: handle.exitCode.pipe(
-          Effect.map(Number),
-          Effect.orElseSucceed(() => null),
-        ),
-        stderr: Stream.ignore(handle.stderr),
-        stdout: Stream.ignore(handle.stdout),
-      })),
-      Effect.mapError((error) => SpawnError.make({ cause: error, message: causeMessage(error) })),
+      Effect.mapBoth({
+        onFailure: (error) => SpawnError.make({ cause: error, message: causeMessage(error) }),
+        onSuccess: (handle): platformTypes.SpawnedProcess => ({
+          exitCode: handle.exitCode.pipe(
+            Effect.map(Number),
+            Effect.orElseSucceed(() => null),
+          ),
+          stderr: Stream.ignore(handle.stderr),
+          stdout: Stream.ignore(handle.stdout),
+        }),
+      }),
     ),
   );
 

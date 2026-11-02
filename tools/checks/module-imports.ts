@@ -19,9 +19,9 @@ const loaderOf = (file: string): Loader =>
 const blankImports = (code: string, imports: ReadonlyArray<ImportSpecifier>): string =>
   imports.reduce(
     (rest, entry) =>
-      entry.ss < 0
+      entry.importStart < 0
         ? rest
-        : `${rest.slice(0, entry.ss)}${" ".repeat(entry.se - entry.ss)}${rest.slice(entry.se)}`,
+        : `${rest.slice(0, entry.importStart)}${" ".repeat(entry.importEnd - entry.importStart)}${rest.slice(entry.importEnd)}`,
     code,
   );
 
@@ -36,7 +36,9 @@ const read = (file: string, text: string): moduleImportsTypes.ModuleImports => {
   const [imports] = parse(code);
   return {
     embedded: embeddedIn(code, imports),
-    specs: imports.flatMap((entry) => (entry.n === undefined ? [] : [entry.n])),
+    specs: imports.flatMap((entry) =>
+      typeof entry.specifier === "string" ? [entry.specifier] : [],
+    ),
   };
 };
 
@@ -46,7 +48,7 @@ const readImports: moduleImportsTypes.ReadImports = (file, text) =>
     try: () => read(file, text),
   });
 
-const ready = Effect.promise(() => init);
+const ready = Effect.promise(init);
 
 const moduleImports = { readImports, ready };
 
