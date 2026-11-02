@@ -56,7 +56,7 @@ const timersArmedBy = <A, E, R>(
               run.tracking = false;
             }),
           ),
-          Effect.flatMap((exit) => exit),
+          Effect.flatten,
           Effect.tap(() => nextImmediate),
           Effect.map((value) => {
             const holding = [...live.values()].filter((timer) => timer?.hasRef() ?? true).length;

@@ -90,8 +90,8 @@ function scoredMeta(overrides?: {
       name: "without_docs",
       run: {
         artifacts: overrides?.artifacts ?? {
-          runId: "run-1",
           [MSA_SESSION_SNAPSHOT_ARTIFACT]: SESSION,
+          runId: "run-1",
         },
         errors: overrides?.errors ?? [],
         output: { ok: true },

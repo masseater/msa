@@ -1,4 +1,4 @@
-import MagicString from "magic-string";
+import { MagicString } from "magic-string";
 import type { SourceMap } from "magic-string";
 import { parseSync } from "vite-plus";
 

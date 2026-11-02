@@ -32,7 +32,7 @@ const rejectsNonPositiveModelTokenLimits = () => {
   for (const field of ["contextWindow", "maxTokens"] as const) {
     for (const value of [0, -1]) {
       expect(
-        validator.Check({ providers: { local: { models: [{ id: "model", [field]: value }] } } }),
+        validator.Check({ providers: { local: { models: [{ [field]: value, id: "model" }] } } }),
         `models[].${field}=${value}`,
       ).toBe(false);
       expect(

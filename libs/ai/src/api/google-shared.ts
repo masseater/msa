@@ -11,6 +11,7 @@ function mapStopReason(reason: FinishReason): typesModule.StopReason {
     case FinishReason.STOP:
       return "stop";
     case FinishReason.MAX_TOKENS:
+    case FinishReason.CONTINUATION:
       return "length";
     case FinishReason.BLOCKLIST:
     case FinishReason.PROHIBITED_CONTENT:

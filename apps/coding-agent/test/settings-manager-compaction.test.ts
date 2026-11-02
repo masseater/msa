@@ -158,8 +158,8 @@ describe("compaction model overrides", () => {
       compaction: {
         modelOverrides: {
           "family/model": { reserveTokens: 2 },
-          "provider/*": { reserveTokens: 1 },
           [modelKey]: { reserveTokens: 400000 },
+          "provider/*": { reserveTokens: 1 },
         },
       },
     });
