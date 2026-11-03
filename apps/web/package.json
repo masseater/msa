@@ -8,8 +8,7 @@
     "destroy": "alchemy destroy"
   },
   "dependencies": {
-    "effect": "catalog:stack",
-    "jose": "catalog:"
+    "effect": "catalog:stack"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare": "catalog:stack",

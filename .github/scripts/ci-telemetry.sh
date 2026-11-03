@@ -4,8 +4,7 @@ if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
   echo "::notice::Cloudflare is not configured; skipping CI telemetry"
   exit 0
 fi
-app="$(sed -n 's/^const APP_NAME = "\(.*\)";$/\1/p' apps/web/app-name.ts)"
-audience="$app-ci-telemetry"
+audience="masseater-dev-ci-telemetry"
 subdomain="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" |
   jq -er .result.subdomain)"

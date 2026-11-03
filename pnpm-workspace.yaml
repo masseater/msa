@@ -55,7 +55,6 @@ catalog:
   hosted-git-info: 10.1.1
   ignore: 7.0.14
   jiti: 2.7.0
-  jose: 6.2.14
   magic-string: 1.4.5
   marked: 18.1.2
   minimatch: 11.0.3
