@@ -31,7 +31,7 @@ tar -xzf msa-darwin-arm64.tar.gz
 ./msa/msa
 ```
 
-Releases ship `msa-darwin-arm64.tar.gz`, `msa-darwin-x64.tar.gz`, `msa-linux-x64.tar.gz`, `msa-linux-arm64.tar.gz`, `msa-windows-x64.zip`, `msa-windows-arm64.zip`, and `SHA256SUMS`. On Windows, unzip the archive and run `msa.exe`.
+Archives are published for macOS, Linux and Windows on x64 and arm64. On Windows, unzip the archive and run `msa.exe`.
 
 To run from a checkout instead:
 
@@ -48,26 +48,9 @@ Run `/login` inside msa to connect a subscription or API key, then give msa a ta
 
 Install the [treg](https://treg.to/web-access) CLI and sign in from msa with `/login treg` (or `treg login`, or set `TREG_TOKEN`), and msa gets `web_search` and `web_fetch` tools, on by default. treg tries free TinyFish first and falls back to other vendors, and uses keys you registered in treg (Exa, for example) before its own.
 
-Values that identify the client to external services (the `pi/<version>` User-Agent, pi.dev endpoints, the Codex login identifier) intentionally keep the pi name, because those services know the client by it.
-
-## Packages
-
-This monorepo contains the msa CLI and its supporting libraries.
-
-| Package                                    | Description                                                                                         |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| **[@msa/chord](libs/chord)**               | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
-| **[@msa/telemetry](libs/telemetry)**       | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas         |
-| **[@msa/ai](libs/ai)**                     | Unified multi-provider LLM API (OpenAI, Anthropic, OpenRouter, etc.)                                |
-| **[@msa/durable](libs/durable)**           | Durable conversation, task, and document runtime                                                    |
-| **[@msa/agent-core](libs/agent)**          | Agent runtime with tool calling and state management                                                |
-| **[@msa/coding-agent](apps/coding-agent)** | Interactive coding agent CLI                                                                        |
-| **[@msa/tui](libs/tui)**                   | Terminal UI library with differential rendering                                                     |
-| **[@msa/web](apps/web)**                   | Cloudflare Worker that records CI job and step timings                                              |
-
 ## Deployments
 
-- CI telemetry receiver: https://msa-ci-telemetry.masseater.workers.dev (deployed by the `deploy` job of `.github/workflows/verify.yml` on `main`)
+- CI telemetry receiver: https://msa-ci-telemetry.masseater.workers.dev
 
 ## Permissions & Containerization
 
@@ -89,10 +72,6 @@ vp run verify         # Lint, type check, tests, model data check
 ./scripts/msa-dev.sh  # Run msa from sources (can be run from any directory)
 vp run install-local  # Build and install the host binary to ~/.local
 ```
-
-### Release binaries
-
-`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`) and runs `msa --version` from the host platform's archive; with `MSA_LOCAL_LLM_TESTS=1`, which CI sets, it also has that binary decide a task review through node-llama-cpp. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release. `vp run render-homebrew-formula` renders `Formula/msa.rb` from `SHA256SUMS` into `.artifacts/homebrew`; the workflow pushes it to [masseater/homebrew-tap](https://github.com/masseater/homebrew-tap) once the release is published.
 
 ## License
 
