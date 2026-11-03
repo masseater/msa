@@ -5,7 +5,7 @@ import { parse } from "yaml";
 
 const JOB = "ci-telemetry";
 const SCRIPT = ".github/scripts/ci-telemetry.sh";
-const SCRIPT_SHA256 = "790af7860c8ed9be31ab2bdda9b12e052d7a97659e1c948ee666f2ff0a2c6264";
+const SCRIPT_SHA256 = "95ff27850232c98a34be89083ca6e4adf272b30bd9b3cc43d09dbbf0d37e2145";
 
 const Step = Schema.Struct({ run: Schema.optional(Schema.String) });
 
