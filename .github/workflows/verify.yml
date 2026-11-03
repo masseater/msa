@@ -153,45 +153,8 @@ jobs:
           tar -xf .artifacts/binaries/msa-linux-x64.tar.gz -C extracted
           vp run smoke-binary-decide extracted/msa/msa
 
-  deploy:
-    needs: verify
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    concurrency:
-      group: deploy
-    steps:
-      - id: head
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.sha }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          current="$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF_NAME" --jq .sha)"
-          if [ "$current" = "$HEAD_SHA" ]; then
-            echo "latest=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.head.outputs.latest == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: steps.head.outputs.latest == 'true'
-        uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
-        with:
-          node-version-file: .node-version
-          cache: true
-          run-install: |
-            - args: ['--frozen-lockfile']
-      - if: steps.head.outputs.latest == 'true'
-        run: .github/scripts/cloudflare-token.sh
-      - if: steps.head.outputs.latest == 'true'
-        run: vp exec alchemy deploy --stage production --yes
-        working-directory: apps/web
-
   ci-telemetry:
-    needs: [checks, test, verify, binary, deploy]
+    needs: [checks, test, verify, binary]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -205,7 +168,6 @@ jobs:
           sparse-checkout: |
             .github/scripts/ci-telemetry.sh
             .github/scripts/cloudflare-token.sh
-            apps/web/app-name.ts
           sparse-checkout-cone-mode: false
       - if: github.ref == 'refs/heads/main'
         run: .github/scripts/cloudflare-token.sh
