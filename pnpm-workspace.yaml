@@ -81,10 +81,8 @@ catalog:
 
 catalogs:
   stack:
-    "@alchemy.run/cloudflare": 2.0.0-beta.84
     "@effect/tsgo": 0.63.0
     "@effect/vitest": 4.0.7
-    alchemy: 2.0.0-beta.84
     effect: 4.0.7
     fallow: 3.38.1
     vite-plus: 1.4.0
