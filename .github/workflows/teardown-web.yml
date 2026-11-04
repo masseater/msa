@@ -42,6 +42,7 @@ jobs:
             "type": "module",
             "devDependencies": {
               "@alchemy.run/cloudflare": "2.0.0-beta.85",
+              "@effect/platform-node": "4.1.2",
               "alchemy": "2.0.0-beta.85",
               "effect": "4.1.2"
             }
