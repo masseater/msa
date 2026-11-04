@@ -47,6 +47,7 @@ jobs:
             }
           }
           JSON
+          printf 'allowBuilds:\n  esbuild: true\n  workerd: true\n' > pnpm-workspace.yaml
           cat > alchemy.run.ts <<'TS'
           import { providers, state } from "@alchemy.run/cloudflare";
           import { Stack } from "alchemy";
