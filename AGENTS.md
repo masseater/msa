@@ -1,41 +1,4 @@
-<!--VITE PLUS START-->
-
-# Using Vite+, the Unified Toolchain for the Web
-
-This project is using Vite+, a unified toolchain built on top of Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task. Vite+ wraps runtime management, package management, and frontend tooling in a single global CLI called `vp`. Vite+ is distinct from Vite, and it invokes Vite through `vp dev` and `vp build`. Run `vp help` to print a list of commands and `vp <command> --help` for information about a specific command.
-
-Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.dev/guide/.
-
-## Built-in Commands vs Scripts
-
-`vp <name>` runs a built-in command. `vp run <name>` runs a `package.json` script or a `vite.config.ts` task. Scripts cannot overwrite built-ins, so `vp dev` and `vp run dev` may do different things. Check `package.json` and `vite.config.ts` first, and run `vp run <name>` when the project defines a script or task with that name.
-
-## Tool Versions
-
-Run `vp toolchain` to show versions and relationships in the active Vite+
-release. Add a tool name to select part of the graph. For example, run
-`vp toolchain vite`. Use `--global` to ignore the local `vite-plus` package. Use
-`vp why <package>` to show the package-manager dependency graph.
-
-## Review Checklist
-
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to format, lint, type check and test changes.
-- [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
-- [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
-
-<!--VITE PLUS END-->
-
-## 手段の選び方
-
-強制・推奨・指示の手段は次の順で選ぶ。自作するときは、何を探して何が合わなかったかをコミットメッセージに残す。
-
-1. ライブラリ公式の統合手段（lint ルール、skill、plugin、CLI、diagnostics など）
-2. それを実現している既存のライブラリやツール
-3. 方針を提言しているブログ・issue・discussion
-4. 自作
-
-検査を通すために設定を無効化・簡易化したり、閾値を下げたり、抑止ディレクティブを使ったりしない。数値の設定はツールの既定値を保ち、既定値で検査が機能しないときだけ公式の指針で設定する。
+作業を始める前に `repo-conventions` と `vite-plus` の skill を読み、従う。このファイルの決まりが skill と食い違うときは、このファイルに従う。
 
 ## 文書
 
@@ -101,7 +64,6 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## 環境変数
 
-- 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
 - 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
 - 実際の `process.env` に書く必要があるとき（子プロセスや `Bun.env` に見せる）は、`platform/env.ts` の `assignProcessEnv` だけを使う。書き込みはこの関数の 1 か所だけに置き、`msa/process-env-writer` と `tools/checks/typed-access.ts` がほかの形を断る。
 
@@ -139,9 +101,6 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## ライブラリ
 
-- ライブラリが型を提供する値は、その型のまま `Schema.decode*` に渡す。
-- ライブラリが export する型・スキーマ・enum・定数を書き写さない。
-- 外部 API のクライアントは手で包まず、Effect 公式のパッケージ、distilled.cloud、公開 OpenAPI から `@effect/openapi-generator` で生成、の順に選ぶ。
 - `vp pm audit` の指摘は、`pnpm why -r <pkg>` で経路を出し、まず直接の依存を上げて経路ごと修正版に移す。上げても上流の依存範囲が修正前の版を許す経路にだけ、`pnpm-workspace.yaml` の `overrides` に `"<pkg>@<修正版": ^<修正版>` の形で下限を置く。同じパッケージの行が前の advisory で入っていれば、行を足さずにその行を書き換える。指摘を消すために `audit.ignore` に足したり閾値を変えたりしない。
 - override が major を越えるときは、その版を使う経路を既存のテストか実際の起動で動かして確かめる。依存を上げて使われなくなった override は消す（fallow の `unused-dependency-override` が見つける）。
 
@@ -200,11 +159,3 @@ release. Add a tool name to select part of the graph. For example, run
 - 各 workflow の最後には、ほかの全ジョブを `needs` に並べ `if: always()` で `.github/scripts/ci-telemetry.sh` を動かす `ci-telemetry` ジョブを置く。`tools/checks/ci-telemetry-job.test.ts` が検査する。
 - 一時的な例外の期限を、時刻を条件にしたタスクで管理しない。外せるかは、例外の今の状態を毎日見る workflow に判定させ、issue にする。`pnpm-workspace.yaml` の `minimumReleaseAgeExclude` は、`audit` workflow の `release-age` ジョブが、公開から `minimumReleaseAge` を過ぎた版を issue にする。
 - `.github/scripts/ci-telemetry.sh` は土台のテンプレートと同じ中身に保ち、手で書き換えない。同じ検査が中身の SHA-256 を突き合わせ、`template-drift` workflow が毎日テンプレートの最新の中身と比べて、違えば issue を開く。テンプレートのリポジトリ名は repository variable `TEMPLATE_REPOSITORY` に置く。送り先は masseater/masseater.dev の `masseater-dev-ci-telemetry` Worker である。
-
-## 公開先
-
-- デプロイ先や外部公開しているもの（サイト、API、npm パッケージなど）があれば、その URL を README に一覧で載せる。
-
-## スキル
-
-- 複数リポで使う自作スキルは masseater/skills に置き、skills CLI で入れる。
