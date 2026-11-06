@@ -23,6 +23,7 @@ export default defineConfig({
   },
   run: {
     tasks: {
+      build: { cache: false, command: ["vp run generate-models", "vp run build:offline"] },
       "build:offline": {
         cache: {
           input: runConfig.libSources,
@@ -34,6 +35,11 @@ export default defineConfig({
           "shx cp -r src/providers/data dist/providers/data",
           "vp pack",
         ],
+      },
+      "generate-model-catalog": {
+        cache: false,
+        command:
+          "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
       },
       "generate-models": {
         cache: { input: generatorInputs, output: modelSources },

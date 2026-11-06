@@ -48,7 +48,7 @@
   - 手元の LLM を動かすもの（Ollama・LM Studio・llama.cpp のサーバーを呼ぶ `libs/ai/test/*-local.test.ts`、node-llama-cpp でモデルを読み込むテスト、`vp run build-binaries` の判断モデルの smoke）は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。CI の verify は付けて流す。手元では付けない。
   - `libs/ai` と `apps/coding-agent` のテストでは、opt-in なしの node-llama-cpp は `libs/ai/test/no-local-llm-setup.ts` が止める。node-llama-cpp を使うテストは `@msa/testing` の `localLlmTests` で `it.skipIf(!localLlmTests)` にする。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。
-- `libs/ai/src/models.generated.ts` は直接編集せず、`vp run generate:models` で作り直す。clone 直後に typecheck が通らないときは `vp run hydrate:model-data` を回す。
+- `libs/ai/src/models.generated.ts` は直接編集せず、`vp run @msa/ai#generate-models` で作り直す。clone 直後に typecheck が通らないときは `vp run @msa/ai#hydrate-model-data` を回す。
 
 ## pi との関係
 

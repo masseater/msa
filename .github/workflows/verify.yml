@@ -41,7 +41,7 @@ jobs:
           key: vite-task-${{ runner.os }}-${{ runner.arch }}-checks-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: vite-task-${{ runner.os }}-${{ runner.arch }}-checks-
       - name: Hydrate model data
-        run: vp run hydrate:model-data
+        run: vp run @msa/ai#hydrate-model-data
       - run: vp run --log grouped checks
         env:
           GH_TOKEN: ${{ github.token }}
@@ -97,7 +97,7 @@ jobs:
           key: vitest-modules-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: vitest-modules-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Hydrate model data
-        run: vp run hydrate:model-data
+        run: vp run @msa/ai#hydrate-model-data
       - run: vp run --log labeled test-deps
       - run: bash test.sh
         timeout-minutes: 10

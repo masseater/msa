@@ -28,6 +28,7 @@ const READS_NO_DIST: ReadonlyArray<ReadonlyArray<string>> = [
   ["git"],
   ["go"],
   ["jq"],
+  ["shx", "rm"],
   ["syncpack"],
   ["test"],
   ["uvx"],

@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 
 import harnessConfig from "../../.claude/vite.config.ts";
-import codingAgentConfig from "../../apps/coding-agent/vite.config.ts";
 import aiConfig from "../../libs/ai/vite.config.ts";
 import viteConfig from "../../vite.config.ts";
+import appConfigs from "./app-configs.ts";
 import libConfigs from "./lib-configs.ts";
 import type shellSyntaxTypes from "./shell-syntax.types.ts";
 import type taskBuildDepsTypes from "./task-build-deps.types.ts";
@@ -61,9 +61,9 @@ const toTaskDef = (task: TaskConfig): TaskDef => {
 };
 
 const packageConfigs = {
+  ...appConfigs,
   ...libConfigs,
   ".claude": harnessConfig,
-  "apps/coding-agent": codingAgentConfig,
   "libs/ai": aiConfig,
 };
 

@@ -4,18 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "clean": "vp run -r clean",
-    "build": "vp run -r --cache --concurrency-limit 1 build",
-    "build:offline": "vp run --filter @msa/ai build:offline && vp run --filter '!msa-monorepo' --filter '!@msa/ai' --concurrency-limit 1 build",
-    "build:native:darwin": "vp run --filter @msa/tui build:native:darwin",
-    "build:native:linux": "vp run --filter @msa/tui build:native:linux",
-    "build:native:win32": "vp run --filter @msa/tui build:native:win32",
-    "generate:models": "vp run --filter @msa/ai generate-models",
-    "hydrate:model-data": "vp run --filter @msa/ai hydrate-model-data",
-    "generate:model-catalog": "vp run --filter @msa/ai generate-model-catalog",
-    "eval": "vp run --filter @msa/evals eval",
-    "profile:tui": "node scripts/profile-coding-agent-node.ts --mode tui",
-    "profile:rpc": "node scripts/profile-coding-agent-node.ts --mode rpc",
     "prepare": "vp config --no-agent && effect-tsgo patch --oxlint && skills experimental_install --force"
   },
   "devDependencies": {
