@@ -92,10 +92,6 @@
       "import": "./dist/runtime/worker-main.js"
     }
   },
-  "scripts": {
-    "clean": "shx rm -rf dist",
-    "test": "vitest --run"
-  },
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "effect": "catalog:stack",

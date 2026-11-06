@@ -47,10 +47,6 @@
       "import": "./dist/testing/index.types.js"
     }
   },
-  "scripts": {
-    "clean": "shx rm -rf dist",
-    "test": "vitest --run"
-  },
   "dependencies": {
     "effect": "catalog:stack"
   },

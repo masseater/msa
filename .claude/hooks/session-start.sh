@@ -20,4 +20,4 @@ command -v fd >/dev/null 2>&1 || ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 cd "$CLAUDE_PROJECT_DIR"
 vp env on >&2
 vp install --frozen-lockfile >&2
-vp run hydrate:model-data >&2
+vp run @msa/ai#hydrate-model-data >&2

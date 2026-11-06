@@ -40,11 +40,6 @@
       "default": "./dist/index.types.js"
     }
   },
-  "scripts": {
-    "clean": "shx rm -rf dist",
-    "build:daemon": "cd daemon && cargo build --locked",
-    "test": "vitest --run"
-  },
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@msa/chord": "workspace:*",

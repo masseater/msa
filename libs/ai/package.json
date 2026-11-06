@@ -99,12 +99,6 @@
       "import": "./dist/*.types.js"
     }
   },
-  "scripts": {
-    "clean": "shx rm -rf dist",
-    "generate-model-catalog": "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
-    "build": "vp run generate-models && vp run build:offline",
-    "test": "vitest --run"
-  },
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
     "@effect/platform-node": "catalog:",

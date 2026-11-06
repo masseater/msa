@@ -40,6 +40,10 @@ export default defineConfig({
           "shx cp src/core/export-html/template.css dist/core/export-html/",
         ],
       },
+      "generate:schemas": {
+        cache: false,
+        command: "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts",
+      },
     },
   },
 });

@@ -174,13 +174,16 @@ const run: NonNullable<UserConfig["run"]> = {
       command:
         'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
     },
-    audit: {
-      cache: false,
-      command: "vp pm audit",
-    },
+    audit: { cache: false, command: "vp pm audit" },
+    build: { cache: false, command: "vp run -r --concurrency-limit 1 build" },
     "build-binaries": {
       cache: false,
       command: "node tools/build-binaries.ts",
+    },
+    "build:offline": {
+      cache: false,
+      command: "vp run --filter '!msa-monorepo' --filter '!@msa/ai' --concurrency-limit 1 build",
+      dependsOn: ["@msa/ai#build:offline"],
     },
     check: "vp check --deny-warnings",
     checks: {
@@ -192,10 +195,11 @@ const run: NonNullable<UserConfig["run"]> = {
         "code-rules",
         "lockfile-policy",
         "test:mcp-conformance",
-        "fallow-all",
+        "fallow",
         "audit",
       ],
     },
+    clean: { cache: false, command: "shx rm -rf apps/*/dist libs/*/dist apps/evals/.eval" },
     "code-rules": {
       command:
         "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-unawaited-test-cleanup.yml apps && ast-grep scan --rule tools/rules/no-counted-wait-loop.yml apps libs && ast-grep scan --rule tools/rules/no-untracked-orchestrator-launch.yml apps && ast-grep scan --rule tools/rules/no-fork-in-run-sync.yml apps libs tools .msa && ast-grep scan --rule tools/rules/no-html-outside-html-document.yml apps libs scripts tools .msa && ast-grep scan --rule tools/rules/scripts-start-through-run-main.yml apps libs scripts tools",
@@ -224,7 +228,6 @@ const run: NonNullable<UserConfig["run"]> = {
       command:
         "fallow --skip dupes --fail-on-issues --quiet --format compact && fallow dead-code --no-production --fail-on-issues --quiet --format compact && fallow dead-code --no-production --quiet --format json | jq -e '[.prop_drilling_chains, .thin_wrappers, .duplicate_prop_shapes] | all(length == 0)' > /dev/null && fallow dupes --fail-on-issues --quiet --format compact && fallow security --fail-on-issues --quiet",
     },
-    "fallow-all": "vp run -r fallow",
     gitleaks: {
       cache: false,
       command:
@@ -236,6 +239,14 @@ const run: NonNullable<UserConfig["run"]> = {
     },
     "lockfile-policy":
       "git ls-files -- ':(glob)**/package-lock.json' ':(glob)**/npm-shrinkwrap.json' ':(glob)**/yarn.lock' ':(glob)**/bun.lock' ':(glob)**/bun.lockb' ':(glob)**/deno.lock' | awk '{ print \"pnpm-lock.yaml 以外の lock がコミットされている: \" $0; found = 1 } END { exit found }'",
+    "profile:rpc": {
+      cache: false,
+      command: "node scripts/profile-coding-agent-node.ts --mode rpc",
+    },
+    "profile:tui": {
+      cache: false,
+      command: "node scripts/profile-coding-agent-node.ts --mode tui",
+    },
     "render-homebrew-formula": {
       cache: false,
       command: "node tools/render-homebrew-formula.ts",

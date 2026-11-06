@@ -45,11 +45,6 @@
       "import": "./dist/bundle/rpc-entry.js"
     }
   },
-  "scripts": {
-    "clean": "shx rm -rf dist",
-    "test": "vitest --run",
-    "generate:schemas": "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts"
-  },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@anthropic-ai/sdk": "catalog:",
