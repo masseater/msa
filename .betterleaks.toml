@@ -1,0 +1,6 @@
+filter = '''
+matchesAny(finding.line, [`\bCF_BEACON_TOKEN = "[0-9a-f]{32}"`])
+'''
+
+[extend]
+useDefault = true

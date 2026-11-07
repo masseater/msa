@@ -228,10 +228,15 @@ const run: NonNullable<UserConfig["run"]> = {
       command:
         "fallow --skip dupes --fail-on-issues --quiet --format compact && fallow dead-code --no-production --fail-on-issues --quiet --format compact && fallow dead-code --no-production --quiet --format json | jq -e '[.prop_drilling_chains, .thin_wrappers, .duplicate_prop_shapes] | all(length == 0)' > /dev/null && fallow dupes --fail-on-issues --quiet --format compact && fallow security --fail-on-issues --quiet",
     },
-    gitleaks: {
+    betterleaks: {
       cache: false,
       command:
-        'go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner --log-opts="$(git rev-parse -q --verify "$GITLEAKS_BASE" || echo origin/main)..HEAD"',
+        'go run github.com/betterleaks/betterleaks/v2@v2.0.0-rc.7 git . --config .betterleaks.toml --redact --no-banner --revision="$(git rev-parse -q --verify "$BETTERLEAKS_BASE" || echo origin/main)..HEAD"',
+    },
+    "betterleaks:staged": {
+      cache: false,
+      command:
+        "git diff --cached --no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/ | go run github.com/betterleaks/betterleaks/v2@v2.0.0-rc.7 stdin --git-diff --config .betterleaks.toml --redact --no-banner",
     },
     "install-local": {
       cache: false,

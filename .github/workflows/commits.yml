@@ -65,13 +65,13 @@ jobs:
           HEAD_SHA="$(git rev-parse HEAD^2)"
           node --import ./apps/coding-agent/src/experimental/source-resolver.ts apps/coding-agent/src/cli.ts squash-message "$PR_NUMBER" "$HEAD_SHA" | vp exec commitlint --verbose
       - if: github.event_name == 'push'
-        run: vp run gitleaks
+        run: vp run betterleaks
         env:
-          GITLEAKS_BASE: ${{ github.event.before }}
+          BETTERLEAKS_BASE: ${{ github.event.before }}
       - if: github.event_name == 'pull_request'
-        run: vp run gitleaks
+        run: vp run betterleaks
         env:
-          GITLEAKS_BASE: HEAD^1
+          BETTERLEAKS_BASE: HEAD^1
 
   ci-telemetry:
     needs: [commits]
