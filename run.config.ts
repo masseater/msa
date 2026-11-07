@@ -1,5 +1,7 @@
 import type { UserConfig } from "vite-plus";
 
+import taskCaches from "./task-caches.config.ts";
+
 const workspace = (pattern: string) => ({ base: "workspace" as const, pattern });
 
 const libSources = [
@@ -14,34 +16,6 @@ const libSources = [
 const libBuild = {
   cache: { input: libSources, output: ["dist/**"] },
   command: "tsc -p tsconfig.build.json",
-};
-
-const fallowCache = {
-  input: [
-    { auto: true },
-    "!**/.fallow/**",
-    "!node_modules/.pnpm/@fallow-cli+*/**/.fallow-verified",
-  ],
-  output: [],
-};
-
-const testCache = {
-  env: ["MSA_LOCAL_LLM_TESTS", "MSA_TEST_SHARD", "NEO4J_URI", "NEO4J_USERNAME"],
-  output: [],
-  untrackedEnv: [
-    "COMSPEC",
-    "FORCE_COLOR",
-    "GIT_*",
-    "NEO4J_PASSWORD",
-    "NO_COLOR",
-    "NODE_EXTRA_CA_CERTS",
-    "NPM_CONFIG_*",
-    "PATHEXT",
-    "PWD",
-    "TMPDIR",
-    "WINDIR",
-    "XDG_*",
-  ],
 };
 
 interface TestedPackage {
@@ -119,6 +93,7 @@ const sharedInputs = [
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "run.config.ts",
+  "task-caches.config.ts",
   "test.sh",
   "tsconfig.base.json",
   "tsconfig.json",
@@ -139,7 +114,7 @@ const inputsOf = (name: TestedName): string[] => [
 ];
 
 const testTaskOf = (name: TestedName, command: string, cwd?: string) => ({
-  cache: { ...testCache, input: inputsOf(name) },
+  cache: { ...taskCaches.testCache, input: inputsOf(name) },
   command,
   ...(cwd === undefined ? {} : { cwd }),
 });
@@ -175,6 +150,16 @@ const run: NonNullable<UserConfig["run"]> = {
         'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
     },
     audit: { cache: false, command: "vp pm audit" },
+    betterleaks: {
+      cache: false,
+      command:
+        'go run github.com/betterleaks/betterleaks/v2@v2.0.0-rc.7 git . --config .betterleaks.toml --redact --no-banner --revision="$(git rev-parse -q --verify "$BETTERLEAKS_BASE" || echo origin/main)..HEAD"',
+    },
+    "betterleaks:staged": {
+      cache: false,
+      command:
+        "git diff --cached --no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/ | go run github.com/betterleaks/betterleaks/v2@v2.0.0-rc.7 stdin --git-diff --config .betterleaks.toml --redact --no-banner",
+    },
     build: { cache: false, command: "vp run -r --concurrency-limit 1 build" },
     "build-binaries": {
       cache: false,
@@ -224,14 +209,9 @@ const run: NonNullable<UserConfig["run"]> = {
       cwd: "libs/env/daemon",
     },
     fallow: {
-      cache: fallowCache,
+      cache: taskCaches.fallowCache,
       command:
         "fallow --skip dupes --fail-on-issues --quiet --format compact && fallow dead-code --no-production --fail-on-issues --quiet --format compact && fallow dead-code --no-production --quiet --format json | jq -e '[.prop_drilling_chains, .thin_wrappers, .duplicate_prop_shapes] | all(length == 0)' > /dev/null && fallow dupes --fail-on-issues --quiet --format compact && fallow security --fail-on-issues --quiet",
-    },
-    gitleaks: {
-      cache: false,
-      command:
-        'go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner --log-opts="$(git rev-parse -q --verify "$GITLEAKS_BASE" || echo origin/main)..HEAD"',
     },
     "install-local": {
       cache: false,

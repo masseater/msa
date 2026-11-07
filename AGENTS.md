@@ -40,7 +40,7 @@
 
 - ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
-- `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
+- `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは betterleaks だけを走らせる。
 - squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも orchestrator の `merge_pull_request` もこれを使い、CI の `commits` ジョブは検査した head で `msa squash-message` が出すメッセージを commitlint にかける。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
   - テストは vitest の project ごとに `run.config.ts` の `test:<project>` タスクとして回し、Vite Task が入力でキャッシュする。CI は `node_modules/.vite/task-cache` を job ごとに持ち越すので、入力の変わっていない project のテストと build は走らない。project を足したら `test:<project>` も足す（`tools/checks/test-tasks.test.ts` が落とす）。

@@ -1,2 +1,2 @@
 vp staged
-vp run gitleaks --pre-commit --staged
+vp run betterleaks:staged
