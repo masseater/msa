@@ -66,7 +66,7 @@ catalog:
   quickjs-wasi: 3.6.3
   semver: 7.8.5
   shx: 0.4.0
-  skills: 1.7.4
+  skills: 1.8.1
   srvx: 1.0.8
   syncpack: 15.3.3
   tree-sitter-bash: 0.25.1
@@ -95,6 +95,9 @@ overrides:
   protobufjs: 7.6.6
   "@anthropic-ai/sandbox-runtime>zod": 4.6.7
   simple-git: 4.0.2
+  "@hono/node-server@>=2.0.0 <2.1.6": ^2.1.6
+  hono@<4.13.16: ^4.13.16
+  node-forge@<=1.4.2: ^1.4.3
 
 allowBuilds:
   "@ast-grep/cli": true
