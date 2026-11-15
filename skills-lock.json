@@ -3,63 +3,73 @@
   "skills": {
     "dont-it-yourself": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/dont-it-yourself/SKILL.md",
-      "computedHash": "ae45b79c5142a29e81385a514be660b0b9f95da8c77867f9673f1301f77870ca"
+      "computedHash": "8f10331daf522257d2abfed13625e4e34ed1ab1de3a3574728a609536245d829"
     },
     "how-to-use-react": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/how-to-use-react/SKILL.md",
       "computedHash": "5212da88f156efd2e27456684749ed21a8ea609ef464a1f716b481875c364028"
     },
     "humanity-and-humanness": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/humanity-and-humanness/SKILL.md",
       "computedHash": "f9d758ac42aaa5904a3f4f2ef08ecdfa56ca430bee8459e832253fd9fcbc5776"
     },
     "integrate": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/integrate/SKILL.md",
       "computedHash": "a0a371d26ea3634aeecb293a469cca2b488f92ed8d602bb995ec8be9082e2d5d"
     },
     "measure-dont-guess": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/measure-dont-guess/SKILL.md",
       "computedHash": "fb14f7dab81e75d2a3f3b9220a5829b21e3e0d4637b49d59f34b559db435c615"
     },
     "project-checklist": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/project-checklist/SKILL.md",
-      "computedHash": "fb5e4dffdf2112fe9708dd72f8cd055323cc8c1889da26f397577f5188e85912"
+      "computedHash": "770a12cd37e10006e3ad4f535ccbeef0ca3772ffc2c33ac3a9bba786673894b9"
     },
     "repo-conventions": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/repo-conventions/SKILL.md",
-      "computedHash": "4d5d085b81c2c007fdd94f6a8ca189e1a4586eeff202b6ff11309300cc601b9c"
+      "computedHash": "e2481b7846b994cb03a2d3f9b25e81bbbe4a13ef0a7938d62e72577f5d926d8f"
     },
     "skill-authoring": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/skill-authoring/SKILL.md",
-      "computedHash": "637b2cbc95448d90b53e0ce928fe077fc63c1c06a3328845ea304ff74021cad9"
+      "computedHash": "07f981cb8332bf02141c0fdc1ed4e2ee8291a87aacf4a40111753d119ffd321d"
     },
     "vite-plus": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/vite-plus/SKILL.md",
-      "computedHash": "5ee8b5e12252c0451c4e170b1bec0126c810791e190965290c66b366ffba4453"
+      "computedHash": "7bba9059a9f5e6ea6cfc1a75fb042a9e093220e07d7615146c28f7533ed6e93e"
     },
     "writing": {
       "source": "masseater/skills",
+      "ref": "73269c77886d19785cc3f0a103d150d89f102d68",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/writing/SKILL.md",
-      "computedHash": "e32e3a2165406de51072449090c2feb93f10860b6da87da2fc4bb9d9d863952a"
+      "computedHash": "80b1fa94d2af5c44a495d3db7ca8423dd1feaa87bd21fe0ea5ed41a6ffafae1c"
     }
   }
 }
