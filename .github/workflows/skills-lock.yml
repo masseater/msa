@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: masseater/typescript-template/.github/actions/skills-lock@a036b9c24e81d9de10bd390491a6d5c8307f4f05
+      - uses: masseater/typescript-template/.github/actions/skills-lock@d31880940798de1570171b0bd255ec9e69005d83
         with:
           branch: ${{ github.ref_name }}
 
@@ -41,7 +41,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           persist-credentials: false
-      - uses: masseater/typescript-template/.github/actions/skills-lock@a036b9c24e81d9de10bd390491a6d5c8307f4f05
+      - uses: masseater/typescript-template/.github/actions/skills-lock@d31880940798de1570171b0bd255ec9e69005d83
         with:
           branch: ${{ inputs.branch }}
 
