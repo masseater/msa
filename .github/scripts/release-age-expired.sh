@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# minimumReleaseAgeExclude の版のうち、レジストリの公開時刻から minimumReleaseAge（分）を過ぎたものを出す。
-# 1 行に 1 版、`<パッケージ>@<版>\t<例外の項目>\t<公開時刻>` をタブ区切りで出す。
-# 同じ版に当たる例外の項目が複数あれば、1 行にまとめて項目を `, ` でつなぐ。
-# 版を書いていない項目（名前やワイルドカード）は、pnpm-lock.yaml に入っている版を見る。
-# 公開時刻を取れない版があれば、何も出さずに落とす。取れなかった版を外せないと取り違えないため。
 set -euo pipefail
 
 min_age="$(vp pm config get minimumReleaseAge)"

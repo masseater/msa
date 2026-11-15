@@ -1,5 +1,3 @@
-//! Length-prefixed frames: `u32 length | u8 type | u32 id | u32 jsonLength | json | payload` (docs/protocol.md).
-
 use serde_json::Value;
 use std::io::{self, Read, Write};
 
@@ -10,9 +8,7 @@ pub const EVENT: u8 = 4;
 pub const CANCEL: u8 = 5;
 pub const PING: u8 = 6;
 
-/// Largest frame either side accepts.
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
-/// Largest payload a response carries, leaving room for its JSON.
 pub const MAX_PAYLOAD: usize = MAX_FRAME - 64 * 1024;
 
 pub struct Frame {
@@ -46,7 +42,6 @@ fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.to_string())
 }
 
-/// Read one frame; `None` at a clean end of input.
 pub fn read_frame(input: &mut impl Read) -> io::Result<Option<Frame>> {
     let mut length = [0u8; 4];
     match input.read_exact(&mut length) {
@@ -66,7 +61,6 @@ pub fn read_frame(input: &mut impl Read) -> io::Result<Option<Frame>> {
     if 9 + json_length > length {
         return Err(invalid("JSON length out of range"));
     }
-    // Unparseable JSON leaves the framing intact: the frame arrives with `Value::Null` and gets an error reply.
     let json = if json_length == 0 {
         Value::Object(Default::default())
     } else {

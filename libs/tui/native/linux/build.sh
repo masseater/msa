@@ -48,7 +48,6 @@ common_flags=(
     -Wl,--no-as-needed
     -Wl,-O2
     -Wl,--gc-sections
-    # A timed-out private thread may outlive the Node environment that loaded us.
     -Wl,-z,nodelete
     -Wl,-s
 )

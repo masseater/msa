@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-#
-# Migrate sessions from ~/.msa/agent/*.jsonl to proper session directories.
-# This fixes sessions created by the bug in v0.30.0 where sessions were
-# saved to ~/.msa/agent/ instead of ~/.msa/agent/sessions/<encoded-cwd>/.
-#
-# Usage: ./migrate-sessions.sh [--dry-run]
-#
 
 set -e
 
@@ -18,7 +11,6 @@ if [[ "$1" == "--dry-run" ]]; then
     echo
 fi
 
-# Find all .jsonl files directly in agent dir (not in subdirectories)
 shopt -s nullglob
 files=("$AGENT_DIR"/*.jsonl)
 shopt -u nullglob
@@ -37,14 +29,12 @@ failed=0
 for file in "${files[@]}"; do
     filename=$(basename "$file")
     
-    # Read first line and extract cwd using jq
     if ! first_line=$(head -1 "$file" 2>/dev/null); then
         echo "SKIP: $filename - cannot read file"
         ((failed++))
         continue
     fi
     
-    # Parse JSON and extract cwd
     if ! cwd=$(echo "$first_line" | jq -r '.cwd // empty' 2>/dev/null); then
         echo "SKIP: $filename - invalid JSON"
         ((failed++))
@@ -57,7 +47,6 @@ for file in "${files[@]}"; do
         continue
     fi
     
-    # Encode cwd: remove leading slash, replace slashes with dashes, wrap with --
     encoded=$(echo "$cwd" | sed 's|^/||' | sed 's|[/:\\]|-|g')
     encoded="--${encoded}--"
     

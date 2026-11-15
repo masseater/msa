@@ -1,6 +1,3 @@
-//! `listFiles`: the files and directories below a directory, as `fd --hidden --exclude .git` lists them (without
-//! following symbolic links), skipping what git ignores. Uses the `ignore` crate, which fd and ripgrep use.
-
 use crate::errors::Failure;
 use crate::frame::MAX_PAYLOAD;
 use ignore::WalkBuilder;
@@ -15,14 +12,10 @@ const DEFAULT_MAX_BYTES: u64 = 4 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS: u64 = 10_000;
 
 pub struct Options {
-    /// Include names starting with `.` (and, on Windows, hidden files).
     pub hidden: bool,
-    /// Skip what git ignores inside git work trees: `.gitignore` files, `.git/info/exclude`, the global excludes file.
     pub gitignore: bool,
-    /// Names skipped with everything below them, in addition to `.git`.
     pub exclude: Vec<OsString>,
     pub max_entries: u64,
-    /// Bytes of the listing payload: per entry one kind byte, the path, and a NUL.
     pub max_bytes: u64,
     pub timeout: Duration,
 }
@@ -58,14 +51,11 @@ impl Options {
 }
 
 pub struct Listing {
-    /// Records of a kind byte (`f`, `d`, `l`), the path relative to the root with `/` separators, and a NUL.
     pub payload: Vec<u8>,
     pub count: u64,
     pub truncated: bool,
 }
 
-/// The path of `path` below `root`, its components joined with `/`; names that are not UTF-8 get replacement
-/// characters, as `readdir` reports them.
 fn relative(root: &Path, path: &Path) -> Option<String> {
     let rest = path.strip_prefix(root).ok()?;
     let mut text = String::new();
@@ -81,8 +71,6 @@ fn relative(root: &Path, path: &Path) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-/// List `root` depth first, siblings in byte order of their names. Stops with `truncated` at the first entry beyond
-/// a bound; fails with `aborted` once `aborted()` is true. Entries that cannot be read are skipped.
 pub fn list(root: &str, options: &Options, aborted: &dyn Fn() -> bool) -> Result<Listing, Failure> {
     let metadata = fs::metadata(root).map_err(|error| Failure::io(&error, "scandir", root))?;
     if !metadata.is_dir() {
@@ -103,7 +91,6 @@ pub fn list(root: &str, options: &Options, aborted: &dyn Fn() -> bool) -> Result
         .git_global(options.gitignore)
         .require_git(true)
         .follow_links(false)
-        // The global excludes file is found relative to the listed directory, not the daemon's.
         .current_dir(root_path)
         .sort_by_file_name(|a, b| a.cmp(b))
         .filter_entry(move |entry| {
@@ -272,7 +259,6 @@ mod tests {
         ]);
         tree.write(".gitignore", "out/\n*.log\n");
         tree.write("sub/.gitignore", "!keep.txt\n");
-        // Not a work tree yet: everything is listed.
         let (entries, _) = tree.list(options());
         assert!(entries.contains(&"f out/x.js".to_string()));
         tree.write(".git/HEAD", "ref: refs/heads/main\n");
@@ -296,7 +282,6 @@ mod tests {
         });
         assert!(entries.contains(&"f out/x.js".to_string()));
         assert!(!entries.iter().any(|entry| entry.contains(".git/")));
-        // A subdirectory of a work tree applies the rules of its parents.
         let sub = list(&tree.0.join("sub").to_string_lossy(), &options(), &|| false).unwrap();
         assert_eq!(sub.payload, b"f.gitignore\0fkeep.txt\0");
     }
