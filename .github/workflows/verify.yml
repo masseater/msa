@@ -79,6 +79,7 @@ jobs:
           path: ~/.local/share/pnpm/store
           key: pnpm-store-test-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: vp install --frozen-lockfile --filter '!@msa/web'
+      - run: echo "$GITHUB_WORKSPACE/libs/env/daemon/.pnpm/rust/bin" >> "$GITHUB_PATH"
       - if: steps.store-cache.outputs.cache-hit != 'true' && matrix.shard == 1
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

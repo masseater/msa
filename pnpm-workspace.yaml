@@ -126,3 +126,6 @@ audit:
   ignore:
     - GHSA-86w9-cpqp-85rv
     - GHSA-g3hv-75wg-m249
+
+cargo:
+  enabled: true
