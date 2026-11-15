@@ -51,8 +51,6 @@ static bool append_bytes(property_data* result, const unsigned char* bytes, size
     return true;
 }
 
-// Share one deadline across discovery, replies, and incremental chunks.
-// Connection setup and flushing are libxcb calls on the private thread.
 static bool wait_for_input(x11_clipboard* clipboard) {
     for (;;) {
         int64_t remaining = clipboard->deadline - monotonic_ms();
@@ -142,7 +140,7 @@ static bool request_selection(x11_clipboard* clipboard, xcb_atom_t target, prope
         bool received = event->property != XCB_NONE;
         free(event);
         if (!matches) continue;
-        if (!received) return true; // No owner, or the owner does not offer this target.
+        if (!received) return true;
         if (!read_property(clipboard, false, result)) return false;
         break;
     }
@@ -232,7 +230,6 @@ static bool preferred_target(x11_clipboard* clipboard, bool image, xcb_atom_t* t
         }
     }
     free(targets.data);
-    // Some owners refuse TARGETS but still serve text directly.
     if (received && !image && targets.type == XCB_NONE) {
         *target = intern_atom(clipboard, "UTF8_STRING");
         return *target != XCB_NONE;

@@ -1,7 +1,3 @@
-//! `watch`: Durable's `NodeFileWatcher` (libs/durable/src/env/node-watch.ts) running next to the files, so a scan
-//! costs no round trips. Native events only trigger a debounced rescan; changes are the difference between snapshots
-//! plus the event paths. Events go out as `change` events of the request, which lasts until it is cancelled.
-
 use crate::errors::Failure;
 use crate::exec::Control;
 use crate::frame::{EVENT, Frame};
@@ -19,32 +15,17 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant, SystemTime};
 
 const DEBOUNCE: Duration = Duration::from_millis(50);
-/// macOS: FSEvents streams go live after `watch` returns; a rescan this long after installing watchers catches changes
-/// made in between.
 const FSEVENTS_SETTLE: Duration = Duration::from_millis(500);
 const DEFAULT_POLL_MS: u64 = 2000;
 const DEFAULT_MAX_DIRECTORIES: usize = 10_000;
-/// In polling mode, recently modified small files are also compared by content.
 const HASH_MAX_BYTES: u64 = 256 * 1024;
 const HASH_RECENT: Duration = Duration::from_secs(5);
-/// How often a waiting watcher looks for a cancel.
 const CANCEL_POLL: Duration = Duration::from_millis(100);
 
-/// Linux `statfs` magic numbers of file systems that accept watches but do not report changes made elsewhere.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const UNRELIABLE_FILE_SYSTEMS: [u64; 12] = [
-    0x6969,     // NFS
-    0x517b,     // SMB
-    0xff534d42, // CIFS
-    0xfe534d42, // SMB2
-    0x65735546, // FUSE (sshfs, Android shared storage)
-    0x01021997, // 9P (WSL2 Windows drives)
-    0x0bd00bd0, // Lustre
-    0x47504653, // GPFS
-    0x00c36400, // Ceph
-    0x5346414f, // OpenAFS
-    0x6b414653, // kAFS
-    0x5dca2df5, // sdcardfs
+    0x6969, 0x517b, 0xff534d42, 0xfe534d42, 0x65735546, 0x01021997, 0x0bd00bd0, 0x47504653,
+    0x00c36400, 0x5346414f, 0x6b414653, 0x5dca2df5,
 ];
 
 struct Target {
@@ -62,7 +43,6 @@ enum Kind {
     Other,
 }
 
-/// What a snapshot remembers of one path. Directories and ancestors are compared by identity only.
 #[derive(Clone, PartialEq, Eq)]
 struct Entry {
     kind: Kind,
@@ -96,7 +76,6 @@ enum ScanError {
 }
 
 impl ScanError {
-    /// The error `NodeExecutionEnv.watch` returns when opening fails.
     fn failure(&self) -> Failure {
         match self {
             ScanError::Budget(max) => {
@@ -106,7 +85,6 @@ impl ScanError {
         }
     }
 
-    /// The `FileError` code `NodeFileWatcher` reports when a later rescan fails.
     fn code(&self) -> &'static str {
         match self {
             ScanError::Io(error, ..) if denied(error) => "permission_denied",
@@ -132,7 +110,6 @@ fn kind_of(metadata: &Metadata) -> Kind {
     }
 }
 
-/// What a snapshot remembers of `path`, whose `metadata` came from `stat` (`follow`) or `lstat`.
 fn entry_of(path: &str, metadata: &Metadata, follow: bool, hash: Option<u64>) -> Entry {
     let kind = kind_of(metadata);
     let (dev, ino) = sys::path_identity(path, metadata, follow);
@@ -151,7 +128,6 @@ fn entry_of(path: &str, metadata: &Metadata, follow: bool, hash: Option<u64>) ->
     }
 }
 
-/// Ancestors of `path`, nearest first, up to the root.
 fn ancestors(path: &str) -> Vec<String> {
     Path::new(path)
         .ancestors()
@@ -168,7 +144,6 @@ fn with_separator(directory: &str) -> String {
     }
 }
 
-/// Whether `path` is `ancestor` or below it.
 fn is_within(path: &str, ancestor: &str) -> bool {
     path == ancestor || path.starts_with(&with_separator(ancestor))
 }
@@ -177,12 +152,10 @@ fn excluded(target: &Target, name: &str) -> bool {
     (target.hidden && name.starts_with('.')) || target.names.contains(name)
 }
 
-/// JavaScript's default sort: by UTF-16 code units.
 fn sort_like_javascript(paths: &mut [String]) {
     paths.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
 }
 
-/// Whether any path, or its nearest existing ancestor, is on a file system that does not report remote changes.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn any_unreliable(targets: &[Target]) -> bool {
     use std::ffi::CString;
@@ -191,7 +164,6 @@ fn any_unreliable(targets: &[Target]) -> bool {
             let Ok(name) = CString::new(candidate) else {
                 break;
             };
-            // SAFETY: a NUL-terminated path and a zeroed statfs buffer for the call to fill.
             let mut info: libc::statfs = unsafe { std::mem::zeroed() };
             if unsafe { libc::statfs(name.as_ptr(), &mut info) } != 0 {
                 continue;
@@ -212,21 +184,17 @@ fn any_unreliable(_targets: &[Target]) -> bool {
     false
 }
 
-/// One scan: the snapshot, and targets that are symbolic links to files, whose files need their own watchers.
 struct Scan {
     snapshot: Snapshot,
     linked_files: HashSet<String>,
-    /// Directories counted against the limit, and directories traversed per target.
     counted: HashSet<String>,
     traversed: HashSet<(usize, String)>,
-    /// Kinds of listed entries without following links.
     listed: HashMap<String, Kind>,
 }
 
 struct Installed {
     dev: u64,
     ino: u64,
-    /// The watched path with links resolved, as FSEvents spells event paths (`/private/var` for `/var`).
     canonical: Option<String>,
 }
 
@@ -299,7 +267,6 @@ impl FileWatcher<'_> {
             return Ok(());
         }
         let skip = |error: io::Error| -> Result<(), ScanError> {
-            // The watched directory itself must be readable; below it, unreadable directories are skipped.
             if directory == target.path && denied(&error) {
                 return Err(ScanError::Io(error, "scandir", directory.to_string()));
             }
@@ -336,7 +303,6 @@ impl FileWatcher<'_> {
                     };
                     let kind = kind_of(&metadata);
                     scan.listed.insert(path.clone(), kind);
-                    // A target's own entry (following links) wins over its listing by another target.
                     if !scan.snapshot.contains_key(&path) {
                         self.record(scan, &path, &metadata, false);
                     }
@@ -364,7 +330,6 @@ impl FileWatcher<'_> {
                 if scan.snapshot.contains_key(&ancestor) {
                     continue;
                 }
-                // Identity only: an ancestor's own timestamps change with every unrelated sibling.
                 if let Ok(metadata) = fs::symlink_metadata(&ancestor) {
                     let entry = Entry {
                         size: 0,
@@ -374,8 +339,6 @@ impl FileWatcher<'_> {
                     scan.snapshot.insert(ancestor, entry);
                 }
             }
-            // The target may be a symbolic link to what is watched; follow it. A missing target is watched for its
-            // creation; one that cannot be reached for lack of permission fails.
             let metadata = match fs::metadata(&target.path) {
                 Ok(metadata) => metadata,
                 Err(error) if denied(&error) => {
@@ -398,7 +361,6 @@ impl FileWatcher<'_> {
         Ok(scan)
     }
 
-    /// An ancestor that changed identity moved every target below it; report those targets.
     fn reported(&self, path: &str) -> String {
         if self
             .targets
@@ -428,7 +390,6 @@ impl FileWatcher<'_> {
         changed
     }
 
-    /// Rescan, report differences, and install watchers for new directories, rescanning until none are new.
     fn sync(&mut self, mut report: bool) -> Result<HashSet<String>, ScanError> {
         let mut changed = HashSet::new();
         for _ in 0..10 {
@@ -446,15 +407,11 @@ impl FileWatcher<'_> {
             if cfg!(target_os = "macos") {
                 self.settle_at = Some(Instant::now() + FSEVENTS_SETTLE);
             }
-            // Something written into a new directory before its watcher existed shows up in the next round.
             report = true;
         }
         Ok(changed)
     }
 
-    /// Watch every existing ancestor of each target, each target directory, each target that links to a file, and on
-    /// Linux each directory below a recursive target (elsewhere one recursive watcher per target). Returns whether a
-    /// watcher was added.
     fn reconcile(&mut self, linked_files: &HashSet<String>) -> bool {
         let per_directory = cfg!(any(target_os = "linux", target_os = "android"));
         let mut wanted: HashMap<String, bool> = linked_files
@@ -490,7 +447,6 @@ impl FileWatcher<'_> {
                 }
             }
         }
-        // Gone, or replaced: a watcher follows the directory it was installed on, not the path.
         let stale: Vec<String> = self
             .installed
             .iter()
@@ -562,7 +518,6 @@ impl FileWatcher<'_> {
                         }
                         _ => false,
                     };
-                    // Out of watches or unsupported: compare snapshots from now on, and say coverage was uncertain.
                     if !gone {
                         self.switch_to_polling();
                         return false;
@@ -604,7 +559,6 @@ impl FileWatcher<'_> {
         false
     }
 
-    /// An event path in the spelling of the watched path it is under.
     fn watched_spelling(&self, path: &str) -> String {
         let mut best: Option<(&str, &str)> = None;
         for (watched, installed) in &self.installed {
@@ -621,19 +575,16 @@ impl FileWatcher<'_> {
         }
     }
 
-    /// Note a native event; returns whether it calls for a rescan.
     fn on_event(&mut self, event: notify::Result<Event>) -> bool {
         let event = match event {
             Ok(event) => event,
             Err(error) => {
-                // A watched directory that disappears or fails: rescan, which also replaces its watcher.
                 for path in &error.paths {
                     self.installed.remove(&*path.to_string_lossy());
                 }
                 return true;
             }
         };
-        // Reads are not changes (libuv does not ask for them).
         if matches!(event.kind, EventKind::Access(_)) {
             return false;
         }
@@ -643,7 +594,6 @@ impl FileWatcher<'_> {
         let mut flush = false;
         for path in &event.paths {
             let path = self.watched_spelling(&path.to_string_lossy());
-            // Events about unrelated siblings of an ancestor, or about excluded entries, are ignored.
             if self.in_scope(&path) {
                 let reported = self.reported(&path);
                 self.events.insert(reported);
@@ -653,7 +603,6 @@ impl FileWatcher<'_> {
         flush
     }
 
-    /// Rescan and report what changed; an error ends the watcher.
     fn flush(&mut self) -> bool {
         let events = std::mem::take(&mut self.events);
         match self.sync(true) {
@@ -700,12 +649,8 @@ fn parse_targets(json: &Value) -> Result<Vec<Target>, Failure> {
         .collect()
 }
 
-/// Watch until cancelled: a `ready` event once coverage is established, then `change` events, or an `error` event
-/// after which nothing follows.
 pub fn run(id: u32, json: &Value, output: &Output, control: &Control) -> Result<Value, Failure> {
     let targets = parse_targets(json)?;
-    // Windows refuses to rename a directory while a directory below it is open, and native watchers keep watched
-    // directories open, so Windows polls, as do file systems that do not report remote changes.
     let mode = match json["mode"].as_str() {
         Some("native") => Mode::Native,
         Some("polling") => Mode::Polling,

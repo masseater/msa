@@ -1,5 +1,3 @@
-//! Windows, following libuv (`src/win/error.c`, `src/win/process.c`, `src/win/fs.c`) and Node's `child_process`.
-
 use super::{OpenMode, ShellConfig, path_exists, synthetic};
 use crate::errors::Failure;
 use serde_json::{Map, Value};
@@ -34,32 +32,31 @@ use windows_sys::Win32::System::JobObjects::{
 };
 use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
-/// libuv's `uv_translate_sys_error` for the errors file and process operations produce.
 pub fn os_error_name(error: &io::Error) -> &'static str {
     let Some(code) = error.raw_os_error() else {
         return "UNKNOWN";
     };
     match code {
-        1 => "EISDIR",                             // ERROR_INVALID_FUNCTION
-        2 | 3 | 15 | 123 | 161 | 4392 => "ENOENT", // FILE_NOT_FOUND, PATH_NOT_FOUND, INVALID_DRIVE, INVALID_NAME, BAD_PATHNAME, INVALID_REPARSE_DATA
-        4 => "EMFILE",                             // ERROR_TOO_MANY_OPEN_FILES
-        5 | 1314 => "EPERM",                       // ACCESS_DENIED, PRIVILEGE_NOT_HELD
-        6 => "EBADF",                              // ERROR_INVALID_HANDLE
-        8 | 14 => "ENOMEM",                        // NOT_ENOUGH_MEMORY, OUTOFMEMORY
-        17 => "EXDEV",                             // ERROR_NOT_SAME_DEVICE
-        19 => "EROFS",                             // ERROR_WRITE_PROTECT
-        32 | 33 => "EBUSY",                        // SHARING_VIOLATION, LOCK_VIOLATION
-        39 | 82 | 112 => "ENOSPC",                 // HANDLE_DISK_FULL, CANNOT_MAKE, DISK_FULL
-        50 => "ENOTSUP",                           // ERROR_NOT_SUPPORTED
-        80 | 183 => "EEXIST",                      // FILE_EXISTS, ALREADY_EXISTS
-        13 | 87 | 122 | 131 | 1464 => "EINVAL", // INVALID_DATA, INVALID_PARAMETER, INSUFFICIENT_BUFFER, NEGATIVE_SEEK, SYMLINK_NOT_SUPPORTED
-        126 => "ENOENT",                        // ERROR_MOD_NOT_FOUND
-        145 => "ENOTEMPTY",                     // ERROR_DIR_NOT_EMPTY
-        206 => "ENAMETOOLONG",                  // ERROR_FILENAME_EXCED_RANGE
-        267 => "ENOENT",                        // ERROR_DIRECTORY (libuv maps it to ENOENT)
-        998 => "EFAULT",                        // ERROR_NOACCESS
-        740 | 1920 => "EACCES",                 // ELEVATION_REQUIRED, CANT_ACCESS_FILE
-        1921 => "ELOOP",                        // ERROR_CANT_RESOLVE_FILENAME
+        1 => "EISDIR",
+        2 | 3 | 15 | 123 | 161 | 4392 => "ENOENT",
+        4 => "EMFILE",
+        5 | 1314 => "EPERM",
+        6 => "EBADF",
+        8 | 14 => "ENOMEM",
+        17 => "EXDEV",
+        19 => "EROFS",
+        32 | 33 => "EBUSY",
+        39 | 82 | 112 => "ENOSPC",
+        50 => "ENOTSUP",
+        80 | 183 => "EEXIST",
+        13 | 87 | 122 | 131 | 1464 => "EINVAL",
+        126 => "ENOENT",
+        145 => "ENOTEMPTY",
+        206 => "ENAMETOOLONG",
+        267 => "ENOENT",
+        998 => "EFAULT",
+        740 | 1920 => "EACCES",
+        1921 => "ELOOP",
         _ => "UNKNOWN",
     }
 }
@@ -70,7 +67,6 @@ pub fn read_at(file: &File, buffer: &mut [u8], offset: u64) -> io::Result<usize>
     file.seek_read(buffer, offset)
 }
 
-/// Modification time as seconds and nanoseconds since the epoch; before 1970 the seconds are negative.
 pub fn mtime(metadata: &Metadata) -> (i64, i64) {
     let Ok(time) = metadata.modified() else {
         return (0, 0);
@@ -89,13 +85,11 @@ pub fn mtime(metadata: &Metadata) -> (i64, i64) {
     }
 }
 
-/// File index numbers need a handle per file; the creation time tells a replaced file or directory apart instead.
 pub fn identity(metadata: &Metadata) -> (u64, u64) {
     use std::os::windows::fs::MetadataExt;
     (0, metadata.creation_time())
 }
 
-/// Node's `os.tmpdir()` on Windows.
 pub fn tmpdir() -> String {
     let variable = |key: &str| std::env::var(key).ok().filter(|value| !value.is_empty());
     let mut path = variable("TEMP")
@@ -114,13 +108,10 @@ pub fn tmpdir() -> String {
     path
 }
 
-/// libuv's `uv_os_homedir`: `USERPROFILE` first.
 pub fn home() -> String {
     std::env::var("USERPROFILE").unwrap_or_default()
 }
 
-/// A NUL-terminated wide path; an embedded NUL fails like the standard library's path conversion (Node rejects such
-/// paths before any system call, which the client reports with the same code).
 fn wide(text: &str) -> io::Result<Vec<u16>> {
     if text.contains('\0') {
         return Err(io::Error::new(
@@ -134,7 +125,6 @@ fn wide(text: &str) -> io::Result<Vec<u16>> {
         .collect())
 }
 
-/// libuv's `fs__mkdtemp`: `prefix` plus six characters from `[a-zA-Z0-9]`, retried while the name exists.
 pub fn mkdtemp(prefix: &str) -> io::Result<String> {
     const CHARACTERS: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -157,8 +147,6 @@ pub fn mkdtemp(prefix: &str) -> io::Result<String> {
     Err(io::Error::from_raw_os_error(80))
 }
 
-/// Windows cannot open a directory as a file and has no `O_NOFOLLOW`: check the path first, as `NodeExecutionEnv` does
-/// there (not race-free).
 pub fn open_reader(path: &str, no_follow: bool) -> Result<File, Failure> {
     if no_follow
         && std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
@@ -173,9 +161,6 @@ pub fn open_reader(path: &str, no_follow: bool) -> Result<File, Failure> {
     File::open(path).map_err(|error| Failure::io(&error, "open", path))
 }
 
-/// libuv's `fs__open` for Node's write modes: `CreateFileW` with its access, sharing and disposition, always with
-/// `FILE_FLAG_BACKUP_SEMANTICS`, so a directory opens and later calls on it fail as in Node; creating a file where a
-/// directory exists reports `EISDIR`. (Rust's `File::create` opens with `OPEN_ALWAYS` and truncates afterwards.)
 pub fn open(path: &str, mode: OpenMode) -> io::Result<File> {
     let (access, disposition) = match mode {
         OpenMode::Read => (FILE_GENERIC_READ, OPEN_EXISTING),
@@ -187,7 +172,6 @@ pub fn open(path: &str, mode: OpenMode) -> io::Result<File> {
         OpenMode::ReadWrite => (FILE_GENERIC_READ | FILE_GENERIC_WRITE, OPEN_EXISTING),
     };
     let name = wide(path)?;
-    // SAFETY: a NUL-terminated wide path; the returned handle is owned by the File on success.
     let handle = unsafe {
         CreateFileW(
             name.as_ptr(),
@@ -201,17 +185,14 @@ pub fn open(path: &str, mode: OpenMode) -> io::Result<File> {
     };
     if handle == INVALID_HANDLE_VALUE {
         let error = io::Error::last_os_error();
-        // ERROR_FILE_EXISTS while creating means the path is a directory.
         if error.raw_os_error() == Some(80) && matches!(mode, OpenMode::Write | OpenMode::Append) {
             return Err(synthetic("EISDIR"));
         }
         return Err(error);
     }
-    // SAFETY: `handle` is a valid, owned file handle.
     Ok(unsafe { File::from_raw_handle(handle as _) })
 }
 
-/// libuv's `uv_fs_realpath`: the final path without the `\\?\` prefix.
 pub fn realpath(path: &str) -> io::Result<String> {
     let resolved = std::fs::canonicalize(path)?.to_string_lossy().into_owned();
     Ok(if let Some(unc) = resolved.strip_prefix("\\\\?\\UNC\\") {
@@ -224,18 +205,14 @@ pub fn realpath(path: &str) -> io::Result<String> {
     })
 }
 
-/// libuv's `fs__rename`: `MoveFileExW` replacing an existing destination.
 pub fn rename(from: &str, to: &str) -> io::Result<()> {
     let (from, to) = (wide(from)?, wide(to)?);
-    // SAFETY: both arguments are NUL-terminated wide strings that outlive the call.
     if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_REPLACE_EXISTING) } == 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(())
 }
 
-/// Node's `rm` on Windows: a symbolic link or junction to a directory is removed as a directory entry (libuv's
-/// `fs__unlink`), and a read-only file is retried after making it writable.
 pub fn remove_file(path: &str) -> io::Result<()> {
     use std::os::windows::fs::FileTypeExt;
     if std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink_dir()) {
@@ -253,11 +230,9 @@ pub fn remove_file(path: &str) -> io::Result<()> {
     }
 }
 
-/// A pipe a reader thread reads with blocking calls; `interrupt_reader` cancels a blocked read.
 pub trait Pipe: io::Read {}
 impl<T: io::Read> Pipe for T {}
 
-/// Read `pipe` until it ends, `on_data` returns false, or `stop` is set; the pipe closes when this returns.
 pub fn read_pipe(mut pipe: impl Pipe, stop: &AtomicBool, mut on_data: impl FnMut(&[u8]) -> bool) {
     let mut buffer = vec![0u8; 64 * 1024];
     while !stop.load(Ordering::SeqCst) {
@@ -272,17 +247,12 @@ pub fn read_pipe(mut pipe: impl Pipe, stop: &AtomicBool, mut on_data: impl FnMut
     }
 }
 
-/// Cancel a reader blocked in `ReadFile`, so it sees `stop` and closes its pipe.
 pub fn interrupt_reader(reader: &std::thread::JoinHandle<()>) {
-    // SAFETY: the handle of a live or finished thread; cancelling no pending I/O is harmless.
     unsafe {
         CancelSynchronousIo(reader.as_raw_handle() as _);
     }
 }
 
-/// libuv's `search_path` for an argv command: a name with a directory is tried as given, otherwise the working
-/// directory and then each `PATH` entry; a name without an extension also tries `.com` and `.exe`. Node refuses
-/// batch files without a shell.
 pub fn resolve_program(
     program: &str,
     cwd: &str,
@@ -330,7 +300,6 @@ pub fn resolve_program(
     Ok(found.to_string_lossy().into_owned())
 }
 
-/// Node's `isLegacyWslBashPath`: `^[a-z]:\\windows\\(system32|sysnative)\\bash\.exe$`, case-insensitive.
 fn is_legacy_wsl_bash(path: &str) -> bool {
     let normalized = path.replace('/', "\\").to_lowercase();
     let mut characters = normalized.chars();
@@ -379,7 +348,6 @@ fn where_bash() -> Option<String> {
     path_exists(&first).then_some(first)
 }
 
-/// Node's shell resolution on Windows: a configured shell, Git Bash, `where bash.exe`, or `shell_unavailable`.
 pub fn shell_config(shell_path: Option<&str>) -> Result<ShellConfig, Failure> {
     if let Some(configured) = shell_path {
         if path_exists(configured) {
@@ -415,7 +383,6 @@ pub fn shell_config(shell_path: Option<&str>) -> Result<ShellConfig, Failure> {
     ))
 }
 
-/// libuv's `quote_cmd_arg`: how one argument is written into the command line the child splits again.
 pub fn quote_argument(argument: &str) -> String {
     if argument.is_empty() {
         return "\"\"".into();
@@ -426,7 +393,6 @@ pub fn quote_argument(argument: &str) -> String {
     if !argument.contains(['"', '\\']) {
         return format!("\"{argument}\"");
     }
-    // Walk backwards: backslashes before a quote (or the closing quote) are doubled, and quotes are escaped.
     let mut reversed = Vec::new();
     let mut quote_hit = true;
     for character in argument.chars().rev() {
@@ -446,7 +412,6 @@ pub fn quote_argument(argument: &str) -> String {
     quoted
 }
 
-/// Variables libuv copies from the parent into every child environment that lacks them.
 const REQUIRED_VARIABLES: [&str; 11] = [
     "HOMEDRIVE",
     "HOMEPATH",
@@ -461,8 +426,6 @@ const REQUIRED_VARIABLES: [&str; 11] = [
     "WINDIR",
 ];
 
-/// The child environment as Node builds it on Windows: the variables in object order, sorted by UTF-16 code units,
-/// keeping the first of names that differ only in case; then libuv adds required variables the result lacks.
 fn child_environment(env: &Map<String, Value>, inherit_env: bool) -> Vec<(String, String)> {
     let mut entries: Vec<(String, String)> = Vec::new();
     let mut set =
@@ -498,7 +461,6 @@ fn child_environment(env: &Map<String, Value>, inherit_env: bool) -> Vec<(String
     entries
 }
 
-/// Arguments quoted as libuv quotes them, Node's environment, and a hidden console.
 pub fn configure(
     command: &mut Command,
     args: &[String],
@@ -515,42 +477,36 @@ pub fn configure(
     command.creation_flags(CREATE_NO_WINDOW);
 }
 
-/// libuv puts every child it starts into one job that ends its processes when the daemon exits.
 fn job() -> Option<isize> {
     static JOB: OnceLock<Option<isize>> = OnceLock::new();
-    *JOB.get_or_init(|| {
-        // SAFETY: plain Win32 calls with a zeroed, correctly sized information struct.
-        unsafe {
-            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if job.is_null() {
-                return None;
-            }
-            let mut information: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            information.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK
-                | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK
-                | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION
-                | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                (&information as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
-                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            );
-            Some(job as isize)
+    *JOB.get_or_init(|| unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return None;
         }
+        let mut information: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        information.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK
+            | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK
+            | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION
+            | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            (&information as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        Some(job as isize)
     })
 }
 
 pub fn after_spawn(child: &Child) {
     if let Some(job) = job() {
-        // SAFETY: both handles are valid for the duration of the call.
         unsafe {
             AssignProcessToJobObject(job as _, child.as_raw_handle() as _);
         }
     }
 }
 
-/// Node's `killProcessTree` on Windows: `taskkill /F /T`, not waited for.
 pub fn kill_tree(pid: u32) {
     let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
     let _ = Command::new(format!("{system_root}\\System32\\taskkill.exe"))
@@ -562,17 +518,14 @@ pub fn kill_tree(pid: u32) {
         .spawn();
 }
 
-/// Exit codes are unsigned 32-bit values on Windows (an access violation is 3221225477).
 pub fn exit_code(status: ExitStatus) -> i64 {
     i64::from(status.code().unwrap_or(1) as u32)
 }
 
-/// Windows listings keep the file system's order; nothing sorts by raw names.
 pub fn raw_name(_name: &OsStr) -> Option<Vec<u8>> {
     None
 }
 
-/// The per-drive working directories of the `=C:` variables, which Node's `path.resolve` uses for drive-relative paths.
 pub fn drive_cwds() -> Map<String, Value> {
     std::env::vars_os()
         .filter_map(|(key, value)| {
@@ -592,7 +545,6 @@ pub fn drive_cwds() -> Map<String, Value> {
         .collect()
 }
 
-/// libuv's `scandir` and `opendir` report a file as `ENOTDIR` (elsewhere `ERROR_DIRECTORY` is `ENOENT`).
 pub fn read_dir(path: &str) -> io::Result<std::fs::ReadDir> {
     std::fs::read_dir(path).map_err(|error| {
         if error.raw_os_error() == Some(267) {
@@ -603,9 +555,6 @@ pub fn read_dir(path: &str) -> io::Result<std::fs::ReadDir> {
     })
 }
 
-/// Volume serial number and file index of `path`, as libuv's `stat` reports `dev` and `ino`: the creation time is not
-/// enough, because NTFS gives a file created under a recently removed name the old one's creation time ("tunneling").
-/// Opens a handle, like libuv; falls back to the metadata when the path cannot be opened.
 pub fn path_identity(path: &str, metadata: &Metadata, follow: bool) -> (u64, u64) {
     let Ok(name) = wide(path) else {
         return identity(metadata);
@@ -616,7 +565,6 @@ pub fn path_identity(path: &str, metadata: &Metadata, follow: bool) -> (u64, u64
         } else {
             FILE_FLAG_OPEN_REPARSE_POINT
         };
-    // SAFETY: a NUL-terminated wide path; the handle is closed below.
     let handle = unsafe {
         CreateFileW(
             name.as_ptr(),
@@ -631,10 +579,8 @@ pub fn path_identity(path: &str, metadata: &Metadata, follow: bool) -> (u64, u64
     if handle == INVALID_HANDLE_VALUE {
         return identity(metadata);
     }
-    // SAFETY: a valid handle and a zeroed buffer for the call to fill.
     let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     let found = unsafe { GetFileInformationByHandle(handle, &mut information) } != 0;
-    // SAFETY: the handle opened above.
     unsafe { CloseHandle(handle) };
     if !found {
         return identity(metadata);

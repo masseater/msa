@@ -1,9 +1,6 @@
-//! Errors as Node reports them: a code such as `ENOENT` plus a diagnostic message.
-
 use serde_json::{Value, json};
 use std::io;
 
-/// A failure with a Node-style code; messages are diagnostic only.
 #[derive(Debug)]
 pub struct Failure {
     pub code: String,
@@ -15,7 +12,6 @@ pub struct Failure {
 struct Details {
     syscall: Option<String>,
     path: Option<String>,
-    /// Extra fields for the client, such as `spillPath`.
     extra: Option<Value>,
 }
 
@@ -32,18 +28,15 @@ impl Failure {
         self.details.get_or_insert_with(Default::default)
     }
 
-    /// Add fields to the error JSON, such as `spillPath`.
     pub fn extra(mut self, extra: Value) -> Failure {
         self.details().extra = Some(extra);
         self
     }
 
-    /// An I/O error of `syscall` on `path`, with libuv's error name as code.
     pub fn io(error: &io::Error, syscall: &str, path: &str) -> Failure {
         Failure::io_between(error, syscall, path, None)
     }
 
-    /// Node's message for an error of a two-path call: `CODE: description, syscall 'from' -> 'to'`.
     pub fn io_between(
         error: &io::Error,
         syscall: &str,
@@ -52,7 +45,6 @@ impl Failure {
     ) -> Failure {
         let code = crate::sys::error_name(error).to_string();
         let description = describe(&code).map(str::to_string).unwrap_or_else(|| {
-            // Unknown to libuv's table: the OS text without Rust's " (os error N)".
             let text = error.to_string();
             text.split(" (os error")
                 .next()
@@ -93,7 +85,6 @@ impl Failure {
     }
 }
 
-/// libuv's `uv_strerror` texts, which Node uses on every system.
 fn describe(code: &str) -> Option<&'static str> {
     Some(match code {
         "EACCES" => "permission denied",

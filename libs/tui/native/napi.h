@@ -1,8 +1,6 @@
 #ifndef MSA_NAPI_H
 #define MSA_NAPI_H
 
-// Resolve the small N-API surface we use from Node or Bun, without Node headers
-// or a link-time dependency on a particular runtime.
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# minimumReleaseAgeExclude の版のうち、公開から minimumReleaseAge を過ぎたものごとに issue を 1 つ開いておく。
-# 新しく過ぎた版は issue を作り、開いている版は issue を更新し、例外から外れた版は issue を閉じる。
 set -euo pipefail
 
 label="release-age"

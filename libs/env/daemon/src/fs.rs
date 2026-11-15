@@ -1,5 +1,3 @@
-//! File operations with Node's semantics where the Rust standard library differs (docs/semantics.md).
-
 use crate::errors::Failure;
 use crate::sys;
 use serde_json::{Value, json};
@@ -10,7 +8,6 @@ use std::path::Path;
 
 pub type Outcome<T> = Result<T, Failure>;
 
-/// `{ name, kind, size, mtimeSec, mtimeNsec, dev, ino }` of lstat or fstat metadata.
 pub fn info(path: &str, metadata: &Metadata) -> Value {
     let file_type = metadata.file_type();
     let kind = if file_type.is_file() {
@@ -51,8 +48,6 @@ pub fn realpath(path: &str) -> Outcome<Value> {
         .map_err(|error| Failure::io(&error, "realpath", path))
 }
 
-/// Node's recursive `mkdir`: an existing directory is fine, an existing file is `EEXIST`, a file in the way of a
-/// parent is `ENOTDIR`.
 pub fn mkdir_recursive(path: &Path) -> io::Result<()> {
     let is_dir = |path: &Path| {
         fs::metadata(path)
@@ -103,8 +98,6 @@ pub fn mkdir(path: &str, recursive: bool) -> Outcome<Value> {
         .map_err(|error| Failure::io(&error, "mkdir", path))
 }
 
-/// `writeFile`/`appendFile`: create missing parents like Node's recursive `mkdir`, then write. Returns the open file
-/// for further chunks.
 pub fn write(path: &str, append: bool, parents: bool, content: &[u8]) -> Outcome<File> {
     if let Some(parent) = Path::new(path)
         .parent()
@@ -137,7 +130,6 @@ pub fn truncate(path: &str, size: u64) -> Outcome<Value> {
 }
 
 pub fn fsync(path: &str) -> Outcome<Value> {
-    // POSIX refuses to open a directory for writing; check first so Windows reports the same.
     if fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()) {
         return Err(Failure::new(
             "EISDIR",
@@ -157,7 +149,6 @@ pub fn rename(from: &str, to: &str) -> Outcome<Value> {
         .map_err(|error| Failure::io_between(&error, "rename", from, Some(to)))
 }
 
-/// Node's `fs.rm`: missing paths fail unless `force`; a directory without `recursive` fails with `ERR_FS_EISDIR`.
 pub fn rm(path: &str, recursive: bool, force: bool) -> Outcome<Value> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
@@ -181,15 +172,12 @@ pub fn rm(path: &str, recursive: bool, force: bool) -> Outcome<Value> {
         .map_err(|error| Failure::io(&error, "rm", path))
 }
 
-/// A new directory named `prefix` plus six random characters, as libuv's `mkdtemp` creates it.
 pub fn mkdtemp(prefix: &str) -> Outcome<Value> {
     sys::mkdtemp(prefix)
         .map(|path| json!({ "path": path }))
         .map_err(|error| Failure::io(&error, "mkdtemp", &format!("{prefix}XXXXXX")))
 }
 
-/// Open a regular file for positional reads; directories fail with `EISDIR`, other non-regular files with
-/// `NOT_REGULAR`, and with `no_follow` a final symbolic link with `SYMLINK`.
 pub fn open_reader(path: &str, no_follow: bool) -> Outcome<(File, Value)> {
     let file = sys::open_reader(path, no_follow)?;
     let metadata = file
@@ -207,7 +195,6 @@ pub fn open_reader(path: &str, no_follow: bool) -> Outcome<(File, Value)> {
     Ok((file, info))
 }
 
-/// Up to `length` bytes at `offset`; fewer only at the end of the file.
 pub fn pread(file: &File, path: &str, offset: u64, length: usize) -> Outcome<Vec<u8>> {
     let mut buffer = vec![0u8; length];
     let mut filled = 0;
@@ -223,8 +210,6 @@ pub fn pread(file: &File, path: &str, offset: u64, length: usize) -> Outcome<Vec
     Ok(buffer)
 }
 
-/// Up to `length` bytes from the current position: one `read` call, as Node's `readFile` makes for files of unknown
-/// size (FIFOs, devices).
 pub fn read(mut file: &File, path: &str, length: usize) -> Outcome<Vec<u8>> {
     let mut buffer = vec![0u8; length];
     loop {
@@ -239,9 +224,6 @@ pub fn read(mut file: &File, path: &str, length: usize) -> Outcome<Vec<u8>> {
     }
 }
 
-/// One directory entry as Node lists it: the name decoded as UTF-8 (invalid bytes replaced), and lstat of the
-/// directory joined with that decoded name, so a name that is not valid UTF-8 reports `ENOENT` as in Node. `raw`
-/// carries the original bytes of such a name, which libuv sorts by.
 pub fn dir_entry(dir: &str, file_name: &OsStr) -> Value {
     let name = file_name.to_string_lossy().into_owned();
     let entry_path = Path::new(dir).join(&name).to_string_lossy().into_owned();

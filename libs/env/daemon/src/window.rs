@@ -1,7 +1,3 @@
-//! Durable's output window (`ShellExecOptions.window`, `ShellOutputInfo.skipped`): undelivered command output is held
-//! and coalesced; text followed by more than the window (by a byte or a line) can never be in the caller's tail and is
-//! replaced by counts. Delivery follows the caller's commit pace, and waits while an earlier frame is still unsent.
-
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
@@ -34,7 +30,6 @@ struct Skipped {
     ends_with_newline: bool,
 }
 
-/// One output event: its stream, text, and the output omitted right before it.
 pub struct Event {
     pub stream: &'static str,
     pub text: String,
@@ -43,7 +38,6 @@ pub struct Event {
 
 pub struct Pending {
     window: Window,
-    /// Undelivered text in arrival order, by stream.
     segments: Vec<(&'static str, String)>,
     bytes: usize,
     newlines: usize,
@@ -71,7 +65,6 @@ impl Pending {
         self.segments.is_empty()
     }
 
-    /// When the next delivery may happen.
     pub fn next_send(&self) -> Instant {
         self.next_send
     }
@@ -86,7 +79,6 @@ impl Pending {
             Some((last, existing)) if *last == stream => existing.push_str(&text),
             _ => self.segments.push((stream, text)),
         }
-        // Trimming costs a pass over the held text; do it once a few windows have accumulated.
         if self.bytes > 4 * (self.window.max_bytes + 1)
             || self.newlines > 4 * (self.window.max_lines + 1)
         {
@@ -94,15 +86,12 @@ impl Pending {
         }
     }
 
-    /// Whether the text after a cut still proves the cut text is outside the window.
     fn proves(&self, bytes: usize, newlines: usize) -> bool {
         bytes > self.window.max_bytes || newlines > self.window.max_lines
     }
 
-    /// Replace the longest prefix whose remainder still proves exclusion by counts.
     fn trim(&mut self) {
         let mut removed = String::new();
-        // Whole segments first.
         while self.segments.len() > 1 {
             let (bytes, newlines) = {
                 let first = &self.segments[0].1;
@@ -116,12 +105,10 @@ impl Pending {
             self.newlines -= newlines;
             removed.push_str(&text);
         }
-        // Then a prefix of the first remaining segment, at a character boundary.
         let rest_bytes = self.bytes - self.segments[0].1.len();
         let rest_newlines = self.newlines - newline_count(&self.segments[0].1);
         let first = &self.segments[0].1;
         let mut cut = 0;
-        // By bytes: keep more than `max_bytes` overall.
         let keep_bytes = (self.window.max_bytes + 1).saturating_sub(rest_bytes);
         if first.len() > keep_bytes {
             let mut index = first.len() - keep_bytes;
@@ -130,7 +117,6 @@ impl Pending {
             }
             cut = cut.max(index);
         }
-        // By lines: keep more than `max_lines` newlines overall, starting at a newline of this segment.
         let keep_newlines = (self.window.max_lines + 1).saturating_sub(rest_newlines);
         if keep_newlines > 0 {
             let positions: Vec<usize> = first
@@ -163,13 +149,11 @@ impl Pending {
         }
     }
 
-    /// Deliver everything held: one event carrying the skip and all text after it, or one event per segment.
     pub fn take(&mut self) -> Vec<Event> {
         let segments = std::mem::take(&mut self.segments);
         let delivered = self.bytes;
         self.bytes = 0;
         self.newlines = 0;
-        // The caller writes at most the window per sample, and paces itself by what it wrote.
         let pace = Duration::from_secs_f64(
             delivered.min(self.window.max_bytes) as f64 / self.window.bytes_per_second,
         );
@@ -216,7 +200,6 @@ mod tests {
         }
     }
 
-    /// Bytes and newlines delivered or skipped, and the text after the last skip.
     fn total(events: &[Event]) -> (u64, u64, String) {
         let mut bytes = 0;
         let mut newlines = 0;

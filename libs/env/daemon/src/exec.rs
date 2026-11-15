@@ -1,5 +1,3 @@
-//! `exec`: Durable's `NodeExecutionEnv.exec` semantics (docs/semantics.md), output streamed as `output` events.
-
 use crate::decode::StreamDecoder;
 use crate::errors::Failure;
 use crate::frame::{EVENT, Frame};
@@ -19,10 +17,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 const EXIT_STDIO_GRACE: Duration = Duration::from_millis(100);
-/// How often a delivery waiting for the link to drain looks again.
 const UNSENT_POLL: Duration = Duration::from_millis(20);
 
-/// Commands this daemon started and has not reaped; killed when the connection ends.
 pub type Groups = Arc<Mutex<HashSet<u32>>>;
 
 pub enum Message {
@@ -30,13 +26,10 @@ pub enum Message {
     Eof(usize),
     Exit(ExitStatus),
     WaitFailed(String),
-    /// Abort: the command settles as `aborted`.
     Cancel,
-    /// Kill without aborting, as `cleanup()` does: the command settles with the killed process's status.
     Kill,
 }
 
-/// Cancellation of one request, registered before the request runs so a cancel that arrives first is not lost.
 #[derive(Default)]
 pub struct Control {
     pub aborted: AtomicBool,
@@ -126,7 +119,6 @@ fn random_uuid() -> String {
     )
 }
 
-/// Spill of the complete raw output, started once it crosses either threshold, like Node's.
 struct Spill {
     after_bytes: u64,
     after_lines: u64,
@@ -163,7 +155,6 @@ impl Spill {
         }
     }
 
-    /// `createTempFile({ prefix: "msa-output-", suffix: ".log" })`: a fresh `tmp-` directory holding the file.
     fn start(&mut self, tmpdir: &str) -> Result<(), String> {
         let prefix = Path::new(tmpdir)
             .join("tmp-")
@@ -210,7 +201,6 @@ fn spawn(
     Ok(child)
 }
 
-/// Read one pipe on its own thread. Without an output window, reading waits while too much output is unsent.
 fn spawn_reader(
     stream: usize,
     pipe: impl sys::Pipe + Send + 'static,
@@ -238,7 +228,6 @@ fn output_frame(id: u32, stream: &str, text: String, skipped: Option<Value>) -> 
     Frame::with_payload(EVENT, id, json, text.into_bytes())
 }
 
-/// Run one command, sending output events for request `id`, until it settles.
 pub fn run(
     id: u32,
     request: ExecRequest,
@@ -252,7 +241,6 @@ pub fn run(
     if control.aborted.load(Ordering::SeqCst) {
         return Err(Failure::new("aborted", "aborted"));
     }
-    // A string runs through the shell (as its last argument, or on stdin for legacy WSL bash); argv runs directly.
     let (program, args, stdin_command) = match (&request.command, &request.argv) {
         (Some(command), _) => {
             let shell = sys::shell_config(request.shell_path.as_deref())?;
@@ -292,7 +280,6 @@ pub fn run(
     groups.lock().unwrap().insert(pid);
     let deadline = request.timeout.map(|timeout| Instant::now() + timeout);
     let stop = Arc::new(AtomicBool::new(false));
-    // Without a window, output is not coalesced; reading then waits for the link.
     let gate = if request.window.is_none() {
         Some(output.clone())
     } else {
@@ -371,7 +358,6 @@ pub fn run(
     }
     loop {
         let now = Instant::now();
-        // Node's timer stays armed until the command settles, including the grace period after exit.
         if !timed_out && deadline.is_some_and(|deadline| now >= deadline) {
             timed_out = true;
             kill(&mut killed);
@@ -380,7 +366,6 @@ pub fn run(
             break;
         }
         if idle_until.is_some_and(|idle| now >= idle) {
-            // A descendant may hold the pipes open after the process exited; stop waiting for it.
             break;
         }
         if let Some(pending) = &mut pending
@@ -435,7 +420,6 @@ pub fn run(
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
-    // Like Node destroying its streams: stop reading, so the pipes close even if a descendant still holds them.
     stop.store(true, Ordering::SeqCst);
     for reader in &readers {
         sys::interrupt_reader(reader);

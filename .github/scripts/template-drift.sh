@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# 土台のテンプレートの最新の ci-telemetry.sh と、このリポジトリのものを比べる。
-# 違えば落とし、定期実行では issue を 1 つ開いておく。揃えば開いている issue を閉じる。
 set -euo pipefail
 
 script=".github/scripts/ci-telemetry.sh"
