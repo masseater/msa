@@ -1,12 +1,3 @@
-const fallowCache = {
-  input: [
-    { auto: true },
-    "!**/.fallow/**",
-    "!node_modules/.pnpm/@fallow-cli+*/**/.fallow-verified",
-  ],
-  output: [],
-};
-
 const testCache = {
   env: ["MSA_LOCAL_LLM_TESTS", "MSA_TEST_SHARD", "NEO4J_URI", "NEO4J_USERNAME"],
   output: [],
@@ -26,6 +17,6 @@ const testCache = {
   ],
 };
 
-const taskCaches = { fallowCache, testCache };
+const taskCaches = { testCache };
 
 export default taskCaches;

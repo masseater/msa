@@ -49,6 +49,8 @@ declare namespace liveTypes {
     error: string;
   };
 
+  interface LiveDraft extends chordTypes.Draft<LiveState> {}
+
   type LiveState = {
     run?: { taskId: typesModule.TaskId; inputs: typesModule.SubmissionId[] };
     generation?: {

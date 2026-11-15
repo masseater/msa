@@ -1,7 +1,8 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import type compatTypes from "@msa/ai/compat.types";
 import http from "@msa/ai/utils/http";
-import { Clock, Crypto, Effect, ManagedRuntime, Option, Schema } from "effect";
+import { Clock, Effect, ManagedRuntime, Option, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { dual } from "effect/Function";
 
 import config from "./config.ts";
@@ -11,9 +12,9 @@ import GitLabAuthError from "./git-lab-auth-error.ts";
 const { BUNDLED_CLIENT_ID, DIRECT_ACCESS_TTL, GITLAB_COM_URL, OAUTH_SCOPES, REDIRECT_URI } = config;
 const { httpRequest } = http;
 
-const cryptoRuntime = ManagedRuntime.make(NodeCrypto.layer);
+const cryptoRuntime = ManagedRuntime.make(NodeCrypto.layerSecureRandom);
 const randomUuid = (): string =>
-  cryptoRuntime.runSync(Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()));
+  cryptoRuntime.runSync(SecureRandom.SecureRandom.use((random) => random.uuidV4()));
 const DirectAccessSchema = Schema.Struct({
   headers: Schema.Record(Schema.String, Schema.String),
   token: Schema.String,

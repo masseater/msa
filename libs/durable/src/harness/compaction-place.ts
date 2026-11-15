@@ -20,7 +20,7 @@ type Current = compactionTypesModule.CompactionTask;
 const placeSummary: typesModule.Dual4<
   typesModule.Tx,
   compactionTypesModule.CompactionRuntime,
-  { readonly current: Current; readonly live: chordTypes.Draft<liveTypes.LiveState> },
+  { readonly current: Current; readonly live: liveTypes.LiveDraft },
   { readonly firstKept: typesModule.EntryId; readonly summary: string },
   Effect.Effect<compactionTypesModule.CompactionNext>
 > = Function.dual(
@@ -28,7 +28,7 @@ const placeSummary: typesModule.Dual4<
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
     runtime: compactionTypesModule.CompactionRuntime,
-    state: { readonly current: Current; readonly live: chordTypes.Draft<liveTypes.LiveState> },
+    state: { readonly current: Current; readonly live: liveTypes.LiveDraft },
     summary: { readonly firstKept: typesModule.EntryId; readonly summary: string },
   ) {
     const { current, live } = state;

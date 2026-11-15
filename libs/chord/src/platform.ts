@@ -1,12 +1,12 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
-import { Crypto, Effect, FileSystem, Layer, ManagedRuntime, Option, Path } from "effect";
-import { Hex } from "effect/encoding";
+import { Effect, FileSystem, Layer, ManagedRuntime, Option, Path } from "effect";
+import { Digest } from "effect/crypto";
 
 import type platformTypes from "./platform.types.ts";
 
-const layer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, NodeCrypto.layer);
+const layer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, NodeCrypto.layerDigest);
 
 const runtime = ManagedRuntime.make(layer);
 
@@ -22,8 +22,8 @@ const onPlatform = <A>(
 
 const sha256Hex = (text: string): Effect.Effect<string> =>
   onPlatform(
-    Crypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(text))),
-  ).pipe(Effect.map(Hex.encode));
+    Digest.Digest.use((digest) => digest.digestHex(Digest.sha256, new TextEncoder().encode(text))),
+  );
 
 const joinPath = (...segments: readonly string[]): Effect.Effect<string> =>
   onPlatform(Path.Path.use((path) => Effect.succeed(path.join(...segments))));

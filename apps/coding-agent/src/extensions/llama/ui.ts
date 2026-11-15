@@ -3,10 +3,13 @@ import { dual } from "effect/Function";
 
 import awaitingModule from "../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import platform from "../../core/platform/index.ts";
 import errors from "../../utils/errors.ts";
 import type clientTypes from "./client.types.ts";
 import LlamaView from "./llama-view.ts";
 import type uiTypes from "./ui.types.ts";
+
+const { fromPromise } = platform;
 const { awaited, awaiting } = awaitingModule;
 const { toErrorMessage } = errors;
 
@@ -20,7 +23,7 @@ function showLlamaUiImpl(
         ctx.ui.custom<void>((tui, theme, keybindings, done) => {
           const view = new LlamaView(tui, theme, keybindings);
           Effect.runFork(
-            Effect.tryPromise(() => run(view)).pipe(
+            fromPromise(() => run(view)).pipe(
               Effect.catch((error) =>
                 Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
               ),

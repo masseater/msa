@@ -1,6 +1,6 @@
-import type { Node, SourceFile } from "typescript/unstable/ast";
-import { API } from "typescript/unstable/sync";
-import type { Checker, Project, Type } from "typescript/unstable/sync";
+import type { Node, SourceFile } from "typescript/ast";
+import { API } from "typescript/sync";
+import type { Checker, Project, Type } from "typescript/sync";
 
 type Scope = {
   readonly files: (name: string) => boolean;
@@ -53,7 +53,7 @@ const scanProject = <F>(
   const api = new API({ cwd: root });
   const prefix = new URL(`file://${root}/`).pathname;
   try {
-    const snapshot = api.updateSnapshot({ openProject: `${root}/${config}` } as never);
+    const snapshot = api.createSnapshot({ openProjects: [`${root}/${config}`] });
     const [project] = snapshot.getProjects();
     if (project === undefined) throw new Error(`${config} の project を開けない`);
     return project.program

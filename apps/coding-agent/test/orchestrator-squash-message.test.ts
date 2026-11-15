@@ -31,7 +31,7 @@ function commitlint(message: string, cwd: string) {
     yield* writeTextFile(file, message);
     return yield* Effect.promise((signal) =>
       runCommand(
-        `${joinPath(ROOT, "node_modules", ".bin", "commitlint")} --cwd ${ROOT} --edit ${file}`,
+        `${joinPath(ROOT, "node_modules", ".bin", "vpa")} --commit-msg ${file}`,
         ROOT,
         60_000,
         signal,

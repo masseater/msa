@@ -36,9 +36,10 @@ const entriesOf = (project: TestProject) =>
 
 const resolveIn = (project: TestProject, spec: string, importer: string) =>
   Effect.result(
-    Effect.tryPromise(() =>
-      project.vite.environments.ssr.pluginContainer.resolveId(spec, importer),
-    ),
+    Effect.tryPromise({
+      catch: String,
+      try: () => project.vite.environments.ssr.pluginContainer.resolveId(spec, importer),
+    }),
   );
 
 const isVirtual = (id: string): boolean => id.startsWith("\0") || id.includes("?");
@@ -72,7 +73,7 @@ function follow(visit: Visit, spec: string, importer: string): Problems {
   if (visit.mocked.has(spec)) return Effect.succeed([]);
   return Effect.flatMap(resolveIn(visit.project, spec, importer), (result) => {
     if (Result.isFailure(result))
-      return Effect.succeed(unresolved(visit, spec, importer, String(result.failure)));
+      return Effect.succeed(unresolved(visit, spec, importer, result.failure));
     const id = idOf(result.success);
     return id === undefined
       ? Effect.succeed(unresolved(visit, spec, importer, "no file"))

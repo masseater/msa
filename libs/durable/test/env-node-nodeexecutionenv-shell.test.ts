@@ -248,7 +248,9 @@ describe("NodeExecutionEnv shell", () => {
                 }
                 const target = pid;
                 if (target !== undefined && Number.isFinite(target))
-                  yield* Effect.ignore(Effect.try(() => process.kill(target, "SIGKILL")));
+                  yield* Effect.ignore(
+                    Effect.try({ catch: String, try: () => process.kill(target, "SIGKILL") }),
+                  );
                 vi.unstubAllEnvs();
                 if (platformDescriptor !== undefined)
                   Object.defineProperty(process, "platform", platformDescriptor);

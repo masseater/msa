@@ -1,16 +1,18 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Crypto, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
+import { NodeCrypto, NodeServices } from "@effect/platform-node";
+import { Effect, Exit, FileSystem, Layer, ManagedRuntime } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import decodeModule from "../decode.ts";
 import FileError from "../file-error.ts";
-import type fileErrorTypes from "../file-error.types.ts";
 import resultModule from "../result.ts";
 import type resultTypes from "../result.types.ts";
 import nodeErrors from "./node-errors.ts";
 import type nodeFilesTypes from "./node-files.types.ts";
 import nodePaths from "./node-paths.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+const nodeRuntime = ManagedRuntime.make(
+  Layer.merge(NodeServices.layer, NodeCrypto.layerSecureRandom),
+);
 
 const { abortResult, fileResult, recoverFileError } = nodeErrors;
 const { err, ok } = resultModule;
@@ -18,11 +20,7 @@ const { err, ok } = resultModule;
 const { rangeDecoder } = decodeModule;
 const { joinPaths, parentPath } = nodePaths;
 
-type FileOp<T> = Effect.Effect<
-  resultTypes.Result<T, fileErrorTypes.FileError>,
-  never,
-  FileSystem.FileSystem
->;
+type FileOp<T> = Effect.Effect<resultTypes.Result<T, FileError>, never, FileSystem.FileSystem>;
 
 const encodeContent = (content: string | Uint8Array): Uint8Array =>
   typeof content === "string" ? new TextEncoder().encode(content) : content;
@@ -30,7 +28,7 @@ const encodeContent = (content: string | Uint8Array): Uint8Array =>
 const runFileOp = <T>(
   { path, context }: nodeFilesTypes.FileRequest,
   op: FileOp<T>,
-): Promise<resultTypes.Result<T, fileErrorTypes.FileError>> => {
+): Promise<resultTypes.Result<T, FileError>> => {
   const aborted = abortResult<T>(context.abortSignal, path);
   return aborted === undefined ? nodeRuntime.runPromise(op) : Promise.resolve(aborted);
 };
@@ -38,7 +36,7 @@ const runFileOp = <T>(
 const runCancellableFileOp = <T>(
   { path, context }: nodeFilesTypes.FileRequest,
   op: FileOp<T>,
-): Promise<resultTypes.Result<T, fileErrorTypes.FileError>> => {
+): Promise<resultTypes.Result<T, FileError>> => {
   const signal = context.abortSignal;
   const aborted = abortResult<T>(signal, path);
   if (aborted !== undefined) return Promise.resolve(aborted);
@@ -47,15 +45,13 @@ const runCancellableFileOp = <T>(
     .then((exit) =>
       Exit.isSuccess(exit)
         ? exit.value
-        : err<T, fileErrorTypes.FileError>(
-            FileError.create("aborted", "The operation was aborted", path),
-          ),
+        : err<T, FileError>(FileError.create("aborted", "The operation was aborted", path)),
     );
 };
 
 const readBinaryFile = (
   request: nodeFilesTypes.FileRequest,
-): Promise<resultTypes.Result<Uint8Array, fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<Uint8Array, FileError>> =>
   runCancellableFileOp(
     request,
     fileResult(
@@ -66,7 +62,7 @@ const readBinaryFile = (
 
 const readTextFile = (
   request: nodeFilesTypes.FileRequest,
-): Promise<resultTypes.Result<string, fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<string, FileError>> =>
   runCancellableFileOp(
     request,
     fileResult(
@@ -82,7 +78,7 @@ const makeParentDirectory = (path: string) =>
 
 const writeFile = (
   request: nodeFilesTypes.WriteRequest,
-): Promise<resultTypes.Result<void, fileErrorTypes.FileError>> => {
+): Promise<resultTypes.Result<void, FileError>> => {
   const { path, context, content } = request;
   return runFileOp(
     request,
@@ -108,7 +104,7 @@ const writeFile = (
 
 const appendFile = (
   request: nodeFilesTypes.WriteRequest,
-): Promise<resultTypes.Result<void, fileErrorTypes.FileError>> => {
+): Promise<resultTypes.Result<void, FileError>> => {
   const { path, context, content } = request;
   return runFileOp(
     request,
@@ -128,7 +124,7 @@ const appendFile = (
 
 const truncateFile = (
   request: nodeFilesTypes.TruncateRequest,
-): Promise<resultTypes.Result<void, fileErrorTypes.FileError>> => {
+): Promise<resultTypes.Result<void, FileError>> => {
   const { path, context, size } = request;
   const aborted = abortResult<void>(context.abortSignal, path);
   if (aborted !== undefined) return Promise.resolve(aborted);
@@ -151,7 +147,7 @@ const truncateFile = (
 
 const renameFile = (
   request: nodeFilesTypes.RenameRequest,
-): Promise<resultTypes.Result<void, fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<void, FileError>> =>
   runFileOp(
     request,
     fileResult(
@@ -162,7 +158,7 @@ const renameFile = (
 
 const canonicalPath = (
   request: nodeFilesTypes.FileRequest,
-): Promise<resultTypes.Result<string, fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<string, FileError>> =>
   runFileOp(
     request,
     fileResult(
@@ -173,7 +169,7 @@ const canonicalPath = (
 
 const createDir = (
   request: nodeFilesTypes.CreateDirRequest,
-): Promise<resultTypes.Result<void, fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<void, FileError>> =>
   runFileOp(
     request,
     fileResult(
@@ -186,7 +182,7 @@ const createDir = (
 
 const removePath = (
   request: nodeFilesTypes.RemoveRequest,
-): Promise<resultTypes.Result<void, fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<void, FileError>> =>
   runFileOp(
     request,
     fileResult(
@@ -199,7 +195,7 @@ const removePath = (
 
 const directoryNames = (
   request: nodeFilesTypes.FileRequest,
-): Promise<resultTypes.Result<string[], fileErrorTypes.FileError>> =>
+): Promise<resultTypes.Result<string[], FileError>> =>
   runFileOp(
     request,
     fileResult(
@@ -211,9 +207,7 @@ const directoryNames = (
 const createTempDir = ({
   prefix,
   context,
-}: nodeFilesTypes.TempDirRequest): Promise<
-  resultTypes.Result<string, fileErrorTypes.FileError>
-> => {
+}: nodeFilesTypes.TempDirRequest): Promise<resultTypes.Result<string, FileError>> => {
   const aborted = abortResult<string>(context.abortSignal, undefined);
   if (aborted !== undefined) return Promise.resolve(aborted);
   return nodeRuntime.runPromise(
@@ -228,11 +222,11 @@ const createEmptyTempFile = ({
   directory,
   prefix,
   suffix,
-}: nodeFilesTypes.TempFileRequest): Promise<resultTypes.Result<string, fileErrorTypes.FileError>> =>
+}: nodeFilesTypes.TempFileRequest): Promise<resultTypes.Result<string, FileError>> =>
   nodeRuntime.runPromise(
     Effect.gen(function* () {
-      const crypto = yield* Crypto.Crypto;
-      const id = yield* Effect.orDie(crypto.randomUUIDv4());
+      const random = yield* SecureRandom.SecureRandom;
+      const id = yield* random.uuidV4();
       const path = joinPaths(directory, `${prefix}${id}${suffix}`);
       return yield* fileResult(
         Effect.as(

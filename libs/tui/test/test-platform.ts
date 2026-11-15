@@ -3,7 +3,6 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import {
-  Crypto,
   Effect,
   Exit,
   Fiber,
@@ -14,7 +13,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { Hex } from "effect/encoding";
+import { Digest } from "effect/crypto";
 import { dual } from "effect/Function";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -25,7 +24,7 @@ const { pathOperations } = platform;
 
 const testServices = Layer.mergeAll(
   NodeFileSystem.layer,
-  NodeCrypto.layer,
+  NodeCrypto.layerDigest,
   NodeChildProcessSpawner.layer.pipe(
     Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
   ),
@@ -77,11 +76,7 @@ const symlink: {
 );
 
 const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> =>
-  run(
-    Effect.flatMap(Effect.service(Crypto.Crypto), (crypto) => crypto.digest("SHA-256", bytes)).pipe(
-      Effect.map(Hex.encode),
-    ),
-  );
+  run(Digest.Digest.use((digest) => digest.digestHex(Digest.sha256, bytes)));
 
 const makeCommand = (request: {
   readonly file: string;

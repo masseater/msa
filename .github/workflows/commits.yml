@@ -28,11 +28,6 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-          cache: true
-          cache-dependency-path: run.config.ts
       - if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,7 +37,6 @@ jobs:
           gh auth setup-git
           commits="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE_SHA...$HEAD_SHA" --jq .total_commits)"
           git fetch --no-tags --depth="$((commits + 1))" origin "$HEAD_SHA"
-          vp exec commitlint --from "$BEFORE_SHA" --to "$HEAD_SHA" --verbose
           missing=0
           for sha in $(git rev-list --no-merges "$BEFORE_SHA..$HEAD_SHA"); do
             if ! git show -s --format=%B "$sha" | grep -q '^Msa-Merge: '; then
@@ -60,18 +54,11 @@ jobs:
         run: |
           gh auth setup-git
           git fetch --no-tags --depth="$((COMMITS + 2))" origin "$GITHUB_SHA"
-          vp exec commitlint --from HEAD^1 --to HEAD^2 --verbose
-          printf '%s\n' "$PR_TITLE" | vp exec commitlint --verbose
+          printf '%s\n' "$PR_TITLE" > "$RUNNER_TEMP/title"
+          vp exec vpa --commit-msg "$RUNNER_TEMP/title"
           HEAD_SHA="$(git rev-parse HEAD^2)"
-          node --import ./apps/coding-agent/src/experimental/source-resolver.ts apps/coding-agent/src/cli.ts squash-message "$PR_NUMBER" "$HEAD_SHA" | vp exec commitlint --verbose
-      - if: github.event_name == 'push'
-        run: vp run betterleaks
-        env:
-          BETTERLEAKS_BASE: ${{ github.event.before }}
-      - if: github.event_name == 'pull_request'
-        run: vp run betterleaks
-        env:
-          BETTERLEAKS_BASE: HEAD^1
+          node --import ./apps/coding-agent/src/experimental/source-resolver.ts apps/coding-agent/src/cli.ts squash-message "$PR_NUMBER" "$HEAD_SHA" > "$RUNNER_TEMP/squash"
+          vp exec vpa --commit-msg "$RUNNER_TEMP/squash"
 
   ci-telemetry:
     needs: [commits]

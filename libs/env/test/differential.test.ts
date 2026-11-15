@@ -71,11 +71,12 @@ interface ToolRun {
 
 const runTool = ({ env, tool, args }: ToolRun): Effect.Effect<unknown> => {
   const output: string[] = [];
-  return Effect.tryPromise(() => tool.execute(args as never, api(env, output), context)).pipe(
+  return Effect.tryPromise({
+    catch: (cause) => (cause as Error).message,
+    try: () => tool.execute(args as never, api(env, output), context),
+  }).pipe(
     Effect.map((result) => ({ output: output.join(""), result })),
-    Effect.catch((failure) =>
-      Effect.succeed({ error: (failure.cause as Error).message, output: output.join("") }),
-    ),
+    Effect.catch((error) => Effect.succeed({ error, output: output.join("") })),
   );
 };
 

@@ -29,11 +29,23 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: run.config.ts
-          ignore-nothing-to-cache: true
+      - name: Fetch the commits under check
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          COMMITS: ${{ github.event.pull_request.commits }}
+        run: |
+          gh auth setup-git
+          if [ "$EVENT" = pull_request ]; then
+            git fetch --no-tags --depth="$((COMMITS + 2))" origin "$GITHUB_SHA"
+            echo "VPA_BASE=HEAD^1" >> "$GITHUB_ENV"
+          else
+            commits="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE_SHA...$GITHUB_SHA" --jq .total_commits)"
+            git fetch --no-tags --depth="$((commits + 1))" origin "$GITHUB_SHA"
+            echo "VPA_BASE=$BEFORE_SHA" >> "$GITHUB_ENV"
+          fi
       - id: task-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

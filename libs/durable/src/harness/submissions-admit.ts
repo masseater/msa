@@ -104,7 +104,7 @@ const placeInput = Effect.fnUntraced(function* (
     readonly draft: Extract<typesModule.SubmissionDraft, { type: "input" }>;
     readonly requestId: RequestId;
     readonly now: number;
-    readonly live: chordTypes.Draft<liveTypes.LiveState>;
+    readonly live: liveTypes.LiveDraft;
   },
 ) {
   const { draft, requestId, now } = state;

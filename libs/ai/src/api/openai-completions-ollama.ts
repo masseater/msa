@@ -2,6 +2,7 @@ import { Clock, Effect, Option } from "effect";
 import type OpenAI from "openai";
 
 import type typesModule from "../types.types.ts";
+import OllamaProbeFailed from "./ollama-probe-failed.ts";
 import openaiCompletionsCompat from "./openai-completions-compat.ts";
 import type openaiCompletionsCompatTypes from "./openai-completions-compat.types.ts";
 
@@ -57,7 +58,10 @@ const isOllamaRoot = (body: unknown): boolean =>
   typeof body === "string" && body.trim() === OLLAMA_ROOT_TEXT;
 
 const askRoot = (client: OpenAI, root: string): Effect.Effect<ProbeAnswer> =>
-  Effect.tryPromise((signal) => client.get<unknown>(root, { maxRetries: 0, signal })).pipe(
+  Effect.tryPromise({
+    catch: (cause) => OllamaProbeFailed.make({ cause }),
+    try: (signal) => client.get<unknown>(root, { maxRetries: 0, signal }),
+  }).pipe(
     Effect.timeoutOption(PROBE_TIMEOUT_MS),
     Effect.map(Option.match({ onNone: (): ProbeAnswer => undefined, onSome: isOllamaRoot })),
     Effect.catch((failure) => Effect.succeed(settledByStatus(failure.cause) ? false : undefined)),

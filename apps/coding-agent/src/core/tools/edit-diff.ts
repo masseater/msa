@@ -47,7 +47,10 @@ const computeDiffEffect = (path: string, edits: editDiffTypes.Edit[], cwd: strin
       return { error };
     }
     const rawContent = yield* fs.readFileString(absolutePath, "utf-8");
-    return yield* Effect.try(() => diffFromContent(rawContent, edits, path));
+    return yield* Effect.try({
+      catch: (cause) => ({ cause }),
+      try: () => diffFromContent(rawContent, edits, path),
+    });
   }).pipe(Effect.catch((error) => Effect.succeed({ error: failureMessage(error) })));
 };
 

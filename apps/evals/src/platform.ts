@@ -1,23 +1,26 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   Config,
   ConfigProvider,
-  Crypto,
   Effect,
   FileSystem,
+  Layer,
   ManagedRuntime,
   Option,
   Path,
   Predicate,
   Stream,
 } from "effect";
-import { Hex } from "effect/encoding";
+import { Digest, SecureRandom } from "effect/crypto";
 import { dual } from "effect/Function";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import type platformTypes from "./platform.types.ts";
 
-const services = ManagedRuntime.make(NodeServices.layer);
+const services = ManagedRuntime.make(
+  Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+);
 
 const provideNodeServices = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.flatMap(services.contextEffect, (context) => Effect.provideContext(effect, context));
@@ -116,12 +119,12 @@ const files = {
 
 const sha256Hex = (text: string): Effect.Effect<string> =>
   provideNodeServices(
-    Crypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(text))),
-  ).pipe(Effect.map(Hex.encode), Effect.orDie);
+    Digest.Digest.use((digest) => digest.digestHex(Digest.sha256, new TextEncoder().encode(text))),
+  );
 
 const randomUuid: Effect.Effect<string> = provideNodeServices(
-  Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()),
-).pipe(Effect.orDie);
+  SecureRandom.SecureRandom.use((random) => random.uuidV4()),
+);
 
 const STDOUT_MODES = { capture: "pipe", ignore: "ignore", inherit: "inherit" } as const;
 

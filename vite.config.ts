@@ -1,5 +1,6 @@
 import { defineConfig } from "vite-plus";
 
+import fallow from "./fallow.config.ts";
 import lintConfig from "./lint.config.ts";
 import localTimeRules from "./local-time-rules.config.ts";
 import runConfig from "./run.config.ts";
@@ -18,6 +19,7 @@ const {
   loopbackTestServerMembers,
   platformOnlyImports,
   processEnvWriter,
+  requiredStack,
   restrictedImports,
   restrictedProperties,
   restrictedPropertiesExceptLocalDate,
@@ -36,6 +38,16 @@ const withProbes = (files: readonly string[]): string[] => [
   ...files.filter((file) => !file.startsWith("**/")).map((file) => `${lintProbeRoot}/*/${file}`),
 ];
 export default defineConfig({
+  betterleaks: {
+    extend: { useDefault: true },
+    filter: 'matchesAny(finding.line, [`\\bCF_BEACON_TOKEN = "[0-9a-f]{32}"`])',
+  },
+  commitlint: {
+    extends: ["@commitlint/config-conventional"],
+    rules: { "subject-case": [0] as const },
+  },
+  dependencyRules: { banned: requiredStack },
+  fallow,
   fmt: {
     ignorePatterns: generated,
     sortImports: true,

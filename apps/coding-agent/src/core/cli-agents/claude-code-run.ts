@@ -1,12 +1,15 @@
 import type compatTypes from "@msa/ai/compat.types";
 import { Cause, Effect } from "effect";
 
+import platform from "../platform/index.ts";
 import claudeAccounts from "./claude-accounts.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 import claudeCodeAttach from "./claude-code-attach.ts";
 import claudeCodePump from "./claude-code-pump.ts";
 import type claudeCodeSessionTypes from "./claude-code-session.types.ts";
 import type replyTypes from "./reply.types.ts";
+
+const { fromPromise } = platform;
 
 const { blockIfUnusable, blockOf, loadAccounts } = claudeAccounts;
 const { PROVIDER_ID, attach } = claudeCodeAttach;
@@ -134,9 +137,7 @@ const notifyPayload = (request: RunRequest) => {
     ...config,
     tools: config.tools.map((tool) => tool.name),
   };
-  return Effect.ignore(
-    Effect.tryPromise(() => Promise.resolve(options?.onPayload?.(payload, model))),
-  );
+  return Effect.ignore(fromPromise(() => options?.onPayload?.(payload, model)));
 };
 
 const run = (request: RunRequest): Effect.Effect<void> => {

@@ -13,7 +13,7 @@ const { createInterface } = nodeReadline;
 
 const { createReply } = replyModule;
 const { spawnProcess, waitForChildProcess } = childProcess;
-const { envSnapshot } = platformModule;
+const { envSnapshot, fromPromise } = platformModule;
 
 const SPAWN_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1500;
@@ -36,8 +36,7 @@ interface AttemptResult {
 
 const decodeJsonLine = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
 
-const ignoreFailure = (run: () => unknown) =>
-  Effect.ignore(Effect.tryPromise(() => Promise.resolve(run())));
+const ignoreFailure = (run: () => unknown) => Effect.ignore(fromPromise(run));
 
 const prepareCommand = <Event>(attempt: Attempt<Event>) =>
   Effect.gen(function* () {
@@ -50,9 +49,9 @@ const prepareCommand = <Event>(attempt: Attempt<Event>) =>
       prompt: command.stdin,
       provider: backend.providerId,
     };
-    const replaced = yield* Effect.tryPromise(() =>
-      Promise.resolve(options?.onPayload?.(payload, model)),
-    ).pipe(Effect.orElseSucceed(() => undefined));
+    const replaced = yield* fromPromise(() => options?.onPayload?.(payload, model)).pipe(
+      Effect.orElseSucceed(() => undefined),
+    );
     const prompt = (replaced as { prompt?: unknown } | undefined)?.prompt;
     if (typeof prompt === "string") command = { ...command, stdin: prompt };
     return command;

@@ -1,8 +1,8 @@
 import { lstat, readdir, stat, statfs } from "node:fs/promises";
 
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Cause, Clock, Crypto, Effect, FileSystem, Function, ManagedRuntime, Option } from "effect";
-import * as Hex from "effect/encoding/Hex";
+import { NodeCrypto, NodeServices } from "@effect/platform-node";
+import { Cause, Clock, Effect, FileSystem, Function, Layer, ManagedRuntime, Option } from "effect";
+import { Digest } from "effect/crypto";
 
 import nodeErrors from "./node-errors.ts";
 import nodeWatchErrors from "./node-watch-errors.ts";
@@ -11,7 +11,7 @@ import type nodeWatchScanTypes from "./node-watch-scan.types.ts";
 import nodeWatchScope from "./node-watch-scope.ts";
 import type nodeWatchScopeTypes from "./node-watch-scope.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+const nodeRuntime = ManagedRuntime.make(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest));
 
 const { BudgetExceeded, isDenied } = nodeWatchErrors;
 const { isNodeError } = nodeErrors;
@@ -59,9 +59,8 @@ const optionalLinkStats = (path: string) =>
 const contentHash = (path: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const crypto = yield* Crypto.Crypto;
-    const digest = yield* crypto.digest("SHA-256", yield* fs.readFile(path));
-    return Option.some(Hex.encode(digest));
+    const digest = yield* Digest.Digest;
+    return Option.some(yield* digest.digestHex(Digest.sha256, yield* fs.readFile(path)));
   }).pipe(Effect.catchCause(() => Effect.succeedNone));
 
 class TreeScan {
@@ -113,7 +112,7 @@ class TreeScan {
   ): Effect.Effect<
     void,
     nodeWatchErrorsTypes.BudgetExceeded,
-    FileSystem.FileSystem | Crypto.Crypto
+    FileSystem.FileSystem | Digest.Digest
   > {
     return Effect.gen({ self: this }, function* () {
       const key = `${index}\0${directory}`;
@@ -183,7 +182,7 @@ class TreeScan {
   run(): Effect.Effect<
     nodeWatchScopeTypes.Scan,
     nodeWatchErrorsTypes.BudgetExceeded,
-    FileSystem.FileSystem | Crypto.Crypto
+    FileSystem.FileSystem | Digest.Digest
   > {
     return Effect.gen({ self: this }, function* () {
       for (const [index, target] of this.#request.targets.entries()) {

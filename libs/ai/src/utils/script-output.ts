@@ -1,9 +1,8 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { NodeCrypto, NodeRuntime, NodeServices } from "@effect/platform-node";
 import {
   Cause,
   Console,
   Context,
-  Crypto,
   Effect,
   FileSystem,
   Function,
@@ -13,6 +12,7 @@ import {
   Queue,
   Stream,
 } from "effect";
+import { Digest } from "effect/crypto";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import htmlDocumentModule from "./html-document.ts";
@@ -73,7 +73,7 @@ const failRead = <A, R>(effect: Effect.Effect<A, { readonly message: string }, R
 
 const makeFiles = (
   fs: FileSystem.FileSystem,
-  crypto: Crypto.Crypto,
+  digest: Digest.Digest["Service"],
 ): scriptOutputTypes.ScriptFileSystemShape => ({
   chmod: (target, mode) => failRead(fs.chmod(target, mode)),
   exists: (target) => failRead(fs.exists(target)),
@@ -96,12 +96,7 @@ const makeFiles = (
   remove: (target) => failRead(fs.remove(target, { force: true, recursive: true })),
   sha256Hex: (target) =>
     failRead(
-      fs.readFile(target).pipe(
-        Effect.flatMap((bytes) => crypto.digest("SHA-256", bytes)),
-        Effect.map((digest) =>
-          Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""),
-        ),
-      ),
+      Effect.flatMap(fs.readFile(target), (bytes) => digest.digestHex(Digest.sha256, bytes)),
     ),
   stat: (target) =>
     failRead(
@@ -197,7 +192,7 @@ const makeScriptOutput = Effect.gen(function* () {
   return ScriptOutput.of({
     copyFileTo: (from, to) => guarded(sameKind(from, to), fs.copyFile(from, to)),
     copyTreeTo: (from, to) => guarded(sameKind(from, to), fs.copy(from, to)),
-    files: makeFiles(fs, yield* Crypto.Crypto),
+    files: makeFiles(fs, yield* Digest.Digest),
     interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
     linkPath: (target, link) => guarded(sameKind(target, link), fs.symlink(target, link)),
     movePath: (from, to) => guarded(sameKind(from, to), fs.rename(from, to)),
@@ -224,7 +219,7 @@ const makeScriptOutput = Effect.gen(function* () {
 const scriptOutputLayer: Layer.Layer<ScriptOutput> = Layer.effect(
   ScriptOutput,
   makeScriptOutput,
-).pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest)));
 
 const runMainWith: {
   <ROut, E2>(

@@ -24,8 +24,8 @@ const commitlint = (message: string) =>
     const file = path.join(dir, "message.txt");
     yield* fs.writeFileString(file, message);
     return yield* captureProcess({
-      args: ["--edit", file],
-      command: path.join(root, "node_modules/.bin/commitlint"),
+      args: ["--commit-msg", file],
+      command: path.join(root, "node_modules/.bin/vpa"),
       cwd: root,
     });
   }).pipe(Effect.scoped);

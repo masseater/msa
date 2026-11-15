@@ -8,7 +8,7 @@ import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { execCommand } = exec;
-const { files } = platform;
+const { files, fromPromise } = platform;
 const { store } = storeModule;
 
 const TIMEOUT_MS = 60_000;
@@ -23,9 +23,7 @@ function run(
   args: readonly string[],
   cwd: string,
 ): Effect.Effect<string | undefined> {
-  return Effect.tryPromise(() =>
-    execCommand(command, [...args], cwd, { timeout: TIMEOUT_MS }),
-  ).pipe(
+  return fromPromise(() => execCommand(command, [...args], cwd, { timeout: TIMEOUT_MS })).pipe(
     Effect.map((result) => (result.code === 0 ? result.stdout.trim() : undefined)),
     Effect.orElseSucceed(() => undefined),
   );
@@ -36,7 +34,7 @@ function gh(
   args: readonly string[],
   cwd: string,
 ): Effect.Effect<string | undefined> {
-  return Effect.tryPromise(() => runtime.options.runGh(args, cwd)).pipe(
+  return fromPromise(() => runtime.options.runGh(args, cwd)).pipe(
     Effect.map((result) => (result.code === 0 ? result.stdout.trim() : undefined)),
     Effect.orElseSucceed(() => undefined),
   );
@@ -73,7 +71,7 @@ function pullRequestText(
 function agentsText(cwd: string): Effect.Effect<string> {
   return Effect.gen(function* () {
     const root = (yield* run("git", ["rev-parse", "--show-toplevel"], cwd)) ?? cwd;
-    const text = yield* Effect.tryPromise(() =>
+    const text = yield* fromPromise(() =>
       files.readText(platformPath.join(root, "AGENTS.md")),
     ).pipe(Effect.orElseSucceed(() => undefined));
     return text === undefined ? "(no AGENTS.md at the root)" : clip(text);

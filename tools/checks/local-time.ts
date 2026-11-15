@@ -1,11 +1,11 @@
-import { SyntaxKind } from "typescript/unstable/ast";
+import { SyntaxKind } from "typescript/ast";
 import type {
   BinaryExpression,
   BindingElement,
   CallExpression,
   Node,
   SourceFile,
-} from "typescript/unstable/ast";
+} from "typescript/ast";
 import {
   isBinaryExpression,
   isBindingElement,
@@ -20,9 +20,9 @@ import {
   isStringLiteral,
   isTemplateSpan,
   isVariableDeclaration,
-} from "typescript/unstable/ast/is";
-import { SymbolFlags } from "typescript/unstable/sync";
-import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/unstable/sync";
+} from "typescript/ast/is";
+import { SymbolFlags } from "typescript/sync";
+import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/sync";
 
 import typedProject from "./typed-project.ts";
 

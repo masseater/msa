@@ -34,7 +34,7 @@ const fallowTargets = Effect.fn("fallowTargets")(function* fallowTargets(
     candidates,
     Effect.filter((dir: string) => platform.exists(platform.join(root, dir, ".fallowrc.jsonc"))),
   );
-  return [[], ...withConfig.map((dir) => ["-r", dir])];
+  return withConfig.map((dir) => ["-r", dir]);
 });
 
 const runFallow = Effect.fn("runFallow")(function* runFallow(

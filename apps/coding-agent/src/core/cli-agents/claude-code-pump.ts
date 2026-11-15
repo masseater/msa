@@ -157,9 +157,10 @@ const pump = (
         return { error: detail === "" ? "Claude Code exited" : detail } satisfies Failure;
       }
       yield* Effect.ignore(
-        Effect.tryPromise(() =>
-          Promise.resolve(options?.onProviderStreamEvent?.(next.value, model)),
-        ),
+        Effect.tryPromise({
+          catch: (cause) => ClaudeCodeFailure.fromCause(cause),
+          try: () => Promise.resolve(options?.onProviderStreamEvent?.(next.value, model)),
+        }),
       );
       const outcome = yield* onEvent(state, next.value);
       if (outcome !== undefined) return outcome.failure;

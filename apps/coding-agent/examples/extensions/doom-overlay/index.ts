@@ -1,10 +1,13 @@
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
+import platform from "../../../src/core/platform/index.ts";
 import DoomOverlayComponent from "./doom-component.ts";
 import DoomEngine from "./doom-engine.ts";
 import type doomEngineTypes from "./doom-engine.types.ts";
 import wadFinder from "./wad-finder.ts";
+
+const { fromPromise } = platform;
 const { ensureWadFile } = wadFinder;
 
 let activeEngine: doomEngineTypes.DoomEngine | null = null;
@@ -24,7 +27,7 @@ const startEngine = (wad: string) =>
   Effect.gen(function* () {
     if (activeEngine !== null && activeWadPath === wad) return true;
     activeEngine = new DoomEngine(wad);
-    yield* Effect.tryPromise(() => activeEngine!.init());
+    yield* fromPromise(() => activeEngine!.init());
     activeWadPath = wad;
     return false;
   });
