@@ -134,32 +134,9 @@ const vitestProjectTasks = Object.fromEntries(
 
 const run: NonNullable<UserConfig["run"]> = {
   tasks: {
-    "actions-lint": {
-      cache: {
-        env: ["CLAUDE_CODE_REMOTE"],
-        untrackedEnv: [
-          "GH_TOKEN",
-          "HTTPS_PROXY",
-          "https_proxy",
-          "NO_PROXY",
-          "no_proxy",
-          "SSL_CERT_FILE",
-        ],
-      },
-      command:
-        'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
-    },
+    "actions-lint":
+      "ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows",
     audit: { cache: false, command: "vp pm audit" },
-    betterleaks: {
-      cache: false,
-      command:
-        'go run github.com/betterleaks/betterleaks/v2@v2.0.0-rc.7 git . --config .betterleaks.toml --redact --no-banner --revision="$(git rev-parse -q --verify "$BETTERLEAKS_BASE" || echo origin/main)..HEAD"',
-    },
-    "betterleaks:staged": {
-      cache: false,
-      command:
-        "git diff --cached --no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/ | go run github.com/betterleaks/betterleaks/v2@v2.0.0-rc.7 stdin --git-diff --config .betterleaks.toml --redact --no-banner",
-    },
     build: { cache: false, command: "vp run -r --concurrency-limit 1 build" },
     "build-binaries": {
       cache: false,
@@ -175,12 +152,11 @@ const run: NonNullable<UserConfig["run"]> = {
       command: [],
       dependsOn: [
         "check",
-        "syncpack",
         "actions-lint",
         "code-rules",
         "lockfile-policy",
         "test:mcp-conformance",
-        "fallow",
+        "vpa",
         "audit",
       ],
     },
@@ -208,11 +184,6 @@ const run: NonNullable<UserConfig["run"]> = {
       command: "cargo build --locked",
       cwd: "libs/env/daemon",
     },
-    fallow: {
-      cache: taskCaches.fallowCache,
-      command:
-        "fallow --skip dupes --fail-on-issues --quiet --format compact && fallow dead-code --no-production --fail-on-issues --quiet --format compact && fallow dead-code --no-production --quiet --format json | jq -e '[.prop_drilling_chains, .thin_wrappers, .duplicate_prop_shapes] | all(length == 0)' > /dev/null && fallow dupes --fail-on-issues --quiet --format compact && fallow security --fail-on-issues --quiet",
-    },
     "install-local": {
       cache: false,
       command: "node tools/local-install.ts",
@@ -239,7 +210,6 @@ const run: NonNullable<UserConfig["run"]> = {
       cache: false,
       command: "node tools/smoke-binary-decide.ts",
     },
-    syncpack: "syncpack lint",
     test: {
       command: [],
       dependsOn: [...Object.keys(vitestProjectTasks), "test:tui"],
@@ -268,6 +238,7 @@ const run: NonNullable<UserConfig["run"]> = {
       command: [],
       dependsOn: ["checks", "test-all"],
     },
+    vpa: { cache: false, command: "vpa" },
   },
 };
 

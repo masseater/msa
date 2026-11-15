@@ -1,7 +1,10 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 
-const testRuntime = ManagedRuntime.make(NodeServices.layer);
+const testRuntime = ManagedRuntime.make(
+  Layer.merge(NodeServices.layer, NodeCrypto.layerSecureRandom),
+);
 
 const runTest = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => testRuntime.runPromise(effect);
 

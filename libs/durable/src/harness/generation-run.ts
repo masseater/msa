@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import type chordTypes from "@msa/chord/index.types";
 import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
@@ -41,14 +40,14 @@ const appendAssistant: typesModule.Dual3<
 
 const convertPartial: typesModule.Dual3<
   typesModule.Tx,
-  chordTypes.Draft<liveTypes.LiveState>,
+  liveTypes.LiveDraft,
   typesModule.ConversationId,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
-    live: chordTypes.Draft<liveTypes.LiveState>,
+    live: liveTypes.LiveDraft,
     conversationId: typesModule.ConversationId,
   ) {
     const partial = live.generation?.message;
@@ -75,7 +74,7 @@ const createGeneration: typesModule.Dual2<
 const startRun: typesModule.Dual4<
   typesModule.Tx,
   typesModule.ConversationId,
-  chordTypes.Draft<liveTypes.LiveState>,
+  liveTypes.LiveDraft,
   typesModule.SubmissionId[],
   Effect.Effect<void>
 > = Function.dual(
@@ -83,7 +82,7 @@ const startRun: typesModule.Dual4<
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
     conversationId: typesModule.ConversationId,
-    live: chordTypes.Draft<liveTypes.LiveState>,
+    live: liveTypes.LiveDraft,
     inputs: typesModule.SubmissionId[],
   ) {
     live.run = { inputs, taskId: yield* createGeneration(tx, conversationId) };
@@ -91,17 +90,13 @@ const startRun: typesModule.Dual4<
 );
 
 const handOver: typesModule.Dual3<
-  chordTypes.Draft<liveTypes.LiveState>,
+  liveTypes.LiveDraft,
   typesModule.TaskId,
   typesModule.TaskId,
   void
 > = Function.dual(
   3,
-  (
-    live: chordTypes.Draft<liveTypes.LiveState>,
-    from: typesModule.TaskId,
-    to: typesModule.TaskId,
-  ): void => {
+  (live: liveTypes.LiveDraft, from: typesModule.TaskId, to: typesModule.TaskId): void => {
     if (live.run?.taskId === from) live.run.taskId = to;
   },
 );

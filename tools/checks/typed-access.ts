@@ -1,4 +1,4 @@
-import { NodeFlags, SyntaxKind } from "typescript/unstable/ast";
+import { NodeFlags, SyntaxKind } from "typescript/ast";
 import type {
   Expression,
   HeritageClause,
@@ -6,7 +6,7 @@ import type {
   ShorthandPropertyAssignment,
   SourceFile,
   VariableDeclaration,
-} from "typescript/unstable/ast";
+} from "typescript/ast";
 import {
   isArrayLiteralExpression,
   isBinaryExpression,
@@ -15,6 +15,7 @@ import {
   isComputedPropertyName,
   isElementAccessExpression,
   isExportAssignment,
+  isExpressionWithTypeArguments,
   isForInStatement,
   isForOfStatement,
   isHeritageClause,
@@ -25,9 +26,9 @@ import {
   isShorthandPropertyAssignment,
   isSpreadAssignment,
   isVariableDeclaration,
-} from "typescript/unstable/ast/is";
-import { SymbolFlags } from "typescript/unstable/sync";
-import type { Checker, Project, Symbol as TsSymbol } from "typescript/unstable/sync";
+} from "typescript/ast/is";
+import { SymbolFlags } from "typescript/sync";
+import type { Checker, Project, Symbol as TsSymbol } from "typescript/sync";
 
 import lintConfig from "../../lint.config.ts";
 import processEnvWrite from "./process-env-write.ts";
@@ -219,7 +220,9 @@ const isClassExtends = (node: Node): node is HeritageClause =>
   node.parent?.kind !== SyntaxKind.InterfaceDeclaration;
 
 const extendedExpressions = (node: Node): readonly Node[] =>
-  isClassExtends(node) ? node.types.map((type) => type.expression) : [];
+  isClassExtends(node)
+    ? node.types.filter(isExpressionWithTypeArguments).map((type) => type.expression)
+    : [];
 
 const holderFindings = (project: Project, extended: Node) => {
   const containers = containersOf(baseOf(extended));

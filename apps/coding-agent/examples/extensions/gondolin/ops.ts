@@ -74,7 +74,7 @@ const walkDirectory = (
       const guestPath = platform.posix.join(dir, entry);
       const relativePath = relativeDir === "" ? entry : platform.posix.join(relativeDir, entry);
       const entryStat = yield* Effect.option(
-        Effect.tryPromise(() => vm.fs.stat(guestPath, signalOption(signal))),
+        platform.fromPromise(() => vm.fs.stat(guestPath, signalOption(signal))),
       );
       if (Option.isNone(entryStat)) continue;
       const keepGoing = entryStat.value.isDirectory()

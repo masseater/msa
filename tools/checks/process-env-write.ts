@@ -1,10 +1,10 @@
-import { NodeFlags, SyntaxKind } from "typescript/unstable/ast";
+import { NodeFlags, SyntaxKind } from "typescript/ast";
 import type {
   BinaryExpression,
   ForOfStatement,
   Node,
   VariableDeclarationList,
-} from "typescript/unstable/ast";
+} from "typescript/ast";
 import {
   isBinaryExpression,
   isCallExpression,
@@ -14,7 +14,7 @@ import {
   isIdentifier,
   isPropertyAccessExpression,
   isVariableDeclarationList,
-} from "typescript/unstable/ast/is";
+} from "typescript/ast/is";
 
 const isNamed = (node: Node | undefined, name: string): boolean =>
   node !== undefined && isIdentifier(node) && node.text === name;

@@ -17,16 +17,17 @@ const { ScriptOutput } = scriptOutput;
 const runtime = ManagedRuntime.make(scriptOutput.scriptOutputLayer);
 
 const workerResize = (image: Uint8Array) =>
-  Effect.tryPromise(() => codingAgent.resizeImageInWorker(image, "image/png", RESIZE_LIMITS)).pipe(
-    Effect.catch((cause) => Effect.succeed({ workerFailed: String(cause) })),
-  );
+  Effect.tryPromise({
+    catch: String,
+    try: () => codingAgent.resizeImageInWorker(image, "image/png", RESIZE_LIMITS),
+  }).pipe(Effect.catch((workerFailed) => Effect.succeed({ workerFailed })));
 
 const nativeClipboard = Effect.gen(function* () {
   const clipboard = tui.getNativeClipboard();
   if (clipboard === undefined) return { loaded: false };
-  const text = yield* Effect.tryPromise(() => clipboard.getText()).pipe(
+  const text = yield* Effect.tryPromise({ catch: String, try: () => clipboard.getText() }).pipe(
     Effect.map((value) => typeof value),
-    Effect.catch((cause) => Effect.succeed(`failed: ${String(cause)}`)),
+    Effect.catch((cause) => Effect.succeed(`failed: ${cause}`)),
   );
   return { loaded: true, text };
 });

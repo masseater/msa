@@ -44,13 +44,14 @@ const neverDownloadsOffline = () =>
         );
         const first = yield* decideNow;
         const provider = runtime.services.modelRuntime.getProvider(LOCAL_PROVIDER_ID);
-        const prepared = yield* Effect.tryPromise(() =>
-          provider!.prepareClassifier!(LIQUID_D1),
-        ).pipe(Effect.flip);
+        const prepared = yield* Effect.tryPromise({
+          catch: String,
+          try: () => provider!.prepareClassifier!(LIQUID_D1),
+        }).pipe(Effect.flip);
         const afterwards = yield* decideNow;
 
         expect(first.status).toBe("undecided");
-        expect(String(prepared.cause)).toContain("downloads are disabled");
+        expect(prepared).toContain("downloads are disabled");
         expect(afterwards.status).toBe("undecided");
         expect(server.state.requests).toBe(0);
       } finally {

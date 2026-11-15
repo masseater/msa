@@ -1,7 +1,11 @@
 import { Effect, Semaphore } from "effect";
 import type { Token } from "node-llama-cpp";
 
+import LlamaCallFailed from "./llama-call-failed.ts";
 import type nodeLlamaCppClassifyTypes from "./node-llama-cpp-classify.types.ts";
+
+const llamaCall = <A>(run: () => Promise<A>) =>
+  Effect.tryPromise({ catch: (cause) => LlamaCallFailed.make({ cause }), try: run });
 
 type LoadedModel = nodeLlamaCppClassifyTypes.LoadedModel;
 
@@ -11,7 +15,7 @@ const EVALUATION_CHUNK = 128;
 const lastTokenProbabilities = (loaded: LoadedModel, token: Token) =>
   Effect.gen(function* () {
     const evaluation = loaded.sequence.evaluateWithMetadata([token], { probabilities: true });
-    const step = yield* Effect.tryPromise(() => evaluation.next());
+    const step = yield* llamaCall(() => evaluation.next());
     yield* Effect.promise(() => evaluation.return());
     if (step.done === true) return yield* Effect.die(new Error(`${LABEL} returned no next token`));
     return step.value.probabilities;
@@ -54,6 +58,6 @@ function sharedPrefixLength(prompts: readonly Token[][]): number {
   return length;
 }
 
-const nodeLlamaCppEvaluate = { LABEL, nextTokenProbabilities, sharedPrefixLength };
+const nodeLlamaCppEvaluate = { LABEL, llamaCall, nextTokenProbabilities, sharedPrefixLength };
 
 export default nodeLlamaCppEvaluate;

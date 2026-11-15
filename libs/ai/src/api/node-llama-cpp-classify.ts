@@ -14,7 +14,7 @@ const { SYSTEM_PROMPT, renderQuestion } = llamaCppPrompt;
 const { answerFromProbabilities, labelProbabilities } = llamaCppReadout;
 const { formatProviderError, normalizeProviderError } = errorBody;
 
-const { LABEL, nextTokenProbabilities, sharedPrefixLength } = nodeLlamaCppEvaluate;
+const { LABEL, llamaCall, nextTokenProbabilities, sharedPrefixLength } = nodeLlamaCppEvaluate;
 
 type LoadedModel = nodeLlamaCppClassifyTypes.LoadedModel;
 
@@ -45,7 +45,7 @@ const resolveFile = (
       directory: config.directory,
       ...(config.endpoints === undefined ? {} : { endpoints: config.endpoints }),
     };
-    const existing = yield* Effect.tryPromise(() =>
+    const existing = yield* llamaCall(() =>
       resolveModelFile(uri, { ...options, download: false }),
     ).pipe(Effect.option);
     if (Option.isSome(existing)) return existing.value;
@@ -54,7 +54,7 @@ const resolveFile = (
         cause: new Error(`${uri} is not in ${config.directory} and downloads are disabled`),
       });
     yield* Deferred.succeed(downloading, undefined);
-    return yield* Effect.tryPromise(() => resolveModelFile(uri, options));
+    return yield* llamaCall(() => resolveModelFile(uri, options));
   });
 
 const loadModel = Effect.fn("loadModel")(function* (
@@ -63,21 +63,19 @@ const loadModel = Effect.fn("loadModel")(function* (
   contextSize: number,
   downloading: Deferred.Deferred<void>,
 ) {
-  const bindings = yield* Effect.tryPromise(
+  const bindings = yield* llamaCall(
     (): Promise<Bindings> => config.loadBindings?.() ?? import("node-llama-cpp"),
   );
   const path = yield* resolveFile(bindings, config, uri, downloading);
-  const llama = yield* Effect.tryPromise(() =>
+  const llama = yield* llamaCall(() =>
     bindings.getLlama({
       build: "never",
       logLevel: bindings.LlamaLogLevel.error,
       progressLogs: false,
     }),
   );
-  const model = yield* Effect.tryPromise(() => llama.loadModel({ modelPath: path }));
-  const context = yield* Effect.tryPromise(() =>
-    model.createContext({ contextSize, sequences: 1 }),
-  );
+  const model = yield* llamaCall(() => llama.loadModel({ modelPath: path }));
+  const context = yield* llamaCall(() => model.createContext({ contextSize, sequences: 1 }));
   const loaded: LoadedModel = {
     chatWrapper: bindings.resolveChatWrapper(model),
     labelTokens: new Map(),

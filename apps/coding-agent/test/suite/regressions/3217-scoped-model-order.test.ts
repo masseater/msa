@@ -104,10 +104,7 @@ const preservesScopedModelOrderInTheStep1 = (
       .split("\n")
       .filter((line) => line.includes(`[${modelOne.provider}]`));
     const orderedIds = renderedLines.slice(0, 3).map((line) => {
-      const [modelId] = line
-        .trim()
-        .replace(/^→\s*/u, "")
-        .split(" [");
+      const [modelId] = line.trim().replace(/^→\s*/u, "").split(" [");
       return modelId?.replace(/^✓\s*/u, "").trim() ?? "";
     });
     expect(orderedIds).toEqual([modelTwo.id, modelOne.id, modelThree.id]);

@@ -56,9 +56,10 @@ const pullRequestRun = Effect.gen(function* () {
   return (step?.run ?? "").split("\n");
 });
 
-const squashLine = Effect.map(pullRequestRun, (lines) =>
-  lines.find((line) => line.includes(" squash-message ")),
-);
+const squashLines = Effect.map(pullRequestRun, (lines) => {
+  const index = lines.findIndex((line) => line.includes(" squash-message "));
+  return index === -1 ? [] : lines.slice(index, index + 2);
+});
 
 const lint = (pages: Pages, head: string) =>
   Effect.gen(function* () {
@@ -77,7 +78,8 @@ const lint = (pages: Pages, head: string) =>
     yield* fs.writeFileString(path.join(bin, "calls.txt"), "");
     yield* fs.writeFileString(path.join(bin, "gh"), FAKE_GH(bin), { mode: 0o755 });
     const inherited = yield* Config.String("PATH").pipe(Config.withDefault(""));
-    const line = (yield* squashLine) ?? "exit 99";
+    const lines = yield* squashLines;
+    const line = lines.length === 0 ? "exit 99" : lines.join("\n");
     const result = yield* captureProcess({
       args: ["-eo", "pipefail", "-c", line],
       command: "bash",
@@ -86,9 +88,17 @@ const lint = (pages: Pages, head: string) =>
         HEAD_SHA: head,
         PATH: `${bin}:${path.join(root, "node_modules/.bin")}:${inherited}`,
         PR_NUMBER: "7",
+        RUNNER_TEMP: bin,
       },
     });
-    return { ...result, calls: (yield* fs.readFileString(path.join(bin, "calls.txt"))).trim() };
+    const message = yield* fs
+      .readFileString(path.join(bin, "squash"))
+      .pipe(Effect.orElseSucceed(() => ""));
+    return {
+      ...result,
+      calls: (yield* fs.readFileString(path.join(bin, "calls.txt"))).trim(),
+      message,
+    };
   }).pipe(Effect.scoped);
 
 it("lints, in the commits job, the message msa squash-message builds at the tested head", () =>
@@ -96,9 +106,11 @@ it("lints, in the commits job, the message msa squash-message builds at the test
     Effect.gen(function* () {
       const lines = yield* pullRequestRun;
       expect(lines).toContain('HEAD_SHA="$(git rev-parse HEAD^2)"');
-      expect(yield* squashLine).toMatch(
-        /apps\/coding-agent\/src\/cli\.ts squash-message "\$PR_NUMBER" "\$HEAD_SHA" \| vp exec commitlint --verbose$/u,
+      const [build, check] = yield* squashLines;
+      expect(build).toMatch(
+        /apps\/coding-agent\/src\/cli\.ts squash-message "\$PR_NUMBER" "\$HEAD_SHA" > "\$RUNNER_TEMP\/squash"$/u,
       );
+      expect(check?.trim()).toBe('vp exec vpa --commit-msg "$RUNNER_TEMP/squash"');
     }),
   ));
 
@@ -115,7 +127,7 @@ it("passes the squash message built from the commits even when a pull request bo
         SECOND,
       );
       expect(result.exitCode, result.stdout + result.stderr).toBe(0);
-      expect(result.stdout).toContain(`${TITLE} (#7)`);
+      expect(result.message).toContain(`${TITLE} (#7)`);
       expect(result.calls).toContain("api --paginate --slurp repos/{owner}/{repo}/pulls/7/commits");
     }),
   ));

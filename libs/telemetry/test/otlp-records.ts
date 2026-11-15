@@ -95,7 +95,10 @@ function normalizeMetrics(
           ? ["counter", metric.sum?.dataPoints ?? []]
           : ["gauge", metric.gauge.dataPoints]
         : ["histogram", metric.histogram.dataPoints];
-    const unit = metric.unit === undefined || metric.unit === "1" ? {} : { unit: metric.unit };
+    const unit =
+      metric.unit === undefined || metric.unit === "" || metric.unit === "1"
+        ? {}
+        : { unit: metric.unit };
     return points.map((point): telemetryTypes.RecordedTelemetryMetric =>
       Object.assign(
         {

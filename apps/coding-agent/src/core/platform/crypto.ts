@@ -1,30 +1,20 @@
-import { Crypto, Effect, Random } from "effect";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import { Effect, ManagedRuntime, Random } from "effect";
+import { Digest, SecureRandom } from "effect/crypto";
 import { Hex } from "effect/encoding";
 
-import platformRuntime from "./runtime.ts";
+const digestRuntime = ManagedRuntime.make(NodeCrypto.layerDigest);
 
-const cryptoService = platformRuntime.runSync(Crypto.Crypto);
-
-const randomBytes = (count: number): Uint8Array =>
-  platformRuntime.runSync(cryptoService.randomBytes(count).pipe(Effect.orDie));
-
-const randomHex = (byteCount: number): string => Hex.encode(randomBytes(byteCount));
+const randomHex = (byteCount: number): string =>
+  Hex.encode(SecureRandom.randomBytesUnsafe(byteCount));
 
 const randomUnit = (): number => Effect.runSync(Random.next);
 
-const randomUuid = (): string => {
-  const bytes = randomBytes(16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = Hex.encode(bytes);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
+const randomUuid = (): string => SecureRandom.uuidV4Unsafe();
 
 const sha256Hex = (text: string): string =>
-  Hex.encode(
-    platformRuntime.runSync(
-      cryptoService.digest("SHA-256", new TextEncoder().encode(text)).pipe(Effect.orDie),
-    ),
+  digestRuntime.runSync(
+    Digest.Digest.use((digest) => digest.digestHex(Digest.sha256, new TextEncoder().encode(text))),
   );
 
 const platformCrypto = {

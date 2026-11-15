@@ -11,7 +11,7 @@ import worktreeSnapshot from "./worktree-snapshot.ts";
 import worktreeModule from "./worktree.ts";
 
 const { execCommand } = exec;
-const { files } = platform;
+const { files, fromPromise } = platform;
 const { orchestratorError } = errors;
 const { worktrees } = worktreeModule;
 const { store } = storeModule;
@@ -21,9 +21,7 @@ const ADVISOR_MARK = "msa-advisor-";
 const WORK_LIMIT = 20_000;
 
 function git(cwd: string, args: readonly string[]): Effect.Effect<{ ok: boolean; output: string }> {
-  return Effect.tryPromise(() =>
-    execCommand("git", [...args], cwd, { timeout: GIT_TIMEOUT_MS }),
-  ).pipe(
+  return fromPromise(() => execCommand("git", [...args], cwd, { timeout: GIT_TIMEOUT_MS })).pipe(
     Effect.map((result) => ({
       ok: result.code === 0,
       output: (result.code === 0 ? result.stdout : result.stderr).trim(),
@@ -132,7 +130,7 @@ function remove(cwd: string): Effect.Effect<void> {
       const removed = yield* git(main, ["worktree", "remove", "--force", root]);
       if (removed.ok) return;
     }
-    yield* Effect.tryPromise(() => files.remove({ force: true, path: root, recursive: true })).pipe(
+    yield* fromPromise(() => files.remove({ force: true, path: root, recursive: true })).pipe(
       Effect.ignore,
     );
     if (main !== undefined) yield* git(main, ["worktree", "prune"]);
@@ -176,9 +174,9 @@ function sweep(runtime: runtimeTypes.Runtime): Effect.Effect<void> {
         if (registered.has(platformPath.basename(root))) {
           yield* git(repository, ["worktree", "remove", "--force", root]);
         }
-        yield* Effect.tryPromise(() =>
-          files.remove({ force: true, path: root, recursive: true }),
-        ).pipe(Effect.ignore);
+        yield* fromPromise(() => files.remove({ force: true, path: root, recursive: true })).pipe(
+          Effect.ignore,
+        );
       }
     }
   });

@@ -23,7 +23,7 @@ const recordGrandchild = Effect.gen(function* () {
 
 const serve = (mode: string) =>
   Effect.gen(function* () {
-    yield* Effect.tryPromise(() => control.lock()).pipe(
+    yield* Effect.tryPromise({ catch: String, try: () => control.lock() }).pipe(
       Effect.catch(() => exitSoon.pipe(Effect.andThen(Effect.never))),
     );
     const name = yield* Effect.orDie(Config.String("HOST_NAME").pipe(Config.withDefault("worker")));

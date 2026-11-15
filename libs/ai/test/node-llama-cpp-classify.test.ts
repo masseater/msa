@@ -110,10 +110,10 @@ const retriesAFailedDownload = () =>
         [modelAt("hf:example/missing/missing.gguf")],
       );
       const model = modelAt("hf:example/missing/missing.gguf");
-      const failure = Effect.tryPromise(() => provider.prepareClassifier!(model)).pipe(
-        Effect.flip,
-        Effect.map((error) => String(error.cause)),
-      );
+      const failure = Effect.tryPromise({
+        catch: String,
+        try: () => provider.prepareClassifier!(model),
+      }).pipe(Effect.flip);
 
       const first = yield* Effect.promise(() => provider.classify!(model, context));
       const firstFailure = yield* failure;
@@ -143,11 +143,12 @@ const loadsBindingsFromTheGivenLoader = () =>
         [modelAt(FIXTURE)],
       );
 
-      const failure = yield* Effect.tryPromise(() =>
-        provider.prepareClassifier!(modelAt(FIXTURE)),
-      ).pipe(Effect.flip);
+      const failure = yield* Effect.tryPromise({
+        catch: String,
+        try: () => provider.prepareClassifier!(modelAt(FIXTURE)),
+      }).pipe(Effect.flip);
 
-      expect(String(failure.cause)).toContain("no node-llama-cpp next to the binary");
+      expect(failure).toContain("no node-llama-cpp next to the binary");
     }),
   );
 

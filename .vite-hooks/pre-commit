@@ -1,2 +1,2 @@
 vp staged
-vp run betterleaks:staged
+vp exec vpa --staged

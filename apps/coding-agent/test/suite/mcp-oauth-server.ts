@@ -1,7 +1,8 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { NodeCrypto, NodeServices } from "@effect/platform-node";
 import mcp from "@msa/mcp";
 import testing from "@msa/testing";
-import { Crypto, Deferred, Effect, Exit, ManagedRuntime, Scope } from "effect";
+import { Deferred, Effect, Exit, Layer, ManagedRuntime, Scope } from "effect";
+import { Digest } from "effect/crypto";
 
 import type mcpOauthServerTypes from "./mcp-oauth-server.types.ts";
 
@@ -9,7 +10,7 @@ const { LATEST_PROTOCOL_VERSION } = mcp;
 
 const { fromJsonText, serveLoopback } = testing;
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
+const runtime = ManagedRuntime.make(Layer.merge(NodeServices.layer, NodeCrypto.layerDigest));
 
 interface McpMessage {
   id?: number;
@@ -30,7 +31,7 @@ const readJson = (request: Request): Effect.Effect<unknown> =>
 
 const sha256 = (value: string) =>
   Effect.map(
-    Crypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(value))),
+    Digest.Digest.use((digest) => digest.digest(Digest.sha256, new TextEncoder().encode(value))),
     (digest) => Buffer.from(digest),
   );
 

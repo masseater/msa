@@ -64,7 +64,7 @@ const grepFile = (
     const { glob } = state.params;
     if (glob !== undefined && glob !== "" && !matchesToolGlob(file.relativePath, glob)) return true;
     const content = yield* Effect.option(
-      Effect.tryPromise(() =>
+      platform.fromPromise(() =>
         vm.fs.readFile(file.guestPath, { encoding: "utf8", ...signalOption(signal) }),
       ),
     );

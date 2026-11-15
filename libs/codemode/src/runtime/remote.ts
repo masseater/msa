@@ -7,6 +7,7 @@ import inline from "./inline.ts";
 import preludeSource from "./prelude-source.ts";
 import type protocolTypes from "./protocol.ts";
 import RemoteCodemodeSandbox from "./remote-codemode-sandbox.ts";
+import RuntimeError from "./runtime-error.ts";
 
 const { DEFAULT_INTERRUPT_BUDGET, inlineLauncher } = inline;
 const { causeMessage } = preludeSource;
@@ -31,6 +32,13 @@ const takeBuffer = (serve: Serve): protocolTypes.CodemodeRemoteMessage[] => {
   return batch;
 };
 
+const exchangeMessages = (serve: Serve, messages: protocolTypes.CodemodeRemoteMessage[]) =>
+  Effect.tryPromise({
+    catch: (cause) =>
+      RuntimeError.make({ cause, message: "remote exchange failed", reason: "remote" }),
+    try: () => serve.exchange(messages),
+  });
+
 const end = (serve: Serve, terminal: protocolTypes.CodemodeRemoteMessage | undefined): void => {
   if (serve.ended) return;
   serve.ended = true;
@@ -38,7 +46,7 @@ const end = (serve: Serve, terminal: protocolTypes.CodemodeRemoteMessage | undef
   const delivered =
     terminal === undefined
       ? Effect.void
-      : Effect.tryPromise(() => serve.exchange([...batch, terminal])).pipe(Effect.ignore);
+      : exchangeMessages(serve, [...batch, terminal]).pipe(Effect.ignore);
   Effect.runFork(
     delivered.pipe(
       Effect.andThen(Effect.suspend(() => serve.channel?.stop ?? Effect.void)),
@@ -56,7 +64,7 @@ const reply = (serve: Serve, message: protocolTypes.CodemodeRemoteReply): void =
 
 const send = (serve: Serve, messages: protocolTypes.CodemodeRemoteMessage[]): void => {
   Effect.runFork(
-    Effect.tryPromise(() => serve.exchange(messages)).pipe(
+    exchangeMessages(serve, messages).pipe(
       Effect.match({
         onFailure: () => end(serve, undefined),
         onSuccess: (message) => reply(serve, message),

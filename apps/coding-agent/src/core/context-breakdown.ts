@@ -6,7 +6,10 @@ import { Effect } from "effect";
 import compaction from "./compaction/compaction.ts";
 import type contextBreakdownTypes from "./context-breakdown.types.ts";
 import memory from "./memory/memory.ts";
+import platform from "./platform/index.ts";
 import systemPrompt from "./system-prompt.ts";
+
+const { fromPromise } = platform;
 
 const { estimateTokens } = compaction;
 const { ORCHESTRATOR_PREAMBLE } = systemPrompt;
@@ -139,7 +142,7 @@ const measureContextBreakdown = (
       Effect.promise(() => Promise.resolve(source.convertToLlm([message]))),
     );
     const elements = splitContext(transformed, sent);
-    const counted = yield* Effect.tryPromise(() => source.countTokens(sent.flat())).pipe(
+    const counted = yield* fromPromise(() => source.countTokens(sent.flat())).pipe(
       Effect.orElseSucceed(() => undefined),
     );
     const estimated = elements.reduce((sum, element) => sum + element.estimate, 0);

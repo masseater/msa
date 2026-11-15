@@ -1,5 +1,5 @@
-import { TypeFlags } from "typescript/unstable/sync";
-import type { Checker, Type } from "typescript/unstable/sync";
+import { TypeFlags } from "typescript/sync";
+import type { Checker, Type } from "typescript/sync";
 
 const UNSAFE_NAMES: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
 

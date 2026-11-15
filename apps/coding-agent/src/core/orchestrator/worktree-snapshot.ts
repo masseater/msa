@@ -6,7 +6,7 @@ import platformPath from "../platform/path.ts";
 import type worktreeSnapshotTypes from "./worktree-snapshot.types.ts";
 
 const { execCommand } = exec;
-const { files, randomHex, sha256Hex } = platform;
+const { files, fromPromise, randomHex, sha256Hex } = platform;
 
 const GIT_TIMEOUT_MS = 60_000;
 const DIFF_LIMIT = 6000;
@@ -24,7 +24,7 @@ function git(
   args: readonly string[],
   env?: Readonly<Record<string, string>>,
 ): Effect.Effect<GitRun> {
-  return Effect.tryPromise(() =>
+  return fromPromise(() =>
     execCommand("git", [...args], cwd, {
       timeout: GIT_TIMEOUT_MS,
       ...(env === undefined ? {} : { env }),
@@ -39,7 +39,7 @@ function git(
 }
 
 function promised<A>(run: () => Promise<A>): Effect.Effect<A | undefined> {
-  return Effect.tryPromise(run).pipe(Effect.orElseSucceed(() => undefined));
+  return fromPromise(run).pipe(Effect.orElseSucceed(() => undefined));
 }
 
 function gitSnapshot(cwd: string): Effect.Effect<Snapshot | undefined> {

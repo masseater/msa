@@ -9,12 +9,12 @@
   "devDependencies": {
     "@anthropic-ai/sandbox-runtime": "catalog:",
     "@ast-grep/cli": "catalog:",
-    "@commitlint/cli": "catalog:",
     "@commitlint/config-conventional": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/tsgo": "catalog:stack",
     "@jridgewell/remapping": "catalog:",
     "@picocss/pico": "catalog:",
+    "@r_masseater/vite-plus-adopt": "catalog:",
     "@types/d3-array": "catalog:",
     "@types/node": "catalog:",
     "charts.css": "catalog:",
@@ -28,7 +28,6 @@
     "shx": "catalog:",
     "skills": "catalog:",
     "srvx": "catalog:",
-    "syncpack": "catalog:",
     "tree-sitter-bash": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:stack",
@@ -37,16 +36,6 @@
   },
   "overrides": {
     "protobufjs": "7.6.6"
-  },
-  "commitlint": {
-    "extends": [
-      "@commitlint/config-conventional"
-    ],
-    "rules": {
-      "subject-case": [
-        0
-      ]
-    }
   },
   "devEngines": {
     "packageManager": {

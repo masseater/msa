@@ -1,14 +1,5 @@
-import {
-  Cause,
-  Clock,
-  Context,
-  Crypto,
-  DateTime,
-  Deferred,
-  type Duration,
-  Effect,
-  Exit,
-} from "effect";
+import { Cause, Clock, Context, DateTime, Deferred, type Duration, Effect, Exit } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import childProcesses from "./child-processes.ts";
 import type effectSupportTypes from "./effect-support.types.ts";
@@ -79,11 +70,8 @@ const pollUntil = Effect.fn("pollUntil")(function* (
 });
 
 const randomSuffix: Effect.Effect<string> = provideNode(
-  Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()),
-).pipe(
-  Effect.orDie,
-  Effect.map((uuid) => uuid.replaceAll("-", "").slice(0, 12)),
-);
+  SecureRandom.SecureRandom.use((random) => random.uuidV4()),
+).pipe(Effect.map((uuid) => uuid.replaceAll("-", "").slice(0, 12)));
 
 const gate = (): effectSupportTypes.Gate => {
   const deferred = Deferred.makeUnsafe<void>();

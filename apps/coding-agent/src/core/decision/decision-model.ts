@@ -3,8 +3,11 @@ import localModule from "@msa/ai/providers/local";
 import { Effect } from "effect";
 
 import type modelRuntimeTypes from "../model-runtime.types.ts";
+import platform from "../platform/index.ts";
 import type ModelSettings from "../settings/model-settings.ts";
 import type decideTypes from "./decide.types.ts";
+
+const { fromPromise } = platform;
 
 const { LIQUID_D1 } = localModule;
 
@@ -42,7 +45,7 @@ function prepareDecisionModel(
     return Promise.resolve({ model: reference, reason: resolved.unavailable, status: "failed" });
   const { model } = resolved;
   return Effect.runPromise(
-    Effect.tryPromise(
+    fromPromise(
       () =>
         runtime.getProvider(model.provider)?.prepareClassifier?.(model) ??
         Promise.resolve({ fetched: false }),

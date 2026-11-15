@@ -1,5 +1,5 @@
 import type chordTypes from "@msa/chord/index.types";
-import { Effect, Exit } from "effect";
+import { Effect, Result } from "effect";
 
 import FileError from "../file-error.ts";
 import LineScanner from "../line-scan.ts";
@@ -125,12 +125,15 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
     const unavailable = this.#unavailable<typesModule.LineScan>(context);
     if (unavailable !== undefined) return Promise.resolve(unavailable);
     const scanner = Effect.runSync(
-      Effect.exit(Effect.try(() => new LineScanner(options.startLine, options.endLine))),
+      Effect.result(
+        Effect.try({
+          catch: () => FileError.create("invalid", "Invalid line range", this.#path),
+          try: () => new LineScanner(options.startLine, options.endLine),
+        }),
+      ),
     );
-    if (Exit.isFailure(scanner)) {
-      return Promise.resolve(err(FileError.create("invalid", "Invalid line range", this.#path)));
-    }
-    return this.#run(this.#scan(scanner.value, context));
+    if (Result.isFailure(scanner)) return Promise.resolve(err(scanner.failure));
+    return this.#run(this.#scan(scanner.success, context));
   }
 
   #scan(

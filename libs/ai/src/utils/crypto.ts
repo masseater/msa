@@ -1,18 +1,18 @@
-import { Crypto, Effect, Function } from "effect";
+import { Effect, Function, ManagedRuntime } from "effect";
+import { Digest, SecureRandom } from "effect/crypto";
 
 import type cryptoTypes from "./crypto.types.ts";
 
-const webCrypto = Crypto.make({
-  digest: (algorithm, data) =>
-    Effect.map(
-      Effect.promise(() => globalThis.crypto.subtle.digest(algorithm, new Uint8Array(data))),
-      (digested) => new Uint8Array(digested),
-    ),
-  randomBytes: (size) => globalThis.crypto.getRandomValues(new Uint8Array(size)),
+const ALGORITHMS: Readonly<Record<cryptoTypes.DigestAlgorithm, Digest.Algorithm>> = Object.freeze({
+  "SHA-1": Digest.sha1,
+  "SHA-256": Digest.sha256,
+  "SHA-384": Digest.sha384,
+  "SHA-512": Digest.sha512,
 });
 
-const randomBytes = (size: number): Uint8Array =>
-  Effect.runSync(Effect.orDie(webCrypto.randomBytes(size)));
+const webDigest = ManagedRuntime.make(Digest.layerWebCrypto).runSync(Digest.Digest);
+
+const randomBytes = (size: number): Uint8Array => SecureRandom.randomBytesUnsafe(size);
 
 const randomHex = (size: number): string =>
   Array.from(randomBytes(size), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -23,10 +23,10 @@ const digest: {
 } = Function.dual(
   2,
   (algorithm: cryptoTypes.DigestAlgorithm, data: Uint8Array): Effect.Effect<Uint8Array> =>
-    Effect.orDie(webCrypto.digest(algorithm, data)),
+    webDigest.digest(ALGORITHMS[algorithm], data),
 );
 
-const randomUuid = (): string => Effect.runSync(Effect.orDie(webCrypto.randomUUIDv4()));
+const randomUuid = (): string => SecureRandom.uuidV4Unsafe();
 
 const cryptoModule = {
   digest,

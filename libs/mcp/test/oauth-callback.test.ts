@@ -87,7 +87,7 @@ const rejectsTakenPort = withCallback(undefined, (callback) =>
   Effect.gen(function* () {
     const port = Number(new URL(callback.redirectUrl).port);
     const second = yield* Effect.exit(
-      Effect.tryPromise(() => OAuthCallbackServer.listen({ port })),
+      Effect.tryPromise({ catch: String, try: () => OAuthCallbackServer.listen({ port }) }),
     );
     expect(Exit.isFailure(second)).toBe(true);
   }),
