@@ -35,13 +35,13 @@
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/project-checklist/SKILL.md",
-      "computedHash": "47e8ba1545686fd1ffdbec279e30ecd2e5b744da88d3b33d0f3c384697c7e789"
+      "computedHash": "fb5e4dffdf2112fe9708dd72f8cd055323cc8c1889da26f397577f5188e85912"
     },
     "repo-conventions": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/repo-conventions/SKILL.md",
-      "computedHash": "41989590c6e95a2eeec633f65c90c71f36ea0379cdfe6833345ea495f61ee445"
+      "computedHash": "71275f7e23f8ba2e3a91826ad9b783cb09817cc4a0ea73c6a5a01c0fe00e1722"
     },
     "skill-authoring": {
       "source": "masseater/skills",
@@ -53,13 +53,13 @@
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/vite-plus/SKILL.md",
-      "computedHash": "80d9dc1e764c62f08ac1169766e44b31e0db168246cdccb0de416d3af660bdff"
+      "computedHash": "5ee8b5e12252c0451c4e170b1bec0126c810791e190965290c66b366ffba4453"
     },
     "writing": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/writing/SKILL.md",
-      "computedHash": "189aa4b8d3f6c5da35ff662bdb5f93a95fe3f1fedc99ced59e69de834bfb0795"
+      "computedHash": "e32e3a2165406de51072449090c2feb93f10860b6da87da2fc4bb9d9d863952a"
     }
   }
 }
