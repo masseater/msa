@@ -147,7 +147,7 @@ const run: NonNullable<UserConfig["run"]> = {
         ],
       },
       command:
-        'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
+        'actionlint && zizmor $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
     },
     audit: { cache: false, command: "vp pm audit" },
     betterleaks: {

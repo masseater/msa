@@ -20,6 +20,7 @@ type RunRef = taskCommandTypes.RunRef;
 type Handler = (call: Call) => Effect.Effect<Checked>;
 
 const READS_NO_DIST: ReadonlyArray<ReadonlyArray<string>> = [
+  ["actionlint"],
   ["ast-grep"],
   ["awk"],
   ["cargo"],
@@ -31,9 +32,9 @@ const READS_NO_DIST: ReadonlyArray<ReadonlyArray<string>> = [
   ["shx", "rm"],
   ["syncpack"],
   ["test"],
-  ["uvx"],
   ["vp", "check"],
   ["vp", "pm", "audit"],
+  ["zizmor"],
 ];
 const NODE_OPTIONS = "NODE_OPTIONS";
 const NPM_RUN = new Set(["run", "run-script"]);

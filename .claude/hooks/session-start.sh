@@ -18,6 +18,13 @@ fi
 command -v fd >/dev/null 2>&1 || ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 
 cd "$CLAUDE_PROJECT_DIR"
+if ! command -v mise >/dev/null 2>&1; then
+  curl -fsSL https://mise.run | sh >&2
+fi
+export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+mise trust --quiet mise.toml
+mise install --locked >&2
+echo "export PATH=\"$HOME/.local/bin:$HOME/.local/share/mise/shims:\$PATH\"" >>"$CLAUDE_ENV_FILE"
 vp env on >&2
 vp install --frozen-lockfile >&2
 vp run @msa/ai#hydrate-model-data >&2

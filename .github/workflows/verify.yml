@@ -29,11 +29,9 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
-          enable-cache: true
-          cache-dependency-glob: run.config.ts
-          ignore-nothing-to-cache: true
+          fetch_from_github: false
       - id: task-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
