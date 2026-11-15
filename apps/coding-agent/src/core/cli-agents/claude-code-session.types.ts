@@ -1,4 +1,5 @@
 import type {
+  EffortLevel,
   Query as QuerySource,
   SDKMessage as SDKMessageSource,
   SDKUserMessage as SDKUserMessageSource,
@@ -13,7 +14,7 @@ import type claudeAccountsTypes from "./claude-accounts.types.ts";
 import type SessionClass from "./claude-code-session.ts";
 
 declare namespace claudeCodeSessionTypes {
-  type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+  type Effort = EffortLevel;
 
   interface SessionConfig {
     accounts: claudeAccountsTypes.Account[];

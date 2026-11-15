@@ -87,13 +87,10 @@ catalogs:
     vite-plus: 1.6.0
 
 overrides:
-  effect: "catalog:stack"
   "@effect/platform-node-shared": 4.1.4
   vite@*: npm:@voidzero-dev/vite-plus-core@1.6.0
-  vitest@*: 5.1.0
   "@anthropic-ai/sandbox-runtime>zod": 4.6.7
   simple-git: 4.0.2
-  hono@<4.13.16: ^4.13.16
   "steiger>@feature-sliced/steiger-plugin": "-"
   glob@>=9.0.0 <=14.0.1: ^14.0.2
   katex@>=0.11.0 <0.18.2: ^0.19.0

@@ -24,7 +24,7 @@ const QUERY = 'mutation { mergePullRequest(input: {pullRequestId: "x"}) { client
 const BYPASSES = [
   'args="pr merge 12 --squash"; gh $args',
   "printf 'gh pr merge 12 --auto --squash\\n' > merge.sh && sh merge.sh",
-  `python3 -c 'import subprocess, sys; sys.exit(subprocess.run(["gh", "pr", "merge", "12"]).returncode)'`,
+  `node -e 'process.exit(require("node:child_process").spawnSync("gh", ["pr", "merge", "12"], { stdio: "inherit" }).status)'`,
   `printf '%s' '${QUERY}' > merge.graphql && gh api graphql -F query=@merge.graphql`,
   `printf '%s' '${QUERY}' | gh api graphql -F query=@-`,
   "gh alias set --clobber land 'pr merge'",

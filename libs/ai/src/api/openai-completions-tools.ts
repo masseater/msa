@@ -12,7 +12,10 @@ const {
 
 function toCustomTool(
   tool: typesModule.Tool,
-  grammar: { format: "lark" | "regex"; definition: string },
+  grammar: {
+    format: OpenAI.Chat.Completions.ChatCompletionCustomTool.Custom.Grammar.Grammar["syntax"];
+    definition: string;
+  },
 ): OpenAI.Chat.Completions.ChatCompletionCustomTool {
   return {
     custom: {
