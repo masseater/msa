@@ -16,6 +16,12 @@
     {
       "matchFileNames": ["skills-lock.json"],
       "ignoreTests": false
+    },
+    {
+      "description": "masseater/skills と masseater/typescript-template はマージのたびに全リポへ digest の PR を出し、ジョブの同時実行枠を埋める。1 日 1 回にまとめる。",
+      "matchDepNames": ["masseater/skills", "masseater/typescript-template"],
+      "groupName": "masseater digests",
+      "schedule": ["* 4 * * *"]
     }
   ],
   "automerge": true,
@@ -41,5 +47,6 @@
       "packageNameTemplate": "https://github.com/{{{depName}}}"
     }
   ],
-  "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"]
+  "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"],
+  "timezone": "Asia/Tokyo"
 }
