@@ -143,7 +143,7 @@
 - 番号は 0.0.x の patch を 1 つ上げる。0.0.4・0.0.5 は provider 名や DB の変更を含んでいたが、どちらも patch だった。1.0 までは破壊的な変更の有無で minor を上げない。
 - 手順は次のとおり。
   1. 最新の main から枝を切り、`apps/coding-agent/CHANGELOG.md` の `[Unreleased]` の下に `## [x.y.z] - YYYY-MM-DD` の見出しを足し、`apps/coding-agent/package.json` の `version` を上げる。この 2 ファイルだけを `chore(release): vx.y.z` の PR にする。本文には、番号をその値にした理由と、何を含むかを書く。
-  2. orchestrator が `merge_pull_request` で PR を squash merge する。release の worker も `gh pr merge` を使わない。ハーネスを通さないと squash の本文と `Msa-Merge` trailer が付かず、main への push で `commits` ジョブが落ちる。
+  2. orchestrator が `merge_pull_request` で PR を squash merge する。release の worker も `gh pr merge` を使わない。ハーネスを通さないと squash の本文と `Msa-Merge` trailer が付かず、main への push で `commits` ジョブが落ちる。author が `[bot]` で終わる bot のコミット（renovate の automerge など）は検査しない。
   3. tag は、`apps/coding-agent/package.json` の `version` が上がった commit か、その後の main の commit のうち、release workflow が通る最新の commit に付ける。版を上げる PR のマージ commit に付けるのが普通で、`git fetch origin && git tag -a vx.y.z -m "msa vx.y.z" origin/main && git push origin vx.y.z`（`origin/main` がその commit を指しているときに限る）。
   4. release workflow が success になり（`cleanup-draft-release` は release job が失敗したときだけ動くので、成功時は skipped になる）、GitHub Release が Latest になり、`masseater/homebrew-tap` の `Formula/msa.rb` が `msa x.y.z` の commit で更新されたことを確かめる。
   5. `brew update && brew upgrade msa` のあと `msa --version` が `x.y.z` を返すことを確かめる。DB の移行を確かめるときは、`~/.msa/agent` をそのまま使わず、`sqlite3 ~/.msa/agent/orchestrator.db ".backup <temp>/orchestrator.db"` で取ったコピーに `MSA_CODING_AGENT_DIR=<temp>` を向けて開く。

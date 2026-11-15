@@ -39,6 +39,9 @@ jobs:
           git fetch --no-tags --depth="$((commits + 1))" origin "$HEAD_SHA"
           missing=0
           for sha in $(git rev-list --no-merges "$BEFORE_SHA..$HEAD_SHA"); do
+            case "$(git show -s --format=%an "$sha")" in
+              *"[bot]") continue ;;
+            esac
             if ! git show -s --format=%B "$sha" | grep -q '^Msa-Merge: '; then
               echo "::error::${sha:0:9} has no Msa-Merge trailer: it was merged without the harness or merge_pull_request"
               missing=1
