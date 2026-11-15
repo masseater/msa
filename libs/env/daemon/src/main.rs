@@ -1,6 +1,3 @@
-//! msa-env: a small daemon that gives a msa Durable host an execution environment on this machine over stdin/stdout
-//! (docs/protocol.md). Started as `msa-env serve --token <hex>`, usually through `ssh`.
-
 mod decode;
 mod errors;
 mod exec;
@@ -30,26 +27,19 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const PROTOCOL: u64 = 1;
-/// Operations added after protocol 1's first release; clients check `hello.features` before using them.
 const FEATURES: &[&str] = &["listFiles"];
-/// The npm package version this daemon ships with (build.rs).
 const VERSION: &str = env!("MSA_ENV_VERSION");
 const PING_INTERVAL: Duration = Duration::from_secs(5);
 const SILENCE_LIMIT_MS: u64 = 30_000;
 const SCAN_CHUNK: usize = 64 * 1024;
-/// Threads for file operations; commands run on their own threads.
 const WORKERS: usize = 16;
-/// Open handles per connection, beyond which opening fails with `EMFILE`.
 const MAX_HANDLES: usize = 4096;
-/// Replies with larger payloads queue behind command output instead of going first.
 const CONTROL_PAYLOAD: usize = 64 * 1024;
 
 struct FileHandle {
     file: File,
     path: String,
-    /// A failed chunk write poisons a write handle, so later chunks cannot leave a gap.
     failed: AtomicBool,
-    /// Chunk writes run one at a time in arrival order, though the client sends several at once.
     serial: Mutex<Serial>,
 }
 
@@ -193,7 +183,6 @@ impl Server {
             "open" => {
                 let path = field(json, "path")?;
                 if json["mode"].as_str() == Some("read") {
-                    // Node's `open(path, "r")`: any kind of file, blocking; reads report what the file is.
                     let file = sys::open(path, sys::OpenMode::Read)
                         .map_err(|error| Failure::io(&error, "open", path))?;
                     let stat = match file.metadata() {
@@ -274,7 +263,6 @@ impl Server {
 
     fn read_dir(&self, json: &Value) -> Result<Value, Failure> {
         let max = number(json, "max")?.max(1) as usize;
-        // Lock only this directory, so other requests are not held up by a slow listing.
         let dir = match self.handles.lock().unwrap().get(&number(json, "handle")?) {
             Some(Handle::Dir(dir)) => dir.clone(),
             _ => return Err(Failure::new("EBADF", "not a directory handle")),
@@ -325,7 +313,6 @@ fn kill_all(groups: &exec::Groups) {
     }
 }
 
-/// Stdin that records when bytes last arrived, so a large frame arriving slowly counts as a live client.
 struct Seen<R> {
     inner: R,
     last_seen: Arc<AtomicU64>,
@@ -366,7 +353,6 @@ fn respond(server: &Server, id: u32, request: Frame, control: Arc<Control>) {
         Err(failure) => Frame::new(ERROR, id, failure.to_json()),
     };
     server.controls.lock().unwrap().remove(&id);
-    // A command's result follows its output; large payloads do not hold up pings and small replies.
     if is_exec || reply.payload.len() > CONTROL_PAYLOAD {
         server.output.bulk(reply, None);
     } else {
@@ -374,7 +360,6 @@ fn respond(server: &Server, id: u32, request: Frame, control: Arc<Control>) {
     }
 }
 
-/// Queue `job` behind the handle's earlier chunk writes; one pool job drains the queue.
 fn run_in_order(jobs: &Sender<Job>, handle: Arc<FileHandle>, job: Job) {
     let mut serial = handle.serial.lock().unwrap();
     serial.jobs.push_back(job);
@@ -411,7 +396,6 @@ fn serve_frames(server: &Arc<Server>, input: &mut impl Read) -> io::Result<()> {
                     Some("ptyWrite" | "ptyResize" | "ptyForeground")
                 ) =>
             {
-                // Answered here, in arrival order: through the worker pool, two writes could swap.
                 let reply = match request.json["op"].as_str() {
                     Some("ptyWrite") => {
                         pty::write(&server.terminals, &request.json, request.payload)
@@ -426,10 +410,8 @@ fn serve_frames(server: &Arc<Server>, input: &mut impl Read) -> io::Result<()> {
             }
             REQUEST => {
                 let id = request.id;
-                // Registered before the request runs, so a cancel right behind it is not lost.
                 let control = Arc::new(Control::default());
                 server.controls.lock().unwrap().insert(id, control.clone());
-                // Commands and watchers last; they get their own threads (watchers recurse through trees).
                 if matches!(request.json["op"].as_str(), Some("exec" | "watch" | "pty")) {
                     let worker = server.clone();
                     let spawned = thread::Builder::new()
@@ -500,7 +482,6 @@ fn serve(token: &str) -> io::Result<()> {
             loop {
                 thread::sleep(PING_INTERVAL);
                 output.control(Frame::new(PING, 0, json!({})));
-                // A client that went silent (a phone that lost its network) leaves nothing running.
                 if now_ms().saturating_sub(last_seen.load(Ordering::Relaxed)) > SILENCE_LIMIT_MS {
                     kill_all(&groups);
                     std::process::exit(0);
@@ -516,7 +497,6 @@ fn serve(token: &str) -> io::Result<()> {
         },
     );
     let result = serve_frames(&server, &mut input);
-    // However input ended, the client is gone: stop everything it started.
     kill_all(&server.groups);
     output.close();
     let _ = writer.join();
@@ -539,7 +519,6 @@ fn main() {
                 eprintln!("msa-env: {error}");
                 std::process::exit(1);
             }
-            // Request threads may still be blocked (a FIFO open); nothing is left to answer them.
             std::process::exit(0);
         }
         Some("--version") => println!("msa-env {VERSION}"),

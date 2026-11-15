@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# 依存の audit を流し、出た advisory ごとに issue を 1 つ開いておく。
-# 新しい advisory は issue を作り、開いている advisory は issue を更新し、出なくなった advisory は issue を閉じる。
 set -euo pipefail
 
 label="audit"

@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Track only allocations made by the clipboard implementation, not libxcb.
-// This makes the partial-transfer leak regression deterministic, unlike RSS.
 static void* allocations[64];
 static size_t sizes[64];
 static size_t allocated_bytes;
@@ -69,7 +67,6 @@ int main(int argc, char** argv) {
         assert(!append_property(&result, &chunk));
         assert(result.length == 2 * sizeof(atom) && result.items == 2);
 
-        // The terminating chunk must agree with the preceding metadata too.
         chunk.length = chunk.items = 0;
         chunk.format = 8;
         assert(!append_property(&result, &chunk));
@@ -88,7 +85,7 @@ int main(int argc, char** argv) {
         close_clipboard(&clipboard);
         assert(!received);
         assert(!result.data && !result.length);
-        assert(peak_bytes >= 8192); // Both the received chunk and accumulated data were allocated.
+        assert(peak_bytes >= 8192);
         assert(allocated_bytes == 0);
         puts("clean");
         return 0;
@@ -100,7 +97,6 @@ int main(int argc, char** argv) {
     xcb_atom_t text = intern_atom(&clipboard, "UTF8_STRING");
     xcb_atom_t image = intern_atom(&clipboard, "image/png");
     xcb_set_selection_owner(connection, clipboard.window, clipboard.clipboard, XCB_CURRENT_TIME);
-    // Wait for the server to process selection ownership before reporting ready.
     assert(intern_atom(&clipboard, "READY") != XCB_NONE);
     puts("ready");
     fflush(stdout);
@@ -165,9 +161,8 @@ int main(int argc, char** argv) {
                     xcb_change_property(connection, XCB_PROP_MODE_REPLACE, requestor, property, target, 8, sizeof(chunk), chunk);
                     sent_chunk = true;
                 } else if (strcmp(argv[1], "invalid") == 0) {
-                    // Reject the terminating chunk after allocating the preceding data.
                     xcb_change_property(connection, XCB_PROP_MODE_REPLACE, requestor, property, XCB_ATOM_ATOM, 32, 0, 0);
-                } // Otherwise never finish the transfer; the reader must time out.
+                }
                 xcb_flush(connection);
             }
         }

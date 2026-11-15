@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Build DOOM for msa-doom using doomgeneric and Emscripten
 
 set -e
 
@@ -10,7 +9,6 @@ BUILD_DIR="$PROJECT_ROOT/doom/build"
 
 echo "=== msa-doom Build Script ==="
 
-# Check for emcc
 if ! command -v emcc &> /dev/null; then
     echo "Error: Emscripten (emcc) not found!"
     echo ""
@@ -24,29 +22,24 @@ if ! command -v emcc &> /dev/null; then
     exit 1
 fi
 
-# Clone doomgeneric if not present
 if [ ! -d "$DOOM_DIR/doomgeneric" ]; then
     echo "Cloning doomgeneric..."
     cd "$DOOM_DIR"
     git clone https://github.com/ozkl/doomgeneric.git
 fi
 
-# Create build directory
 mkdir -p "$BUILD_DIR"
 
-# Copy our platform file
 cp "$DOOM_DIR/doomgeneric_pi.c" "$DOOM_DIR/doomgeneric/doomgeneric/"
 
 echo "Compiling DOOM to WebAssembly..."
 cd "$DOOM_DIR/doomgeneric/doomgeneric"
 
-# Resolution - 640x400 is doomgeneric default, good balance of speed/quality
 RESX=${DOOM_RESX:-640}
 RESY=${DOOM_RESY:-400}
 
 echo "Resolution: ${RESX}x${RESY}"
 
-# Compile with Emscripten (no sound)
 emcc -O2 \
     -s WASM=1 \
     -s EXPORTED_FUNCTIONS="['_doomgeneric_Create','_doomgeneric_Tick','_DG_GetFrameBuffer','_DG_GetScreenWidth','_DG_GetScreenHeight','_DG_PushKeyEvent','_malloc','_free']" \

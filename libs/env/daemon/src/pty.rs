@@ -1,7 +1,3 @@
-//! `pty`: a program in a pseudo-terminal, for interactive terminals. Unlike `exec`, output is the terminal's raw
-//! bytes, and the program reads input: `ptyWrite`, `ptyResize` and `ptyForeground` address the running `pty` request by
-//! its id.
-
 use crate::errors::Failure;
 use crate::exec::{Control, Groups};
 #[cfg(unix)]
@@ -14,23 +10,18 @@ use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
-/// After the program exits, output still arriving is collected until this much silence.
 #[cfg(unix)]
 const EXIT_GRACE: std::time::Duration = std::time::Duration::from_millis(100);
-/// Largest terminal size accepted, in cells.
 const MAX_CELLS: u64 = 4096;
 
-/// What `ptyWrite`, `ptyResize` and `ptyForeground` reach: the terminal of one running `pty` request.
 pub struct Terminal {
     input: Sender<Vec<u8>>,
     #[cfg(unix)]
     master: Arc<std::fs::File>,
-    /// The program's process id, which is also its process group's (it leads the terminal's session).
     #[cfg(unix)]
     pid: u32,
 }
 
-/// Running terminals by the id of their `pty` request.
 pub type Terminals = Arc<Mutex<HashMap<u32, Arc<Terminal>>>>;
 
 #[cfg_attr(not(unix), allow(dead_code))]
@@ -98,7 +89,6 @@ fn find(terminals: &Terminals, json: &Value) -> Result<Arc<Terminal>, Failure> {
         .ok_or_else(|| Failure::new("EBADF", "no running terminal with this id"))
 }
 
-/// Queue input for the terminal; it is written in the order it arrives, without holding up other requests.
 pub fn write(terminals: &Terminals, json: &Value, payload: Vec<u8>) -> Result<Value, Failure> {
     let terminal = find(terminals, json)?;
     terminal
@@ -108,7 +98,6 @@ pub fn write(terminals: &Terminals, json: &Value, payload: Vec<u8>) -> Result<Va
     Ok(json!({}))
 }
 
-/// Change the terminal's size; the program receives `SIGWINCH`.
 pub fn resize(terminals: &Terminals, json: &Value) -> Result<Value, Failure> {
     let terminal = find(terminals, json)?;
     let (cols, rows) = (size(json, "cols")?, size(json, "rows")?);
@@ -120,8 +109,6 @@ pub fn resize(terminals: &Terminals, json: &Value) -> Result<Value, Failure> {
     Ok(json!({}))
 }
 
-/// The process group in the terminal's foreground when it is not the program's own: a job a shell started, such as an
-/// editor. `{ foreground: null }` while the program itself is in front (a shell at its prompt).
 pub fn foreground(terminals: &Terminals, json: &Value) -> Result<Value, Failure> {
     let terminal = find(terminals, json)?;
     #[cfg(unix)]
@@ -156,7 +143,6 @@ pub fn run(
     ))
 }
 
-/// Run the program in a new terminal, sending a `started` event and then its output, until it exits.
 #[cfg(unix)]
 pub fn run(
     id: u32,
@@ -211,7 +197,6 @@ pub fn run(
         thread::spawn(move || {
             unix::read(&master, &stop, |bytes| {
                 let delivered = sender.send(Message::Data(0, bytes.to_vec())).is_ok();
-                // Like a full pipe: a program that writes faster than the link waits.
                 output.wait_for_room(&stop);
                 delivered
             });
@@ -260,7 +245,6 @@ pub fn run(
             Some(idle) => {
                 let now = Instant::now();
                 if now >= idle {
-                    // A background job may keep the terminal open after the program exited.
                     break;
                 }
                 idle - now
@@ -296,7 +280,6 @@ pub fn run(
         }
     }
     stop.store(true, Ordering::SeqCst);
-    // Ending the input channel ends the writer thread.
     terminals.lock().unwrap().remove(&id);
     groups.lock().unwrap().remove(&pid);
     let _ = reader.join();
@@ -344,14 +327,11 @@ mod unix {
 
     pub fn set_size(master: &File, cols: u16, rows: u16) -> io::Result<()> {
         let size = winsize(cols, rows);
-        // SAFETY: TIOCSWINSZ reads one winsize from a valid pointer.
         check(unsafe { libc::ioctl(master.as_raw_fd(), libc::TIOCSWINSZ as _, &size) })?;
         Ok(())
     }
 
-    /// The terminal's foreground process group.
     pub fn foreground(master: &File) -> io::Result<libc::pid_t> {
-        // SAFETY: tcgetpgrp on a descriptor the terminal owns.
         let group = unsafe { libc::tcgetpgrp(master.as_raw_fd()) };
         if group < 0 {
             Err(io::Error::last_os_error())
@@ -360,11 +340,9 @@ mod unix {
         }
     }
 
-    /// A process's name, if it still runs and the system tells.
     #[cfg(target_vendor = "apple")]
     pub fn process_name(pid: libc::pid_t) -> Option<String> {
         let mut buffer = [0u8; 256];
-        // SAFETY: proc_name writes at most `buffer.len()` bytes and returns how many.
         let length =
             unsafe { libc::proc_name(pid, buffer.as_mut_ptr().cast(), buffer.len() as u32) };
         (length > 0).then(|| String::from_utf8_lossy(&buffer[..length as usize]).into_owned())
@@ -382,7 +360,6 @@ mod unix {
     }
 
     fn cloexec(fd: libc::c_int) -> io::Result<()> {
-        // SAFETY: fcntl on a descriptor this function's caller owns.
         unsafe {
             let flags = check(libc::fcntl(fd, libc::F_GETFD))?;
             check(libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC))?;
@@ -390,7 +367,6 @@ mod unix {
         Ok(())
     }
 
-    /// The program to run: `argv`, or the user's shell as a login shell (`-` before its name, as `login` does).
     fn command(request: &PtyRequest) -> Command {
         match &request.argv {
             Some(argv) => {
@@ -419,7 +395,6 @@ mod unix {
         let mut master: libc::c_int = -1;
         let mut slave: libc::c_int = -1;
         let mut size = winsize(request.cols, request.rows);
-        // SAFETY: openpty writes two descriptors; the name and termios are not requested.
         check(unsafe {
             libc::openpty(
                 &mut master,
@@ -429,7 +404,6 @@ mod unix {
                 &raw mut size,
             )
         })?;
-        // SAFETY: openpty returned two new descriptors this function now owns.
         let (master, slave) =
             unsafe { (OwnedFd::from_raw_fd(master), OwnedFd::from_raw_fd(slave)) };
         cloexec(master.as_raw_fd())?;
@@ -449,11 +423,8 @@ mod unix {
                 command.env(key, value);
             }
         }
-        // SAFETY: only async-signal-safe calls between fork and exec.
         unsafe {
             command.pre_exec(|| {
-                // A new session whose controlling terminal is the pty (stdin), so job control and SIGHUP work; default
-                // signal handling and an empty mask, as for `exec`.
                 if libc::setsid() < 0 {
                     return Err(io::Error::last_os_error());
                 }
@@ -472,10 +443,8 @@ mod unix {
             });
         }
         let child = command.spawn()?;
-        // Only the program holds the terminal now, so reads end once it and its descendants close it.
         drop(slave);
         let master = File::from(master);
-        // SAFETY: fcntl on the descriptor owned above; reads and writes poll instead of blocking.
         unsafe {
             let flags = check(libc::fcntl(master.as_raw_fd(), libc::F_GETFL))?;
             check(libc::fcntl(
@@ -493,7 +462,6 @@ mod unix {
             events,
             revents: 0,
         };
-        // SAFETY: one valid pollfd.
         let ready = unsafe { libc::poll(&mut poll, 1, 100) };
         if ready < 0 {
             let error = io::Error::last_os_error();
@@ -506,8 +474,6 @@ mod unix {
         Ok(ready > 0)
     }
 
-    /// Read until the terminal closes (Linux reports `EIO` once no program holds it), `on_data` returns false, or
-    /// `stop` is set.
     pub fn read(master: &File, stop: &AtomicBool, mut on_data: impl FnMut(&[u8]) -> bool) {
         let mut buffer = vec![0u8; 64 * 1024];
         while !stop.load(Ordering::SeqCst) {
@@ -533,7 +499,6 @@ mod unix {
         }
     }
 
-    /// Write all of `bytes`, waiting while the program does not read its input; false once the terminal is gone.
     pub fn write_all(master: &File, mut bytes: &[u8], stop: &AtomicBool) -> bool {
         while !bytes.is_empty() {
             if stop.load(Ordering::SeqCst) {

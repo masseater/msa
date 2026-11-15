@@ -34,7 +34,6 @@ if ($noEnv) {
 	Write-Host "Running without API keys..."
 }
 
-# --import takes a module specifier, so pass the resolver as a file URL (Windows paths are not specifiers).
 $repoRoot = Split-Path -Parent $scriptDir
 $resolverUrl = ([System.Uri](Join-Path $repoRoot "apps/coding-agent/src/experimental/source-resolver.ts")).AbsoluteUri
 $cliPath = Join-Path $repoRoot "apps/coding-agent/src/cli.ts"
