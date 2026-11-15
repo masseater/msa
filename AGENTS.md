@@ -43,11 +43,9 @@
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは `vpa`（Betterleaks・actionlint・zizmor・commitlint・fallow）だけを走らせる。
 - squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも orchestrator の `merge_pull_request` もこれを使い、CI の `commits` ジョブは検査した head で `msa squash-message` が出すメッセージを `vpa --commit-msg` にかける。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
-  - テストは vitest の project ごとに `run.config.ts` の `test:<project>` タスクとして回し、Vite Task が入力でキャッシュする。CI は `node_modules/.vite/task-cache` を job ごとに持ち越すので、入力の変わっていない project のテストと build は走らない。project を足したら `test:<project>` も足す（`tools/checks/test-tasks.test.ts` が落とす）。
   - テストや道具がリポジトリの中に一時ファイルやキャッシュを作るときは、`lint-probe/`・`.fallow/` のようにコミットしたファイル（`.gitkeep` など）で常にあるディレクトリの下に作る。ディレクトリを作ったり消したりすると、親の一覧が変わって他のタスクのキャッシュまで外れる。
   - 手元の LLM を動かすもの（Ollama・LM Studio・llama.cpp のサーバーを呼ぶ `libs/ai/test/*-local.test.ts`、node-llama-cpp でモデルを読み込むテスト、`vp run build-binaries` の判断モデルの smoke）は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。CI の verify は付けて流す。手元では付けない。
   - `libs/ai` と `apps/coding-agent` のテストでは、opt-in なしの node-llama-cpp は `libs/ai/test/no-local-llm-setup.ts` が止める。node-llama-cpp を使うテストは `@msa/testing` の `localLlmTests` で `it.skipIf(!localLlmTests)` にする。
-- パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。
 - `libs/ai/src/models.generated.ts` は直接編集せず、`vp run @msa/ai#generate-models` で作り直す。clone 直後に typecheck が通らないときは `vp run @msa/ai#hydrate-model-data` を回す。
 
 ## pi との関係
@@ -58,34 +56,15 @@
 
 - msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
 - 機能はコマンドラインやツールだけで終わらせず、人間が使う画面（TUI）も作る。状態をひと目で見られ、キー操作で覗く・指示する・止められるようにする。
-- `apps/coding-agent/src` では、同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む（`msa/no-local-class-extends`）。`tui.Container` や `Schema.TaggedError` のような、別パッケージが継承して使う前提で出している基底は継承してよい。
-  - 継承元は、build・vitest・開発用の起動の変換が全 class に入れる実行時の検査で確かめる。検査が通すのは、外の package の import から凍結された入れ物を辿った値と、信頼する factory（`tools/oxlint/class-factories.ts`）の返り値だけで、ローカルの関数・bind・Proxy を含むそれ以外は断る。class はモジュールの直下に書く（`msa/no-nested-class`）
-  - prototype の書き換え・文字列からのコード生成・計算したキーでのアクセスは使わない（`msa/no-prototype-write`、`tools/checks/typed-access.ts`）
-
-## 環境変数
-
-- 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
-- 実際の `process.env` に書く必要があるとき（子プロセスや `Bun.env` に見せる）は、`platform/env.ts` の `assignProcessEnv` だけを使う。書き込みはこの関数の 1 か所だけに置き、`msa/process-env-writer` と `tools/checks/typed-access.ts` がほかの形を断る。
-
-## 時刻
-
-- ローカルの時刻を文字列にするのは `@msa/chord/local-time` の `format` だけにする（coding-agent からは platform の `formatLocalTime`・`formatLocalDateTime`、拡張からは `@msa/coding-agent` の `formatLocalTime`）。端末のタイムゾーンの名前とずれは同じモジュールの `zone`、ローカルの日の境目は `dayStart` で得る。
-- `Date` のローカルの getter と `Intl.DateTimeFormat` は oxlint の `no-restricted-properties`、Effect の `DateTime` のローカルのゾーン（`zoneMakeLocal`・`formatLocal`・`layerCurrentZoneLocal`・`withCurrentZoneLocal`）は `msa/no-restricted-member` が断る。一覧は `local-time-rules.config.ts` にある。名前だけでは決められないもの（`Date` の `toString`・`toLocaleString`・文字列への変換、`new` なしの `Date()`、`timeZone` のない `makeZoned`、別名を経た `Intl.DateTimeFormat`）は、`tools/checks/local-time.ts` が型を見て断る。
 
 ## ブラウザに出すもの
 
 - ブラウザ用の JS を手書きしない。ライブラリとフレームワークの機能を使い、自前で実装しない。
 - HTML の書き出しやレポートは、書き出す時点に Node 側でライブラリ（marked・highlight.js・Charts.css など）の API で描画し、開閉・切り替え・絞り込みは HTML と CSS の標準機能（`details`・`:target`・`:has()`・チェックボックスとラジオ・`resize`・`accesskey`）で作る。JS なしで作れない機能は、既存のライブラリやブラウザの標準機能で済ませる。
-- HTML 文書（書き出し・レポート・OAuth のページなど）は、`@msa/ai/utils/html-document` の `htmlDocument` で組む。`htmlDocument` は `default-src 'none'` の CSP を付け、部品の中の `<script` を文字に変えた `HtmlDocument` 型を返す。ブラウザに渡す出口は同じモジュールの `htmlReply`（`text/html` の応答）と `writeHtmlFile`（`.html` のファイル）だけで、どちらも `HtmlDocument` しか受け取らない。出口の外で `text/html`・`application/xhtml+xml` を書くことと、`.html`・`.htm` の名前を付けた先にファイルを書くことは、`code-rules` の `tools/rules/no-html-outside-html-document.yml` が断る。この規則が外すのは出口のモジュールとテストのファイル（`*.test.*` と `test/` の下）だけで、`tools/checks` のようにディレクトリ単位では外さない。CSP と `<script` が無いことは `libs/ai/test/html-document.test.ts` が確かめる。
-- scripts・tools（`scripts/`・`tools/`・`apps/*/scripts/`・`libs/*/scripts/`）は、ファイル・子プロセス・標準出力に `@msa/ai/utils/script-output`（`libs/ai/src/utils/script-output.ts`）からだけ触れ、入口は同じモジュールの `runMainWith` にする。`ScriptOutput` のファイルの書き込みは書き込み先の拡張子を実行時に見て、`.html` には `HtmlDocument` を受け取る `writeHtmlReport` でだけ書き、`writeTextFile` は決まった拡張子だけ、コピー・移動・リンクは拡張子を変えないときだけ置く。読む・ディレクトリを作る・消すのは `files`、パスは `path` を使う（`Host`・`ScriptFiles` はこれを包む）。標準出力・標準エラーには `print`・`printError` で出し、`Console`・`console` は使わない。止める単位は呼び出しでなく import で、`script-io-rules.config.ts` の一覧（`node:fs`・`node:child_process` などの組み込み、`effect` の `Console`・`FileSystem`・`Stdio`・`Terminal`、`effect/process`、`@effect/platform-node` など）を oxlint の `no-restricted-imports` が、`Bun`・`Deno`・`console` を `no-restricted-globals` が、`process.stdout`・`process.stderr` を `no-restricted-properties` が断る。書き込み API を一つずつ並べて禁じる規則は足さない。この制限を外すのはテストのファイル（`*.test.*`）だけで、ディレクトリ単位では外さない。テストから子プロセスを起こす `tools/checks/test-process.ts` だけは `effect/process`・`@effect/platform-node` を読めるが、ファイル・標準出力の制限はそのまま効く。断ることは `tools/checks/script-io-lint.test.ts`・`html-exit-rule.test.ts`・`script-output.test.ts` が確かめる。
-- この確認が届くのは、スクリプト自身のプロセスの中でコードが HTML を出す先（`.html` への書き込み、`text/html` の応答、標準出力）まで。起動した別のプログラム（`node`・`pnpm`・`bun` など）がその先で書くものと、利用者が標準出力をパイプやリダイレクトで送る先は確認の外にある。`processes` が起動できるのは `libs/ai/src/utils/script-commands.ts` の閉じた一覧（`bun`・`msa`・`node`・`npm`・`pnpm`・`tar`・`vp`・`zip` と、名前が `msa` のビルドした msa バイナリ）で `shell` は受け取らないが、これは起動先を 1 か所で見られるようにするためのもので、起動したプログラムの書き込みは防がない。runtime の起動（`runPromise`・`ManagedRuntime.make` など）は `code-rules` の `tools/rules/scripts-start-through-run-main.yml` が断り、テストから runtime を作る `tools/checks/lint-probe.ts`・`task-build-deps.ts` は `scriptOutputLayer` の上に作る。lint の `env` に `browser` を入れないので DOM のグローバルは `no-undef` が、`javascript:` の URL は `no-script-url` が断る。
 
 ## node の組み込み
 
-- Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`vite.config.ts` で `effecttsgo/node-builtin-import` を外す override もこの 2 つだけに置き、ほかの場所を足さない。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。
-- import 文だけでなく、`require`・`createRequire(...)(...)`・`Module._load`・動的 `import()`・`export ... from` による再 export・`process.getBuiltinModule`・`process.binding` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。`node:module` から来た `createRequire`・`Module` と CJS の `module`（`module.constructor`）、`process`・`globalThis` は変数・別名・分割代入・再代入を追い、読み込む先やキーを決められない書き方（文字列でない引数、計算したキー、値を外へ渡すなど）も弾く。
-- 同期の fs（`existsSync`・`readFileSync` などの `*Sync`）は `msa/no-sync-fs` で禁じている。Effect の `FileSystem` か platform の非同期 API を使う。起動前など同期でしか書けない処理は、`core/platform/node/` の名前付き関数に閉じる。
-- 規則は `tools/oxlint/` にあり、すり抜けの書き方と一覧が effecttsgo・node の fs とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。lint の抑止コメントは書けない（`no-comments` で弾く）。読み込む先が実行時に決まるファイルは、`import()` に `pathToFileURL(...)` の URL を直接渡すか、ネイティブアドオンなら `process.dlopen` で読む（`libs/tui/src/native-addon.ts`）。どちらも組み込みには届かない。
+- 読み込む先が実行時に決まるファイルは、`import()` に `pathToFileURL(...)` の URL を直接渡すか、ネイティブアドオンなら `process.dlopen` で読む（`libs/tui/src/native-addon.ts`）。どちらも組み込みには届かない。
 
 ## effect-tsgo の規則
 
@@ -155,7 +134,4 @@
 
 ## CI
 
-- PR の `edited`（タイトル・本文・base の変更）で起動するのは `commits` workflow だけにし、`commits` ジョブのほかに置けるのは `ci-telemetry` だけにする。`tools/checks/pull-request-edited.test.ts` が検査する。
-- 各 workflow の最後には、ほかの全ジョブを `needs` に並べ `if: always()` で `.github/scripts/ci-telemetry.sh` を動かす `ci-telemetry` ジョブを置く。`tools/checks/ci-telemetry-job.test.ts` が検査する。
 - 一時的な例外の期限を、時刻を条件にしたタスクで管理しない。外せるかは、例外の今の状態を毎日見る workflow に判定させ、issue にする。`pnpm-workspace.yaml` の `minimumReleaseAgeExclude` は、`audit` workflow の `release-age` ジョブが、公開から `minimumReleaseAge` を過ぎた版を issue にする。
-- `.github/scripts/ci-telemetry.sh` は土台のテンプレートと同じ中身に保ち、手で書き換えない。同じ検査が中身の SHA-256 を突き合わせ、`template-drift` workflow が毎日テンプレートの最新の中身と比べて、違えば issue を開く。テンプレートのリポジトリ名は repository variable `TEMPLATE_REPOSITORY` に置く。送り先は masseater/masseater.dev の `masseater-dev-ci-telemetry` Worker である。
