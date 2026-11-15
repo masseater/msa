@@ -6,14 +6,40 @@
     ":semanticCommits",
     "group:allNonMajor"
   ],
-  "enabledManagers": ["nodenv"],
+  "enabledManagers": ["nodenv", "custom.regex"],
   "packageRules": [
     {
       "matchManagers": ["nodenv"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "matchFileNames": ["skills-lock.json"],
+      "ignoreTests": false
     }
   ],
   "automerge": true,
-  "ignoreTests": true
+  "ignoreTests": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^skills-lock\\.json$/"],
+      "matchStrings": [
+        "\"source\": \"(?<depName>[^\"]+)\",\\s*\"ref\": \"(?<currentDigest>[0-9a-f]{40})\",\\s*\"sourceType\": \"github\""
+      ],
+      "datasourceTemplate": "git-refs",
+      "packageNameTemplate": "https://github.com/{{{depName}}}"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "uses: (?<depName>masseater/typescript-template)/\\.github/actions/[a-z-]+@(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "git-refs",
+      "packageNameTemplate": "https://github.com/{{{depName}}}"
+    }
+  ],
+  "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"]
 }
