@@ -5,7 +5,7 @@
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/dont-it-yourself/SKILL.md",
-      "computedHash": "ae45b79c5142a29e81385a514be660b0b9f95da8c77867f9673f1301f77870ca"
+      "computedHash": "8f10331daf522257d2abfed13625e4e34ed1ab1de3a3574728a609536245d829"
     },
     "how-to-use-react": {
       "source": "masseater/skills",
@@ -35,31 +35,31 @@
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/project-checklist/SKILL.md",
-      "computedHash": "fb5e4dffdf2112fe9708dd72f8cd055323cc8c1889da26f397577f5188e85912"
+      "computedHash": "770a12cd37e10006e3ad4f535ccbeef0ca3772ffc2c33ac3a9bba786673894b9"
     },
     "repo-conventions": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/repo-conventions/SKILL.md",
-      "computedHash": "4d5d085b81c2c007fdd94f6a8ca189e1a4586eeff202b6ff11309300cc601b9c"
+      "computedHash": "e2481b7846b994cb03a2d3f9b25e81bbbe4a13ef0a7938d62e72577f5d926d8f"
     },
     "skill-authoring": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/skill-authoring/SKILL.md",
-      "computedHash": "637b2cbc95448d90b53e0ce928fe077fc63c1c06a3328845ea304ff74021cad9"
+      "computedHash": "07f981cb8332bf02141c0fdc1ed4e2ee8291a87aacf4a40111753d119ffd321d"
     },
     "vite-plus": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/vite-plus/SKILL.md",
-      "computedHash": "5ee8b5e12252c0451c4e170b1bec0126c810791e190965290c66b366ffba4453"
+      "computedHash": "7bba9059a9f5e6ea6cfc1a75fb042a9e093220e07d7615146c28f7533ed6e93e"
     },
     "writing": {
       "source": "masseater/skills",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/writing/SKILL.md",
-      "computedHash": "e32e3a2165406de51072449090c2feb93f10860b6da87da2fc4bb9d9d863952a"
+      "computedHash": "80b1fa94d2af5c44a495d3db7ca8423dd1feaa87bd21fe0ea5ed41a6ffafae1c"
     }
   }
 }
