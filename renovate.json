@@ -26,6 +26,7 @@
   ],
   "automerge": true,
   "ignoreTests": true,
+  "platformAutomerge": false,
   "customManagers": [
     {
       "customType": "regex",
