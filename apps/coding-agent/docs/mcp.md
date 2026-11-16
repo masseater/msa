@@ -295,3 +295,7 @@ An extension that registers `codemode` or `tool_search` similarly replaces the b
 ### Use MCP from the SDK
 
 SDK sessions do not load built-in extensions. Add the MCP extension, the codemode extension for `codemode` servers, and the tool-search extension for `deferred` servers to the resource loader. See [Codemode and MCP](sdk.md#examples).
+
+## Conformance
+
+msa's MCP client is checked against the official conformance suite on every verify run. See [MCP client conformance](mcp-conformance.md) for how the run works and which checks are known to fail.

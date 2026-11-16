@@ -231,7 +231,7 @@ Use `ctx.shutdown()` to request an orderly process shutdown.
 
 ## Examples and reference
 
-The checked [extension examples](../examples/extensions/) cover tools, lifecycle events, commands, flags, shortcuts, state, rendering, providers, OAuth, remote execution, and terminal components.
+The checked [extension examples](extension-examples.md) cover tools, lifecycle events, commands, flags, shortcuts, state, rendering, providers, OAuth, remote execution, and terminal components.
 Start with the smallest example matching your integration point.
 
 Use [Custom Providers](custom-provider.md) for model-service integrations, [Terminal UI](tui.md) for custom components, and [msa Packages](packages.md) to install or distribute extensions with other resources.

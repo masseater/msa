@@ -19,7 +19,7 @@ try {
 
 This uses the working directory, discovered resources, stored settings, and configured credentials. `session.run.prompting.prompt()` resolves when the run finishes.
 
-The [complete minimal example](../examples/sdk/01-minimal.ts) also streams text events. All [SDK examples](../examples/sdk/) are typechecked with the repository.
+The [complete minimal example](../examples/sdk/01-minimal.ts) also streams text events. All [SDK examples](sdk-examples.md) are typechecked with the repository.
 
 ## Session lifecycle
 
