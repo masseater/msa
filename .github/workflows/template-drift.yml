@@ -3,11 +3,6 @@ name: template-drift
 on:
   schedule:
     - cron: "41 0 * * *"
-  pull_request:
-    paths:
-      - .github/scripts/ci-telemetry.sh
-      - .github/scripts/template-drift.sh
-      - .github/workflows/template-drift.yml
   workflow_dispatch:
 
 permissions: {}
