@@ -13,24 +13,8 @@ concurrency:
 jobs:
   up-to-date:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
     steps:
-      - id: changed
-        if: github.event_name == 'pull_request'
-        uses: masseater/typescript-template/.github/actions/pr-changed@5e507cf2bcea2ef759c07e195185632936b70c33
-        with:
-          file: skills-lock.json
-          github-token: ${{ github.token }}
-      - if: steps.changed.outputs.changed == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: steps.changed.outputs.changed == 'true'
-        uses: masseater/typescript-template/.github/actions/skills-lock@5e507cf2bcea2ef759c07e195185632936b70c33
-        with:
-          branch: ${{ github.head_ref }}
+      - run: "true"
 
   ci-telemetry:
     needs: [up-to-date]

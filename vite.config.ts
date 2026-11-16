@@ -206,6 +206,13 @@ export default defineConfig({
     },
   },
   run: runConfig.run,
+  skills: {
+    "masseater/skills": {
+      commit: "c4b729ff64af66a7dffc2506091df802b7cd366c",
+      root: "plugins/masseater-skills/skills",
+      skills: "all",
+    },
+  },
   staged: { "*": "vp check --fix" },
   test: {
     passWithNoTests: testShard !== undefined,
