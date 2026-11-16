@@ -148,6 +148,10 @@
             {
               "title": "Use the SDK",
               "path": "sdk.md"
+            },
+            {
+              "title": "Browse Examples",
+              "path": "examples.md"
             }
           ]
         }

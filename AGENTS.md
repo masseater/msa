@@ -77,6 +77,7 @@
 - fs・path・JSON・一時ディレクトリ・時刻・乱数は `@msa/testing` の関数を使い、`node:fs`・`node:path`・`JSON.parse`・`Date.now`・`Math.random`・`console` を直接触らない。
 - 環境変数は `withEnv` で与える（`effect.pipe(withEnv({ MSA_X: "1" }))`）。スコープを抜けると元に戻る。子プロセスへは `envSnapshot()` を `env` に渡す。
 - 書き方の実例は `apps/coding-agent/test/keybindings-migration.test.ts` と `apps/coding-agent/test/process-env.test.ts`。
+- `AgentSession` と `AgentSessionRuntime` のテストは `apps/coding-agent/test/suite/` に置き、`test/suite/harness.ts` と `libs/ai/src/providers/faux.ts` の faux provider で書く。実際の provider の API、API キー、ネットワーク、有料のトークンは使わず、CI で決定的に通るようにする。旧来の `test/test-harness.ts` は、足りない機能がどうしても要るとき以外は使わず、広げない。
 
 ## ライブラリ
 

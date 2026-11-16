@@ -83,7 +83,7 @@ describe("visibleWidth", () => {
     assert.strictEqual(visibleWidth("ર્ક"), 2);
     assert.strictEqual(visibleWidth("ର୍କ"), 2);
     assert.strictEqual(visibleWidth("ర్క"), 2);
-    assert.strictEqual(visibleWidth("ര്‍ക"), 2);
+    assert.strictEqual(visibleWidth("ര്\u200Dക"), 2);
   });
 
   it("keeps ordinary combining marks zero-width", () => {

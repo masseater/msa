@@ -84,7 +84,7 @@ const assertDocumentation = (variant: string | undefined): Effect.Effect<void> =
       return;
     }
     if (variant !== "with_docs") return yield* die("Eval image has no valid MSA_EVAL_VARIANT.");
-    for (const name of ["README.md", "CHANGELOG.md", "docs/models.md", "examples/README.md"]) {
+    for (const name of ["README.md", "CHANGELOG.md", "docs/models.md", "docs/examples.md"]) {
       const path = pathOperations.join(codingAgentDir, name);
       if (!(yield* files.exists(path)) || (yield* files.readFileString(path)).length === 0) {
         return yield* die(`Missing documentation: ${path}`);

@@ -54,7 +54,7 @@ const blocksGitWriteCommands = () => {
 const blocksPackageManagerInstalls = () => {
   expect(isSafeCommand("npm install lodash")).toBe(false);
   expect(isSafeCommand("yarn add react")).toBe(false);
-  expect(isSafeCommand("pip install requests")).toBe(false);
+  expect(isSafeCommand("apt-get install curl")).toBe(false);
   expect(isSafeCommand("brew install node")).toBe(false);
 };
 

@@ -73,7 +73,7 @@ await host.root(async (ctx) => {
 - [Tutorial](docs/tutorial.md): a shared todo list, built up section by section. Every example runs as `test/tutorial.test.ts`.
 - [Usage guide](docs/guide.md): API reference for contracts, objects, state, roots, lifetime, plugins, hot reload, hosts, and links.
 - [Specification](docs/spec.md): compatibility, lifetime, and reload semantics, plus known limitations and implementation decisions.
-- [Delta guide](src/delta/README.md): ownership, lifecycle, operation, and replica contracts of `@msa/chord/delta`.
+- [Delta guide](./docs/delta.md): ownership, lifecycle, operation, and replica contracts of `@msa/chord/delta`.
 
 ## Tracking JSON deltas
 

@@ -1,3 +1,5 @@
+import type { BetaOutputConfig } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
+
 import type typesModule from "../types.types.ts";
 declare namespace anthropicMessagesCompatTypes {
   interface CacheRetentionInput {
@@ -14,7 +16,7 @@ declare namespace anthropicMessagesCompatTypes {
     readonly level: typesModule.SimpleStreamOptions["reasoning"];
   }
 
-  type AnthropicEffort = "low" | "medium" | "high" | "xhigh" | "max";
+  type AnthropicEffort = NonNullable<BetaOutputConfig["effort"]>;
 
   type AnthropicThinkingDisplay = "summarized" | "omitted";
 }

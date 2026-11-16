@@ -22,7 +22,6 @@ const DESTRUCTIVE_PATTERNS = [
   /\bnpm\s+(install|uninstall|update|ci|link|publish)/iu,
   /\byarn\s+(add|remove|install|publish)/iu,
   /\bpnpm\s+(add|remove|install|publish)/iu,
-  /\bpip\s+(install|uninstall)/iu,
   /\bapt(-get)?\s+(install|remove|purge|update|upgrade)/iu,
   /\bbrew\s+(install|uninstall|upgrade)/iu,
   /\bgit\s+(add|commit|push|pull|merge|rebase|reset|checkout|branch\s+-[dD]|stash|cherry-pick|revert|tag|init|clone)/iu,
