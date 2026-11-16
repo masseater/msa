@@ -48,7 +48,7 @@
       "ref": "3fc61a3cbb3faa67871c44691e4089f8f070d6a1",
       "sourceType": "github",
       "skillPath": "plugins/masseater-skills/skills/repo-conventions/SKILL.md",
-      "computedHash": "940123b4ef6f23555888aa6b8709efd7aa54c3e098a0effe003cab0f37e9d5e9"
+      "computedHash": "9f73734cda0c7bd0f01915e7022e624b8e5371f9cfc88b5b25ce5430cda7e6fd"
     },
     "skill-authoring": {
       "source": "masseater/skills",
