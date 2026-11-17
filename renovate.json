@@ -4,7 +4,8 @@
     "config:recommended",
     "security:minimumReleaseAgeNpm",
     ":semanticCommits",
-    "group:allNonMajor"
+    "group:allNonMajor",
+    "github>masseater/masseater.dev//libs/vite-plus-adopt/renovate"
   ],
   "enabledManagers": ["nodenv", "custom.regex"],
   "packageRules": [
@@ -12,10 +13,6 @@
       "matchManagers": ["nodenv"],
       "matchUpdateTypes": ["major"],
       "enabled": false
-    },
-    {
-      "matchFileNames": ["skills-lock.json"],
-      "ignoreTests": false
     },
     {
       "description": "masseater/skills と masseater/typescript-template はマージのたびに全リポへ digest の PR を出し、ジョブの同時実行枠を埋める。1 日 1 回にまとめる。",
@@ -27,15 +24,6 @@
   "automerge": true,
   "ignoreTests": true,
   "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^skills-lock\\.json$/"],
-      "matchStrings": [
-        "\"source\": \"(?<depName>[^\"]+)\",\\s*\"ref\": \"(?<currentDigest>[0-9a-f]{40})\",\\s*\"sourceType\": \"github\""
-      ],
-      "datasourceTemplate": "git-refs",
-      "packageNameTemplate": "https://github.com/{{{depName}}}"
-    },
     {
       "customType": "regex",
       "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
