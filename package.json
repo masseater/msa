@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "vp config --no-agent && effect-tsgo patch --oxlint && skills experimental_install --force"
+    "prepare": "vp config --no-agent && effect-tsgo patch --oxlint && vpa --prepare"
   },
   "devDependencies": {
     "@anthropic-ai/sandbox-runtime": "catalog:",
@@ -26,7 +26,6 @@
     "fallow": "catalog:stack",
     "magic-string": "catalog:",
     "shx": "catalog:",
-    "skills": "catalog:",
     "srvx": "catalog:",
     "tree-sitter-bash": "catalog:",
     "typescript": "catalog:",
