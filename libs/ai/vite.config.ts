@@ -14,6 +14,15 @@ const generatorInputs = [
   { base: "workspace" as const, pattern: "pnpm-lock.yaml" },
 ];
 
+const networkEnv = [
+  "HTTPS_PROXY",
+  "https_proxy",
+  "NO_PROXY",
+  "no_proxy",
+  "NODE_EXTRA_CA_CERTS",
+  "NODE_USE_ENV_PROXY",
+];
+
 export default defineConfig({
   pack: {
     banner: "#!/usr/bin/env node",
@@ -42,11 +51,11 @@ export default defineConfig({
           "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
       },
       "generate-models": {
-        cache: { input: generatorInputs, output: modelSources },
+        cache: { input: generatorInputs, output: modelSources, untrackedEnv: networkEnv },
         command: "node scripts/generate-models.ts --strict",
       },
       "hydrate-model-data": {
-        cache: { input: generatorInputs, output: modelData },
+        cache: { input: generatorInputs, output: modelData, untrackedEnv: networkEnv },
         command: "node scripts/generate-models.ts --strict --data-only",
       },
     },
