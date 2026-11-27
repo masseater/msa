@@ -4,12 +4,8 @@ import treeTraversalCases3 from "./tree-traversal-cases-3.ts";
 
 const treeTraversalCases = {
   appendcompactionIntegratesIntoTree: treeTraversalCases1.appendcompactionIntegratesIntoTree,
-  appendcustomentryIntegratesIntoTree: treeTraversalCases1.appendcustomentryIntegratesIntoTree,
   appendmessageCreatesEntryWithCorrectParentid:
     treeTraversalCases1.appendmessageCreatesEntryWithCorrectParentid,
-  appendmodelchangeIntegratesIntoTree: treeTraversalCases1.appendmodelchangeIntegratesIntoTree,
-  appendthinkinglevelchangeIntegratesIntoTree:
-    treeTraversalCases1.appendthinkinglevelchangeIntegratesIntoTree,
   createsNewSessionWithPathTo: treeTraversalCases2.createsNewSessionWithPathTo,
   doesNotDuplicateEntriesWhenForking: treeTraversalCases2.doesNotDuplicateEntriesWhenForking,
   extractsCorrectPathFromBranchedTree: treeTraversalCases2.extractsCorrectPathFromBranchedTree,
