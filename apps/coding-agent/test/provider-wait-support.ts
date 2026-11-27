@@ -38,6 +38,20 @@ const startedTask = (options: orchestratorHarnessTypes.HarnessOptions = {}) =>
 
 type Started = Effect.Success<ReturnType<typeof startedTask>>;
 
+const startedScenario =
+  (
+    body: (started: Started) => Effect.Effect<void>,
+    options: orchestratorHarnessTypes.HarnessOptions = {},
+  ) =>
+  () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const started = yield* startedTask(options);
+        yield* body(started);
+        yield* Effect.promise(() => started.orchestrator.dispose());
+      }),
+    );
+
 const snapshotOf = (started: Started) =>
   started.orchestrator.snapshot.tasks.find((task) => task.id === started.task.id);
 
@@ -73,6 +87,7 @@ const providerWaitSupport = {
   sessionLimit,
   settledUntil,
   snapshotOf,
+  startedScenario,
   startedTask,
 };
 
