@@ -1,38 +1,32 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import compat from "@msa/ai/compat";
-import testing from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect } from "effect";
 import { Type } from "typebox";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
 import sdk from "../../../src/core/sdk.ts";
 import SessionManager from "../../../src/core/session-manager.ts";
 import SettingsManager from "../../../src/core/settings-manager.ts";
+import tempDirKit from "../../temp-dir.ts";
 
 const { createAgentSession } = sdk;
 
 const { getModel } = compat;
 
-const { joinPath } = testing;
+const { useAgentDir } = tempDirKit;
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
-const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
-
-let tempDir: string;
-
-let agentDir: string;
+const dirs = useAgentDir("msa-tools-filter-");
 
 function createSession(allowedToolNames?: string[]) {
   return Effect.runPromise(
     Effect.gen(function* () {
       const settingsManager = yield* Effect.promise(() =>
-        SettingsManager.create(tempDir, agentDir),
+        SettingsManager.create(dirs.path, dirs.agentDir),
       );
-      const sessionManager = SessionManager.inMemory(tempDir);
+      const sessionManager = SessionManager.inMemory(dirs.path);
       const resourceLoader = new DefaultResourceLoader({
-        agentDir,
-        cwd: tempDir,
+        agentDir: dirs.agentDir,
+        cwd: dirs.path,
         extensionFactories: [
           (msa) => {
             msa.on("session_start", () => {
@@ -57,8 +51,8 @@ function createSession(allowedToolNames?: string[]) {
 
       const { session } = yield* Effect.promise(() =>
         createAgentSession({
-          agentDir,
-          cwd: tempDir,
+          agentDir: dirs.agentDir,
+          cwd: dirs.path,
           model: getModel("anthropic-api", "claude-sonnet-4-5")!,
           resourceLoader,
           sessionManager,
@@ -105,27 +99,7 @@ const allowsOnlyExplicitlyListedBuiltInAnd = () =>
 const disablesAllToolsWhenTheAllowlistIs = () =>
   Effect.runPromise(disablesAllToolsWhenTheAllowlist);
 
-const beforeEachHook = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      tempDir = yield* fs.makeTempDirectory({ prefix: `msa-tools-filter-` });
-      agentDir = joinPath(tempDir, "agent");
-      yield* fs.makeDirectory(agentDir, { recursive: true });
-    }),
-  );
-
-const afterEachHook = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      if (tempDir !== "" && (yield* fs.exists(tempDir))) {
-        yield* fs.remove(tempDir, { force: true, recursive: true });
-      }
-    }),
-  );
-
 describe("regression #2835: tool allowlists filter extension tools", () => {
-  beforeEach(beforeEachHook);
-  afterEach(afterEachHook);
   it(
     "allows only explicitly listed built-in and extension tools",
     allowsOnlyExplicitlyListedBuiltInAnd,

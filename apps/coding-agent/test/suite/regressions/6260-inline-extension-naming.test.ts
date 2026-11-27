@@ -1,18 +1,21 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
 import type srcTypes from "../../../src/index.types.ts";
+import tempDirKit from "../../temp-dir.ts";
+
 const { joinPath } = testing;
+const { useRemovedDirs } = tempDirKit;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 const noop: (msa: srcTypes.ExtensionAPI) => void = () => {};
 
-const roots: string[] = [];
+const roots = useRemovedDirs();
 
 function fixture(name: string) {
   return runtime.runPromise(
@@ -123,23 +126,7 @@ const preservesHiddenStateForNamedFactories2 = () =>
 const supportsMixedBareAndNamedFactories2 = () =>
   Effect.runPromise(supportsMixedBareAndNamedFactories);
 
-const afterEachHook = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      while (roots.length > 0) {
-        const root = roots.pop();
-        if (root !== undefined && root !== "" && (yield* fs.exists(root))) {
-          yield* fs.remove(root, { force: true, recursive: true });
-        }
-      }
-    }),
-  );
-
 describe("inline extension naming", () => {
-  beforeEach(() => {
-    roots.length = 0;
-  });
-  afterEach(afterEachHook);
   it("displays bare factories as <inline:N>", displaysBareFactoriesAsInlineN2);
   it("displays named wrappers as <inline:name>", displaysNamedWrappersAsInlineName2);
   it("preserves hidden state for named factories", preservesHiddenStateForNamedFactories2);

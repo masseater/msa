@@ -1,33 +1,26 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import SessionManager from "../../src/core/session-manager.ts";
+import tempDirKit from "../temp-dir.ts";
 import utilities from "../utilities.ts";
 const { assistantMsg, readSessionFileRoles, userMsg } = utilities;
 
-const {
-  fromJsonText,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  pathExists,
-  readTextFile,
-  awaited,
-  removePath,
-  runTest,
-  writeTextFile,
-} = testing;
+const { fromJsonText, joinPath, pathExists, readTextFile, awaited, runTest, writeTextFile } =
+  testing;
 
-let tempDir5: string;
+const { useTempDir } = tempDirKit;
+
+const temp5 = useTempDir(`session-test-`);
 
 const truncatesAndRewritesEmptyFileWith = () =>
   runTest(
     Effect.gen(function* () {
-      const emptyFile = joinPath(tempDir5, "empty.jsonl");
+      const emptyFile = joinPath(temp5.path, "empty.jsonl");
       yield* writeTextFile(emptyFile, "");
 
-      const sm = yield* Effect.promise(() => SessionManager.open(emptyFile, tempDir5));
+      const sm = yield* Effect.promise(() => SessionManager.open(emptyFile, temp5.path));
 
       expect(sm.getSessionId()).toBeTruthy();
       expect(sm.getHeader()).toBeTruthy();
@@ -47,13 +40,13 @@ const truncatesAndRewritesEmptyFileWith = () =>
 const throwsAndPreservesNonEmptyFile = () =>
   runTest(
     Effect.gen(function* () {
-      const noHeaderFile = joinPath(tempDir5, "no-header.jsonl");
+      const noHeaderFile = joinPath(temp5.path, "no-header.jsonl");
       const originalContent =
         '{"type":"message","id":"abc","parentId":"orphaned","timestamp":"2025-01-01T00:00:00Z","message":{"role":"assistant","content":"test"}}\n';
       yield* writeTextFile(noHeaderFile, originalContent);
 
       yield* awaited(
-        expect(SessionManager.open(noHeaderFile, tempDir5)).rejects.toThrow(
+        expect(SessionManager.open(noHeaderFile, temp5.path)).rejects.toThrow(
           `Session file is not a valid msa session: ${noHeaderFile}`,
         ),
       );
@@ -64,12 +57,12 @@ const throwsAndPreservesNonEmptyFile = () =>
 const throwsAndPreservesNonSessionJsonl = () =>
   runTest(
     Effect.gen(function* () {
-      const nonSessionFile = joinPath(tempDir5, "not-a-session.log");
+      const nonSessionFile = joinPath(temp5.path, "not-a-session.log");
       const originalContent = '{"type":"event","data":"not a session"}\n';
       yield* writeTextFile(nonSessionFile, originalContent);
 
       yield* awaited(
-        expect(SessionManager.open(nonSessionFile, tempDir5)).rejects.toThrow(
+        expect(SessionManager.open(nonSessionFile, temp5.path)).rejects.toThrow(
           `Session file is not a valid msa session: ${nonSessionFile}`,
         ),
       );
@@ -80,10 +73,10 @@ const throwsAndPreservesNonSessionJsonl = () =>
 const preservesExplicitSessionFilePathWhen = () =>
   runTest(
     Effect.gen(function* () {
-      const explicitPath = joinPath(tempDir5, "my-session.jsonl");
+      const explicitPath = joinPath(temp5.path, "my-session.jsonl");
       yield* writeTextFile(explicitPath, "");
 
-      const sm = yield* Effect.promise(() => SessionManager.open(explicitPath, tempDir5));
+      const sm = yield* Effect.promise(() => SessionManager.open(explicitPath, temp5.path));
 
       expect(sm.getSessionFile()).toBe(explicitPath);
     }),
@@ -92,29 +85,19 @@ const preservesExplicitSessionFilePathWhen = () =>
 const subsequentLoadsOfInitializedEmptyFile = () =>
   runTest(
     Effect.gen(function* () {
-      const emptyFile = joinPath(tempDir5, "empty.jsonl");
+      const emptyFile = joinPath(temp5.path, "empty.jsonl");
       yield* writeTextFile(emptyFile, "");
 
-      const sm1 = yield* Effect.promise(() => SessionManager.open(emptyFile, tempDir5));
+      const sm1 = yield* Effect.promise(() => SessionManager.open(emptyFile, temp5.path));
       const sessionId = sm1.getSessionId();
 
-      const sm2 = yield* Effect.promise(() => SessionManager.open(emptyFile, tempDir5));
+      const sm2 = yield* Effect.promise(() => SessionManager.open(emptyFile, temp5.path));
       expect(sm2.getSessionId()).toBe(sessionId);
       expect(sm2.getHeader()?.type).toBe("session");
     }),
   );
 
-const beforeEachHook4 = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir5 = yield* makeTempDir(`session-test-`);
-      yield* makeDirectory(tempDir5);
-    }),
-  );
-
 describe("SessionManager.setSessionFile with corrupted files", () => {
-  beforeEach(beforeEachHook4);
-  afterEach(() => runTest(removePath(tempDir5)));
   it("truncates and rewrites empty file with valid header", truncatesAndRewritesEmptyFileWith);
   it("throws and preserves non-empty file without valid header", throwsAndPreservesNonEmptyFile);
   it("throws and preserves non-session JSONL files", throwsAndPreservesNonSessionJsonl);
@@ -128,12 +111,12 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
   );
 });
 
-let tempDir6: string;
+const temp6 = useTempDir("msa-session-persist-");
 
 const doesNotCreateAFileFor = () =>
   runTest(
     Effect.gen(function* () {
-      const session = SessionManager.create(tempDir6, tempDir6);
+      const session = SessionManager.create(temp6.path, temp6.path);
       session.appendModelChange("anthropic-api", "claude-sonnet-4-5");
       session.appendThinkingLevelChange("off");
 
@@ -144,7 +127,7 @@ const doesNotCreateAFileFor = () =>
 const createsTheFileWhenTheFirst = () =>
   runTest(
     Effect.gen(function* () {
-      const session = SessionManager.create(tempDir6, tempDir6);
+      const session = SessionManager.create(temp6.path, temp6.path);
       session.appendModelChange("anthropic-api", "claude-sonnet-4-5");
       session.appendMessage(userMsg("first question"));
 
@@ -155,7 +138,7 @@ const createsTheFileWhenTheFirst = () =>
         "user",
       ]);
       expect(
-        (yield* Effect.promise(() => SessionManager.open(file, tempDir6))).buildSessionContext()
+        (yield* Effect.promise(() => SessionManager.open(file, temp6.path))).buildSessionContext()
           .messages,
       ).toHaveLength(1);
     }),
@@ -164,7 +147,7 @@ const createsTheFileWhenTheFirst = () =>
 const appendsLaterEntriesToTheFile = () =>
   runTest(
     Effect.gen(function* () {
-      const session = SessionManager.create(tempDir6, tempDir6);
+      const session = SessionManager.create(temp6.path, temp6.path);
       session.appendMessage(userMsg("first question"));
       session.appendCustomEntry("preset-state", { name: "plan" });
       session.appendMessage(assistantMsg("first answer"));
@@ -178,17 +161,7 @@ const appendsLaterEntriesToTheFile = () =>
     }),
   );
 
-const beforeEachHook5 = () =>
-  runTest(
-    Effect.gen(function* () {
-      const value = (tempDir6 = yield* makeTempDir("msa-session-persist-"));
-      return value;
-    }),
-  );
-
 describe("SessionManager session file creation", () => {
-  beforeEach(beforeEachHook5);
-  afterEach(() => runTest(removePath(tempDir6)));
   it("does not create a file for a session with only setup entries", doesNotCreateAFileFor);
   it("creates the file when the first user message is appended", createsTheFileWhenTheFirst);
   it(

@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
 import loaderModule from "../../../src/core/extensions/loader.ts";
+import tempDirKit from "../../temp-dir.ts";
 
 const { clearExtensionCache, loadExtensions, loadExtensionsCached } = loaderModule;
 const { joinPath } = testing;
+const { useRemovedDirs } = tempDirKit;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -46,7 +48,7 @@ export default function () {
   );
 }
 
-const roots: string[] = [];
+const roots = useRemovedDirs();
 
 function fixture(name: string) {
   return runtime.runPromise(
@@ -136,19 +138,10 @@ const clearsTheCacheOnResourceLoaderReload = () =>
 
 const keepsTheCacheScopedToOneCwd = () => Effect.runPromise(keepsTheCacheScopedToOne);
 
-const afterEachHook = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      while (roots.length > 0) {
-        const root = roots.pop();
-        if (root !== undefined && root !== "" && (yield* fs.exists(root))) {
-          yield* fs.remove(root, { force: true, recursive: true });
-        }
-      }
-      resetState();
-      clearExtensionCache();
-    }),
-  );
+const afterEachHook = () => {
+  resetState();
+  clearExtensionCache();
+};
 
 describe("extension factory cache", () => {
   beforeEach(() => {

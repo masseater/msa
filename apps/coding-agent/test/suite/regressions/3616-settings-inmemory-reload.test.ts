@@ -1,19 +1,13 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import testing from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { Effect } from "effect";
+import { describe, expect, it } from "vite-plus/test";
 
 import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
 import SettingsManager from "../../../src/core/settings-manager.ts";
+import tempDirKit from "../../temp-dir.ts";
 
-const { joinPath } = testing;
+const { useAgentDir } = tempDirKit;
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
-const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
-
-let tempDir: string;
-
-let agentDir: string;
+const dirs = useAgentDir("msa-settings-inmemory-");
 
 const preservesInitialSettingsAfterDirectReload = Effect.gen(function* () {
   const settingsManager = SettingsManager.inMemory({
@@ -41,8 +35,8 @@ const preservesInitialSettingsWhenDefaultresourceloaderReloads = Effect.gen(func
     images: { autoResize: false },
   });
   const resourceLoader = new DefaultResourceLoader({
-    agentDir,
-    cwd: tempDir,
+    agentDir: dirs.agentDir,
+    cwd: dirs.path,
     noContextFiles: true,
     noExtensions: true,
     noPromptTemplates: true,
@@ -87,27 +81,7 @@ const preservesInitialSettingsWhenDefaultresourceloaderReloads2 = () =>
 const preservesInitialSettingsAfterAnUnrelatedSetter = () =>
   Effect.runPromise(preservesInitialSettingsAfterAnUnrelated);
 
-const beforeEachHook = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      tempDir = yield* fs.makeTempDirectory({ prefix: `msa-settings-inmemory-` });
-      agentDir = joinPath(tempDir, "agent");
-      yield* fs.makeDirectory(agentDir, { recursive: true });
-    }),
-  );
-
-const afterEachHook = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      if (tempDir !== "" && (yield* fs.exists(tempDir))) {
-        yield* fs.remove(tempDir, { force: true, recursive: true });
-      }
-    }),
-  );
-
 describe("regression #3616: in-memory settings survive reload", () => {
-  beforeEach(beforeEachHook);
-  afterEach(afterEachHook);
   it("preserves initial settings after direct reload", preservesInitialSettingsAfterDirectReload2);
   it(
     "preserves initial settings when DefaultResourceLoader reloads",
