@@ -11,16 +11,12 @@ import modelRegistrySupport from "./model-registry-support.ts";
 
 const { createProvider } = ai;
 
-const { makeGate } = modelRegistrySupport;
+const { makeGate, toShPath } = modelRegistrySupport;
 const { useModelRegistryFixture } = modelRegistryFixture;
 
 const { awaited, joinPath, readTextFile, runTest, writeJsonFile, writeTextFile } = testing;
 
 const fixture = useModelRegistryFixture();
-
-function toShPath(value: string): string {
-  return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
-}
 
 const writeRawModelsJson = (providers: Record<string, unknown>) =>
   writeJsonFile(fixture.modelsJsonPath, { providers });

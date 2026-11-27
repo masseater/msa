@@ -106,13 +106,18 @@ export default class ResourcePatterns {
   getResourcePattern(item: resourceListInternalTypes.ResourceItem): string {
     if (item.metadata.source === "builtin") return item.path;
     const scope = item.metadata.scope as "user" | "project";
-    const baseDir = item.metadata.baseDir ?? this.getTopLevelBaseDir(scope);
-    return relative(baseDir, item.path);
+    return this.relativeToBase(item, this.getTopLevelBaseDir(scope));
   }
 
   getPackageResourcePattern(item: resourceListInternalTypes.ResourceItem): string {
-    const baseDir = item.metadata.baseDir ?? dirname(item.path);
-    return relative(baseDir, item.path);
+    return this.relativeToBase(item, dirname(item.path));
+  }
+
+  private relativeToBase(
+    item: resourceListInternalTypes.ResourceItem,
+    fallbackBaseDir: string,
+  ): string {
+    return relative(item.metadata.baseDir ?? fallbackBaseDir, item.path);
   }
 
   findMatchingPackageSource(

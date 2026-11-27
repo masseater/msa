@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 
 import AuthStorage from "../src/core/auth-storage.ts";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import type modelRegistryTypes from "../src/core/model-registry.types.ts";
 import providerAuth from "../src/core/provider-composer/provider-auth.ts";
+import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
+const { getModelsForProvider } = modelRegistry4Support;
 const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
@@ -20,10 +22,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
-  return registry.getAll().filter((m) => m.provider === provider);
-}
 
 const writeRawModelsJson = (providers: Record<string, unknown>) =>
   writeJsonFile(modelsJsonPath, { providers });

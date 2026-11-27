@@ -1,5 +1,4 @@
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 
 import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
 import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
@@ -7,14 +6,15 @@ import type extensionsTypesTypes from "../../extensions/types.types.ts";
 import renderUtils from "../render-utils.ts";
 import type webFetchTypes from "../web-fetch.types.ts";
 import type webSearchTypes from "../web-search.types.ts";
+import textRenderersModule from "./text-renderers.ts";
 
 const { expandHint } = keybindingHints;
 const { getTextOutput, invalidArgText, str } = renderUtils;
 
-const { Text, getCapabilities, hyperlink } = tui;
+const { getCapabilities, hyperlink } = tui;
+const { textRenderers } = textRenderersModule;
 
-type Renderers = Pick<extensionsTypesTypes.ToolDefinition<any, any>, "renderCall" | "renderResult">;
-type Result = Parameters<NonNullable<Renderers["renderResult"]>>[0];
+type Result = Parameters<NonNullable<Parameters<typeof textRenderers>[1]>>[0];
 
 function link(text: string, url: string | undefined): string {
   return url !== undefined && url !== "" && getCapabilities().hyperlinks
@@ -77,32 +77,6 @@ function formatFetchResult(
   return `\n${theme.fg("toolOutput", output)}\n${theme.fg("muted", summary)}`;
 }
 
-function textRenderers(
-  formatArgs: (args: any, theme: themeTypes.Theme) => string,
-  formatResult: (
-    result: Result,
-    options: extensionsTypesTypes.ToolRenderResultOptions,
-    theme: themeTypes.Theme,
-    showImages: boolean,
-  ) => string,
-): Renderers {
-  return {
-    renderCall(args, theme, context) {
-      const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-      text.setText(formatArgs(args, theme));
-      return text;
-    },
-    renderResult(result, options, theme, context) {
-      const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-      if (context.isPartial) text.setText("");
-      else if (context.isError) {
-        text.setText(`\n${theme.fg("error", getTextOutput(result, false).trim())}`);
-      } else text.setText(formatResult(result, options, theme, context.showImages));
-      return text;
-    },
-  };
-}
-
 function formatCall(name: string, value: unknown, theme: themeTypes.Theme): string {
   const argument = str(value);
   return `${theme.fg("toolTitle", theme.bold(name))} ${
@@ -110,19 +84,40 @@ function formatCall(name: string, value: unknown, theme: themeTypes.Theme): stri
   }`;
 }
 
+const settled =
+  (
+    format: (
+      result: Result,
+      options: extensionsTypesTypes.ToolRenderResultOptions,
+      theme: themeTypes.Theme,
+      showImages: boolean,
+    ) => string,
+  ) =>
+  (
+    result: Result,
+    options: extensionsTypesTypes.ToolRenderResultOptions,
+    theme: themeTypes.Theme,
+    context: { isPartial: boolean; isError: boolean; showImages: boolean },
+  ): string => {
+    if (context.isPartial) return "";
+    if (context.isError) return `\n${theme.fg("error", getTextOutput(result, false).trim())}`;
+    return format(result, options, theme, context.showImages);
+  };
+
 const webSearchRenderers = textRenderers(
   (args: { query?: string } | undefined, theme) => formatCall("web search", args?.query, theme),
-  (result, options, theme) =>
+  settled((result, options, theme) =>
     formatSearchResult(
       result.details as webSearchTypes.WebSearchToolDetails | undefined,
       options,
       theme,
     ),
+  ),
 );
 
 const webFetchRenderers = textRenderers(
   (args: { url?: string } | undefined, theme) => formatCall("web fetch", args?.url, theme),
-  (result, options, theme, showImages) =>
+  settled((result, options, theme, showImages) =>
     formatFetchResult(
       result,
       result.details as webFetchTypes.WebFetchToolDetails | undefined,
@@ -130,6 +125,7 @@ const webFetchRenderers = textRenderers(
       theme,
       showImages,
     ),
+  ),
 );
 
 const web = {

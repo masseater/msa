@@ -1,18 +1,15 @@
-import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
-
 import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
 import type extensionsTypesTypes from "../../extensions/types.types.ts";
 import type lsTypesModule from "../ls.types.ts";
 import renderUtils from "../render-utils.ts";
 import truncate from "../truncate.ts";
 import listOutput from "./list-output.ts";
+import textRenderersModule from "./text-renderers.ts";
 
 const { getTextOutput, renderToolPath, str } = renderUtils;
 const { DEFAULT_MAX_BYTES, formatSize } = truncate;
 const { formatListResult } = listOutput;
-
-const { Text } = tui;
+const { textRenderers } = textRenderersModule;
 
 function formatLsCall(
   args: { path?: string; limit?: number } | undefined,
@@ -46,21 +43,11 @@ function formatLsResult(
   return formatListResult({ expanded: options.expanded, noun: "entries", output, theme, warnings });
 }
 
-const lsRenderers: Pick<
-  extensionsTypesTypes.ToolDefinition<any, any>,
-  "renderCall" | "renderResult"
-> = {
-  renderCall(args, theme, context) {
-    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-    text.setText(formatLsCall(args as any, theme, context.cwd));
-    return text;
-  },
-  renderResult(result, options, theme, context) {
-    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-    text.setText(formatLsResult(result as any, options, theme, context.showImages));
-    return text;
-  },
-};
+const lsRenderers = textRenderers(
+  (args, theme, context) => formatLsCall(args, theme, context.cwd),
+  (result, options, theme, context) =>
+    formatLsResult(result as any, options, theme, context.showImages),
+);
 
 const ls = {
   lsRenderers,

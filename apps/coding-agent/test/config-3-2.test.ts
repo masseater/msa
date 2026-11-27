@@ -4,6 +4,9 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import platform from "../src/core/platform/index.ts";
+import config2Support from "./config-2-support.ts";
+
+const { setExecPath, createFakeBunScript } = config2Support;
 
 const { readEnv } = platform;
 const { detectInstallMethod, getSelfUpdateCommand, getSelfUpdateUnavailableInstruction } = config;
@@ -24,13 +27,6 @@ const originalPath = readEnv("PATH");
 const originalMsaPackageDir = readEnv("MSA_PACKAGE_DIR");
 const originalArgv1 = process.argv[1];
 let tempDir: string | undefined;
-
-function setExecPath(value: string): void {
-  Object.defineProperty(process, "execPath", {
-    configurable: true,
-    value,
-  });
-}
 
 afterEach(() =>
   runTest(
@@ -85,14 +81,6 @@ const createBunGlobalInstall = Effect.fn("createBunGlobalInstall")(function* () 
   setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { packageDir };
 });
-
-function createFakeBunScript(bunBin: string): string {
-  if (process.platform === "win32") {
-    return `@echo off\r\nif "%1"=="pm" if "%2"=="bin" if "%3"=="-g" echo ${bunBin}\r\n`;
-  }
-  const escapedBunBin = bunBin.replaceAll("'", "'\\''");
-  return `#!/bin/sh\nif [ "$1" = "pm" ] && [ "$2" = "bin" ] && [ "$3" = "-g" ]; then\n\tprintf '%s\\n' '${escapedBunBin}'\n\texit 0\nfi\nexit 1\n`;
-}
 
 const selfUpdatesRenamedBunGlobalInstallsBy = () =>
   runTest(

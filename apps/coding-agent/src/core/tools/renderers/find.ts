@@ -1,18 +1,15 @@
-import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
-
 import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
 import type extensionsTypesTypes from "../../extensions/types.types.ts";
 import type findTypesModule from "../find.types.ts";
 import renderUtils from "../render-utils.ts";
 import truncate from "../truncate.ts";
 import listOutput from "./list-output.ts";
+import textRenderersModule from "./text-renderers.ts";
 
 const { getTextOutput, invalidArgText, shortenPath, str } = renderUtils;
 const { DEFAULT_MAX_BYTES, formatSize } = truncate;
 const { formatListResult } = listOutput;
-
-const { Text } = tui;
+const { textRenderers } = textRenderersModule;
 
 function formatFindCall(
   args: { pattern: string; path?: string; limit?: number } | undefined,
@@ -52,21 +49,11 @@ function formatFindResult(
   return formatListResult({ expanded: options.expanded, noun: "files", output, theme, warnings });
 }
 
-const findRenderers: Pick<
-  extensionsTypesTypes.ToolDefinition<any, any>,
-  "renderCall" | "renderResult"
-> = {
-  renderCall(args, theme, context) {
-    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-    text.setText(formatFindCall(args as any, theme));
-    return text;
-  },
-  renderResult(result, options, theme, context) {
-    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-    text.setText(formatFindResult(result as any, options, theme, context.showImages));
-    return text;
-  },
-};
+const findRenderers = textRenderers(
+  (args, theme) => formatFindCall(args, theme),
+  (result, options, theme, context) =>
+    formatFindResult(result as any, options, theme, context.showImages),
+);
 
 const find = {
   findRenderers,

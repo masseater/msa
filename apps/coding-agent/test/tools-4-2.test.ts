@@ -4,19 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import bash from "../src/core/tools/bash.ts";
 import shellModule from "../src/utils/shell.ts";
+import tools2Support from "./tools-2-support.ts";
+
+const { getTextOutput } = tools2Support;
 
 const { createBashTool, createLocalBashOperations } = bash;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;
-
-function getTextOutput(result: any): string {
-  return (
-    result.content
-      ?.filter((c: any) => c.type === "text")
-      .map((c: any) => c.text)
-      .join("\n") || ""
-  );
-}
 
 let testDir = "";
 

@@ -1,11 +1,13 @@
 import ai from "@msa/ai";
-import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import AuthStorage from "../src/core/auth-storage.ts";
 import ModelRuntime from "../src/core/model-runtime.ts";
+import modelRuntimeModifyModelsCompatSupport from "./model-runtime-modify-models-compat-support.ts";
+
+const { model } = modelRuntimeModifyModelsCompatSupport;
 
 const { InMemoryModelsStore } = ai;
 
@@ -19,21 +21,6 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
-
-function model(id: string): aiTypes.Model<"openai-completions"> {
-  return {
-    api: "openai-completions" as const,
-    baseUrl: "https://example.test/v1",
-    contextWindow: 1000,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-    id,
-    input: ["text"],
-    maxTokens: 100,
-    name: id,
-    provider: "extension-oauth",
-    reasoning: false,
-  };
-}
 
 const writeModels = (dir: string, value: unknown): Effect.Effect<string> =>
   Effect.gen(function* () {

@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import bash from "../src/core/tools/bash.ts";
 import editDiff from "../src/core/tools/edit-diff.ts";
 import src from "../src/index.ts";
+import tools2Support from "./tools-2-support.ts";
+
+const { getTextOutput } = tools2Support;
 
 const { createEditTool } = src;
 const { createBashTool, createLocalBashOperations } = bash;
@@ -23,15 +26,6 @@ const {
 
 const editTool = createEditTool(process.cwd());
 const bashTool = createBashTool(process.cwd());
-
-function getTextOutput(result: any): string {
-  return (
-    result.content
-      ?.filter((c: any) => c.type === "text")
-      .map((c: any) => c.text)
-      .join("\n") || ""
-  );
-}
 
 let testDir = "";
 

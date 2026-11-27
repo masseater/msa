@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import compaction from "../src/core/compaction/index.ts";
 import type compactionTypes from "../src/core/compaction/index.types.ts";
+import compactionSummaryReasoning1Support from "./compaction-summary-reasoning-1-support.ts";
+
+const { createModel } = compactionSummaryReasoning1Support;
 
 const { compact, generateSummary } = compaction;
 
@@ -26,26 +29,6 @@ vi.mock("@msa/ai/compat", (importOriginal) =>
     }),
   ),
 );
-
-function createModel(
-  reasoning: boolean,
-  maxTokens = 8192,
-  compat?: aiTypes.Model<"anthropic-messages">["compat"],
-): aiTypes.Model<"anthropic-messages"> {
-  return {
-    api: "anthropic-messages" as const,
-    baseUrl: "https://api.anthropic.com",
-    contextWindow: 200000,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-    id: reasoning ? "reasoning-model" : "non-reasoning-model",
-    input: ["text"],
-    maxTokens,
-    name: reasoning ? "Reasoning Model" : "Non-reasoning Model",
-    provider: "anthropic-api",
-    reasoning,
-    ...(compat === undefined ? {} : { compat }),
-  };
-}
 
 const mockSummaryResponse: aiTypes.AssistantMessage = {
   api: "anthropic-messages" as const,

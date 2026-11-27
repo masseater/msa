@@ -6,7 +6,10 @@ import AuthStorage from "../src/core/auth-storage.ts";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import platform from "../src/core/platform/index.ts";
 import providerAuth from "../src/core/provider-composer/provider-auth.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
+const { toShPath } = modelRegistrySupport;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
@@ -29,10 +32,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-function toShPath(value: string): string {
-  return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
-}
 
 const writeRawModelsJson = (providers: Record<string, unknown>) =>
   writeJsonFile(modelsJsonPath, { providers });

@@ -2,22 +2,16 @@ import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorMergeSupport from "./orchestrator-merge-support.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 import worktreeSupport from "./worktree-support.ts";
+
+const { rejection } = orchestratorMergeSupport;
 
 const { create, replan, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { GIT, gatedTarget, read, runCommand, sh, shortId, withRepository } = worktreeSupport;
-
-function rejection(attempt: () => Promise<unknown>) {
-  return Effect.promise(() =>
-    attempt().then(
-      () => "",
-      (error: unknown) => String(error),
-    ),
-  );
-}
 
 const readsTheWorktreeForTheReplanMemo = () =>
   Effect.runPromise(

@@ -42,11 +42,16 @@ const captureThrown = (run: () => void): unknown => {
   return undefined;
 };
 
+function toShPath(value: string): string {
+  return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
+}
+
 const modelRegistrySupport = {
   captureThrown,
   emptyContext,
   makeGate,
   openAiModel,
+  toShPath,
 };
 
 export default modelRegistrySupport;
