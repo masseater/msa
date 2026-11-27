@@ -5,7 +5,6 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
@@ -13,9 +12,7 @@ const fixture = useModelRegistryFixture();
 
 const { getModelsForProvider } = modelRegistry4Support;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const { awaited, runTest } = testing;
+const { runTest } = testing;
 
 const providerLevelCompatAppliesToBuiltIn = () =>
   runTest(
@@ -29,9 +26,7 @@ const providerLevelCompatAppliesToBuiltIn = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.length).toBeGreaterThan(0);
@@ -72,9 +67,7 @@ const modelSchemaAcceptsThinkinglevelmapAndCompatSchema = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const model = registry.find("demo", "demo-model");
       const compat = model?.compat as compatTypes.OpenAICompletionsCompat | undefined;
 
@@ -113,9 +106,7 @@ const compatSchemaAcceptsChatTemplateThinkingConfiguration = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const kwargsCompat = registry.find("demo", "kwargs-model")?.compat as
         | compatTypes.OpenAICompletionsCompat
         | undefined;
@@ -153,9 +144,7 @@ const compatSchemaAcceptsAnthropicEagerToolInput = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.AnthropicMessagesCompat
         | undefined;
@@ -189,9 +178,7 @@ const compatSchemaAcceptsLongCacheRetentionFlag = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.AnthropicMessagesCompat
         | undefined;

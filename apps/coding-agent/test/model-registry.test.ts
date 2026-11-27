@@ -4,15 +4,12 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 
 const { providerConfig, getModelsForProvider } = modelRegistry4Support;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, runTest } = testing;
 
@@ -27,9 +24,7 @@ const overridingBaseurlKeepsAllBuiltInModels = () =>
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       expect(anthropicModels.length).toBeGreaterThan(1);
@@ -44,9 +39,7 @@ const overridingBaseurlChangesUrlOnAllBuilt = () =>
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       for (const model of anthropicModels) {
@@ -64,9 +57,7 @@ const overridingHeadersResolvesAtRequestTime = () =>
         }),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       for (const model of anthropicModels) {
@@ -90,9 +81,7 @@ const headersOnlyOverrideResolvesAtRequestTime = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       expect(registry.getError()).toBeUndefined();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
@@ -109,9 +98,7 @@ const headersOnlyOverrideResolvesAtRequestTime = () =>
 const unconfiguredCompatibilityAuthIncludesStaticModelHeaders = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const base = registry.getAll()[0];
       if (base === undefined) throw new Error("expected a registered model");
       const model = {
@@ -133,9 +120,7 @@ const baseurlOnlyOverrideDoesNotAffectOther = () =>
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const opencodeModels = getModelsForProvider(registry, "opencode");
 
       expect(opencodeModels.length).toBeGreaterThan(0);
@@ -156,9 +141,7 @@ const canMixBaseurlOverrideAndModelsMerge = () =>
         ),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
       expect(anthropicModels.length).toBeGreaterThan(1);
@@ -176,9 +159,7 @@ const refreshPicksUpBaseurlOverrideChanges = () =>
       yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://first-proxy.example.com/v1"),
       });
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       expect(getModelsForProvider(registry, "anthropic-api")[0]?.baseUrl).toBe(
         "https://first-proxy.example.com/v1",

@@ -4,15 +4,12 @@ import { describe, expect, test } from "vite-plus/test";
 
 import platform from "../src/core/platform/index.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { toShPath, providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 
 const { deleteEnv, readEnv, writeEnv } = platform;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, joinPath, readTextFile, runTest, writeTextFile } = testing;
 
@@ -40,9 +37,7 @@ const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
         ),
       );
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const auth = yield* awaited(
         registry.getApiKeyAndHeaders(registry.find("custom-provider", "test-model")!),
       );
@@ -64,9 +59,7 @@ const getapikeyandheadersPreservesTheLegacyMissingKeyAuthheader = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const auth = yield* awaited(
         registry.getApiKeyAndHeaders(registry.find("custom-provider", "test-model")!),
       );
@@ -85,9 +78,7 @@ const getapikeyandheadersReturnsAnErrorForFailedAuthheader = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const model = registry.find("custom-provider", "test-model");
       expect(model).toBeDefined();
 
@@ -113,9 +104,7 @@ const getapikeyandheadersResolvesAuthheaderOnEveryRequest = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const model = registry.find("custom-provider", "test-model");
       expect(model).toBeDefined();
 
@@ -152,9 +141,7 @@ const getapikeyandheadersResolvesConfiguredAuthExactlyOnce = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const auth = yield* awaited(
         registry.getApiKeyAndHeaders(registry.find("custom-provider", "test-model")!),
       );
@@ -181,9 +168,7 @@ const environmentVariablesAreNotCachedChangesAre = () =>
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
 
         const key1 = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
         expect(key1).toBe("first-value");

@@ -4,14 +4,11 @@ import { describe, expect, test } from "vite-plus/test";
 
 import platform from "../src/core/platform/index.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { toShPath, providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 const { deleteEnv, readEnv, writeEnv } = platform;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, joinPath, readTextFile, runTest, writeTextFile } = testing;
 
@@ -27,9 +24,7 @@ const apikeyWithBracedEnvSyntaxResolvesTo = () =>
           "custom-provider": providerWithApiKey(bracedKey),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
         const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
         expect(apiKey).toBe("braced-env-api-key-value");
@@ -61,9 +56,7 @@ const apikeyInterpolatesBracedEnvReferencesInsideLiterals = () =>
           "custom-provider": providerWithApiKey(interpolatedKey),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
         const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
         expect(apiKey).toBe("left_right");
@@ -89,9 +82,7 @@ const apikeyWithPrefixEscapesALeadingDollar = () =>
         "custom-provider": providerWithApiKey("$$TEST_API_KEY_12345"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("$TEST_API_KEY_12345");
@@ -109,9 +100,7 @@ const apikeyWithEscapesALiteralBangAnd = () =>
           "custom-provider": providerWithApiKey("$!literal-$TEST_API_KEY_12345"),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
         const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
         expect(apiKey).toBe("!literal-env-api-key-value");
@@ -136,9 +125,7 @@ const plainApikeyIsUsedDirectlyEvenWhen = () =>
           "custom-provider": providerWithApiKey("TEST_API_KEY_12345"),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
         const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
         expect(apiKey).toBe("TEST_API_KEY_12345");
@@ -161,9 +148,7 @@ const apikeyAsLiteralValueIsUsedDirectly = () =>
         "custom-provider": providerWithApiKey("literal_api_key_value"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("literal_api_key_value");
@@ -177,9 +162,7 @@ const apikeyCommandCanUseShellFeaturesLike = () =>
         "custom-provider": providerWithApiKey("!echo 'hello world' | tr ' ' '-'"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("hello-world");
@@ -198,9 +181,7 @@ const commandIsExecutedOnEveryProviderLookup = () =>
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       yield* awaited(registry.getApiKeyForProvider("custom-provider"));
       yield* awaited(registry.getApiKeyForProvider("custom-provider"));
       yield* awaited(registry.getApiKeyForProvider("custom-provider"));

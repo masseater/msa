@@ -6,7 +6,6 @@ import { describe, expect, test } from "vite-plus/test";
 import type modelConfigTypes from "../src/core/model-config.types.ts";
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
@@ -14,9 +13,7 @@ const fixture = useModelRegistryFixture();
 
 const { getModelsForProvider } = modelRegistry4Support;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const { awaited, runTest } = testing;
+const { runTest } = testing;
 
 const modelOverrideWithCompatOpenrouterrouting = () =>
   runTest(
@@ -33,9 +30,7 @@ const modelOverrideWithCompatOpenrouterrouting = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -57,9 +52,7 @@ const supportsfinishreasonCanBeConfiguredAtProviderAnd = () =>
       };
       yield* fixture.writeRawModelsJson({ openrouter: provider });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((model) => model.id === "anthropic/claude-sonnet-4.5");
       const opus = models.find((model) => model.id === "anthropic/claude-opus-4.1");
@@ -88,9 +81,7 @@ const modelOverrideDeepMergesCompatSettings = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -115,9 +106,7 @@ const multipleModelOverridesOnSameProvider = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -144,9 +133,7 @@ const modelOverrideCombinedWithBaseurlOverride = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -172,9 +159,7 @@ const modelOverrideForNonExistentModelId = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.find((m) => m.id === "nonexistent/model-id")).toBeUndefined();
@@ -196,9 +181,7 @@ const modelOverrideCanChangeCostFieldsPartially = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 

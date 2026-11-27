@@ -4,11 +4,9 @@ import { describe, expect, test } from "vite-plus/test";
 
 import platform from "../src/core/platform/index.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { deleteEnv, readEnv, writeEnv } = platform;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
 const { providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
@@ -22,9 +20,7 @@ const apikeyWithPrefixExecutesCommandAndUses = () =>
         "custom-provider": providerWithApiKey("!echo test-api-key-from-command"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("test-api-key-from-command");
@@ -38,9 +34,7 @@ const apikeyWithPrefixTrimsWhitespaceFromCommand = () =>
         "custom-provider": providerWithApiKey("!echo '  spaced-key  '"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("spaced-key");
@@ -54,9 +48,7 @@ const apikeyWithPrefixHandlesMultilineOutputUses = () =>
         "custom-provider": providerWithApiKey("!printf 'line1\\nline2'"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("line1\nline2");
@@ -70,9 +62,7 @@ const apikeyWithPrefixReturnsUndefinedOnCommand = () =>
         "custom-provider": providerWithApiKey("!exit 1"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBeUndefined();
@@ -86,9 +76,7 @@ const apikeyWithPrefixReturnsUndefinedOnNonexistent = () =>
         "custom-provider": providerWithApiKey("!nonexistent-command-12345"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBeUndefined();
@@ -102,9 +90,7 @@ const apikeyWithPrefixReturnsUndefinedOnEmpty = () =>
         "custom-provider": providerWithApiKey("!printf ''"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBeUndefined();
@@ -122,9 +108,7 @@ const apikeyWithPrefixResolvesToEnvValue = () =>
           "custom-provider": providerWithApiKey("$TEST_API_KEY_12345"),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
         const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
         expect(apiKey).toBe("env-api-key-value");

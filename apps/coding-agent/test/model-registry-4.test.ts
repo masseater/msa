@@ -5,15 +5,12 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 
 const { getModelsForProvider, providerConfig } = modelRegistry4Support;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, runTest, toJsonText, writeTextFile } = testing;
 
@@ -54,9 +51,7 @@ const modelLevelBaseurlOverridesProviderLevelBaseurl = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const m25 = registry.find("opencode-go", "minimax-m2.5");
       const glm5 = registry.find("opencode-go", "glm-5");
 
@@ -92,9 +87,7 @@ const modeloverridesStillApplyWhenProviderAlsoDefines = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.some((m) => m.id === "custom/openrouter-model")).toBe(true);
@@ -114,9 +107,7 @@ const refreshReloadsMergedCustomModelsFromDisk = () =>
           { id: "claude-custom" },
         ]),
       });
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       expect(
         getModelsForProvider(registry, "anthropic-api").some((m) => m.id === "claude-custom"),
       ).toBe(true);
@@ -148,9 +139,7 @@ const modelOverrideAppliesToASingleBuilt = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -186,9 +175,7 @@ const anthropicModelOverrideReplacesAllowedFallbackMetadata = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const compat = registry.find("anthropic-api", "claude-fable-5")?.compat as
         | compatTypes.AnthropicMessagesCompat
         | undefined;

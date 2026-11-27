@@ -4,15 +4,12 @@ import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const { awaited, runTest } = testing;
+const { runTest } = testing;
 
 const providerLevelCompatAppliesToCustomModels = () =>
   runTest(
@@ -39,9 +36,7 @@ const providerLevelCompatAppliesToCustomModels = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.OpenAICompletionsCompat
         | undefined;
@@ -80,9 +75,7 @@ const modelLevelCompatOverridesProviderLevelCompat = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.OpenAICompletionsCompat
         | undefined;

@@ -8,10 +8,13 @@ import AuthStorage from "../src/core/auth-storage.ts";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import type modelRegistrySupportTypes from "./model-registry-support.types.ts";
+import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { normalizeContext } = ai;
-const { joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } = testing;
+const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
+  testing;
 const { clearApiKeyCache } = providerAuth;
+const { createModelRegistry } = modelRuntimeTestUtils;
 
 const openAiModel: compatTypes.Model<compatTypes.Api> = {
   api: "openai-completions",
@@ -80,12 +83,14 @@ interface ModelRegistryFixture {
   modelsJsonPath: string;
   authStorage: authStorageTypes.AuthStorage;
   writeRawModelsJson: (providers: Record<string, unknown>) => ReturnType<typeof writeJsonFile>;
+  registry: () => Effect.Effect<Awaited<ReturnType<typeof createModelRegistry>>>;
 }
 
 const useModelRegistryFixture = (): ModelRegistryFixture => {
   const fixture: ModelRegistryFixture = {
     authStorage: AuthStorage.inMemory(),
     modelsJsonPath: "",
+    registry: () => awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath)),
     tempDir: "",
     writeRawModelsJson: (providers) => writeRawModelsJson(fixture.modelsJsonPath, providers),
   };

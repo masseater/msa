@@ -4,7 +4,6 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
@@ -12,9 +11,7 @@ const fixture = useModelRegistryFixture();
 
 const { providerConfig, getModelsForProvider } = modelRegistry4Support;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const { awaited, runTest, toJsonText, writeTextFile } = testing;
+const { runTest, toJsonText, writeTextFile } = testing;
 
 const writeModelsJson = Effect.fn("writeModelsJson")(function* (
   providers: Record<string, ReturnType<typeof providerConfig>>,
@@ -39,9 +36,7 @@ const nonBuiltInProviderCustomModelsStill = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       expect(registry.getError()).toContain("baseUrl");
     }),
   );
@@ -54,9 +49,7 @@ const reportsEveryProviderCompositionError = () =>
         "broken-two": { api: "openai-completions", models: [{ id: "two" }] },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const error = registry.getError();
 
       expect(error).toContain('Provider "broken-one"');
@@ -73,9 +66,7 @@ const customProviderWithSameNameAsBuilt = () =>
         ]),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       expect(anthropicModels.length).toBeGreaterThan(1);
@@ -95,9 +86,7 @@ const customModelWithSameIdReplacesBuilt = () =>
         ),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnetModels = models.filter((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -115,9 +104,7 @@ const customProviderWithSameNameAsBuilt2 = () =>
         ]),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       expect(getModelsForProvider(registry, "opencode").length).toBeGreaterThan(0);
       expect(getModelsForProvider(registry, "openai").length).toBeGreaterThan(0);
@@ -133,9 +120,7 @@ const providerLevelBaseurlAppliesToBothBuilt = () =>
         ]),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       for (const model of anthropicModels) {

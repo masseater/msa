@@ -4,7 +4,6 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
@@ -12,16 +11,12 @@ const fixture = useModelRegistryFixture();
 
 const { providerConfig, getModelsForProvider } = modelRegistry4Support;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
 const { awaited, runTest } = testing;
 
 const modelsOnlyCustomProviderRegistrationSurvivesRefresh = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       registry.registerProvider(
         "custom-provider",
@@ -43,9 +38,7 @@ const modelsOnlyCustomProviderRegistrationSurvivesRefresh = () =>
 const baseurlOnlyOverrideKeepsCustomProviderModels = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       registry.registerProvider(
         "custom-provider",
@@ -73,9 +66,7 @@ const baseurlOnlyOverrideKeepsCustomProviderModels = () =>
 const headersOnlyOverrideKeepsCustomProviderModels = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       registry.registerProvider(
         "custom-provider",

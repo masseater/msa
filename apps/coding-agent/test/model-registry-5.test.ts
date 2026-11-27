@@ -5,7 +5,6 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
@@ -13,9 +12,7 @@ const fixture = useModelRegistryFixture();
 
 const { getModelsForProvider } = modelRegistry4Support;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const { awaited, runTest } = testing;
+const { runTest } = testing;
 
 const emptyAllowedFallbackModelOverrideDisablesServer = Effect.gen(function* () {
   yield* fixture.writeRawModelsJson({
@@ -26,7 +23,7 @@ const emptyAllowedFallbackModelOverrideDisablesServer = Effect.gen(function* () 
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
   const compat = registry.find("anthropic-api", "claude-fable-5")?.compat as
     | compatTypes.AnthropicMessagesCompat
     | undefined;
@@ -65,7 +62,7 @@ const customModelsAndModelOverridesCarrySampling = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
   const models = getModelsForProvider(registry, "openrouter");
 
   const custom = models.find((m) => m.id === "custom/sampling-model");
@@ -102,7 +99,7 @@ const customModelAndModelOverrideCarryPrompt = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
   const openrouter = getModelsForProvider(registry, "openrouter");
 
   expect(registry.getError()).toBeUndefined();
@@ -154,7 +151,7 @@ const modelOverrideDeepMergesImageResizeLimits = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
   const model = registry.find("test", "vision-model");
 
   expect(registry.getError()).toBeUndefined();

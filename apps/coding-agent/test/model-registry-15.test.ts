@@ -3,15 +3,12 @@ import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const { awaited, runTest } = testing;
+const { runTest } = testing;
 
 const builtInProviderCustomModelsInheritApi = () =>
   runTest(
@@ -29,9 +26,7 @@ const builtInProviderCustomModelsInheritApi = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       expect(registry.getError()).toBeUndefined();
 
       const model = registry.find("openrouter", "fake-provider/fake-model");

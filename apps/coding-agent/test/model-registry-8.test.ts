@@ -5,7 +5,6 @@ import { describe, expect, test, vi } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
@@ -14,8 +13,6 @@ const fixture = useModelRegistryFixture();
 const { providerConfig } = modelRegistry4Support;
 
 const { getSupportedThinkingLevels } = compat;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, runTest } = testing;
 
@@ -41,7 +38,7 @@ const writeExtensionModelOverride = () =>
 const modeloverridesApplyToDynamicallyRegisteredProviderModels = Effect.gen(function* () {
   yield* writeExtensionModelOverride();
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
   registry.registerProvider("extension-provider", {
     api: "openai-completions",
     apiKey: "test-key",
@@ -99,7 +96,7 @@ const storedApiKeyEnvPropagatesToRequest = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
   const model = registry.getAll().find((m) => m.provider === "openrouter");
   expect(model).toBeDefined();
 
@@ -117,7 +114,7 @@ const registerproviderTreatsUppercaseApikeyAndHeadersAs = Effect.gen(function* (
   for (const key of ["CUSTOM_NAME", "BEARER", "MODEL_TOKEN"]) vi.stubEnv(key, `env-${key}`);
   const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
 
   registry.registerProvider("literal-provider", {
     ...providerConfig("https://provider.test/v1", [{ id: "demo-model" }], "openai-completions"),
@@ -152,7 +149,7 @@ const registerproviderTreatsUppercaseApikeyAndHeadersAs = Effect.gen(function* (
 });
 
 const failedRegisterproviderDoesNotPersistInvalidStreamsimple = Effect.gen(function* () {
-  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
+  const registry = yield* fixture.registry();
 
   expect(() =>
     registry.registerProvider("broken-provider", {

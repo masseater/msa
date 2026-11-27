@@ -4,15 +4,12 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelRegistry4Support from "./model-registry-4-support.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 
 const { getModelsForProvider } = modelRegistry4Support;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
@@ -29,9 +26,7 @@ const modelOverrideCanAddHeadersAtRequest = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
       expect(sonnet).toBeDefined();
@@ -57,9 +52,7 @@ const refreshPicksUpModelOverrideChanges = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       expect(
         getModelsForProvider(registry, "openrouter").find(
           (m) => m.id === "anthropic/claude-sonnet-4.5",
@@ -98,9 +91,7 @@ const removingModelOverrideRestoresBuiltInValues = () =>
         },
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const customName = getModelsForProvider(registry, "openrouter").find(
         (m) => m.id === "anthropic/claude-sonnet-4.5",
       )?.name;
@@ -120,9 +111,7 @@ const expectBuiltInNamesAndRegisterProvider = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const registry = yield* awaited(
-      createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-    );
+    const registry = yield* fixture.registry();
 
     expect(registry.getProviderDisplayName("openai")).toBe("OpenAI");
     expect(registry.getProviderDisplayName("openai-codex")).toBe("OpenAI Codex (legacy)");

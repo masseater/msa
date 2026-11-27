@@ -4,14 +4,11 @@ import { describe, expect, test } from "vite-plus/test";
 
 import platform from "../src/core/platform/index.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
 const { toShPath, providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
 
 const fixture = useModelRegistryFixture();
 const { deleteEnv, readEnv, writeEnv } = platform;
-
-const { createModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, joinPath, readTextFile, runTest, writeTextFile } = testing;
 
@@ -27,14 +24,10 @@ const commandsAreReExecutedAcrossRegistryInstances = () =>
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry1 = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry1 = yield* fixture.registry();
       yield* awaited(registry1.getApiKeyForProvider("custom-provider"));
 
-      const registry2 = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry2 = yield* fixture.registry();
       yield* awaited(registry2.getApiKeyForProvider("custom-provider"));
 
       const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
@@ -50,9 +43,7 @@ const differentCommandsResolveIndependently = () =>
         "provider-b": providerWithApiKey("!echo key-b"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       const keyA = yield* awaited(registry.getApiKeyForProvider("provider-a"));
       const keyB = yield* awaited(registry.getApiKeyForProvider("provider-b"));
@@ -74,9 +65,7 @@ const failedCommandsAreRetried = () =>
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
       const key1 = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
       const key2 = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
@@ -101,9 +90,7 @@ const providerAuthStatusReportsApikeyEnvironmentVariables = () =>
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: true,
@@ -136,9 +123,7 @@ const providerAuthStatusReportsInterpolatedApikeyEnvironment = () =>
           "custom-provider": providerWithApiKey(interpolatedKey),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: true,
@@ -167,9 +152,7 @@ const providerAuthStatusReportsNonEnvApikey = () =>
         "custom-provider": providerWithApiKey("literal_api_key_value"),
       });
 
-      const registry = yield* awaited(
-        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-      );
+      const registry = yield* fixture.registry();
 
       expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
         configured: true,
@@ -190,9 +173,7 @@ const missingExplicitEnvApikeyKeepsProviderUnavailable = () =>
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
-        const registry = yield* awaited(
-          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
-        );
+        const registry = yield* fixture.registry();
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: false,
