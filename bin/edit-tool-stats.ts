@@ -22,7 +22,7 @@ const { buildEditTextReport } = editToolReport;
 
 const DEFAULT_TOP = 20;
 
-const HELP = `Usage: node scripts/edit-tool-stats.ts [options]
+const HELP = `Usage: node bin/edit-tool-stats.ts [options]
 
 Options:
   --sessions-dir <path>  Sessions directory (default: ~/.msa/agent/sessions)

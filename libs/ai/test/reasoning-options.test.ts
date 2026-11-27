@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import getEffortThinkingLevelMap from "../scripts/models-dev-reasoning-options.ts";
+import getEffortThinkingLevelMap from "../bin/models-dev-reasoning-options.ts";
 
 describe("getEffortThinkingLevelMap", () => {
   it("exposes only verified effort values and none", () => {

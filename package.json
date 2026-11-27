@@ -24,6 +24,7 @@
     "esbuild": "catalog:",
     "eslint-plugin-no-comments": "catalog:",
     "fallow": "catalog:stack",
+    "fallow-similar-code": "catalog:stack",
     "magic-string": "catalog:",
     "shx": "catalog:",
     "srvx": "catalog:",

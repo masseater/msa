@@ -117,14 +117,14 @@
   "include": [
     "*.ts",
     "tools/**/*.ts",
-    "scripts/**/*.ts",
+    "bin/**/*.ts",
     ".msa/extensions/**/*.ts",
     "apps/*/src/**/*",
     "apps/*/test/**/*",
-    "apps/coding-agent/scripts/**/*.ts",
+    "apps/coding-agent/bin/**/*.ts",
     "libs/*/src/**/*",
     "libs/*/test/**/*",
-    "libs/ai/scripts/**/*.ts",
+    "libs/ai/bin/**/*.ts",
     "libs/tui/native/**/*.ts",
     "apps/coding-agent/examples/**/*",
     "libs/agent/examples/**/*"

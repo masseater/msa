@@ -1,4 +1,4 @@
-import type modelDataTypes from "../scripts/model-data.types.ts";
+import type modelDataTypes from "../bin/model-data.types.ts";
 
 declare namespace modelDataFixtureTypes {
   interface ModelDataFixture {

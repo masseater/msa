@@ -4,7 +4,7 @@ import { build } from "esbuild";
 import type { BuildOptions, Metafile, Plugin } from "esbuild";
 import { expect, it } from "vite-plus/test";
 
-import esbuildFilter from "../../scripts/esbuild-filter.ts";
+import esbuildFilter from "../../bin/esbuild-filter.ts";
 
 const { EsbuildFilter } = esbuildFilter;
 

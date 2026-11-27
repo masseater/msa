@@ -3,10 +3,10 @@ language: typescript
 severity: error
 message: "scripts・tools の入口は @msa/ai/utils/script-output の runMainWith にする。テストから呼ぶ runtime は scriptOutputLayer の上に作る。"
 files:
-  - scripts/**
+  - bin/**
   - tools/**
-  - apps/*/scripts/**
-  - libs/*/scripts/**
+  - apps/*/bin/**
+  - libs/*/bin/**
 ignores:
   - tools/binary-smoke/assets-probe.ts
   - tools/binary-smoke/decide-probe.ts
@@ -26,10 +26,10 @@ language: tsx
 severity: error
 message: "scripts・tools の入口は @msa/ai/utils/script-output の runMainWith にする。テストから呼ぶ runtime は scriptOutputLayer の上に作る。"
 files:
-  - scripts/**
+  - bin/**
   - tools/**
-  - apps/*/scripts/**
-  - libs/*/scripts/**
+  - apps/*/bin/**
+  - libs/*/bin/**
 ignores:
   - tools/binary-smoke/assets-probe.ts
   - tools/binary-smoke/decide-probe.ts
@@ -49,10 +49,10 @@ language: javascript
 severity: error
 message: "scripts・tools の入口は @msa/ai/utils/script-output の runMainWith にする。テストから呼ぶ runtime は scriptOutputLayer の上に作る。"
 files:
-  - scripts/**
+  - bin/**
   - tools/**
-  - apps/*/scripts/**
-  - libs/*/scripts/**
+  - apps/*/bin/**
+  - libs/*/bin/**
 ignores:
   - tools/binary-smoke/assets-probe.ts
   - tools/binary-smoke/decide-probe.ts

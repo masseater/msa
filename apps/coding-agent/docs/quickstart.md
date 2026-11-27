@@ -14,21 +14,21 @@ cd msa
 vp install
 ```
 
-`./scripts/msa-dev.sh` runs msa from these sources and can be called from any directory. Put it behind a shell alias or a small script on your `PATH` if you want a plain `msa` command.
+`./bin/msa-dev.sh` runs msa from these sources and can be called from any directory. Put it behind a shell alias or a small script on your `PATH` if you want a plain `msa` command.
 
 Verify the installation:
 
 ```bash
-./scripts/msa-dev.sh --version
+./bin/msa-dev.sh --version
 ```
 
 ## 2. Start msa
 
-Change to the folder you want msa to work with, then start it. When running from source, use `./scripts/msa-dev.sh` in place of `msa`:
+Change to the folder you want msa to work with, then start it. When running from source, use `./bin/msa-dev.sh` in place of `msa`:
 
 ```bash
 cd /path/to/folder
-/path/to/msa/scripts/msa-dev.sh
+/path/to/msa/bin/msa-dev.sh
 ```
 
 The working folder helps msa discover relevant files, instructions, and configuration. msa also uses it to group saved sessions.

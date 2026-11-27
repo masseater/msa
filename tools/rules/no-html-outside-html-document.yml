@@ -5,7 +5,7 @@ message: "HTML は @msa/ai/utils/html-document の出口で渡す。text/html �
 files:
   - apps/**
   - libs/**
-  - scripts/**
+  - bin/**
   - .msa/**
   - tools/*
 ignores:
@@ -99,7 +99,7 @@ message: "HTML は @msa/ai/utils/html-document の出口で渡す。text/html �
 files:
   - apps/**
   - libs/**
-  - scripts/**
+  - bin/**
   - .msa/**
   - tools/*
 ignores:
@@ -193,7 +193,7 @@ message: "HTML は @msa/ai/utils/html-document の出口で渡す。text/html �
 files:
   - apps/**
   - libs/**
-  - scripts/**
+  - bin/**
   - .msa/**
   - tools/*
 ignores:

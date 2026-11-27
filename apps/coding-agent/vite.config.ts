@@ -11,7 +11,7 @@ const outsideDist = {
     "src/**",
     "tsconfig.build.json",
     "tsconfig.json",
-    workspace("scripts/**"),
+    workspace("bin/**"),
     workspace("tools/class-seal/**"),
   ],
   output: ["dist/**"],
@@ -22,7 +22,7 @@ export default defineConfig({
     tasks: {
       build: {
         cache: outsideDist,
-        command: ["vp run build:unbundled", "node ../../scripts/build-coding-agent-bundle.ts"],
+        command: ["vp run build:unbundled", "node ../../bin/build-coding-agent-bundle.ts"],
       },
       "build:unbundled": {
         cache: outsideDist,
@@ -42,7 +42,7 @@ export default defineConfig({
       },
       "generate:schemas": {
         cache: false,
-        command: "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts",
+        command: "node --import ./src/experimental/source-resolver.ts bin/generate-schemas.ts",
       },
     },
   },

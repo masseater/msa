@@ -162,7 +162,7 @@ export default defineConfig({
         },
       },
       {
-        files: withProbes(["scripts/**"]),
+        files: withProbes(["bin/**"]),
         rules: { "import/max-dependencies": ["error", { ignoreTypeImports: true, max: 10 }] },
       },
       {

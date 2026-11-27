@@ -44,7 +44,7 @@ const BUCKETS: ReadonlyArray<number> = [
   Number.POSITIVE_INFINITY,
 ];
 
-const HELP = "Usage: scripts/tool-stats.ts [--sessions-dir <dir>] [--output <file.html>]";
+const HELP = "Usage: bin/tool-stats.ts [--sessions-dir <dir>] [--output <file.html>]";
 
 const nonEmptyValue = (
   set: (parsed: Args, value: string) => void,

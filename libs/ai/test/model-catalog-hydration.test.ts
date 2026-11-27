@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import hydrateModelCatalog from "../scripts/hydrate-model-catalog.ts";
-import modelData from "../scripts/model-data.ts";
-import scriptFiles from "../scripts/script-files.ts";
+import hydrateModelCatalog from "../bin/hydrate-model-catalog.ts";
+import modelData from "../bin/model-data.ts";
+import scriptFiles from "../bin/script-files.ts";
 import modelDataFixture from "./model-data-fixture.ts";
 
 const { MODEL_DATA_MANIFEST_FILE, readModelDataStructure, validateModelDataDirectory } = modelData;

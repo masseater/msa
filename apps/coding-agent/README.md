@@ -25,7 +25,7 @@ This fork is not published to npm, so run msa from a checkout:
 git clone https://github.com/masseater/msa
 cd msa
 vp install
-./scripts/msa-dev.sh
+./bin/msa-dev.sh
 ```
 
 msa requires Node.js 26 or newer. State lives in `~/.msa/agent`.
@@ -34,7 +34,7 @@ Start msa in the directory where you want it to work:
 
 ```bash
 cd /path/to/project
-/path/to/msa/scripts/msa-dev.sh
+/path/to/msa/bin/msa-dev.sh
 ```
 
 For a built-in AI provider, run `/login` inside msa to connect a subscription or API key. Then
@@ -44,7 +44,7 @@ See the [documentation](docs/index.md) for full setup and usage instructions.
 
 ## Development
 
-`scripts/msa-dev.sh` can be called from any directory and preserves the caller's working
+`bin/msa-dev.sh` can be called from any directory and preserves the caller's working
 directory.
 
 Before submitting changes, run from the repository root:

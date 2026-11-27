@@ -8,7 +8,7 @@ import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
 const { flagOption, parseOptions, requiredOption } = cliOptions;
 
 const HELP = `Usage:
-  node scripts/profile-coding-agent-node.ts [options]
+  node bin/profile-coding-agent-node.ts [options]
 
 Profiles coding-agent startup with the runtime selected below:
 - npm run profile:tui     -> builds apps/coding-agent and profiles TUI startup with Node

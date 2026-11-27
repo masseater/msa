@@ -7,7 +7,7 @@ const modelSources = ["src/models.generated.ts", "src/providers/*.models.ts", ..
 
 const generatorInputs = [
   "package.json",
-  "scripts/**",
+  "bin/**",
   "src/**",
   ...modelSources.map((pattern) => `!${pattern}`),
   "!src/providers/.model-generation-*/**",
@@ -48,15 +48,15 @@ export default defineConfig({
       "generate-model-catalog": {
         cache: false,
         command:
-          "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
+          "node bin/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
       },
       "generate-models": {
         cache: { input: generatorInputs, output: modelSources, untrackedEnv: networkEnv },
-        command: "node scripts/generate-models.ts --strict",
+        command: "node bin/generate-models.ts --strict",
       },
       "hydrate-model-data": {
         cache: { input: generatorInputs, output: modelData, untrackedEnv: networkEnv },
-        command: "node scripts/generate-models.ts --strict --data-only",
+        command: "node bin/generate-models.ts --strict --data-only",
       },
     },
   },

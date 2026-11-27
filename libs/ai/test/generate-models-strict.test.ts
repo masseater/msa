@@ -32,7 +32,7 @@ const isolatePackage = Effect.gen(function* () {
   const fixtureRoot = yield* fs.makeTempDirectoryScoped({ prefix: "msa-generate-models-" });
   const isolatedRoot = path.join(fixtureRoot, "package");
   yield* fs.makeDirectory(isolatedRoot);
-  yield* Effect.forEach(["package.json", "scripts", "src"], (entry) =>
+  yield* Effect.forEach(["package.json", "bin", "src"], (entry) =>
     fs.copy(path.join(packageRoot, entry), path.join(isolatedRoot, entry)),
   );
   yield* fs.symlink(
@@ -61,7 +61,7 @@ const failsBeforeMutatingGeneratedData = () =>
         const sourceBefore = yield* readGenerated(packageRoot);
         const isolatedBefore = yield* readGenerated(isolatedRoot);
         const result = yield* Effect.promise(() =>
-          runNode(["--import", preloadUrl, "scripts/generate-models.ts", "--strict"], {
+          runNode(["--import", preloadUrl, "bin/generate-models.ts", "--strict"], {
             cwd: isolatedRoot,
             timeout: "10 seconds",
           }),

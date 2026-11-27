@@ -35,7 +35,7 @@ const fallow: FallowConfig = {
   framework: [
     {
       enablers: ["vite-plus"],
-      entryPoints: ["vite.config.ts", "tools/**/*.ts", "scripts/*.ts", "scripts/*.js"],
+      entryPoints: ["vite.config.ts", "tools/**/*.ts", "bin/*.ts", "bin/*.js"],
       name: "vite-plus",
       toolingDependencies: ["@ast-grep/cli", "eslint-plugin-no-comments"],
     },
@@ -45,6 +45,7 @@ const fallow: FallowConfig = {
     "@effect/language-service",
     "@picocss/pico",
     "charts.css",
+    "fallow-similar-code",
     "node-llama-cpp",
     "tree-sitter-bash",
   ],

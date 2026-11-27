@@ -1,8 +1,8 @@
 import { Effect, ManagedRuntime } from "effect";
 import { it } from "vite-plus/test";
 
-import modelData from "../scripts/model-data.ts";
-import scriptFiles from "../scripts/script-files.ts";
+import modelData from "../bin/model-data.ts";
+import scriptFiles from "../bin/script-files.ts";
 
 const { validateGeneratedModelData } = modelData;
 const { ScriptFiles, scriptFilesLayer } = scriptFiles;

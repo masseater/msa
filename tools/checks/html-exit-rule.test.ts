@@ -32,11 +32,11 @@ const htmlOutputs: readonly Case[] = [
   { file: "tools/checks/probe-serve.mjs", source: CHECKS_SERVE },
   { file: "tools/checks/probe-write.mjs", source: CHECKS_WRITE },
   {
-    file: "scripts/self-closing-file.ts",
+    file: "bin/self-closing-file.ts",
     source: `import { writeFileSync } from "node:fs";\nwriteFileSync("report.html", ${SELF_CLOSING});`,
   },
   {
-    file: "scripts/head-body-file.mjs",
+    file: "bin/head-body-file.mjs",
     source: `export const w = (fs, dir, x) => fs.writeFileString(\`\${dir}/report.html\`, ${HEAD_AND_BODY});`,
   },
   {
@@ -48,7 +48,7 @@ const htmlOutputs: readonly Case[] = [
     source: `const reply = (x) => ({ body: ${HEAD_AND_BODY}, headers: { "Content-Type": "text/html; charset=utf-8" }, status: 200 });`,
   },
   {
-    file: "scripts/variable-path.js",
+    file: "bin/variable-path.js",
     source:
       'import { writeFile } from "node:fs/promises";\nconst output = join(tmp, "msa-report.html");\nawait writeFile(output, page);',
   },
@@ -97,7 +97,7 @@ const notHtmlOutputs: readonly Case[] = [
     source: "const EXAMPLES = `msa --export session.jsonl output.html`;",
   },
   {
-    file: "scripts/report.ts",
+    file: "bin/report.ts",
     source:
       'const defaults = { output: join(tmpdir(), "r.html") };\nexport const w = (args, page) => writeHtmlFile(args.output, page);',
   },
@@ -113,16 +113,16 @@ const notHtmlOutputs: readonly Case[] = [
 ];
 
 const directRuns: readonly Case[] = [
-  { file: "scripts/j.ts", source: "NodeRuntime.runMain(Console.log(page));" },
+  { file: "bin/j.ts", source: "NodeRuntime.runMain(Console.log(page));" },
   { file: "tools/k.js", source: "Effect.runPromise(Console.log(page));" },
-  { file: "libs/ai/scripts/l.ts", source: "ManagedRuntime.make(layer).runFork(program);" },
-  { file: "apps/coding-agent/scripts/m.tsx", source: "runtime.runSync(program);" },
+  { file: "libs/ai/bin/l.ts", source: "ManagedRuntime.make(layer).runFork(program);" },
+  { file: "apps/coding-agent/bin/m.tsx", source: "runtime.runSync(program);" },
 ];
 
 const runsThroughRunMainWith: readonly Case[] = [
-  { file: "scripts/main.ts", source: "runMainWith(program, layer);" },
+  { file: "bin/main.ts", source: "runMainWith(program, layer);" },
   { file: "libs/ai/src/utils/script-output.ts", source: "NodeRuntime.runMain(main);" },
-  { file: "scripts/x.test.ts", source: "Effect.runPromise(program);" },
+  { file: "bin/x.test.ts", source: "Effect.runPromise(program);" },
   { file: "apps/app/src/main.ts", source: "Effect.runPromise(program);" },
 ];
 
@@ -142,17 +142,7 @@ const reportedFiles = (rule: string, cases: readonly Case[]) =>
         yield* fs.writeFileString(`${root}/${file}`, `${source}\n`);
       }
       const { stdout } = yield* captureProcess({
-        args: [
-          "scan",
-          "--rule",
-          rule,
-          "--json=compact",
-          "apps",
-          "libs",
-          "scripts",
-          "tools",
-          ".msa",
-        ],
+        args: ["scan", "--rule", rule, "--json=compact", "apps", "libs", "bin", "tools", ".msa"],
         command: `${repoRoot}/node_modules/.bin/ast-grep`,
         cwd: root,
       });

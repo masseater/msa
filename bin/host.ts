@@ -6,7 +6,7 @@ import type hostTypes from "./host.types.ts";
 
 const { ScriptOutput, print, printError, runMainWith, scriptOutputLayer } = scriptOutput;
 
-class Host extends Context.Service<Host, hostTypes.HostShape>()("msa-monorepo/scripts/host") {}
+class Host extends Context.Service<Host, hostTypes.HostShape>()("msa-monorepo/bin/host") {}
 
 const makeFiles = Effect.gen(function* () {
   const output = yield* ScriptOutput;

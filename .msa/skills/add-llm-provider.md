@@ -31,7 +31,7 @@ Create a provider file exporting:
 - Register the provider in `libs/ai/src/providers/register-builtins.ts` via lazy loader wrappers; do not statically import provider implementation modules there.
 - Add credential detection in `libs/ai/src/env-api-keys.ts`.
 
-## 4. Model Generation (`libs/ai/scripts/generate-models.ts`)
+## 4. Model Generation (`libs/ai/bin/generate-models.ts`)
 
 - Add logic to fetch/parse models from the provider source.
 - Map to the standardized `Model` interface.

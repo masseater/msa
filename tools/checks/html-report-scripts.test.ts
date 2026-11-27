@@ -24,7 +24,7 @@ const writesReport = (script: string, scopeArgs: readonly string[]) => () =>
         const output = `${root}/report.html`;
         const { exitCode, stderr, stdout } = yield* captureProcess({
           args: [
-            `${repoRoot}/scripts/${script}`,
+            `${repoRoot}/bin/${script}`,
             "--sessions-dir",
             `${root}/sessions`,
             ...scopeArgs,
