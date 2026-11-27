@@ -8,7 +8,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { dirnameOf, joinPath } = testing;
 const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
-const { cleanedUp, reviewed, withRemote } = pullRequestSupport;
+const { acceptedMerge, cleanedUp, reviewed, withRemote } = pullRequestSupport;
 const { runCommand } = worktreeSupport;
 
 type Run = ReturnType<typeof setup>;
@@ -31,27 +31,22 @@ const passAll = (orchestrator: Run["orchestrator"], workers: Run["workers"], tas
 
 const UNANSWERED = { code: 1, stderr: "connection reset by peer", stdout: "" };
 
-const completesWhenAnUnansweredMergeIsTheHarnesss = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, branch, head, number, taskId, worktree } =
-          yield* reviewed(remote);
-        github.mergeAnswer = { code: 1, stderr: "request timed out", stdout: "" };
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
-        expect(taskStatus(orchestrator, taskId)).toBe("completed");
-        expect(github.merged).toMatchObject([{ number, sha: head }]);
-        expect(reports.at(-1)?.details.status).toBe("completed");
-        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
-          local: false,
-          remote: false,
-          worktree: false,
-        });
-      }),
-    ),
-  );
+const completesWhenAnUnansweredMergeIsTheHarnesss = acceptedMerge({
+  check: ({ orchestrator, reports, branch, head, number, taskId, worktree, github, remote }) =>
+    Effect.gen(function* () {
+      expect(taskStatus(orchestrator, taskId)).toBe("completed");
+      expect(github.merged).toMatchObject([{ number, sha: head }]);
+      expect(reports.at(-1)?.details.status).toBe("completed");
+      expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
+        local: false,
+        remote: false,
+        worktree: false,
+      });
+    }),
+  prepare: ({ github }) => {
+    github.mergeAnswer = { code: 1, stderr: "request timed out", stdout: "" };
+  },
+});
 
 it(
   "completes the task when the harness's merge request gets no answer and the merge commit carries the harness's trailer",
@@ -153,29 +148,25 @@ it("stops the task after a crash while its merge request was in flight and the p
     }),
   ));
 
-const holdsBackWhenTheMergeCommitCannotBeRead = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, taskId } = yield* reviewed(remote);
-        github.mergeAnswer = { code: 1, stderr: "request timed out", stdout: "" };
-        github.commitRefusal = { code: 1, stderr: "gh: Server Error (HTTP 502)", stdout: "" };
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
-        expect(taskStatus(orchestrator, taskId)).toBe("stopped");
-        const stopped = reports.at(-1)?.text ?? "";
-        expect(stopped).toContain("HTTP 502");
-        expect(stopped).toContain("has not judged the merge to be someone else's");
-        expect(stopped).not.toContain("judged from its own record");
+const holdsBackWhenTheMergeCommitCannotBeRead = acceptedMerge({
+  check: ({ orchestrator, reports, workers, taskId, github }) =>
+    Effect.gen(function* () {
+      expect(taskStatus(orchestrator, taskId)).toBe("stopped");
+      const stopped = reports.at(-1)?.text ?? "";
+      expect(stopped).toContain("HTTP 502");
+      expect(stopped).toContain("has not judged the merge to be someone else's");
+      expect(stopped).not.toContain("judged from its own record");
 
-        github.commitRefusal = undefined;
-        yield* Effect.promise(() => orchestrator.rerun(taskId));
-        yield* passAll(orchestrator, workers, taskId);
-        expect(taskStatus(orchestrator, taskId)).toBe("completed");
-      }),
-    ),
-  );
+      github.commitRefusal = undefined;
+      yield* Effect.promise(() => orchestrator.rerun(taskId));
+      yield* passAll(orchestrator, workers, taskId);
+      expect(taskStatus(orchestrator, taskId)).toBe("completed");
+    }),
+  prepare: ({ github }) => {
+    github.mergeAnswer = { code: 1, stderr: "request timed out", stdout: "" };
+    github.commitRefusal = { code: 1, stderr: "gh: Server Error (HTTP 502)", stdout: "" };
+  },
+});
 
 it(
   "does not judge the harness's own merge as someone else's when the merge commit cannot be read, and completes it on a rerun",

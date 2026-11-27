@@ -5,46 +5,40 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
 const { taskStatus, waitFor } = orchestratorHarness.harness;
-const { advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
+const { acceptedMerge, advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
 
-const sendsBackWhenMainMovesDuringTheMerge = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github, origin } = remote;
-        const { orchestrator, workers, taskId } = yield* reviewed(remote);
-        github.beforeMerge = Effect.suspend(() => {
-          github.beforeMerge = undefined;
-          return advanceMain(origin, "moved.txt");
-        });
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => workers.length === 3);
-        expect(github.merged).toEqual([]);
-        expect(taskStatus(orchestrator, taskId)).toBe("running");
-        expect(workers[2]!.prompts.join("\n")).toContain("behind main");
-      }),
-    ),
-  );
+const sendsBackWhenMainMovesDuringTheMerge = acceptedMerge({
+  check: ({ orchestrator, workers, taskId, github }) =>
+    Effect.sync(() => {
+      expect(github.merged).toEqual([]);
+      expect(taskStatus(orchestrator, taskId)).toBe("running");
+      expect(workers[2]!.prompts.join("\n")).toContain("behind main");
+    }),
+  prepare: ({ github, remote: { origin } }) => {
+    github.beforeMerge = Effect.suspend(() => {
+      github.beforeMerge = undefined;
+      return advanceMain(origin, "moved.txt");
+    });
+  },
+  until: ({ workers }) => workers.length === 3,
+});
 
 it(
   "sends the task back to the worker, as before the merge, when gh pr merge fails because the base moved and the pull request reads back as behind",
   sendsBackWhenMainMovesDuringTheMerge,
 );
 
-const stopsWithTheReasonWhenTheMergeIsRefused = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, taskId } = yield* reviewed(remote);
-        github.mergeRefusal = { code: 1, stderr: "merging is blocked by a ruleset", stdout: "" };
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
-        expect(workers).toHaveLength(2);
-        expect(reports.at(-1)?.text).toContain("merging is blocked by a ruleset");
-      }),
-    ),
-  );
+const stopsWithTheReasonWhenTheMergeIsRefused = acceptedMerge({
+  check: ({ reports, workers }) =>
+    Effect.sync(() => {
+      expect(workers).toHaveLength(2);
+      expect(reports.at(-1)?.text).toContain("merging is blocked by a ruleset");
+    }),
+  prepare: ({ github }) => {
+    github.mergeRefusal = { code: 1, stderr: "merging is blocked by a ruleset", stdout: "" };
+  },
+  until: ({ orchestrator, taskId }) => taskStatus(orchestrator, taskId) === "stopped",
+});
 
 it(
   "stops the task with gh's reason when the merge is refused and the pull request is neither merged nor behind",
@@ -122,27 +116,24 @@ it(
   completesWhenTheRunEndsRightAfterTheMerge,
 );
 
-const stopsWhenMergedOutsideAfterAFailedMerge = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github, origin } = remote;
-        const { orchestrator, reports, workers, number, taskId } = yield* reviewed(remote);
-        github.beforeMerge = Effect.suspend(() => {
-          github.beforeMerge = undefined;
-          return advanceMain(origin, "moved.txt");
-        });
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => workers.length === 3);
-        const commit = yield* github.mergeOutside(number, "someone-else");
-        workers[2]!.complete("rebased");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
-        expect(github.merged).toEqual([]);
-        expect(reports.at(-1)?.text).toContain("someone-else");
-        expect(reports.at(-1)?.text).toContain(commit.slice(0, 12));
-      }),
-    ),
-  );
+const stopsWhenMergedOutsideAfterAFailedMerge = acceptedMerge({
+  check: ({ orchestrator, reports, workers, number, taskId, github }) =>
+    Effect.gen(function* () {
+      const commit = yield* github.mergeOutside(number, "someone-else");
+      workers[2]!.complete("rebased");
+      yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+      expect(github.merged).toEqual([]);
+      expect(reports.at(-1)?.text).toContain("someone-else");
+      expect(reports.at(-1)?.text).toContain(commit.slice(0, 12));
+    }),
+  prepare: ({ github, remote: { origin } }) => {
+    github.beforeMerge = Effect.suspend(() => {
+      github.beforeMerge = undefined;
+      return advanceMain(origin, "moved.txt");
+    });
+  },
+  until: ({ workers }) => workers.length === 3,
+});
 
 it(
   "stops the task when the harness's merge failed, the task went back to the worker, and the pull request was then merged outside the harness at the head the harness had tried",
