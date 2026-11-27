@@ -11,7 +11,7 @@ const { orchestratorError } = errors;
 
 const { runTest } = testing;
 
-const { create, read, replan, stopAndWrapUp } = orchestratorReplanSupport;
+const { create, createNamed, read, replan, stopAndWrapUp } = orchestratorReplanSupport;
 
 const { harness } = orchestratorHarness;
 
@@ -82,17 +82,8 @@ it("stops at the turn boundary, hands the memo to the split tasks, and resumes t
 
 const abortsWithoutTouchingThePlanWhenThe = Effect.gen(function* () {
   const { orchestrator, workers } = setup();
-  const a = yield* create(orchestrator, {
-    currentState: "a is not written",
-    goalState: "a works",
-    title: "a",
-  });
-  const b = yield* create(orchestrator, {
-    currentState: "b is not written",
-    dependsOn: [a.id],
-    goalState: "b works",
-    title: "b",
-  });
+  const a = yield* createNamed(orchestrator, "a");
+  const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
 
   const pending = replan(orchestrator, {
     drop: [{ reason: "not needed", taskId: b.id }],
@@ -121,11 +112,7 @@ it("aborts without touching the plan when the wrap-up fails", () =>
 
 const rejectsACycleAmongTheNewTasks = Effect.gen(function* () {
   const { orchestrator, workers } = setup();
-  const a = yield* create(orchestrator, {
-    currentState: "a is not written",
-    goalState: "a works",
-    title: "a",
-  });
+  const a = yield* createNamed(orchestrator, "a");
   const before = orchestrator.snapshot.tasks.length;
 
   const result = yield* Effect.result(
@@ -167,11 +154,7 @@ it("rejects a cycle among the new tasks and writes nothing", () =>
 
 const rejectsANewTaskWithoutACurrent = Effect.gen(function* () {
   const { orchestrator, workers } = setup();
-  yield* create(orchestrator, {
-    currentState: "a is not written",
-    goalState: "a works",
-    title: "a",
-  });
+  yield* createNamed(orchestrator, "a");
   const before = orchestrator.snapshot.tasks.length;
 
   const result = yield* Effect.result(
@@ -196,17 +179,8 @@ it("rejects a new task without a current state or a goal state", () =>
 
 const rewiresAKeptTaskOntoTheTasks = Effect.gen(function* () {
   const { orchestrator, workers } = setup();
-  const a = yield* create(orchestrator, {
-    currentState: "a is not written",
-    goalState: "a works",
-    title: "a",
-  });
-  const b = yield* create(orchestrator, {
-    currentState: "b is not written",
-    dependsOn: [a.id],
-    goalState: "b works",
-    title: "b",
-  });
+  const a = yield* createNamed(orchestrator, "a");
+  const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
 
   const pending = replan(orchestrator, {
     keep: [b.id],

@@ -3,15 +3,13 @@ import { Effect } from "effect";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
 
 const { harness } = orchestratorHarness;
 
 const { waitFor } = harness;
 
-const create = (
-  orchestrator: orchestratorTypes.Orchestrator,
-  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
-) => Effect.promise(() => orchestrator.createTask(input));
+const { create, createNamed } = orchestratorSupport;
 
 const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
   Effect.promise(() => orchestrator.read(id));
@@ -38,6 +36,7 @@ function stopAndWrapUp(
 
 const orchestratorReplanSupport = {
   create,
+  createNamed,
   read,
   replan,
   stopAndWrapUp,

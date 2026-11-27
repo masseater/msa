@@ -7,7 +7,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 
 const { store } = storeModule;
 
-const { create } = orchestratorSupport;
+const { createNamed } = orchestratorSupport;
 
 const { harness } = orchestratorHarness;
 
@@ -17,17 +17,8 @@ const steersRunningThreadsWithASharedNote = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
       const delivery = yield* Effect.promise(() =>
         orchestrator.sendNote({ audience: "all", content: "never touch x.ts" }),
       );
@@ -52,11 +43,7 @@ const reReadsANoteAtTheTurn = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
+      const a = yield* createNamed(orchestrator, "a");
       workers[0]?.complete("first pass");
       store.insertNote(orchestrator.database, {
         author: "test",
@@ -79,11 +66,7 @@ const searchesReportsAcrossTasksAndThreads = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const task = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
+      const task = yield* createNamed(orchestrator, "a");
       workers[0]?.complete("alpha implementation");
       yield* waitFor(() => workers.length === 2);
       workers[1]?.complete("alpha reviewed");
