@@ -2,11 +2,16 @@ import ai from "@msa/ai";
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
+import { afterEach, beforeEach, vi } from "vite-plus/test";
 
+import AuthStorage from "../src/core/auth-storage.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import type modelRegistrySupportTypes from "./model-registry-support.types.ts";
 
 const { normalizeContext } = ai;
-const { writeJsonFile } = testing;
+const { joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } = testing;
+const { clearApiKeyCache } = providerAuth;
 
 const openAiModel: compatTypes.Model<compatTypes.Api> = {
   api: "openai-completions",
@@ -70,6 +75,39 @@ function providerWithApiKey(apiKey: string) {
   };
 }
 
+interface ModelRegistryFixture {
+  tempDir: string;
+  modelsJsonPath: string;
+  authStorage: authStorageTypes.AuthStorage;
+  writeRawModelsJson: (providers: Record<string, unknown>) => ReturnType<typeof writeJsonFile>;
+}
+
+const useModelRegistryFixture = (): ModelRegistryFixture => {
+  const fixture: ModelRegistryFixture = {
+    authStorage: AuthStorage.inMemory(),
+    modelsJsonPath: "",
+    tempDir: "",
+    writeRawModelsJson: (providers) => writeRawModelsJson(fixture.modelsJsonPath, providers),
+  };
+
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      fixture.tempDir = dir;
+      fixture.modelsJsonPath = joinPath(dir, "models.json");
+      fixture.authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
+
+  afterEach(() => {
+    clearApiKeyCache();
+    vi.restoreAllMocks();
+    return runTest(removePath(fixture.tempDir));
+  });
+
+  return fixture;
+};
+
 const modelRegistrySupport = {
   captureThrown,
   emptyContext,
@@ -77,6 +115,7 @@ const modelRegistrySupport = {
   openAiModel,
   providerWithApiKey,
   toShPath,
+  useModelRegistryFixture,
   writeRawModelsJson,
 };
 

@@ -1,35 +1,26 @@
 import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
+
 const { providerConfig } = modelRegistry4Support;
-const { clearApiKeyCache } = providerAuth;
 
 const { getSupportedThinkingLevels } = compat;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { awaited, runTest } = testing;
 
 const writeExtensionModelOverride = () =>
-  writeRawModelsJson({
+  fixture.writeRawModelsJson({
     "extension-provider": {
       modelOverrides: {
         "extension-model": {
@@ -50,7 +41,7 @@ const writeExtensionModelOverride = () =>
 const modeloverridesApplyToDynamicallyRegisteredProviderModels = Effect.gen(function* () {
   yield* writeExtensionModelOverride();
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
   registry.registerProvider("extension-provider", {
     api: "openai-completions",
     apiKey: "test-key",
@@ -92,7 +83,7 @@ const storedApiKeyEnvPropagatesToRequest = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   yield* awaited(
-    authStorage.modify("openrouter", () =>
+    fixture.authStorage.modify("openrouter", () =>
       effectRunPromise(
         awaited({
           env: { OPENROUTER_TEAM: "stored-team" },
@@ -102,13 +93,13 @@ const storedApiKeyEnvPropagatesToRequest = Effect.gen(function* () {
       ),
     ),
   );
-  yield* writeRawModelsJson({
+  yield* fixture.writeRawModelsJson({
     openrouter: {
       headers: { "x-team": "$OPENROUTER_TEAM" },
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
   const model = registry.getAll().find((m) => m.provider === "openrouter");
   expect(model).toBeDefined();
 
@@ -126,7 +117,7 @@ const registerproviderTreatsUppercaseApikeyAndHeadersAs = Effect.gen(function* (
   for (const key of ["CUSTOM_NAME", "BEARER", "MODEL_TOKEN"]) vi.stubEnv(key, `env-${key}`);
   const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
 
   registry.registerProvider("literal-provider", {
     ...providerConfig("https://provider.test/v1", [{ id: "demo-model" }], "openai-completions"),
@@ -161,7 +152,7 @@ const registerproviderTreatsUppercaseApikeyAndHeadersAs = Effect.gen(function* (
 });
 
 const failedRegisterproviderDoesNotPersistInvalidStreamsimple = Effect.gen(function* () {
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
 
   expect(() =>
     registry.registerProvider("broken-provider", {
@@ -174,25 +165,7 @@ const failedRegisterproviderDoesNotPersistInvalidStreamsimple = Effect.gen(funct
   yield* awaited(expect(registry.refresh()).resolves.toMatchObject({ aborted: false }));
 });
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("dynamic provider lifecycle", () => {
     test("modelOverrides apply to dynamically registered provider models", () =>
       runTest(modeloverridesApplyToDynamicallyRegisteredProviderModels));

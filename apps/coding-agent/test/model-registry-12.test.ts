@@ -1,53 +1,40 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import platform from "../src/core/platform/index.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { toShPath, writeRawModelsJson, providerWithApiKey } = modelRegistrySupport;
+const { toShPath, providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
 const { deleteEnv, readEnv, writeEnv } = platform;
-const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  randomSuffixSync,
-  readTextFile,
-  removePath,
-  runTest,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
+const { awaited, joinPath, readTextFile, runTest, writeTextFile } = testing;
 
 const commandsAreReExecutedAcrossRegistryInstances = () =>
   runTest(
     Effect.gen(function* () {
-      const counterFile = joinPath(tempDir, "counter");
+      const counterFile = joinPath(fixture.tempDir, "counter");
       yield* writeTextFile(counterFile, "0");
 
       const counterPath = toShPath(counterFile);
       const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry1 = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry1 = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       yield* awaited(registry1.getApiKeyForProvider("custom-provider"));
 
-      const registry2 = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry2 = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       yield* awaited(registry2.getApiKeyForProvider("custom-provider"));
 
       const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
@@ -58,12 +45,14 @@ const commandsAreReExecutedAcrossRegistryInstances = () =>
 const differentCommandsResolveIndependently = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "provider-a": providerWithApiKey("!echo key-a"),
         "provider-b": providerWithApiKey("!echo key-b"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
 
       const keyA = yield* awaited(registry.getApiKeyForProvider("provider-a"));
       const keyB = yield* awaited(registry.getApiKeyForProvider("provider-b"));
@@ -76,16 +65,18 @@ const differentCommandsResolveIndependently = () =>
 const failedCommandsAreRetried = () =>
   runTest(
     Effect.gen(function* () {
-      const counterFile = joinPath(tempDir, "counter");
+      const counterFile = joinPath(fixture.tempDir, "counter");
       yield* writeTextFile(counterFile, "0");
 
       const counterPath = toShPath(counterFile);
       const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; exit 1'`;
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const key1 = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
       const key2 = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
@@ -106,11 +97,13 @@ const providerAuthStatusReportsApikeyEnvironmentVariables = () =>
       try {
         writeEnv(envVarName, "status-test-key");
 
-        yield* writeRawModelsJson(modelsJsonPath, {
+        yield* fixture.writeRawModelsJson({
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
-        const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+        const registry = yield* awaited(
+          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+        );
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: true,
@@ -139,11 +132,13 @@ const providerAuthStatusReportsInterpolatedApikeyEnvironment = () =>
       const interpolatedKey = ["$", "{", envVarNameA, "}_$", "{", envVarNameB, "}"].join("");
 
       try {
-        yield* writeRawModelsJson(modelsJsonPath, {
+        yield* fixture.writeRawModelsJson({
           "custom-provider": providerWithApiKey(interpolatedKey),
         });
 
-        const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+        const registry = yield* awaited(
+          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+        );
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: true,
@@ -168,11 +163,13 @@ const providerAuthStatusReportsInterpolatedApikeyEnvironment = () =>
 const providerAuthStatusReportsNonEnvApikey = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("literal_api_key_value"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
 
       expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
         configured: true,
@@ -189,11 +186,13 @@ const missingExplicitEnvApikeyKeepsProviderUnavailable = () =>
       deleteEnv(envVarName);
 
       try {
-        yield* writeRawModelsJson(modelsJsonPath, {
+        yield* fixture.writeRawModelsJson({
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
-        const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+        const registry = yield* awaited(
+          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+        );
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: false,
@@ -211,25 +210,7 @@ const missingExplicitEnvApikeyKeepsProviderUnavailable = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("API key resolution", () => {
     describe("request-time resolution", () => {
       test(

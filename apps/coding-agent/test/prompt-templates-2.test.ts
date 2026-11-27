@@ -1,12 +1,16 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import promptTemplateArgs from "../src/core/prompt-template-args.ts";
+import promptTemplateArgsSupport from "./prompt-template-args-support.ts";
 
 const { substituteArgs } = promptTemplateArgs;
+const { substitutes } = promptTemplateArgsSupport;
 
-const shouldUseDefaultWhenPositionalArgIs = () => {
-  expect(substituteArgs(`List exactly \${1:-7} next steps`, [])).toBe("List exactly 7 next steps");
-};
+const shouldUseDefaultWhenPositionalArgIs = substitutes([
+  `List exactly \${1:-7} next steps`,
+  [],
+  "List exactly 7 next steps",
+]);
 
 const shouldSupportDefaultsForAllArguments = () => {
   const template = `\${@:-default}\n\${ARGUMENTS:-default}`;
@@ -17,43 +21,47 @@ const shouldSupportDefaultsForAllArguments = () => {
   );
 };
 
-const shouldUsePositionalArgWhenPresent = () => {
-  expect(substituteArgs(`List exactly \${1:-7} next steps`, ["3"])).toBe(
-    "List exactly 3 next steps",
-  );
-};
+const shouldUsePositionalArgWhenPresent = substitutes([
+  `List exactly \${1:-7} next steps`,
+  ["3"],
+  "List exactly 3 next steps",
+]);
 
-const shouldUseDefaultWhenPositionalArgIs2 = () => {
-  expect(substituteArgs(`Mode: \${1:-brief}`, [""])).toBe("Mode: brief");
-};
+const shouldUseDefaultWhenPositionalArgIs2 = substitutes([
+  `Mode: \${1:-brief}`,
+  [""],
+  "Mode: brief",
+]);
 
-const shouldSupportMultiplePositionalDefaults = () => {
-  expect(substituteArgs(`\${1:-7} \${2:-brief}`, [])).toBe("7 brief");
-  expect(substituteArgs(`\${1:-7} \${2:-brief}`, ["3"])).toBe("3 brief");
-  expect(substituteArgs(`\${1:-7} \${2:-brief}`, ["3", "verbose"])).toBe("3 verbose");
-};
+const shouldSupportMultiplePositionalDefaults = substitutes(
+  [`\${1:-7} \${2:-brief}`, [], "7 brief"],
+  [`\${1:-7} \${2:-brief}`, ["3"], "3 brief"],
+  [`\${1:-7} \${2:-brief}`, ["3", "verbose"], "3 verbose"],
+);
 
-const shouldNotRecursivelySubstitutePatternsInArg = () => {
-  expect(substituteArgs(`\${1:-7}`, ["$ARGUMENTS"])).toBe("$ARGUMENTS");
-  expect(substituteArgs(`\${1:-7}`, ["$1"])).toBe("$1");
-};
+const shouldNotRecursivelySubstitutePatternsInArg = substitutes(
+  [`\${1:-7}`, ["$ARGUMENTS"], "$ARGUMENTS"],
+  [`\${1:-7}`, ["$1"], "$1"],
+);
 
-const shouldNotRecursivelySubstitutePatternsInDefault = () => {
-  expect(substituteArgs(`\${1:-$ARGUMENTS}`, ["a", "b"])).toBe("a");
-  expect(substituteArgs(`\${3:-$ARGUMENTS}`, ["a", "b"])).toBe("$ARGUMENTS");
-};
+const shouldNotRecursivelySubstitutePatternsInDefault = substitutes(
+  [`\${1:-$ARGUMENTS}`, ["a", "b"], "a"],
+  [`\${3:-$ARGUMENTS}`, ["a", "b"], "$ARGUMENTS"],
+);
 
-const shouldSupportDefaultsWithSpaces = () => {
-  expect(substituteArgs(`\${1:-seven steps}`, [])).toBe("seven steps");
-};
+const shouldSupportDefaultsWithSpaces = substitutes([`\${1:-seven steps}`, [], "seven steps"]);
 
-const shouldSupportOutOfRangePositionalDefaults = () => {
-  expect(substituteArgs(`\${3:-fallback}`, ["a", "b"])).toBe("fallback");
-};
+const shouldSupportOutOfRangePositionalDefaults = substitutes([
+  `\${3:-fallback}`,
+  ["a", "b"],
+  "fallback",
+]);
 
-const shouldMixPositionalDefaultsWithExistingPlaceholders = () => {
-  expect(substituteArgs(`$1 \${2:-x} $ARGUMENTS`, ["a"])).toBe("a x a");
-};
+const shouldMixPositionalDefaultsWithExistingPlaceholders = substitutes([
+  `$1 \${2:-x} $ARGUMENTS`,
+  ["a"],
+  "a x a",
+]);
 
 describe("substituteArgs - positional defaults", () => {
   test("should use default when positional arg is missing", shouldUseDefaultWhenPositionalArgIs);
@@ -89,88 +97,87 @@ describe("substituteArgs - positional defaults", () => {
   );
 });
 
-const shouldSliceFromIndex = () => {
-  expect(substituteArgs(`\${@:2}`, ["a", "b", "c", "d"])).toBe("b c d");
-  expect(substituteArgs(`\${@:1}`, ["a", "b", "c"])).toBe("a b c");
-  expect(substituteArgs(`\${@:3}`, ["a", "b", "c", "d"])).toBe("c d");
-};
+const shouldSliceFromIndex = substitutes(
+  [`\${@:2}`, ["a", "b", "c", "d"], "b c d"],
+  [`\${@:1}`, ["a", "b", "c"], "a b c"],
+  [`\${@:3}`, ["a", "b", "c", "d"], "c d"],
+);
 
-const shouldSliceWithLength = () => {
-  expect(substituteArgs(`\${@:2:2}`, ["a", "b", "c", "d"])).toBe("b c");
-  expect(substituteArgs(`\${@:1:1}`, ["a", "b", "c"])).toBe("a");
-  expect(substituteArgs(`\${@:3:1}`, ["a", "b", "c", "d"])).toBe("c");
-  expect(substituteArgs(`\${@:2:3}`, ["a", "b", "c", "d", "e"])).toBe("b c d");
-};
+const shouldSliceWithLength = substitutes(
+  [`\${@:2:2}`, ["a", "b", "c", "d"], "b c"],
+  [`\${@:1:1}`, ["a", "b", "c"], "a"],
+  [`\${@:3:1}`, ["a", "b", "c", "d"], "c"],
+  [`\${@:2:3}`, ["a", "b", "c", "d", "e"], "b c d"],
+);
 
-const shouldHandleOutOfRangeSlices = () => {
-  expect(substituteArgs(`\${@:99}`, ["a", "b"])).toBe("");
-  expect(substituteArgs(`\${@:5}`, ["a", "b"])).toBe("");
-  expect(substituteArgs(`\${@:10:5}`, ["a", "b"])).toBe("");
-};
+const shouldHandleOutOfRangeSlices = substitutes(
+  [`\${@:99}`, ["a", "b"], ""],
+  [`\${@:5}`, ["a", "b"], ""],
+  [`\${@:10:5}`, ["a", "b"], ""],
+);
 
-const shouldHandleZeroLengthSlices = () => {
-  expect(substituteArgs(`\${@:2:0}`, ["a", "b", "c"])).toBe("");
-  expect(substituteArgs(`\${@:1:0}`, ["a", "b"])).toBe("");
-};
+const shouldHandleZeroLengthSlices = substitutes(
+  [`\${@:2:0}`, ["a", "b", "c"], ""],
+  [`\${@:1:0}`, ["a", "b"], ""],
+);
 
-const shouldHandleLengthExceedingArray = () => {
-  expect(substituteArgs(`\${@:2:99}`, ["a", "b", "c"])).toBe("b c");
-  expect(substituteArgs(`\${@:1:10}`, ["a", "b"])).toBe("a b");
-};
+const shouldHandleLengthExceedingArray = substitutes(
+  [`\${@:2:99}`, ["a", "b", "c"], "b c"],
+  [`\${@:1:10}`, ["a", "b"], "a b"],
+);
 
-const shouldProcessSliceBeforeSimple = () => {
-  expect(substituteArgs(`\${@:2} vs $@`, ["a", "b", "c"])).toBe("b c vs a b c");
-  expect(substituteArgs(`First: \${@:1:1}, All: $@`, ["x", "y", "z"])).toBe("First: x, All: x y z");
-};
+const shouldProcessSliceBeforeSimple = substitutes(
+  [`\${@:2} vs $@`, ["a", "b", "c"], "b c vs a b c"],
+  [`First: \${@:1:1}, All: $@`, ["x", "y", "z"], "First: x, All: x y z"],
+);
 
-const shouldNotRecursivelySubstituteSlicePatternsIn = () => {
-  expect(substituteArgs(`\${@:1}`, [`\${@:2}`, "test"])).toBe(`\${@:2} test`);
-  expect(substituteArgs(`\${@:2}`, ["a", `\${@:3}`, "c"])).toBe(`\${@:3} c`);
-};
+const shouldNotRecursivelySubstituteSlicePatternsIn = substitutes(
+  [`\${@:1}`, [`\${@:2}`, "test"], `\${@:2} test`],
+  [`\${@:2}`, ["a", `\${@:3}`, "c"], `\${@:3} c`],
+);
 
-const shouldHandleMixedUsageWithPositionalArgs = () => {
-  expect(substituteArgs(`$1: \${@:2}`, ["cmd", "arg1", "arg2"])).toBe("cmd: arg1 arg2");
-  expect(substituteArgs(`$1 $2 \${@:3}`, ["a", "b", "c", "d"])).toBe("a b c d");
-};
+const shouldHandleMixedUsageWithPositionalArgs = substitutes(
+  [`$1: \${@:2}`, ["cmd", "arg1", "arg2"], "cmd: arg1 arg2"],
+  [`$1 $2 \${@:3}`, ["a", "b", "c", "d"], "a b c d"],
+);
 
-const shouldTreatAsAllArgs = () => {
-  expect(substituteArgs(`\${@:0}`, ["a", "b", "c"])).toBe("a b c");
-};
+const shouldTreatAsAllArgs = substitutes([`\${@:0}`, ["a", "b", "c"], "a b c"]);
 
-const shouldHandleEmptyArgsArray = () => {
-  expect(substituteArgs(`\${@:2}`, [])).toBe("");
-  expect(substituteArgs(`\${@:1}`, [])).toBe("");
-};
+const shouldHandleEmptyArgsArray = substitutes([`\${@:2}`, [], ""], [`\${@:1}`, [], ""]);
 
-const shouldHandleSingleArgArray = () => {
-  expect(substituteArgs(`\${@:1}`, ["only"])).toBe("only");
-  expect(substituteArgs(`\${@:2}`, ["only"])).toBe("");
-};
+const shouldHandleSingleArgArray = substitutes(
+  [`\${@:1}`, ["only"], "only"],
+  [`\${@:2}`, ["only"], ""],
+);
 
-const shouldHandleSliceInMiddleOfText = () => {
-  expect(substituteArgs(`Process \${@:2} with $1`, ["tool", "file1", "file2"])).toBe(
-    "Process file1 file2 with tool",
-  );
-};
+const shouldHandleSliceInMiddleOfText = substitutes([
+  `Process \${@:2} with $1`,
+  ["tool", "file1", "file2"],
+  "Process file1 file2 with tool",
+]);
 
-const shouldHandleMultipleSlicesInOneTemplate = () => {
-  expect(substituteArgs(`\${@:1:1} and \${@:2}`, ["a", "b", "c"])).toBe("a and b c");
-  expect(substituteArgs(`\${@:1:2} vs \${@:3:2}`, ["a", "b", "c", "d", "e"])).toBe("a b vs c d");
-};
+const shouldHandleMultipleSlicesInOneTemplate = substitutes(
+  [`\${@:1:1} and \${@:2}`, ["a", "b", "c"], "a and b c"],
+  [`\${@:1:2} vs \${@:3:2}`, ["a", "b", "c", "d", "e"], "a b vs c d"],
+);
 
-const shouldHandleQuotedArgumentsInSlices = () => {
-  expect(substituteArgs(`\${@:2}`, ["cmd", "first arg", "second arg"])).toBe(
-    "first arg second arg",
-  );
-};
+const shouldHandleQuotedArgumentsInSlices = substitutes([
+  `\${@:2}`,
+  ["cmd", "first arg", "second arg"],
+  "first arg second arg",
+]);
 
-const shouldHandleSpecialCharactersInSlicedArgs = () => {
-  expect(substituteArgs(`\${@:2}`, ["cmd", "$100", "@user", "#tag"])).toBe("$100 @user #tag");
-};
+const shouldHandleSpecialCharactersInSlicedArgs = substitutes([
+  `\${@:2}`,
+  ["cmd", "$100", "@user", "#tag"],
+  "$100 @user #tag",
+]);
 
-const shouldHandleUnicodeInSlicedArgs = () => {
-  expect(substituteArgs(`\${@:1}`, ["日本語", "🎉", "café"])).toBe("日本語 🎉 café");
-};
+const shouldHandleUnicodeInSlicedArgs = substitutes([
+  `\${@:1}`,
+  ["日本語", "🎉", "café"],
+  "日本語 🎉 café",
+]);
 
 const shouldCombinePositionalSliceAndWildcardPlaceholders = () => {
   const template = `Run $1 on \${@:2:2}, then process $@`;
@@ -180,9 +187,11 @@ const shouldCombinePositionalSliceAndWildcardPlaceholders = () => {
   );
 };
 
-const shouldHandleSliceWithNoSpacing = () => {
-  expect(substituteArgs(`prefix\${@:2}suffix`, ["a", "b", "c"])).toBe("prefixb csuffix");
-};
+const shouldHandleSliceWithNoSpacing = substitutes([
+  `prefix\${@:2}suffix`,
+  ["a", "b", "c"],
+  "prefixb csuffix",
+]);
 
 const shouldHandleLargeSliceLengthsGracefully = () => {
   const args = Array.from({ length: 10 }, (_, i) => `arg${i + 1}`);

@@ -1,32 +1,23 @@
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+
+const { useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { awaited, runTest } = testing;
 
 const providerLevelCompatAppliesToCustomModels = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         demo: {
           api: "openai-completions",
           apiKey: "DEMO_KEY",
@@ -48,7 +39,9 @@ const providerLevelCompatAppliesToCustomModels = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.OpenAICompletionsCompat
         | undefined;
@@ -61,7 +54,7 @@ const providerLevelCompatAppliesToCustomModels = () =>
 const modelLevelCompatOverridesProviderLevelCompat = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         demo: {
           api: "openai-completions",
           apiKey: "DEMO_KEY",
@@ -87,7 +80,9 @@ const modelLevelCompatOverridesProviderLevelCompat = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.OpenAICompletionsCompat
         | undefined;
@@ -97,25 +92,7 @@ const modelLevelCompatOverridesProviderLevelCompat = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("custom models merge behavior", () => {
     test(
       "provider-level compat applies to custom models",

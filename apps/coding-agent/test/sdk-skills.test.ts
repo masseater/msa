@@ -20,7 +20,7 @@ const {
   joinPath,
   makeDirectory,
   randomSuffixSync,
-  removePath,
+  removeDirIfSet,
   runTest,
   writeTextFile,
 } = testing;
@@ -151,14 +151,7 @@ This is a test skill.
     }),
   );
 
-const afterEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      if (tempDir.length > 0) {
-        yield* removePath(tempDir);
-      }
-    }),
-  );
+const afterEachHook = () => runTest(removeDirIfSet(tempDir));
 
 describe("createAgentSession skills option", () => {
   beforeEach(beforeEachHook);

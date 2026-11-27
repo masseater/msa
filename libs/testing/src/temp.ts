@@ -36,6 +36,12 @@ const remove = (directory: string) =>
 
 const removeDir = (directory: string): Effect.Effect<void> => Effect.orDie(remove(directory));
 
+const removeDirIfSet = (directory: string): Effect.Effect<void> =>
+  Effect.when(
+    removeDir(directory),
+    Effect.sync(() => directory.length > 0),
+  ).pipe(Effect.asVoid);
+
 const removeDirRetrying = (directory: string): Effect.Effect<void> =>
   Effect.orDie(
     remove(directory).pipe(
@@ -50,6 +56,7 @@ const temp = {
   makeTempDir,
   makeTempFile,
   removeDir,
+  removeDirIfSet,
   removeDirRetrying,
   removeDirs,
   tempPath,

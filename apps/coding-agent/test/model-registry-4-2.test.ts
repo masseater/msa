@@ -1,45 +1,27 @@
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+
+const { useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
 
 const { getModelsForProvider, providerConfig } = modelRegistry4Support;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  randomSuffixSync,
-  removePath,
-  runTest,
-  toJsonText,
-  writeJsonFile,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
+const { awaited, runTest, toJsonText, writeTextFile } = testing;
 
 const writeModelsJson = Effect.fn("writeModelsJson")(function* (
   providers: Record<string, ReturnType<typeof providerConfig>>,
 ) {
-  yield* writeTextFile(modelsJsonPath, yield* toJsonText({ providers }));
+  yield* writeTextFile(fixture.modelsJsonPath, yield* toJsonText({ providers }));
 });
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
 
 const removingCustomModelsFromModelsJsonKeeps = () =>
   runTest(
@@ -47,7 +29,9 @@ const removingCustomModelsFromModelsJsonKeeps = () =>
       yield* writeModelsJson({
         "anthropic-api": providerConfig("https://proxy.example.com/v1", [{ id: "claude-custom" }]),
       });
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       expect(
         getModelsForProvider(registry, "anthropic-api").some((m) => m.id === "claude-custom"),
       ).toBe(true);
@@ -64,7 +48,7 @@ const removingCustomModelsFromModelsJsonKeeps = () =>
 const modelOverrideAppliesToASingleBuilt = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -74,7 +58,9 @@ const modelOverrideAppliesToASingleBuilt = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -100,7 +86,7 @@ const anthropicModelOverrideReplacesAllowedFallbackMetadata = () =>
           provider: "anthropic-api",
         },
       ];
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": {
           modelOverrides: {
             "claude-fable-5": {
@@ -110,7 +96,9 @@ const anthropicModelOverrideReplacesAllowedFallbackMetadata = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const compat = registry.find("anthropic-api", "claude-fable-5")?.compat as
         | compatTypes.AnthropicMessagesCompat
         | undefined;
@@ -120,25 +108,7 @@ const anthropicModelOverrideReplacesAllowedFallbackMetadata = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("custom models merge behavior", () => {
     test(
       "removing custom models from models.json keeps built-in provider models",

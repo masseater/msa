@@ -1,35 +1,30 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import platform from "../src/core/platform/index.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
 const { deleteEnv, readEnv, writeEnv } = platform;
-const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
-const { writeRawModelsJson, providerWithApiKey } = modelRegistrySupport;
+const { providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest } = testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
+const { awaited, runTest } = testing;
 
 const apikeyWithPrefixExecutesCommandAndUses = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("!echo test-api-key-from-command"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("test-api-key-from-command");
@@ -39,11 +34,13 @@ const apikeyWithPrefixExecutesCommandAndUses = () =>
 const apikeyWithPrefixTrimsWhitespaceFromCommand = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("!echo '  spaced-key  '"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("spaced-key");
@@ -53,11 +50,13 @@ const apikeyWithPrefixTrimsWhitespaceFromCommand = () =>
 const apikeyWithPrefixHandlesMultilineOutputUses = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("!printf 'line1\\nline2'"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBe("line1\nline2");
@@ -67,11 +66,13 @@ const apikeyWithPrefixHandlesMultilineOutputUses = () =>
 const apikeyWithPrefixReturnsUndefinedOnCommand = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("!exit 1"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBeUndefined();
@@ -81,11 +82,13 @@ const apikeyWithPrefixReturnsUndefinedOnCommand = () =>
 const apikeyWithPrefixReturnsUndefinedOnNonexistent = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("!nonexistent-command-12345"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBeUndefined();
@@ -95,11 +98,13 @@ const apikeyWithPrefixReturnsUndefinedOnNonexistent = () =>
 const apikeyWithPrefixReturnsUndefinedOnEmpty = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson(modelsJsonPath, {
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey("!printf ''"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
       const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
       expect(apiKey).toBeUndefined();
@@ -113,11 +118,13 @@ const apikeyWithPrefixResolvesToEnvValue = () =>
       writeEnv("TEST_API_KEY_12345", "env-api-key-value");
 
       try {
-        yield* writeRawModelsJson(modelsJsonPath, {
+        yield* fixture.writeRawModelsJson({
           "custom-provider": providerWithApiKey("$TEST_API_KEY_12345"),
         });
 
-        const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+        const registry = yield* awaited(
+          createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+        );
         const apiKey = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
 
         expect(apiKey).toBe("env-api-key-value");
@@ -131,25 +138,7 @@ const apikeyWithPrefixResolvesToEnvValue = () =>
     }),
   );
 
-const beforeEachHook2 = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook2 = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook2);
-
-  afterEach(afterEachHook2);
-
   describe("API key resolution", () => {
     test(
       "apiKey with ! prefix executes command and uses stdout",

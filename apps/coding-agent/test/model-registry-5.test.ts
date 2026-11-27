@@ -1,33 +1,24 @@
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
+
 const { getModelsForProvider } = modelRegistry4Support;
-const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { awaited, runTest } = testing;
 
 const emptyAllowedFallbackModelOverrideDisablesServer = Effect.gen(function* () {
-  yield* writeRawModelsJson({
+  yield* fixture.writeRawModelsJson({
     "anthropic-api": {
       modelOverrides: {
         "claude-fable-5": { compat: { allowedFallbackModels: [] } },
@@ -35,7 +26,7 @@ const emptyAllowedFallbackModelOverrideDisablesServer = Effect.gen(function* () 
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
   const compat = registry.find("anthropic-api", "claude-fable-5")?.compat as
     | compatTypes.AnthropicMessagesCompat
     | undefined;
@@ -45,7 +36,7 @@ const emptyAllowedFallbackModelOverrideDisablesServer = Effect.gen(function* () 
 });
 
 const customModelsAndModelOverridesCarrySampling = Effect.gen(function* () {
-  yield* writeRawModelsJson({
+  yield* fixture.writeRawModelsJson({
     openrouter: {
       api: "openai-completions",
       baseUrl: "https://my-proxy.example.com/v1",
@@ -74,7 +65,7 @@ const customModelsAndModelOverridesCarrySampling = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
   const models = getModelsForProvider(registry, "openrouter");
 
   const custom = models.find((m) => m.id === "custom/sampling-model");
@@ -95,7 +86,7 @@ const customModelsAndModelOverridesCarrySampling = Effect.gen(function* () {
 });
 
 const customModelAndModelOverrideCarryPrompt = Effect.gen(function* () {
-  yield* writeRawModelsJson({
+  yield* fixture.writeRawModelsJson({
     "anthropic-api": {
       modelOverrides: {
         "claude-sonnet-4-6": { promptCache: { long: 1800 } },
@@ -111,7 +102,7 @@ const customModelAndModelOverrideCarryPrompt = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
   const openrouter = getModelsForProvider(registry, "openrouter");
 
   expect(registry.getError()).toBeUndefined();
@@ -130,7 +121,7 @@ const customModelAndModelOverrideCarryPrompt = Effect.gen(function* () {
 });
 
 const modelOverrideDeepMergesImageResizeLimits = Effect.gen(function* () {
-  yield* writeRawModelsJson({
+  yield* fixture.writeRawModelsJson({
     test: {
       api: "openai-completions",
       apiKey: "test-key",
@@ -163,7 +154,7 @@ const modelOverrideDeepMergesImageResizeLimits = Effect.gen(function* () {
     },
   });
 
-  const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+  const registry = yield* awaited(createModelRegistry(fixture.authStorage, fixture.modelsJsonPath));
   const model = registry.find("test", "vision-model");
 
   expect(registry.getError()).toBeUndefined();
@@ -176,25 +167,7 @@ const modelOverrideDeepMergesImageResizeLimits = Effect.gen(function* () {
   });
 });
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("modelOverrides (per-model customization)", () => {
     test("empty allowed fallback model override disables server-side fallback", () =>
       runTest(emptyAllowedFallbackModelOverrideDisablesServer));

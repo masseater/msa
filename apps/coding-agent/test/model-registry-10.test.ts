@@ -1,30 +1,27 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
+
 const { providerConfig, getModelsForProvider } = modelRegistry4Support;
-const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest } = testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
+const { awaited, runTest } = testing;
 
 const modelsOnlyCustomProviderRegistrationSurvivesRefresh = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
 
       registry.registerProvider(
         "custom-provider",
@@ -46,7 +43,9 @@ const modelsOnlyCustomProviderRegistrationSurvivesRefresh = () =>
 const baseurlOnlyOverrideKeepsCustomProviderModels = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
 
       registry.registerProvider(
         "custom-provider",
@@ -74,7 +73,9 @@ const baseurlOnlyOverrideKeepsCustomProviderModels = () =>
 const headersOnlyOverrideKeepsCustomProviderModels = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(
+        createModelRegistry(fixture.authStorage, fixture.modelsJsonPath),
+      );
 
       registry.registerProvider(
         "custom-provider",
@@ -99,25 +100,7 @@ const headersOnlyOverrideKeepsCustomProviderModels = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("dynamic provider lifecycle", () => {
     describe("dynamic provider override persistence", () => {
       test(

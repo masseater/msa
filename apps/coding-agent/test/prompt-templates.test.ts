@@ -1,133 +1,131 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import promptTemplateArgs from "../src/core/prompt-template-args.ts";
+import promptTemplateArgsSupport from "./prompt-template-args-support.ts";
 
 const { substituteArgs } = promptTemplateArgs;
+const { substitutes } = promptTemplateArgsSupport;
 
-const shouldReplaceArgumentsWithAllArgsJoined = () => {
-  expect(substituteArgs("Test: $ARGUMENTS", ["a", "b", "c"])).toBe("Test: a b c");
-};
+const shouldReplaceArgumentsWithAllArgsJoined = substitutes([
+  "Test: $ARGUMENTS",
+  ["a", "b", "c"],
+  "Test: a b c",
+]);
 
-const shouldReplaceWithAllArgsJoined = () => {
-  expect(substituteArgs("Test: $@", ["a", "b", "c"])).toBe("Test: a b c");
-};
+const shouldReplaceWithAllArgsJoined = substitutes(["Test: $@", ["a", "b", "c"], "Test: a b c"]);
 
 const shouldReplaceAndArgumentsIdentically = () => {
   const args = ["foo", "bar", "baz"];
   expect(substituteArgs("Test: $@", args)).toBe(substituteArgs("Test: $ARGUMENTS", args));
 };
 
-const shouldNotRecursivelySubstitutePatternsInArgument = () => {
-  expect(substituteArgs("$ARGUMENTS", ["$1", "$ARGUMENTS"])).toBe("$1 $ARGUMENTS");
-  expect(substituteArgs("$@", ["$100", "$1"])).toBe("$100 $1");
-  expect(substituteArgs("$ARGUMENTS", ["$100", "$1"])).toBe("$100 $1");
-};
+const shouldNotRecursivelySubstitutePatternsInArgument = substitutes(
+  ["$ARGUMENTS", ["$1", "$ARGUMENTS"], "$1 $ARGUMENTS"],
+  ["$@", ["$100", "$1"], "$100 $1"],
+  ["$ARGUMENTS", ["$100", "$1"], "$100 $1"],
+);
 
-const shouldSupportMixed12AndArguments = () => {
-  expect(substituteArgs("$1: $ARGUMENTS", ["prefix", "a", "b"])).toBe("prefix: prefix a b");
-};
+const shouldSupportMixed12AndArguments = substitutes([
+  "$1: $ARGUMENTS",
+  ["prefix", "a", "b"],
+  "prefix: prefix a b",
+]);
 
-const shouldSupportMixed12And = () => {
-  expect(substituteArgs("$1: $@", ["prefix", "a", "b"])).toBe("prefix: prefix a b");
-};
+const shouldSupportMixed12And = substitutes(["$1: $@", ["prefix", "a", "b"], "prefix: prefix a b"]);
 
-const shouldHandleEmptyArgumentsArrayWithArguments = () => {
-  expect(substituteArgs("Test: $ARGUMENTS", [])).toBe("Test: ");
-};
+const shouldHandleEmptyArgumentsArrayWithArguments = substitutes([
+  "Test: $ARGUMENTS",
+  [],
+  "Test: ",
+]);
 
-const shouldHandleEmptyArgumentsArrayWith = () => {
-  expect(substituteArgs("Test: $@", [])).toBe("Test: ");
-};
+const shouldHandleEmptyArgumentsArrayWith = substitutes(["Test: $@", [], "Test: "]);
 
-const shouldHandleEmptyArgumentsArrayWith1 = () => {
-  expect(substituteArgs("Test: $1", [])).toBe("Test: ");
-};
+const shouldHandleEmptyArgumentsArrayWith1 = substitutes(["Test: $1", [], "Test: "]);
 
-const shouldHandleMultipleOccurrencesOfArguments = () => {
-  expect(substituteArgs("$ARGUMENTS and $ARGUMENTS", ["a", "b"])).toBe("a b and a b");
-};
+const shouldHandleMultipleOccurrencesOfArguments = substitutes([
+  "$ARGUMENTS and $ARGUMENTS",
+  ["a", "b"],
+  "a b and a b",
+]);
 
-const shouldHandleMultipleOccurrencesOf = () => {
-  expect(substituteArgs("$@ and $@", ["a", "b"])).toBe("a b and a b");
-};
+const shouldHandleMultipleOccurrencesOf = substitutes(["$@ and $@", ["a", "b"], "a b and a b"]);
 
-const shouldHandleMixedOccurrencesOfAndArguments = () => {
-  expect(substituteArgs("$@ and $ARGUMENTS", ["a", "b"])).toBe("a b and a b");
-};
+const shouldHandleMixedOccurrencesOfAndArguments = substitutes([
+  "$@ and $ARGUMENTS",
+  ["a", "b"],
+  "a b and a b",
+]);
 
-const shouldHandleSpecialCharactersInArguments = () => {
-  expect(substituteArgs("$1 $2: $ARGUMENTS", ["arg100", "@user"])).toBe(
-    "arg100 @user: arg100 @user",
-  );
-};
+const shouldHandleSpecialCharactersInArguments = substitutes([
+  "$1 $2: $ARGUMENTS",
+  ["arg100", "@user"],
+  "arg100 @user: arg100 @user",
+]);
 
-const shouldHandleOutOfRangeNumberedPlaceholders = () => {
-  expect(substituteArgs("$1 $2 $3 $4 $5", ["a", "b"])).toBe("a b   ");
-};
+const shouldHandleOutOfRangeNumberedPlaceholders = substitutes([
+  "$1 $2 $3 $4 $5",
+  ["a", "b"],
+  "a b   ",
+]);
 
-const shouldHandleUnicodeCharacters = () => {
-  expect(substituteArgs("$ARGUMENTS", ["日本語", "🎉", "café"])).toBe("日本語 🎉 café");
-};
+const shouldHandleUnicodeCharacters = substitutes([
+  "$ARGUMENTS",
+  ["日本語", "🎉", "café"],
+  "日本語 🎉 café",
+]);
 
-const shouldPreserveNewlinesAndTabsInArgument = () => {
-  expect(substituteArgs("$1 $2", ["line1\nline2", "tab\tthere"])).toBe("line1\nline2 tab\tthere");
-};
+const shouldPreserveNewlinesAndTabsInArgument = substitutes([
+  "$1 $2",
+  ["line1\nline2", "tab\tthere"],
+  "line1\nline2 tab\tthere",
+]);
 
-const shouldHandleConsecutiveDollarPatterns = () => {
-  expect(substituteArgs("$1$2", ["a", "b"])).toBe("ab");
-};
+const shouldHandleConsecutiveDollarPatterns = substitutes(["$1$2", ["a", "b"], "ab"]);
 
-const shouldHandleQuotedArgumentsWithSpaces = () => {
-  expect(substituteArgs("$ARGUMENTS", ["first arg", "second arg"])).toBe("first arg second arg");
-};
+const shouldHandleQuotedArgumentsWithSpaces = substitutes([
+  "$ARGUMENTS",
+  ["first arg", "second arg"],
+  "first arg second arg",
+]);
 
-const shouldHandleSingleArgumentWithArguments = () => {
-  expect(substituteArgs("Test: $ARGUMENTS", ["only"])).toBe("Test: only");
-};
+const shouldHandleSingleArgumentWithArguments = substitutes([
+  "Test: $ARGUMENTS",
+  ["only"],
+  "Test: only",
+]);
 
-const shouldHandleSingleArgumentWith = () => {
-  expect(substituteArgs("Test: $@", ["only"])).toBe("Test: only");
-};
+const shouldHandleSingleArgumentWith = substitutes(["Test: $@", ["only"], "Test: only"]);
 
-const shouldHandle0ZeroIndex = () => {
-  expect(substituteArgs("$0", ["a", "b"])).toBe("");
-};
+const shouldHandle0ZeroIndex = substitutes(["$0", ["a", "b"], ""]);
 
-const shouldHandleDecimalNumberInPatternOnly = () => {
-  expect(substituteArgs("$1.5", ["a"])).toBe("a.5");
-};
+const shouldHandleDecimalNumberInPatternOnly = substitutes(["$1.5", ["a"], "a.5"]);
 
-const shouldHandleArgumentsAsPartOfWord = () => {
-  expect(substituteArgs("pre$ARGUMENTS", ["a", "b"])).toBe("prea b");
-};
+const shouldHandleArgumentsAsPartOfWord = substitutes(["pre$ARGUMENTS", ["a", "b"], "prea b"]);
 
-const shouldHandleAsPartOfWord = () => {
-  expect(substituteArgs("pre$@", ["a", "b"])).toBe("prea b");
-};
+const shouldHandleAsPartOfWord = substitutes(["pre$@", ["a", "b"], "prea b"]);
 
-const shouldHandleEmptyArgumentsInMiddleOf = () => {
-  expect(substituteArgs("$ARGUMENTS", ["a", "", "c"])).toBe("a  c");
-};
+const shouldHandleEmptyArgumentsInMiddleOf = substitutes(["$ARGUMENTS", ["a", "", "c"], "a  c"]);
 
-const shouldHandleTrailingAndLeadingSpacesIn = () => {
-  expect(substituteArgs("$ARGUMENTS", ["  leading  ", "trailing  "])).toBe(
-    "  leading   trailing  ",
-  );
-};
+const shouldHandleTrailingAndLeadingSpacesIn = substitutes([
+  "$ARGUMENTS",
+  ["  leading  ", "trailing  "],
+  "  leading   trailing  ",
+]);
 
-const shouldHandleArgumentContainingPatternPartially = () => {
-  expect(substituteArgs("Prefix $ARGUMENTS suffix", ["ARGUMENTS"])).toBe("Prefix ARGUMENTS suffix");
-};
+const shouldHandleArgumentContainingPatternPartially = substitutes([
+  "Prefix $ARGUMENTS suffix",
+  ["ARGUMENTS"],
+  "Prefix ARGUMENTS suffix",
+]);
 
-const shouldHandleNonMatchingPatterns = () => {
-  expect(substituteArgs("$A $$ $ $ARGS", ["a"])).toBe("$A $$ $ $ARGS");
-};
+const shouldHandleNonMatchingPatterns = substitutes(["$A $$ $ $ARGS", ["a"], "$A $$ $ $ARGS"]);
 
-const shouldHandleCaseVariationsCaseSensitive = () => {
-  expect(substituteArgs("$arguments $Arguments $ARGUMENTS", ["a", "b"])).toBe(
-    "$arguments $Arguments a b",
-  );
-};
+const shouldHandleCaseVariationsCaseSensitive = substitutes([
+  "$arguments $Arguments $ARGUMENTS",
+  ["a", "b"],
+  "$arguments $Arguments a b",
+]);
 
 const shouldHandleBothSyntaxesInSameCommand = () => {
   const args = ["x", "y", "z"];
@@ -143,32 +141,40 @@ const shouldHandleVeryLongArgumentLists = () => {
   expect(result).toBe(args.join(" "));
 };
 
-const shouldHandleNumberedPlaceholdersWithSingleDigit = () => {
-  expect(substituteArgs("$1 $2 $3", ["a", "b", "c"])).toBe("a b c");
-};
+const shouldHandleNumberedPlaceholdersWithSingleDigit = substitutes([
+  "$1 $2 $3",
+  ["a", "b", "c"],
+  "a b c",
+]);
 
 const shouldHandleNumberedPlaceholdersWithMultipleDigits = () => {
   const args = Array.from({ length: 15 }, (_, i) => `val${i}`);
   expect(substituteArgs("$10 $12 $15", args)).toBe("val9 val11 val14");
 };
 
-const shouldHandleEscapedDollarSignsLiteralBackslash = () => {
-  expect(substituteArgs("Price: \\$100", [])).toBe("Price: \\");
-};
+const shouldHandleEscapedDollarSignsLiteralBackslash = substitutes([
+  "Price: \\$100",
+  [],
+  "Price: \\",
+]);
 
-const shouldHandleMixedNumberedAndWildcardPlaceholders = () => {
-  expect(substituteArgs("$1: $@ ($ARGUMENTS)", ["first", "second", "third"])).toBe(
-    "first: first second third (first second third)",
-  );
-};
+const shouldHandleMixedNumberedAndWildcardPlaceholders = substitutes([
+  "$1: $@ ($ARGUMENTS)",
+  ["first", "second", "third"],
+  "first: first second third (first second third)",
+]);
 
-const shouldHandleCommandWithNoPlaceholders = () => {
-  expect(substituteArgs("Just plain text", ["a", "b"])).toBe("Just plain text");
-};
+const shouldHandleCommandWithNoPlaceholders = substitutes([
+  "Just plain text",
+  ["a", "b"],
+  "Just plain text",
+]);
 
-const shouldHandleCommandWithOnlyPlaceholders = () => {
-  expect(substituteArgs("$1 $2 $@", ["a", "b", "c"])).toBe("a b a b c");
-};
+const shouldHandleCommandWithOnlyPlaceholders = substitutes([
+  "$1 $2 $@",
+  ["a", "b", "c"],
+  "a b a b c",
+]);
 
 const substituteArgsCases: ReadonlyArray<readonly [string, () => void]> = [
   ["should replace $ARGUMENTS with all args joined", shouldReplaceArgumentsWithAllArgsJoined],
