@@ -11,7 +11,7 @@ const defaultModelPerProvider: Partial<Record<aiTypes.KnownProvider, string>> = 
   "anthropic-api": "claude-opus-4-8",
   openai: "gpt-5.5",
   "openai-codex": "gpt-6.1-sol",
-  opencode: "kimi-k2.6",
+  opencode: "kimi-k2.7-code",
   "opencode-go": "kimi-k3",
   openrouter: "moonshotai/kimi-k2.6",
 };
@@ -203,15 +203,37 @@ function isAlias(id: string): boolean {
   return id.endsWith("-latest") || !/-\d{8}$/u.test(id);
 }
 
+const NAME_PREFIX = /^(?:[^/]+\/)?[a-z]+/iu;
+
+function namePrefix(id: string): string {
+  return NAME_PREFIX.exec(id)?.[0].toLowerCase() ?? id;
+}
+
+function defaultModelFor(
+  provider: aiTypes.KnownProvider,
+  models: readonly aiTypes.Model<aiTypes.Api>[],
+): aiTypes.Model<aiTypes.Api> | undefined {
+  const defaultId = defaultModelPerProvider[provider];
+  if (defaultId === undefined || defaultId === "") return undefined;
+  const providerModels = models.filter((model) => model.provider === provider);
+  const exact = providerModels.find((model) => model.id === defaultId);
+  if (exact !== undefined) return exact;
+  const prefix = namePrefix(defaultId);
+  return providerModels
+    .filter((model) => namePrefix(model.id) === prefix)
+    .sort(
+      (a, b) =>
+        a.cost.input - b.cost.input || b.id.localeCompare(a.id, undefined, { numeric: true }),
+    )[0];
+}
+
 function buildFallbackModel(
   providerModels: [aiTypes.Model<aiTypes.Api>, ...aiTypes.Model<aiTypes.Api>[]],
   modelId: string,
 ): aiTypes.Model<aiTypes.Api> {
-  const defaultId = defaultModelPerProvider[providerModels[0].provider as aiTypes.KnownProvider];
   const baseModel =
-    defaultId !== undefined && defaultId !== ""
-      ? (providerModels.find((m) => m.id === defaultId) ?? providerModels[0])
-      : providerModels[0];
+    defaultModelFor(providerModels[0].provider as aiTypes.KnownProvider, providerModels) ??
+    providerModels[0];
 
   return {
     ...baseModel,
@@ -224,8 +246,7 @@ function preferredAvailableModel(
   availableModels: readonly aiTypes.Model<aiTypes.Api>[],
 ): aiTypes.Model<aiTypes.Api> | undefined {
   for (const provider of Object.keys(defaultModelPerProvider) as aiTypes.KnownProvider[]) {
-    const defaultId = defaultModelPerProvider[provider];
-    const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
+    const match = defaultModelFor(provider, availableModels);
     if (match !== undefined) return match;
   }
   return availableModels[0];
@@ -233,6 +254,7 @@ function preferredAvailableModel(
 
 const modelResolver = {
   buildFallbackModel,
+  defaultModelFor,
   defaultModelPerProvider,
   findExactModelReferenceMatch,
   preferredAvailableModel,

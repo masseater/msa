@@ -3,7 +3,7 @@ import { describe, expect, test } from "vite-plus/test";
 
 import modelResolver from "../src/core/model-resolver.ts";
 
-const { defaultModelPerProvider } = modelResolver;
+const { defaultModelFor, defaultModelPerProvider } = modelResolver;
 
 const { getBuiltinModels, getBuiltinProviders } = all;
 
@@ -24,10 +24,21 @@ const builtInChatProvidersHaveDefaultsIn = () => {
       continue;
     }
     expect(
-      chatModels.some((model) => model.id === defaultId),
-      `${provider} default ${defaultId} should exist in its generated catalog`,
-    ).toBe(true);
+      defaultModelFor(provider, chatModels),
+      `${provider} default ${defaultId} should resolve to a model in its generated catalog`,
+    ).toBeDefined();
   }
+};
+
+const staleDefaultFollowsTheCatalog = () => {
+  const catalog = getBuiltinModels("opencode");
+  const successor = catalog.find((model) => model.id === defaultModelPerProvider.opencode);
+  expect(successor).toBeDefined();
+  const withoutDefault = catalog.filter((model) => model !== successor);
+  const followed = defaultModelFor("opencode", withoutDefault);
+  expect(followed?.provider).toBe("opencode");
+  expect(followed?.id).not.toBe(successor?.id);
+  expect(followed?.id.startsWith("kimi")).toBe(true);
 };
 
 describe("default model selection", () => {
@@ -36,5 +47,10 @@ describe("default model selection", () => {
   test(
     "built-in chat providers have defaults in their generated catalogs",
     builtInChatProvidersHaveDefaultsIn,
+  );
+
+  test(
+    "a default that left the catalog resolves to the same family",
+    staleDefaultFollowsTheCatalog,
   );
 });

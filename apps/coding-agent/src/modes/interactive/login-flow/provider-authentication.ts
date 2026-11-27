@@ -19,7 +19,7 @@ const {
   llamaCppPostLoginGuidance,
 } = loginFlowHelpers;
 const { toErrorMessage } = errorsModule;
-const { defaultModelPerProvider } = modelResolver;
+const { defaultModelFor, defaultModelPerProvider } = modelResolver;
 const { schedule } = platform;
 
 function* selectDefaultModel(
@@ -42,7 +42,7 @@ function* selectDefaultModel(
       selectionError = `${actionLabel}, but no models are available for that provider. Use /model to select a model.`;
     } else {
       const defaultModelId = defaultModelPerProvider[providerId];
-      selectedModel = providerModels.find((model) => model.id === defaultModelId);
+      selectedModel = defaultModelFor(providerId, providerModels);
       if (selectedModel === undefined) {
         selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
       } else {
@@ -191,12 +191,8 @@ export default class ProviderAuthentication {
     const deferSelection =
       isUnknownModel(previousModel) &&
       hasDefaultModelProvider(providerId) &&
-      !session.models.selection.modelRuntime
-        .getAvailableSnapshot()
-        .some(
-          (model) =>
-            model.provider === providerId && model.id === defaultModelPerProvider[providerId],
-        );
+      defaultModelFor(providerId, session.models.selection.modelRuntime.getAvailableSnapshot()) ===
+        undefined;
     return { actionLabel, deferSelection, host, session };
   }
 }

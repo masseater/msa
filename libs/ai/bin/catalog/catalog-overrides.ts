@@ -78,7 +78,7 @@ function overrideGatewayModels(candidate: typesModule.Model<any>): void {
     candidate.cost.cacheRead = 0.07;
     candidate.maxTokens = 4096;
   }
-  if (candidate.id.startsWith("moonshotai/kimi-k2.6")) {
+  if (/^moonshotai\/kimi-k2\.[67]/u.test(candidate.id)) {
     candidate.compat = {
       ...candidate.compat,
       requiresReasoningContentOnAssistantMessages: true,

@@ -66,13 +66,10 @@ const replaysThinkingAsReasoningContent = () => {
   expect(message).not.toHaveProperty("reasoning");
 };
 
-const deepseekThinkingModel = () =>
-  chooseModel(
-    "opencode",
-    "deepseek-format thinking completions",
-    (model) =>
-      usesApi("openai-completions")(model) && compatValue(model, "thinkingFormat") === "deepseek",
-  );
+const deepseekThinkingModel = (): typesModule.Model<"openai-completions"> => ({
+  ...localModel("deepseek-format"),
+  compat: { supportsReasoningEffort: false, thinkingFormat: "deepseek" },
+});
 
 const sendsThinkingToggle = (reasoning: "high" | undefined, thinking: string) => () =>
   Effect.runPromise(
