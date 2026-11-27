@@ -143,6 +143,20 @@ type Reviewed = Effect.Success<ReturnType<typeof reviewed>> & {
 
 const nothing = (): void => undefined;
 
+function reviewedScenario<E>(
+  body: (run: Reviewed) => Effect.Effect<void, E>,
+  options: orchestratorHarnessTypes.HarnessOptions = {},
+) {
+  return () =>
+    Effect.runPromise(
+      withRemote((remote) =>
+        Effect.gen(function* () {
+          yield* body({ ...(yield* reviewed(remote, options)), github: remote.github, remote });
+        }),
+      ),
+    );
+}
+
 function acceptedMerge<E>({
   check,
   prepare = nothing,
@@ -152,18 +166,14 @@ function acceptedMerge<E>({
   prepare?: (run: Reviewed) => void;
   until?: (run: Reviewed) => boolean;
 }) {
-  return () =>
-    Effect.runPromise(
-      withRemote((remote) =>
-        Effect.gen(function* () {
-          const run = { ...(yield* reviewed(remote)), github: remote.github, remote };
-          prepare(run);
-          run.workers[1]!.complete("acceptable");
-          yield* waitFor(() => until(run));
-          yield* check(run);
-        }),
-      ),
-    );
+  return reviewedScenario((run) =>
+    Effect.gen(function* () {
+      prepare(run);
+      run.workers[1]!.complete("acceptable");
+      yield* waitFor(() => until(run));
+      yield* check(run);
+    }),
+  );
 }
 
 function cleanedUp(remote: Remote, worktree: string, branch: string) {
@@ -187,6 +197,7 @@ const pullRequestSupport = {
   openedTask,
   rebaseAndPush,
   reviewed,
+  reviewedScenario,
   withRemote,
 };
 

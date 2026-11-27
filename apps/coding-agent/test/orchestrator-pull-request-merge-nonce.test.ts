@@ -8,7 +8,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { dirnameOf, joinPath } = testing;
 const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
-const { acceptedMerge, cleanedUp, reviewed, withRemote } = pullRequestSupport;
+const { acceptedMerge, cleanedUp, reviewed, reviewedScenario, withRemote } = pullRequestSupport;
 const { runCommand } = worktreeSupport;
 
 type Run = ReturnType<typeof setup>;
@@ -53,31 +53,28 @@ it(
   completesWhenAnUnansweredMergeIsTheHarnesss,
 );
 
-const stopsWhenAnUnansweredMergeIsSomeoneElses = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, head, number, taskId } = yield* reviewed(remote);
-        let commit = "";
-        github.mergeRefusal = UNANSWERED;
-        github.beforeMerge = Effect.gen(function* () {
-          github.beforeMerge = undefined;
-          commit = yield* github.mergeOutside(number, "harness");
-        });
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
-        expect(taskStatus(orchestrator, taskId)).toBe("stopped");
-        expect(github.pulls[0]).toMatchObject({ head, state: "MERGED" });
-        const stopped = reports.at(-1)?.text ?? "";
-        expect(stopped).toContain(commit.slice(0, 12));
-        expect(stopped).toContain("under the account harness");
-        expect(stopped).toContain("can be the account the harness itself uses");
-        expect(stopped).toContain("judged from its own record");
-        expect(stopped).toContain("does not carry the trailer Msa-Merge: ");
-      }),
-    ),
-  );
+const stopsWhenAnUnansweredMergeIsSomeoneElses = reviewedScenario((run) =>
+  Effect.gen(function* () {
+    const { github } = run;
+    const { orchestrator, reports, workers, head, number, taskId } = run;
+    let commit = "";
+    github.mergeRefusal = UNANSWERED;
+    github.beforeMerge = Effect.gen(function* () {
+      github.beforeMerge = undefined;
+      commit = yield* github.mergeOutside(number, "harness");
+    });
+    workers[1]!.complete("acceptable");
+    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    expect(taskStatus(orchestrator, taskId)).toBe("stopped");
+    expect(github.pulls[0]).toMatchObject({ head, state: "MERGED" });
+    const stopped = reports.at(-1)?.text ?? "";
+    expect(stopped).toContain(commit.slice(0, 12));
+    expect(stopped).toContain("under the account harness");
+    expect(stopped).toContain("can be the account the harness itself uses");
+    expect(stopped).toContain("judged from its own record");
+    expect(stopped).toContain("does not carry the trailer Msa-Merge: ");
+  }),
+);
 
 it(
   "stops the task, naming who merged it, when the harness's merge request gets no answer and the same head is merged outside the harness under the harness's own account",

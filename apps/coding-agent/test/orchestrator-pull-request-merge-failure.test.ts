@@ -5,7 +5,8 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
 const { taskStatus, waitFor } = orchestratorHarness.harness;
-const { acceptedMerge, advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
+const { acceptedMerge, advanceMain, cleanedUp, reviewed, reviewedScenario, withRemote } =
+  pullRequestSupport;
 
 const sendsBackWhenMainMovesDuringTheMerge = acceptedMerge({
   check: ({ orchestrator, workers, taskId, github }) =>
@@ -45,35 +46,28 @@ it(
   stopsWithTheReasonWhenTheMergeIsRefused,
 );
 
-const completesWhenTheRunEndsMidMerge = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, branch, number, taskId, worktree } =
-          yield* reviewed(remote);
-        const merging = yield* Deferred.make<void>();
-        const gate = yield* Deferred.make<void>();
-        github.beforeMerge = Effect.andThen(
-          Deferred.succeed(merging, undefined),
-          Deferred.await(gate),
-        );
-        workers[1]!.complete("acceptable");
-        yield* Deferred.await(merging);
-        const stopping = orchestrator.stop(taskId);
-        yield* Deferred.succeed(gate, undefined);
-        yield* Effect.promise(() => stopping);
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
-        expect(github.merged).toMatchObject([{ number }]);
-        expect(reports.at(-1)?.details.status).toBe("completed");
-        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
-          local: false,
-          remote: false,
-          worktree: false,
-        });
-      }),
-    ),
-  );
+const completesWhenTheRunEndsMidMerge = reviewedScenario((run) =>
+  Effect.gen(function* () {
+    const { github, remote } = run;
+    const { orchestrator, reports, workers, branch, number, taskId, worktree } = run;
+    const merging = yield* Deferred.make<void>();
+    const gate = yield* Deferred.make<void>();
+    github.beforeMerge = Effect.andThen(Deferred.succeed(merging, undefined), Deferred.await(gate));
+    workers[1]!.complete("acceptable");
+    yield* Deferred.await(merging);
+    const stopping = orchestrator.stop(taskId);
+    yield* Deferred.succeed(gate, undefined);
+    yield* Effect.promise(() => stopping);
+    yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+    expect(github.merged).toMatchObject([{ number }]);
+    expect(reports.at(-1)?.details.status).toBe("completed");
+    expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
+      local: false,
+      remote: false,
+      worktree: false,
+    });
+  }),
+);
 
 it(
   "completes the task and cleans up when its run is stopped while gh pr merge is in flight and the merge lands",

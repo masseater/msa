@@ -5,7 +5,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
 const { taskStatus, waitFor } = orchestratorHarness.harness;
-const { cleanedUp, commitAndPush, reviewed, withRemote } = pullRequestSupport;
+const { cleanedUp, commitAndPush, reviewed, reviewedScenario, withRemote } = pullRequestSupport;
 
 type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
 
@@ -104,34 +104,30 @@ it(
   stopsWhenTheSameHeadIsMergedOutsideAfterItReadAsOpen,
 );
 
-const completesWhenGitHubConfirmsTheMergeButItCannotBeRead = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, branch, head, number, taskId, worktree } =
-          yield* reviewed(remote);
-        let unreadFrom = 0;
-        github.afterMerge = Effect.sync(() => {
-          github.afterMerge = undefined;
-          github.unavailable = UNREADABLE;
-          unreadFrom = github.calls;
-        });
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
-        expect(github.calls).toBeGreaterThan(unreadFrom);
-        github.unavailable = undefined;
-        expect(taskStatus(orchestrator, taskId)).toBe("completed");
-        expect(github.merged).toMatchObject([{ number, sha: head }]);
-        expect(reports.at(-1)?.text).toContain(github.pulls[0]!.mergedBy!.commit.slice(0, 12));
-        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
-          local: false,
-          remote: false,
-          worktree: false,
-        });
-      }),
-    ),
-  );
+const completesWhenGitHubConfirmsTheMergeButItCannotBeRead = reviewedScenario((run) =>
+  Effect.gen(function* () {
+    const { github, remote } = run;
+    const { orchestrator, reports, workers, branch, head, number, taskId, worktree } = run;
+    let unreadFrom = 0;
+    github.afterMerge = Effect.sync(() => {
+      github.afterMerge = undefined;
+      github.unavailable = UNREADABLE;
+      unreadFrom = github.calls;
+    });
+    workers[1]!.complete("acceptable");
+    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    expect(github.calls).toBeGreaterThan(unreadFrom);
+    github.unavailable = undefined;
+    expect(taskStatus(orchestrator, taskId)).toBe("completed");
+    expect(github.merged).toMatchObject([{ number, sha: head }]);
+    expect(reports.at(-1)?.text).toContain(github.pulls[0]!.mergedBy!.commit.slice(0, 12));
+    expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
+      local: false,
+      remote: false,
+      worktree: false,
+    });
+  }),
+);
 
 it(
   "completes the task and cleans up when GitHub confirms the harness's merge with its merge commit but the pull request cannot be read back",
