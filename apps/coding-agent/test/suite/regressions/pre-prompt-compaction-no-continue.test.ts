@@ -5,8 +5,11 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
+import agentSessionCompactionSupport from "../agent-session-compaction-support.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { createUsage } = agentSessionCompactionSupport;
 
 const { cleanupAll } = harnessModule;
 
@@ -15,17 +18,6 @@ const { fauxAssistantMessage } = ai;
 const { createHarness, getUserTexts } = harnessModule;
 
 const { currentTimeMillis } = testing;
-
-function createUsage(totalTokens: number) {
-  return {
-    cacheRead: 0,
-    cacheWrite: 0,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-    input: totalTokens,
-    output: 0,
-    totalTokens,
-  };
-}
 
 const harnesses: harnessTypes.Harness[] = [];
 

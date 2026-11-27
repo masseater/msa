@@ -4,19 +4,15 @@ import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import ToolExecutionComponent from "../../../src/modes/interactive/components/tool-execution.ts";
 import themeModule from "../../../src/modes/interactive/theme/theme.ts";
-import ansi from "../../../src/utils/ansi.ts";
 import interactiveModeFake from "../../interactive-mode-fake.ts";
+import tuiKit from "../../tui-kit.ts";
 
 const { bindModeFake } = interactiveModeFake;
 
-const { stripAnsi } = ansi;
 const { initTheme } = themeModule;
+const { renderChat } = tuiKit;
 
 const { Container } = tui;
-
-function renderChat(container: tuiTypes.Container): string {
-  return stripAnsi(container.render(120).join("\n"));
-}
 
 const preservesPartialBashOutput = () => {
   const ui = { requestRender: vi.fn() } as unknown as tuiTypes.TUI;

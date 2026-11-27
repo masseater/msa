@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import config from "../src/config.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import interactiveModeSupport from "../src/modes/interactive/interactive-mode-support.ts";
+import stdoutTtySupport from "./stdout-tty-support.ts";
+
+const { setStdoutIsTTY } = stdoutTtySupport;
 
 const { formatResumeCommand } = interactiveModeSupport;
 const { APP_NAME } = config;
@@ -28,10 +31,6 @@ afterEach(() =>
     }),
   ),
 );
-
-function setStdoutIsTTY(value: boolean): void {
-  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value });
-}
 
 const createTempFile: Effect.Effect<string> = Effect.gen(function* () {
   const dir = yield* makeTempDir("msa-format-resume-command-");

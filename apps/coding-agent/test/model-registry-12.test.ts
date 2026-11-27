@@ -9,7 +9,7 @@ import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { toShPath } = modelRegistrySupport;
+const { toShPath, writeRawModelsJson } = modelRegistrySupport;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
@@ -23,7 +23,6 @@ const {
   readTextFile,
   removePath,
   runTest,
-  writeJsonFile,
   writeTextFile,
 } = testing;
 
@@ -32,9 +31,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
 
 function providerWithApiKey(apiKey: string) {
   return {
@@ -63,7 +59,7 @@ const commandsAreReExecutedAcrossRegistryInstances = () =>
 
       const counterPath = toShPath(counterFile);
       const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey(command),
       });
 
@@ -81,7 +77,7 @@ const commandsAreReExecutedAcrossRegistryInstances = () =>
 const differentCommandsResolveIndependently = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "provider-a": providerWithApiKey("!echo key-a"),
         "provider-b": providerWithApiKey("!echo key-b"),
       });
@@ -104,7 +100,7 @@ const failedCommandsAreRetried = () =>
 
       const counterPath = toShPath(counterFile);
       const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; exit 1'`;
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey(command),
       });
 
@@ -129,7 +125,7 @@ const providerAuthStatusReportsApikeyEnvironmentVariables = () =>
       try {
         writeEnv(envVarName, "status-test-key");
 
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
@@ -162,7 +158,7 @@ const providerAuthStatusReportsInterpolatedApikeyEnvironment = () =>
       const interpolatedKey = ["$", "{", envVarNameA, "}_$", "{", envVarNameB, "}"].join("");
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey(interpolatedKey),
         });
 
@@ -191,7 +187,7 @@ const providerAuthStatusReportsInterpolatedApikeyEnvironment = () =>
 const providerAuthStatusReportsNonEnvApikey = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("literal_api_key_value"),
       });
 
@@ -212,7 +208,7 @@ const missingExplicitEnvApikeyKeepsProviderUnavailable = () =>
       deleteEnv(envVarName);
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 

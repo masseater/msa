@@ -1,14 +1,16 @@
 import testing from "@msa/testing";
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import KeybindingsManager from "../src/core/keybindings-manager.ts";
 import codingAgent from "../src/index.ts";
 import ansi from "../src/utils/ansi.ts";
+import fakeTuiSupport from "./fake-tui-support.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
+
+const { createFakeTui } = fakeTuiSupport;
 
 const { ModelSelectorComponent } = codingAgent;
 const { initTheme } = codingAgent;
@@ -19,10 +21,6 @@ const { setKeybindings } = tui;
 const { createHarness } = harnessModule;
 
 const { awaited, runTest } = testing;
-
-function createFakeTui(): tuiTypes.TUI {
-  return { requestRender: () => {} } as unknown as tuiTypes.TUI;
-}
 
 let harness: harnessTypes.Harness | undefined;
 

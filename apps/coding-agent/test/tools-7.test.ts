@@ -2,11 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import bash from "../src/core/tools/bash.ts";
 import find from "../src/core/tools/find.ts";
 import ls from "../src/core/tools/ls.ts";
+import tools6Support from "./tools-6-support.ts";
 import tools7Support from "./tools-7-support.ts";
+
+const { fakeCtx } = tools6Support;
 
 const { createFindToolDefinition } = find;
 const { createLsToolDefinition } = ls;
@@ -15,10 +17,6 @@ const { createBashToolDefinition } = bash;
 const { getTextOutput } = tools7Support;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;
-
-function fakeCtx(cwd: string): extensionsTypesTypes.ExtensionToolContext {
-  return { cwd } as extensionsTypesTypes.ExtensionToolContext;
-}
 
 let testDir = "";
 

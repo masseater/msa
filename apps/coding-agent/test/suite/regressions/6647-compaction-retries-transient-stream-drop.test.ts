@@ -5,8 +5,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import agentSessionCompactionSupport from "../agent-session-compaction-support.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { createUsage } = agentSessionCompactionSupport;
 
 const { cleanupAll } = harnessModule;
 
@@ -17,17 +20,6 @@ const { createHarness } = harnessModule;
 const { currentTimeMillis } = testing;
 
 const harnesses: harnessTypes.Harness[] = [];
-
-function createUsage(totalTokens: number) {
-  return {
-    cacheRead: 0,
-    cacheWrite: 0,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-    input: totalTokens,
-    output: 0,
-    totalTokens,
-  };
-}
 
 function seedCompactableSession(harness: harnessTypes.Harness): void {
   harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });

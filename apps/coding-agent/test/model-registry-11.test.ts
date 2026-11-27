@@ -9,7 +9,7 @@ import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { toShPath } = modelRegistrySupport;
+const { toShPath, writeRawModelsJson } = modelRegistrySupport;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
@@ -23,7 +23,6 @@ const {
   readTextFile,
   removePath,
   runTest,
-  writeJsonFile,
   writeTextFile,
 } = testing;
 
@@ -32,9 +31,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
 
 function providerWithApiKey(apiKey: string) {
   return {
@@ -63,7 +59,7 @@ const apikeyWithBracedEnvSyntaxResolvesTo = () =>
       const bracedKey = "${TEST_BRACED_API_KEY_12345}";
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey(bracedKey),
         });
 
@@ -95,7 +91,7 @@ const apikeyInterpolatesBracedEnvReferencesInsideLiterals = () =>
       ].join("");
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey(interpolatedKey),
         });
 
@@ -121,7 +117,7 @@ const apikeyInterpolatesBracedEnvReferencesInsideLiterals = () =>
 const apikeyWithPrefixEscapesALeadingDollar = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("$$TEST_API_KEY_12345"),
       });
 
@@ -139,7 +135,7 @@ const apikeyWithEscapesALiteralBangAnd = () =>
       writeEnv("TEST_API_KEY_12345", "env-api-key-value");
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey("$!literal-$TEST_API_KEY_12345"),
         });
 
@@ -164,7 +160,7 @@ const plainApikeyIsUsedDirectlyEvenWhen = () =>
       writeEnv("TEST_API_KEY_12345", "env-api-key-value");
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey("TEST_API_KEY_12345"),
         });
 
@@ -187,7 +183,7 @@ const apikeyAsLiteralValueIsUsedDirectly = () =>
     Effect.gen(function* () {
       deleteEnv("literal_api_key_value");
 
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("literal_api_key_value"),
       });
 
@@ -201,7 +197,7 @@ const apikeyAsLiteralValueIsUsedDirectly = () =>
 const apikeyCommandCanUseShellFeaturesLike = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!echo 'hello world' | tr ' ' '-'"),
       });
 
@@ -220,7 +216,7 @@ const commandIsExecutedOnEveryProviderLookup = () =>
 
       const counterPath = toShPath(counterFile);
       const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey(command),
       });
 

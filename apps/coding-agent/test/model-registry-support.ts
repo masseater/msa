@@ -1,10 +1,12 @@
 import ai from "@msa/ai";
 import type compatTypes from "@msa/ai/compat.types";
+import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 
 import type modelRegistrySupportTypes from "./model-registry-support.types.ts";
 
 const { normalizeContext } = ai;
+const { writeJsonFile } = testing;
 
 const openAiModel: compatTypes.Model<compatTypes.Api> = {
   api: "openai-completions",
@@ -46,12 +48,16 @@ function toShPath(value: string): string {
   return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
 }
 
+const writeRawModelsJson = (modelsJsonPath: string, providers: Record<string, unknown>) =>
+  writeJsonFile(modelsJsonPath, { providers });
+
 const modelRegistrySupport = {
   captureThrown,
   emptyContext,
   makeGate,
   openAiModel,
   toShPath,
+  writeRawModelsJson,
 };
 
 export default modelRegistrySupport;

@@ -6,23 +6,21 @@ import AuthStorage from "../src/core/auth-storage.ts";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import platform from "../src/core/platform/index.ts";
 import providerAuth from "../src/core/provider-composer/provider-auth.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
+const { writeRawModelsJson } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
+const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest } = testing;
 
 let tempDir: string;
 
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
 
 function providerWithApiKey(apiKey: string) {
   return {
@@ -46,7 +44,7 @@ function providerWithApiKey(apiKey: string) {
 const apikeyWithPrefixExecutesCommandAndUses = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!echo test-api-key-from-command"),
       });
 
@@ -60,7 +58,7 @@ const apikeyWithPrefixExecutesCommandAndUses = () =>
 const apikeyWithPrefixTrimsWhitespaceFromCommand = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!echo '  spaced-key  '"),
       });
 
@@ -74,7 +72,7 @@ const apikeyWithPrefixTrimsWhitespaceFromCommand = () =>
 const apikeyWithPrefixHandlesMultilineOutputUses = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!printf 'line1\\nline2'"),
       });
 
@@ -88,7 +86,7 @@ const apikeyWithPrefixHandlesMultilineOutputUses = () =>
 const apikeyWithPrefixReturnsUndefinedOnCommand = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!exit 1"),
       });
 
@@ -102,7 +100,7 @@ const apikeyWithPrefixReturnsUndefinedOnCommand = () =>
 const apikeyWithPrefixReturnsUndefinedOnNonexistent = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!nonexistent-command-12345"),
       });
 
@@ -116,7 +114,7 @@ const apikeyWithPrefixReturnsUndefinedOnNonexistent = () =>
 const apikeyWithPrefixReturnsUndefinedOnEmpty = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey("!printf ''"),
       });
 
@@ -134,7 +132,7 @@ const apikeyWithPrefixResolvesToEnvValue = () =>
       writeEnv("TEST_API_KEY_12345", "env-api-key-value");
 
       try {
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey("$TEST_API_KEY_12345"),
         });
 

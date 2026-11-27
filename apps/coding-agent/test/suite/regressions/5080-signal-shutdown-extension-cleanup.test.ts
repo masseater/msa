@@ -7,7 +7,10 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import config from "../../../src/config.ts";
 import type sessionManagerTypes from "../../../src/core/session-manager.types.ts";
 import interactiveModeFake from "../../interactive-mode-fake.ts";
+import stdoutTtySupport from "../../stdout-tty-support.ts";
 import ProcessExitError from "./5080-signal-shutdown-extension-cleanup-support.ts";
+
+const { setStdoutIsTTY } = stdoutTtySupport;
 
 const { bindModeFake } = interactiveModeFake;
 const { APP_NAME } = config;
@@ -52,10 +55,6 @@ function createTempFile() {
       return file;
     }),
   );
-}
-
-function setStdoutIsTTY(value: boolean): void {
-  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value });
 }
 
 function restoreStdoutIsTTY(): void {

@@ -7,7 +7,10 @@ import modelUpgrade from "../src/core/model-upgrade.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import modelUpgradeModule from "../src/core/tools/model-upgrade.ts";
 import toolDefinitionWrapper from "../src/core/tools/tool-definition-wrapper.ts";
+import modelPolicySupport from "./model-policy-support.ts";
 import modelUpgradeSupport from "./model-upgrade-support.ts";
+
+const { text } = modelPolicySupport;
 const { createUpgradeReplacements, rewriteModelReferencesInSettings } = modelUpgrade;
 const { wrapToolDefinition } = toolDefinitionWrapper;
 const { createModelUpgradeToolDefinition } = modelUpgradeModule;
@@ -61,10 +64,6 @@ function createTool() {
       return { settingsManager, tool };
     }),
   );
-}
-
-function text(result: { content: Array<{ type: string; text?: string }> }): string {
-  return result.content.map((part) => part.text ?? "").join("\n");
 }
 
 const listsTheChangesWithoutWritingThem = () =>

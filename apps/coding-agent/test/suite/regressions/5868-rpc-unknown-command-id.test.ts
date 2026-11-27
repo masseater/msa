@@ -2,10 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
 import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
 import harnessModule from "../harness.ts";
-import type harnessTypes from "../harness.types.ts";
+import rpcRuntimeSupport from "./rpc-runtime-support.ts";
+
+const { createRuntimeHost, takeListenerSnapshot } = rpcRuntimeSupport;
 
 const { runRpcMode } = rpcMode;
 
@@ -52,17 +53,6 @@ type ListenerSnapshot = {
   signals: Map<NodeJS.Signals, NodeListener[]>;
 };
 
-function takeListenerSnapshot(): ListenerSnapshot {
-  const signals: NodeJS.Signals[] =
-    process.platform === "win32" ? ["SIGTERM"] : ["SIGTERM", "SIGHUP"];
-  return {
-    signals: new Map(
-      signals.map((signal) => [signal, process.listeners(signal) as NodeListener[]]),
-    ),
-    stdinEnd: process.stdin.listeners("end") as NodeListener[],
-  };
-}
-
 function restoreListeners(snapshot: ListenerSnapshot): void {
   for (const listener of process.stdin.listeners("end") as NodeListener[]) {
     if (!snapshot.stdinEnd.includes(listener)) {
@@ -84,19 +74,6 @@ function parseOutputLines(): Array<Record<string, unknown>> {
     .flatMap((line) => line.split("\n"))
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line) as Record<string, unknown>);
-}
-
-function createRuntimeHost(
-  harness: harnessTypes.Harness,
-): agentSessionRuntimeTypes.AgentSessionRuntime {
-  return {
-    dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-    fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
-    newSession: vi.fn(() => Promise.resolve({ cancelled: true })),
-    session: harness.session,
-    setRebindSession: vi.fn(),
-    switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
-  } as unknown as agentSessionRuntimeTypes.AgentSessionRuntime;
 }
 
 const preservesTheRequestIdOnUnknown = Effect.gen(function* () {

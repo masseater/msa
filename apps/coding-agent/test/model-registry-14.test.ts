@@ -9,7 +9,7 @@ import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { toShPath } = modelRegistrySupport;
+const { toShPath, writeRawModelsJson } = modelRegistrySupport;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
@@ -23,7 +23,6 @@ const {
   readTextFile,
   removePath,
   runTest,
-  writeJsonFile,
   writeTextFile,
 } = testing;
 
@@ -32,9 +31,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
 
 function providerWithApiKey(apiKey: string) {
   return {
@@ -63,7 +59,7 @@ const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
       const counterFile = joinPath(tempDir, "fallback-counter");
       yield* writeTextFile(counterFile, "0");
       const counterPath = toShPath(counterFile);
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": providerWithApiKey(
           `!sh -c 'echo 1 > "${counterPath}"; echo fallback-key'`,
         ),
@@ -92,7 +88,7 @@ const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
 const getapikeyandheadersPreservesTheLegacyMissingKeyAuthheader = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": {
           api: "openai-completions",
           authHeader: true,
@@ -113,7 +109,7 @@ const getapikeyandheadersPreservesTheLegacyMissingKeyAuthheader = () =>
 const getapikeyandheadersReturnsAnErrorForFailedAuthheader = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": {
           ...providerWithApiKey("!exit 1"),
           authHeader: true,
@@ -139,7 +135,7 @@ const getapikeyandheadersResolvesAuthheaderOnEveryRequest = () =>
       yield* writeTextFile(tokenFile, "token-1");
       const tokenPath = toShPath(tokenFile);
 
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": {
           ...providerWithApiKey(`!sh -c 'cat "${tokenPath}"'`),
           authHeader: true,
@@ -174,7 +170,7 @@ const getapikeyandheadersResolvesConfiguredAuthExactlyOnce = () =>
       const counterFile = joinPath(tempDir, "auth-counter");
       yield* writeTextFile(counterFile, "0");
       const counterPath = toShPath(counterFile);
-      yield* writeRawModelsJson({
+      yield* writeRawModelsJson(modelsJsonPath, {
         "custom-provider": {
           ...providerWithApiKey(
             `!sh -c 'count=$(cat "${counterPath}"); count=$((count + 1)); echo "$count" > "${counterPath}"; echo "token-$count"'`,
@@ -206,7 +202,7 @@ const environmentVariablesAreNotCachedChangesAre = () =>
       try {
         writeEnv(envVarName, "first-value");
 
-        yield* writeRawModelsJson({
+        yield* writeRawModelsJson(modelsJsonPath, {
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 

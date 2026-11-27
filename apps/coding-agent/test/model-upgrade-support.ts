@@ -1,13 +1,10 @@
-import type aiTypes from "@msa/ai/index.types";
-
 import modelUpgrade from "../src/core/model-upgrade.ts";
 import type settingsSchemaTypes from "../src/core/settings-schema.types.ts";
+import modelLifecycleSupport from "./model-lifecycle-support.ts";
+
+const { model } = modelLifecycleSupport;
 
 const { findModelUpgrades } = modelUpgrade;
-
-function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
-  return { id, name: id, provider } as unknown as aiTypes.Model<aiTypes.Api>;
-}
 
 function upgradePair(): {
   candidates: ReturnType<typeof findModelUpgrades>;

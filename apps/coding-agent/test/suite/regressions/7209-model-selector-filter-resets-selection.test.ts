@@ -1,5 +1,4 @@
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -7,8 +6,11 @@ import KeybindingsManager from "../../../src/core/keybindings-manager.ts";
 import codingAgent from "../../../src/index.ts";
 import type modelSelectorTypes from "../../../src/modes/interactive/components/model-selector.types.ts";
 import ansi from "../../../src/utils/ansi.ts";
+import fakeTuiSupport from "../../fake-tui-support.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { createFakeTui } = fakeTuiSupport;
 
 const { cleanupAll } = harnessModule;
 
@@ -19,10 +21,6 @@ const { stripAnsi } = ansi;
 const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;
-
-function createFakeTui(): tuiTypes.TUI {
-  return { requestRender: () => {} } as unknown as tuiTypes.TUI;
-}
 
 function selectedModelId(rendered: string): string | undefined {
   const line = rendered.split("\n").find((l) => l.startsWith("→ "));

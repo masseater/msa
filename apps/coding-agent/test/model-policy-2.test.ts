@@ -18,7 +18,7 @@ const { saveModelPolicy } = coreModelPolicy;
 
 const { awaited, runTest } = testing;
 
-const { cleanupRuntimeDirs, createRuntime, policy } = modelPolicySupport;
+const { cleanupRuntimeDirs, createRuntime, policy, text } = modelPolicySupport;
 
 afterEach(cleanupRuntimeDirs);
 
@@ -128,10 +128,6 @@ function createTool(deny: string[] = []) {
       return { modelRuntime, settingsManager, tool };
     }),
   );
-}
-
-function text(result: { content: Array<{ type: string; text?: string }> }): string {
-  return result.content.map((part) => part.text ?? "").join("\n");
 }
 
 const listsThePatternsAndTheModelsThey = () =>
