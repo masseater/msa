@@ -1,274 +1,151 @@
 import testing from "@msa/testing";
-import { Effect } from "effect";
+import { Array as Arr, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type diagnosticsTypes from "../src/core/diagnostics.ts";
-import skillDirectory from "../src/core/skill-directory.ts";
 import skillsSupport from "./skills-support.ts";
 
-const { loadSkillsFromDir } = skillDirectory;
-
-const { fixturesDir } = skillsSupport;
+const { fixturesDir, loadedFrom } = skillsSupport;
 
 const { joinPath, runTest } = testing;
 
-const shouldLoadAValidSkill = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "valid-skill"),
-          source: "test",
-        }),
-      );
+interface Expected {
+  readonly skills: number;
+  readonly name?: string;
+  readonly description?: string;
+  readonly descriptionIncludes?: readonly string[];
+  readonly disableModelInvocation?: boolean;
+  readonly source?: string;
+  readonly diagnosticCount?: number;
+  readonly diagnostic?: Readonly<{ includes: string; present: boolean }>;
+}
 
-      expect(skills).toHaveLength(1);
-      expect(skills[0]?.name).toBe("valid-skill");
-      expect(skills[0]?.description).toBe("A valid skill for testing purposes.");
-      expect(skills[0]?.sourceInfo.source).toBe("test");
-      expect(diagnostics).toHaveLength(0);
-    }),
-  );
+const FIXTURES: readonly (readonly [string, string, Expected])[] = [
+  [
+    "should load a valid skill",
+    "valid-skill",
+    {
+      description: "A valid skill for testing purposes.",
+      diagnosticCount: 0,
+      disableModelInvocation: false,
+      name: "valid-skill",
+      skills: 1,
+      source: "test",
+    },
+  ],
+  [
+    "should allow names that don't match parent directory",
+    "name-mismatch",
+    {
+      diagnostic: { includes: "does not match parent directory", present: false },
+      name: "different-name",
+      skills: 1,
+    },
+  ],
+  [
+    "should warn when name contains invalid characters",
+    "invalid-name-chars",
+    { diagnostic: { includes: "invalid characters", present: true }, skills: 1 },
+  ],
+  [
+    "should warn when name exceeds 64 characters",
+    "long-name",
+    { diagnostic: { includes: "exceeds 64 characters", present: true }, skills: 1 },
+  ],
+  [
+    "should warn and skip skill when description is missing",
+    "missing-description",
+    { diagnostic: { includes: "description is required", present: true }, skills: 0 },
+  ],
+  ["should ignore unknown frontmatter fields", "unknown-field", { diagnosticCount: 0, skills: 1 }],
+  [
+    "should load nested skills recursively",
+    "nested",
+    { diagnosticCount: 0, name: "child-skill", skills: 1 },
+  ],
+  [
+    "should prefer a directory's root SKILL.md over nested SKILL.md files",
+    "root-skill-preferred",
+    {
+      description: "Root skill should win.",
+      diagnosticCount: 0,
+      name: "root-skill-preferred",
+      skills: 1,
+    },
+  ],
+  [
+    "should skip files without frontmatter",
+    "no-frontmatter",
+    { diagnostic: { includes: "description is required", present: true }, skills: 0 },
+  ],
+  [
+    "should warn and skip skill when YAML frontmatter is invalid",
+    "invalid-yaml",
+    { diagnostic: { includes: "at line", present: true }, skills: 0 },
+  ],
+  [
+    "should preserve multiline descriptions from YAML",
+    "multiline-description",
+    {
+      descriptionIncludes: ["\n", "This is a multiline description."],
+      diagnosticCount: 0,
+      skills: 1,
+    },
+  ],
+  [
+    "should warn when name contains consecutive hyphens",
+    "consecutive-hyphens",
+    { diagnostic: { includes: "consecutive hyphens", present: true }, skills: 1 },
+  ],
+  [
+    "should use parent directory name when name not in frontmatter",
+    "valid-skill",
+    { name: "valid-skill", skills: 1 },
+  ],
+  [
+    "should parse disable-model-invocation frontmatter field",
+    "disable-model-invocation",
+    {
+      diagnostic: { includes: "unknown frontmatter field", present: false },
+      disableModelInvocation: true,
+      name: "disable-model-invocation",
+      skills: 1,
+    },
+  ],
+];
 
-const shouldAllowNamesThatDonTMatch = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "name-mismatch"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(skills[0]?.name).toBe("different-name");
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-          d.message.includes("does not match parent directory"),
-        ),
-      ).toBe(false);
-    }),
-  );
-
-const shouldWarnWhenNameContainsInvalidCharacters = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "invalid-name-chars"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-          d.message.includes("invalid characters"),
-        ),
-      ).toBe(true);
-    }),
-  );
-
-const shouldWarnWhenNameExceeds64Characters = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "long-name"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-          d.message.includes("exceeds 64 characters"),
-        ),
-      ).toBe(true);
-    }),
-  );
-
-const shouldWarnAndSkipSkillWhenDescription = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "missing-description"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(0);
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-          d.message.includes("description is required"),
-        ),
-      ).toBe(true);
-    }),
-  );
-
-const shouldIgnoreUnknownFrontmatterFields = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "unknown-field"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(diagnostics).toHaveLength(0);
-    }),
-  );
-
-const shouldLoadNestedSkillsRecursively = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "nested"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(skills[0]?.name).toBe("child-skill");
-      expect(diagnostics).toHaveLength(0);
-    }),
-  );
-
-const shouldPreferADirectorySRootSkill = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "root-skill-preferred"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(skills[0]?.name).toBe("root-skill-preferred");
-      expect(skills[0]?.description).toBe("Root skill should win.");
-      expect(diagnostics).toHaveLength(0);
-    }),
-  );
-
-const shouldSkipFilesWithoutFrontmatter = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "no-frontmatter"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(0);
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-          d.message.includes("description is required"),
-        ),
-      ).toBe(true);
-    }),
-  );
-
-const shouldWarnAndSkipSkillWhenYaml = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "invalid-yaml"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(0);
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) => d.message.includes("at line")),
-      ).toBe(true);
-    }),
-  );
-
-const shouldPreserveMultilineDescriptionsFromYaml = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "multiline-description"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(skills[0]?.description).toContain("\n");
-      expect(skills[0]?.description).toContain("This is a multiline description.");
-      expect(diagnostics).toHaveLength(0);
-    }),
-  );
-
-const shouldWarnWhenNameContainsConsecutiveHyphens = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* Effect.promise(() =>
-        loadSkillsFromDir({
-          dir: joinPath(fixturesDir, "consecutive-hyphens"),
-          source: "test",
-        }),
-      );
-
-      expect(skills).toHaveLength(1);
-      expect(
-        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-          d.message.includes("consecutive hyphens"),
-        ),
-      ).toBe(true);
-    }),
-  );
+const loadsAs = (fixture: string, expected: Expected) =>
+  Effect.gen(function* () {
+    const { skills, diagnostics } = yield* loadedFrom(joinPath(fixturesDir, fixture));
+    const [skill] = skills;
+    expect(skills).toHaveLength(expected.skills);
+    if (expected.name !== undefined) {
+      expect(skill?.name).toBe(expected.name);
+    }
+    if (expected.description !== undefined) {
+      expect(skill?.description).toBe(expected.description);
+    }
+    Arr.forEach(expected.descriptionIncludes ?? [], (part) => {
+      expect(skill?.description).toContain(part);
+    });
+    if (expected.disableModelInvocation !== undefined) {
+      expect(skill?.disableModelInvocation).toBe(expected.disableModelInvocation);
+    }
+    if (expected.source !== undefined) {
+      expect(skill?.sourceInfo.source).toBe(expected.source);
+    }
+    if (expected.diagnosticCount !== undefined) {
+      expect(diagnostics).toHaveLength(expected.diagnosticCount);
+    }
+    if (expected.diagnostic !== undefined) {
+      const { includes, present } = expected.diagnostic;
+      expect(Arr.some(diagnostics, ({ message }) => message.includes(includes))).toBe(present);
+    }
+  });
 
 describe("skills", () => {
   describe("loadSkillsFromDir", () => {
-    it("should load a valid skill", shouldLoadAValidSkill);
-
-    it("should allow names that don't match parent directory", shouldAllowNamesThatDonTMatch);
-
-    it(
-      "should warn when name contains invalid characters",
-      shouldWarnWhenNameContainsInvalidCharacters,
-    );
-
-    it("should warn when name exceeds 64 characters", shouldWarnWhenNameExceeds64Characters);
-
-    it(
-      "should warn and skip skill when description is missing",
-      shouldWarnAndSkipSkillWhenDescription,
-    );
-
-    it("should ignore unknown frontmatter fields", shouldIgnoreUnknownFrontmatterFields);
-
-    it("should load nested skills recursively", shouldLoadNestedSkillsRecursively);
-
-    it(
-      "should prefer a directory's root SKILL.md over nested SKILL.md files",
-      shouldPreferADirectorySRootSkill,
-    );
-
-    it("should skip files without frontmatter", shouldSkipFilesWithoutFrontmatter);
-
-    it(
-      "should warn and skip skill when YAML frontmatter is invalid",
-      shouldWarnAndSkipSkillWhenYaml,
-    );
-
-    it(
-      "should preserve multiline descriptions from YAML",
-      shouldPreserveMultilineDescriptionsFromYaml,
-    );
-
-    it(
-      "should warn when name contains consecutive hyphens",
-      shouldWarnWhenNameContainsConsecutiveHyphens,
-    );
+    Arr.forEach(FIXTURES, ([name, fixture, expected]) => {
+      it(name, () => runTest(loadsAs(fixture, expected)));
+    });
   });
 });
