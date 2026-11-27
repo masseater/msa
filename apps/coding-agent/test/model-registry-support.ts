@@ -51,11 +51,31 @@ function toShPath(value: string): string {
 const writeRawModelsJson = (modelsJsonPath: string, providers: Record<string, unknown>) =>
   writeJsonFile(modelsJsonPath, { providers });
 
+function providerWithApiKey(apiKey: string) {
+  return {
+    api: "anthropic-messages",
+    apiKey,
+    baseUrl: "https://example.com/v1",
+    models: [
+      {
+        contextWindow: 100000,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+        id: "test-model",
+        input: ["text"],
+        maxTokens: 8000,
+        name: "Test Model",
+        reasoning: false,
+      },
+    ],
+  };
+}
+
 const modelRegistrySupport = {
   captureThrown,
   emptyContext,
   makeGate,
   openAiModel,
+  providerWithApiKey,
   toShPath,
   writeRawModelsJson,
 };

@@ -9,7 +9,7 @@ import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { toShPath, writeRawModelsJson } = modelRegistrySupport;
+const { toShPath, writeRawModelsJson, providerWithApiKey } = modelRegistrySupport;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
@@ -31,25 +31,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-function providerWithApiKey(apiKey: string) {
-  return {
-    api: "anthropic-messages",
-    apiKey,
-    baseUrl: "https://example.com/v1",
-    models: [
-      {
-        contextWindow: 100000,
-        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-        id: "test-model",
-        input: ["text"],
-        maxTokens: 8000,
-        name: "Test Model",
-        reasoning: false,
-      },
-    ],
-  };
-}
 
 const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
   runTest(

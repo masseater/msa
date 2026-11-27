@@ -1,38 +1,21 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeSymlink,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, makeSymlink, runTest, toJsonText, writeTextFile } =
+  testing;
 
 const shouldReturnNoPackageSourcedPathsWhen = Effect.gen(function* () {
-  const result = yield* awaited(packageManager.resolution.resolve());
+  const result = yield* awaited(fixture.packageManager.resolution.resolve());
   expect(result.extensions).toEqual([]);
   expect(result.prompts).toEqual([]);
   expect(result.themes).toEqual([]);
@@ -42,13 +25,13 @@ const shouldReturnNoPackageSourcedPathsWhen = Effect.gen(function* () {
 });
 
 const shouldResolveLocalExtensionPathsFromSettings = Effect.gen(function* () {
-  const extDir = joinPath(agentDir, "extensions");
+  const extDir = joinPath(fixture.agentDir, "extensions");
   yield* makeDirectory(extDir);
   const extPath = joinPath(extDir, "my-extension.ts");
   yield* writeTextFile(extPath, "export default function() {}");
-  settingsManager.resources.setExtensionPaths(["extensions/my-extension.ts"]);
+  fixture.settingsManager.resources.setExtensionPaths(["extensions/my-extension.ts"]);
 
-  const result = yield* awaited(packageManager.resolution.resolve());
+  const result = yield* awaited(fixture.packageManager.resolution.resolve());
   expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
 });
 
@@ -56,10 +39,10 @@ const shouldResolveBuiltInExtensionsWithUser = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const pm = new DefaultPackageManager({
-    agentDir,
+    agentDir: fixture.agentDir,
     builtinExtensions: ["mcp", "llama.cpp"],
-    cwd: tempDir,
-    settingsManager,
+    cwd: fixture.tempDir,
+    settingsManager: fixture.settingsManager,
   });
   const builtins = () =>
     effectRunPromise(
@@ -78,14 +61,17 @@ const shouldResolveBuiltInExtensionsWithUser = Effect.gen(function* () {
     ["builtin:llama.cpp", true, "builtin", "user"],
   ]);
 
-  settingsManager.resources.setExtensionPaths(["-builtin:mcp"]);
-  settingsManager.resources.setProjectExtensionPaths(["+builtin:mcp", "-builtin:llama.cpp"]);
+  fixture.settingsManager.resources.setExtensionPaths(["-builtin:mcp"]);
+  fixture.settingsManager.resources.setProjectExtensionPaths([
+    "+builtin:mcp",
+    "-builtin:llama.cpp",
+  ]);
   expect(yield* awaited(builtins())).toEqual([
     ["builtin:mcp", true, "builtin", "project"],
     ["builtin:llama.cpp", false, "builtin", "project"],
   ]);
 
-  settingsManager.resources.setProjectExtensionPaths([]);
+  fixture.settingsManager.resources.setProjectExtensionPaths([]);
   expect(yield* awaited(builtins())).toEqual([
     ["builtin:mcp", false, "builtin", "user"],
     ["builtin:llama.cpp", true, "builtin", "user"],
@@ -93,7 +79,7 @@ const shouldResolveBuiltInExtensionsWithUser = Effect.gen(function* () {
 });
 
 const shouldResolveSkillPathsFromSettings = Effect.gen(function* () {
-  const skillDir = joinPath(agentDir, "skills", "my-skill");
+  const skillDir = joinPath(fixture.agentDir, "skills", "my-skill");
   yield* makeDirectory(skillDir);
   const skillFile = joinPath(skillDir, "SKILL.md");
   yield* writeTextFile(
@@ -105,16 +91,16 @@ description: A test skill
 Content`,
   );
 
-  settingsManager.resources.setSkillPaths(["skills"]);
+  fixture.settingsManager.resources.setSkillPaths(["skills"]);
 
-  const result = yield* awaited(packageManager.resolution.resolve());
+  const result = yield* awaited(fixture.packageManager.resolution.resolve());
 
   expect(result.skills.some((r) => r.path === skillFile && r.enabled)).toBe(true);
 });
 
 const shouldAutoDiscoverRootMarkdownSkillsFrom = Effect.gen(function* () {
-  const skillFile = joinPath(agentDir, "skills", "single-file.md");
-  yield* makeDirectory(joinPath(agentDir, "skills"));
+  const skillFile = joinPath(fixture.agentDir, "skills", "single-file.md");
+  yield* makeDirectory(joinPath(fixture.agentDir, "skills"));
   yield* writeTextFile(
     skillFile,
     `---
@@ -124,31 +110,31 @@ description: A root markdown skill
 Content`,
   );
 
-  const result = yield* awaited(packageManager.resolution.resolve());
+  const result = yield* awaited(fixture.packageManager.resolution.resolve());
   expect(result.skills.some((r) => r.path === skillFile && r.enabled)).toBe(true);
 });
 
 const shouldResolveProjectPathsRelativeToMsa = Effect.gen(function* () {
-  const extDir = joinPath(tempDir, ".msa", "extensions");
+  const extDir = joinPath(fixture.tempDir, ".msa", "extensions");
   yield* makeDirectory(extDir);
   const extPath = joinPath(extDir, "project-ext.ts");
   yield* writeTextFile(extPath, "export default function() {}");
 
-  settingsManager.resources.setProjectExtensionPaths(["extensions/project-ext.ts"]);
+  fixture.settingsManager.resources.setProjectExtensionPaths(["extensions/project-ext.ts"]);
 
-  const result = yield* awaited(packageManager.resolution.resolve());
+  const result = yield* awaited(fixture.packageManager.resolution.resolve());
   expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
 });
 
 const shouldAutoDiscoverUserPromptsWithOverrides = Effect.gen(function* () {
-  const promptsDir = joinPath(agentDir, "prompts");
+  const promptsDir = joinPath(fixture.agentDir, "prompts");
   yield* makeDirectory(promptsDir);
   const promptPath = joinPath(promptsDir, "auto.md");
   yield* writeTextFile(promptPath, "Auto prompt");
 
-  settingsManager.resources.setPromptTemplatePaths(["!prompts/auto.md"]);
+  fixture.settingsManager.resources.setPromptTemplatePaths(["!prompts/auto.md"]);
 
-  const result = yield* awaited(packageManager.resolution.resolve());
+  const result = yield* awaited(fixture.packageManager.resolution.resolve());
   expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
 });
 
@@ -181,17 +167,17 @@ Content`,
 
 const shouldResolveSymlinkedUserAndProjectResources = Effect.gen(function* () {
   const previousHome = readEnv("HOME");
-  vi.stubEnv("HOME", tempDir);
+  vi.stubEnv("HOME", fixture.tempDir);
 
   try {
-    const shared = yield* writeSharedResources(joinPath(tempDir, "shared-resources"));
-    yield* makeDirectory(joinPath(agentDir));
-    yield* makeDirectory(joinPath(tempDir, ".msa"));
-    for (const root of [agentDir, joinPath(tempDir, ".msa")])
+    const shared = yield* writeSharedResources(joinPath(fixture.tempDir, "shared-resources"));
+    yield* makeDirectory(joinPath(fixture.agentDir));
+    yield* makeDirectory(joinPath(fixture.tempDir, ".msa"));
+    for (const root of [fixture.agentDir, joinPath(fixture.tempDir, ".msa")])
       for (const [kind, dir] of Object.entries(shared))
         yield* makeSymlink(dir, joinPath(root, kind));
 
-    const result = yield* awaited(packageManager.resolution.resolve());
+    const result = yield* awaited(fixture.packageManager.resolution.resolve());
 
     expect({
       extensions: result.extensions.length,
@@ -218,33 +204,7 @@ const shouldResolveSymlinkedUserAndProjectResources = Effect.gen(function* () {
   }
 });
 
-const beforeEachHook = Effect.gen(function* () {
-  previousOfflineEnv = readEnv("MSA_OFFLINE");
-  vi.stubEnv("MSA_OFFLINE", undefined);
-  tempDir = yield* makeTempDir("pm-test-");
-  agentDir = joinPath(tempDir, "agent");
-  yield* makeDirectory(agentDir);
-
-  settingsManager = SettingsManager.inMemory();
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
-  });
-});
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(() => runTest(beforeEachHook));
-
-  afterEach(afterEachHook);
-
   describe("resolve", () => {
     it("should return no package-sourced paths when no sources configured", () =>
       runTest(shouldReturnNoPackageSourcedPathsWhen));

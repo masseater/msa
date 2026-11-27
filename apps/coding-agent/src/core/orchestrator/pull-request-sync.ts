@@ -13,7 +13,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { finish, hasLiveRun } = pullRequestFinish;
 const { judgeMerge, outsideMergeLine } = pullRequestOutside;
 const { short } = pullRequestProblems;
-const { nowMillis } = runtimeModule;
+const { lockedWrite, nowMillis } = runtimeModule;
 const { scheduling } = schedule;
 const { store } = storeModule;
 
@@ -72,10 +72,6 @@ function candidates(runtime: runtimeTypes.Runtime): orchestratorTypesTypes.Task[
       if (pull?.state === "OPEN") return true;
       return pull?.state === "MERGED" && !outside.has(keyOf(pull));
     });
-}
-
-function lockedWrite(runtime: runtimeTypes.Runtime): runtimeTypes.Write {
-  return (effect) => Effect.promise(() => runtime.exclusive(effect));
 }
 
 function readMerge(

@@ -6,7 +6,14 @@ import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
 import harnessModule from "../harness.ts";
 import rpcRuntimeSupport from "./rpc-runtime-support.ts";
 
-const { createRuntimeHost, takeListenerSnapshot } = rpcRuntimeSupport;
+const {
+  createRuntimeHost,
+  parseOutputLines,
+  resetRpcIo,
+  restoreListeners,
+  rpcIo,
+  takeListenerSnapshot,
+} = rpcRuntimeSupport;
 
 const { runRpcMode } = rpcMode;
 
@@ -14,67 +21,15 @@ const { createHarness } = harnessModule;
 
 const { awaited, toJsonText } = testing;
 
-const rpcIo = vi.hoisted(() => ({
-  lineHandler: undefined as ((line: string) => void) | undefined,
-  outputLines: [] as string[],
-}));
-
-vi.mock("../../../src/core/output-guard.js", () => ({
-  default: {
-    flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-    takeOverStdout: vi.fn(),
-    waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-    writeRawStdout: (line: string) => {
-      rpcIo.outputLines.push(line);
-    },
-  },
-}));
+vi.mock("../../../src/core/output-guard.js", () =>
+  import("./rpc-runtime-support.ts").then((module) => module.default.outputGuardModule),
+);
 
 vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
-vi.mock("../../../src/modes/rpc/jsonl.js", () => ({
-  default: {
-    attachJsonlLineReader: vi.fn(
-      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-        rpcIo.lineHandler = onLine;
-        return () => {
-          rpcIo.lineHandler = undefined;
-        };
-      },
-    ),
-    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
-  },
-}));
-
-type NodeListener = Parameters<typeof process.on>[1];
-
-type ListenerSnapshot = {
-  stdinEnd: NodeListener[];
-  signals: Map<NodeJS.Signals, NodeListener[]>;
-};
-
-function restoreListeners(snapshot: ListenerSnapshot): void {
-  for (const listener of process.stdin.listeners("end") as NodeListener[]) {
-    if (!snapshot.stdinEnd.includes(listener)) {
-      process.stdin.off("end", listener);
-    }
-  }
-
-  for (const [signal, previousListeners] of snapshot.signals) {
-    for (const listener of process.listeners(signal) as NodeListener[]) {
-      if (!previousListeners.includes(listener)) {
-        process.off(signal, listener);
-      }
-    }
-  }
-}
-
-function parseOutputLines(): Array<Record<string, unknown>> {
-  return rpcIo.outputLines
-    .flatMap((line) => line.split("\n"))
-    .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-}
+vi.mock("../../../src/modes/rpc/jsonl.js", () =>
+  import("./rpc-runtime-support.ts").then((module) => module.default.jsonlModule),
+);
 
 const preservesTheRequestIdOnUnknown = Effect.gen(function* () {
   const listenerSnapshot = takeListenerSnapshot();
@@ -108,8 +63,7 @@ const preservesTheRequestIdOnUnknownCommand = () =>
 
 describe("RPC unknown command responses (#5868)", () => {
   afterEach(() => {
-    rpcIo.outputLines = [];
-    rpcIo.lineHandler = undefined;
+    resetRpcIo();
   });
   test("preserves the request id on unknown command errors", preservesTheRequestIdOnUnknownCommand);
 });

@@ -32,12 +32,6 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 
 const GIT_UPDATE_CONCURRENCY = 4;
 
-function isOfflineModeEnabled(): boolean {
-  const value = readEnv("MSA_OFFLINE");
-  if (value === undefined || value === "") return false;
-  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
-}
-
 function getHomeDir(): string {
   return readEnv("HOME") || homedir();
 }
@@ -58,7 +52,6 @@ const packageEnv = {
   getHomeDir,
   getNpmVersionRange,
   isExactNpmVersion,
-  isOfflineModeEnabled,
 };
 
 export default packageEnv;

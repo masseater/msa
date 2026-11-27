@@ -2,15 +2,16 @@ import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import config from "../config.ts";
-import paths from "../utils/paths.ts";
+import text from "../utils/text.ts";
 import AuthDataReader from "./auth-data-reader.ts";
 import type authStorageTypes from "./auth-storage.types.ts";
 import awaitingModule from "./awaiting.ts";
 import FileAuthStorageBackend from "./file-auth-storage-backend.ts";
 import InMemoryAuthStorageBackend from "./in-memory-auth-storage-backend.ts";
 import resolveConfigValueModule from "./resolve-config-value.ts";
+
+const { prettyJson } = text;
 const { getAuthPath } = config;
-const { normalizePath } = paths;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { resolveConfigValue } = resolveConfigValueModule;
 
@@ -24,8 +25,8 @@ export default class AuthStorage implements aiTypes.CredentialStore {
   }
 
   static create(authPath: string = getAuthPath()): AuthStorage {
-    const normalizedAuthPath = normalizePath(authPath);
-    return new AuthStorage(new FileAuthStorageBackend(normalizedAuthPath), normalizedAuthPath);
+    const backend = new FileAuthStorageBackend(authPath);
+    return new AuthStorage(backend, backend.authPath);
   }
 
   static fromStorage(storage: authStorageTypes.AuthStorageBackend): AuthStorage {
@@ -123,7 +124,4 @@ export default class AuthStorage implements aiTypes.CredentialStore {
       }, this),
     );
   }
-}
-function prettyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
 }

@@ -1,34 +1,32 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-const { readEnv } = platform;
+import packageManagerFixture from "./package-manager-fixture.ts";
 
-const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
-  testing;
+const { usePackageManagerFixture } = packageManagerFixture;
 
-let tempDir: string;
+const fixture = usePackageManagerFixture();
 
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, writeTextFile } = testing;
 
 const shouldScanAgentsSkillsFromCwdUp = () =>
   runTest(
     Effect.gen(function* () {
-      const repoRoot = joinPath(tempDir, "repo");
+      const repoRoot = joinPath(fixture.tempDir, "repo");
       const nestedCwd = joinPath(repoRoot, "packages", "feature");
       yield* makeDirectory(nestedCwd);
       yield* makeDirectory(joinPath(repoRoot, ".git"));
 
-      const aboveRepoSkill = joinPath(tempDir, ".agents", "skills", "above-repo", "SKILL.md");
-      yield* makeDirectory(joinPath(tempDir, ".agents", "skills", "above-repo"));
+      const aboveRepoSkill = joinPath(
+        fixture.tempDir,
+        ".agents",
+        "skills",
+        "above-repo",
+        "SKILL.md",
+      );
+      yield* makeDirectory(joinPath(fixture.tempDir, ".agents", "skills", "above-repo"));
       yield* writeTextFile(aboveRepoSkill, "---\nname: above-repo\ndescription: above\n---\n");
 
       const repoRootSkill = joinPath(repoRoot, ".agents", "skills", "repo-root", "SKILL.md");
@@ -40,9 +38,9 @@ const shouldScanAgentsSkillsFromCwdUp = () =>
       yield* writeTextFile(nestedSkill, "---\nname: nested\ndescription: nested\n---\n");
 
       const pm = new DefaultPackageManager({
-        agentDir,
+        agentDir: fixture.agentDir,
         cwd: nestedCwd,
-        settingsManager,
+        settingsManager: fixture.settingsManager,
       });
 
       const result = yield* awaited(pm.resolution.resolve());
@@ -55,7 +53,7 @@ const shouldScanAgentsSkillsFromCwdUp = () =>
 const shouldScanAgentsSkillsUpToFilesystem = () =>
   runTest(
     Effect.gen(function* () {
-      const nonRepoRoot = joinPath(tempDir, "non-repo");
+      const nonRepoRoot = joinPath(fixture.tempDir, "non-repo");
       const nestedCwd = joinPath(nonRepoRoot, "a", "b");
       yield* makeDirectory(nestedCwd);
 
@@ -68,9 +66,9 @@ const shouldScanAgentsSkillsUpToFilesystem = () =>
       yield* writeTextFile(middleSkill, "---\nname: middle\ndescription: middle\n---\n");
 
       const pm = new DefaultPackageManager({
-        agentDir,
+        agentDir: fixture.agentDir,
         cwd: nestedCwd,
-        settingsManager,
+        settingsManager: fixture.settingsManager,
       });
 
       const result = yield* awaited(pm.resolution.resolve());
@@ -79,31 +77,7 @@ const shouldScanAgentsSkillsUpToFilesystem = () =>
     }),
   );
 
-const beforeEachHook3 = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-    }),
-  );
-
-const afterEachHook3 = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook3);
-
-  afterEach(afterEachHook3);
-
   describe(".agents/skills auto-discovery", () => {
     it("should scan .agents/skills from cwd up to git repo root", shouldScanAgentsSkillsFromCwdUp);
 

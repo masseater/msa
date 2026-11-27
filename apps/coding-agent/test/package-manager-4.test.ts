@@ -1,43 +1,24 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-const { readEnv } = platform;
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 
 const { packagePaths } = packageManagerSupport;
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
 const shouldKeepMsaManifestEntriesWithLeading = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "tilde-manifest-package");
+      const pkgDir = joinPath(fixture.tempDir, "tilde-manifest-package");
       const directExtensionPath = joinPath(pkgDir, "~extensions", "main.ts");
       const slashExtensionPath = joinPath(pkgDir, "~", "extensions", "alt.ts");
       const directSkillPath = joinPath(pkgDir, "~skills", "direct-skill", "SKILL.md");
@@ -68,7 +49,9 @@ const shouldKeepMsaManifestEntriesWithLeading = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),
+      );
 
       expect(result.extensions.some((r) => r.path === directExtensionPath && r.enabled)).toBe(true);
       expect(result.extensions.some((r) => r.path === slashExtensionPath && r.enabled)).toBe(true);
@@ -80,7 +63,7 @@ const shouldKeepMsaManifestEntriesWithLeading = () =>
 const shouldHandleDirectoriesWithAutoDiscoveryLayout = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "auto-pkg");
+      const pkgDir = joinPath(fixture.tempDir, "auto-pkg");
       yield* makeDirectory(joinPath(pkgDir, "extensions"));
       yield* makeDirectory(joinPath(pkgDir, "themes"));
       yield* writeTextFile(
@@ -89,7 +72,9 @@ const shouldHandleDirectoriesWithAutoDiscoveryLayout = () =>
       );
       yield* writeTextFile(joinPath(pkgDir, "themes", "dark.json"), "{}");
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),
+      );
       expect(
         result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "main.ts") && r.enabled),
       ).toBe(true);
@@ -102,7 +87,7 @@ const shouldHandleDirectoriesWithAutoDiscoveryLayout = () =>
 const shouldStopRecursingWhenAPackageSkill = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "skill-root-pkg");
+      const pkgDir = joinPath(fixture.tempDir, "skill-root-pkg");
       yield* makeDirectory(joinPath(pkgDir, "skills", "root-skill", "nested-skill"));
       const rootSkill = joinPath(pkgDir, "skills", "root-skill", "SKILL.md");
       const nestedSkill = joinPath(pkgDir, "skills", "root-skill", "nested-skill", "SKILL.md");
@@ -112,7 +97,9 @@ const shouldStopRecursingWhenAPackageSkill = () =>
         "---\nname: nested-skill\ndescription: Nested skill\n---\n",
       );
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),
+      );
       expect(result.skills.some((r) => r.path === rootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedSkill)).toBe(false);
     }),
@@ -122,12 +109,12 @@ const shouldEmitProgressEvents = () =>
   runTest(
     Effect.gen(function* () {
       const events: packageManagerTypes.ProgressEvent[] = [];
-      packageManager.progress.setProgressCallback((event) => events.push(event));
+      fixture.packageManager.progress.setProgressCallback((event) => events.push(event));
 
-      const extPath = joinPath(tempDir, "ext.ts");
+      const extPath = joinPath(fixture.tempDir, "ext.ts");
       yield* writeTextFile(extPath, "export default function() {}");
 
-      yield* awaited(packageManager.resolution.resolveExtensionSources([extPath]));
+      yield* awaited(fixture.packageManager.resolution.resolveExtensionSources([extPath]));
 
       expect(events.length).toBe(0);
     }),
@@ -144,36 +131,7 @@ const shouldPreserveArgvEntriesContainingSpaces = () => {
   expect(output).toBe(valueWithSpace);
 };
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("resolveExtensionSources", () => {
     it(
       "should keep msa manifest entries with leading tilde package-relative",
@@ -193,10 +151,6 @@ describe("DefaultPackageManager", () => {
 });
 
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("progress callback", () => {
     it("should emit progress events", shouldEmitProgressEvents);
   });

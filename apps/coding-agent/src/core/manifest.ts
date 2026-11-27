@@ -1,14 +1,13 @@
+import json from "../utils/json.ts";
 import text from "../utils/text.ts";
 import type manifestTypes from "./manifest.types.ts";
 import platform from "./platform/index.ts";
 
+const { isObject } = json;
+
 const { stripBom } = text;
 
 const RESOURCE_FIELDS = ["extensions", "skills", "prompts", "themes"] as const;
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function readMsaManifest(packageJsonPath: string): Promise<manifestTypes.MsaManifest | null> {
   return platform.files.readText(packageJsonPath).then(manifestOf, () => null);

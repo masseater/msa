@@ -10,17 +10,10 @@ import truncate from "../truncate.ts";
 import type readRenderTypes from "./read.types.ts";
 
 const { getLanguageFromPath, highlightCode } = themeModule;
-const { getTextOutput, replaceTabs, str } = renderUtils;
+const { getTextOutput, replaceTabs, str, trimTrailingEmptyLines } = renderUtils;
 const { expandHint } = keybindingHints;
 const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } = truncate;
 
-function trimTrailingEmptyLines(lines: string[]): string[] {
-  let end = lines.length;
-  while (end > 0 && lines[end - 1] === "") {
-    end--;
-  }
-  return lines.slice(0, end);
-}
 function formatReadResult(
   args: readRenderTypes.ReadRenderArgs | undefined,
   result: {

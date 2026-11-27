@@ -1,95 +1,17 @@
-import agentModule from "@msa/agent-core";
-import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import src from "../src/index.ts";
-import type srcTypes from "../src/index.types.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+import agentSessionCompactionLiveSupport from "./agent-session-compaction-live-support.ts";
 import utilities from "./utilities.ts";
 
-const { AgentSession, SessionManager, SettingsManager, createCodingTools } = src;
-const { getModel, streamSimple } = compat;
+const { hasLiveAuth } = utilities;
 
-const { Agent } = agentModule;
+const { awaited, runTest } = testing;
 
-const { createTestResourceLoader, hasLiveAuth } = utilities;
+const live = agentSessionCompactionLiveSupport.liveCompaction();
 
-const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
-
-const { awaited, currentTimeMillis, joinPath, makeDirectory, removePath, runTest, tempRoot } =
-  testing;
-
-let session: srcTypes.AgentSession;
-
-let tempDir: string;
-
-let sessionManager: srcTypes.SessionManager;
-
-let events: srcTypes.AgentSessionEvent[];
-
-function createSession(inMemory = false) {
-  return runTest(
-    Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
-      const agent = new Agent({
-        initialState: {
-          model,
-          systemPrompt: "You are a helpful assistant. Be concise.",
-          tools: createCodingTools(process.cwd()),
-        },
-        streamFn: streamSimple,
-      });
-
-      sessionManager = inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
-      const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
-
-      settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-      const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
-      const modelRegistry = yield* awaited(createModelRegistry(authStorage));
-
-      session = new AgentSession({
-        agent,
-        agentDir: tempDir,
-        cwd: tempDir,
-        modelRuntime: getModelRuntime(modelRegistry),
-        resourceLoader: createTestResourceLoader(),
-        sessionManager,
-        settingsManager,
-      });
-
-      session.subscribe((event) => {
-        events.push(event);
-      });
-
-      return yield* awaited(session);
-    }),
-  );
-}
-
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = joinPath(tempRoot(), `msa-compaction-test-${currentTimeMillis()}`);
-      yield* makeDirectory(tempDir);
-
-      events = [];
-    }),
-  );
-
-const afterEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      if (session !== null && session !== undefined) {
-        session.dispose();
-      }
-      if (tempDir.length > 0) {
-        yield* removePath(tempDir);
-      }
-    }),
-  );
+const { afterEachHook, beforeEachHook, createSession } = live;
 
 describe.skipIf(!hasLiveAuth)("AgentSession compaction e2e", () => {
   beforeEach(beforeEachHook);
@@ -103,19 +25,23 @@ describe.skipIf(!hasLiveAuth)("AgentSession compaction e2e", () => {
         Effect.gen(function* () {
           yield* awaited(createSession());
 
-          yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(
+            live.session.run.prompting.prompt("What is 2+2? Reply with just the number."),
+          );
+          yield* awaited(live.session.agent.waitForIdle());
 
-          yield* awaited(session.run.prompting.prompt("What is 3+3? Reply with just the number."));
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(
+            live.session.run.prompting.prompt("What is 3+3? Reply with just the number."),
+          );
+          yield* awaited(live.session.agent.waitForIdle());
 
-          const result = yield* awaited(session.compaction.manual.compact());
+          const result = yield* awaited(live.session.compaction.manual.compact());
 
           expect(result.summary).toBeDefined();
           expect(result.summary.length).toBeGreaterThan(0);
           expect(result.tokensBefore).toBeGreaterThan(0);
 
-          const messages = session.messages;
+          const messages = live.session.messages;
           expect(messages.length).toBeGreaterThan(0);
 
           const firstMsg = messages[0];
@@ -139,25 +65,25 @@ describe.skipIf(!hasLiveAuth)("AgentSession compaction e2e", () => {
           yield* awaited(createSession());
 
           yield* awaited(
-            session.run.prompting.prompt("What is the capital of France? One word answer."),
+            live.session.run.prompting.prompt("What is the capital of France? One word answer."),
           );
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(live.session.agent.waitForIdle());
 
           yield* awaited(
-            session.run.prompting.prompt("What is the capital of Germany? One word answer."),
+            live.session.run.prompting.prompt("What is the capital of Germany? One word answer."),
           );
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(live.session.agent.waitForIdle());
 
-          yield* awaited(session.compaction.manual.compact());
+          yield* awaited(live.session.compaction.manual.compact());
 
           yield* awaited(
-            session.run.prompting.prompt("What is the capital of Italy? One word answer."),
+            live.session.run.prompting.prompt("What is the capital of Italy? One word answer."),
           );
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(live.session.agent.waitForIdle());
 
-          expect(session.messages.length).toBeGreaterThan(0);
+          expect(live.session.messages.length).toBeGreaterThan(0);
 
-          const assistantMessages = session.messages.filter((m) => m.role === "assistant");
+          const assistantMessages = live.session.messages.filter((m) => m.role === "assistant");
           expect(assistantMessages.length).toBeGreaterThan(0);
         }),
       ),
@@ -177,15 +103,15 @@ describe.skipIf(!hasLiveAuth)("AgentSession compaction e2e", () => {
         Effect.gen(function* () {
           yield* awaited(createSession());
 
-          yield* awaited(session.run.prompting.prompt("Say hello"));
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(live.session.run.prompting.prompt("Say hello"));
+          yield* awaited(live.session.agent.waitForIdle());
 
-          yield* awaited(session.run.prompting.prompt("Say goodbye"));
-          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(live.session.run.prompting.prompt("Say goodbye"));
+          yield* awaited(live.session.agent.waitForIdle());
 
-          yield* awaited(session.compaction.manual.compact());
+          yield* awaited(live.session.compaction.manual.compact());
 
-          const entries = sessionManager.getEntries();
+          const entries = live.sessionManager.getEntries();
 
           const compactionEntries = entries.filter((e) => e.type === "compaction");
           expect(compactionEntries.length).toBe(1);

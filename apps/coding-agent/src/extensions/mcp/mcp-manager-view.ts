@@ -3,8 +3,8 @@ import type tuiTypes from "@msa/tui/index.types";
 
 import type keybindingsTypes from "../../core/keybindings.types.ts";
 import AuthUrlComponent from "../../modes/interactive/components/auth-url.ts";
-import DynamicBorder from "../../modes/interactive/components/dynamic-border.ts";
 import keybindingHints from "../../modes/interactive/components/keybinding-hints.ts";
+import uiFrame from "../../modes/interactive/components/ui-frame.ts";
 import themeModule from "../../modes/interactive/theme/theme.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 import interop from "../../utils/interop.ts";
@@ -12,25 +12,9 @@ import type uiTypes from "./ui.types.ts";
 const { getSelectListTheme } = themeModule;
 const { callbackPromise } = interop;
 const { keyHint } = keybindingHints;
-const { Container, Input, SelectList, Spacer, Text, truncateToWidth, visibleWidth } = tuiModule;
+const { frame } = uiFrame;
+const { Input, SelectList, Spacer, Text, truncateToWidth, visibleWidth } = tuiModule;
 
-function frame(
-  theme: themeTypes.Theme,
-  title: string,
-  body: tuiTypes.Component[],
-  footer?: string,
-): tuiTypes.Container {
-  const container = new Container();
-  container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
-  container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
-  for (const child of body) container.addChild(child);
-  if (footer !== undefined && footer !== "") {
-    container.addChild(new Spacer(1));
-    container.addChild(new Text(theme.fg("dim", footer), 1, 0));
-  }
-  container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
-  return container;
-}
 const MAX_VISIBLE_ITEMS = 12;
 export default class McpManagerView
   implements uiTypes.McpUi, tuiTypes.Component, tuiTypes.Focusable

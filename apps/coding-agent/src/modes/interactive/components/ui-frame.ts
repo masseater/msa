@@ -2,8 +2,8 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import DynamicBorder from "../../modes/interactive/components/dynamic-border.ts";
-import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
+import type themeTypes from "../theme/theme.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
 const { Container, Spacer, Text } = tui;
 
 function selectTheme(theme: themeTypes.Theme) {

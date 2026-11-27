@@ -1,12 +1,10 @@
+import platformEnv from "./platform/env.ts";
 import platform from "./platform/index.ts";
 import type settingsManagerTypes from "./settings-manager.types.ts";
 
-const { readEnv } = platform;
+const { isTruthyEnvFlag } = platformEnv;
 
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (value === undefined || value === "") return false;
-  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
-}
+const { readEnv } = platform;
 
 function isInstallTelemetryEnabled(
   settingsManager: settingsManagerTypes.SettingsManager,

@@ -12,7 +12,7 @@ const { deleteEnv, readEnv, writeEnv } = platform;
 const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
-const { writeRawModelsJson } = modelRegistrySupport;
+const { writeRawModelsJson, providerWithApiKey } = modelRegistrySupport;
 
 const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest } = testing;
 
@@ -21,25 +21,6 @@ let tempDir: string;
 let modelsJsonPath: string;
 
 let authStorage: authStorageTypes.AuthStorage;
-
-function providerWithApiKey(apiKey: string) {
-  return {
-    api: "anthropic-messages",
-    apiKey,
-    baseUrl: "https://example.com/v1",
-    models: [
-      {
-        contextWindow: 100000,
-        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-        id: "test-model",
-        input: ["text"],
-        maxTokens: 8000,
-        name: "Test Model",
-        reasoning: false,
-      },
-    ],
-  };
-}
 
 const apikeyWithPrefixExecutesCommandAndUses = () =>
   runTest(

@@ -242,6 +242,14 @@ const renderToolPath: {
   },
 );
 
+function trimTrailingEmptyLines(lines: string[]): string[] {
+  let end = lines.length;
+  while (end > 0 && lines[end - 1] === "") {
+    end--;
+  }
+  return lines.slice(0, end);
+}
+
 const renderUtils = {
   formatReadLineRange,
   formatToolCallWithArgs,
@@ -256,6 +264,7 @@ const renderUtils = {
   startToolTimer,
   str,
   toolTimerText,
+  trimTrailingEmptyLines,
 };
 
 export default renderUtils;

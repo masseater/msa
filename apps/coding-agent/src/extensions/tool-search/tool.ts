@@ -3,14 +3,14 @@ import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import json from "../../utils/json.ts";
 import Bm25Ranker from "./bm-25-ranker.ts";
 import type toolTypes from "./tool.types.ts";
 
+const { isObject } = json;
+
 const TOOL_SEARCH_TOOL_NAME = "tool_search";
 const DEFAULT_TOOL_SEARCH_LIMIT = 8;
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 function schemaText(schema: unknown, parts: string[]): void {
   if (!isObject(schema)) return;
   if (typeof schema["description"] === "string") parts.push(schema["description"]);

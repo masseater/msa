@@ -3,15 +3,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import agentSessionCompaction5Support from "./agent-session-compaction-5-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 
 const { fauxAssistantMessage } = ai;
 
-const { afterEachHook5 } = agentSessionCompaction5Support;
-
-const { createAssistant, harnesses } = agentSessionCompactionSupport;
+const { afterEachHook, createAssistant, harnesses } = agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;
 
@@ -142,7 +139,7 @@ const compactsSuccessfulOverflowResponsesWithoutRetrying2 = () =>
   Effect.runPromise(compactsSuccessfulOverflowResponsesWithoutRetrying);
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook5);
+  afterEach(afterEachHook);
 
   it(
     "resumes after threshold compaction when only agent-level queued messages exist",

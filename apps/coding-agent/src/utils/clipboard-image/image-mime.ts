@@ -1,16 +1,15 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
+import mime from "../mime.ts";
 import photonModule from "../photon.ts";
+
+const { baseMimeType } = mime;
 
 const { loadPhoton } = photonModule;
 const { awaited, awaiting } = awaitingModule;
 
 const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
-
-function baseMimeType(mimeType: string): string {
-  return mimeType.split(";")[0]?.trim().toLowerCase() ?? mimeType.toLowerCase();
-}
 
 function extensionForImageMimeType(mimeType: string): string | null {
   switch (baseMimeType(mimeType)) {

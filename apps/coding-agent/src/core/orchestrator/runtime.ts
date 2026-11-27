@@ -21,8 +21,13 @@ function abortThread(runtime: runtimeTypes.Runtime, threadId: string): void {
     runtime.launch(Effect.promise(() => worker.run.lifecycle.abort().catch(() => undefined)));
 }
 
+function lockedWrite(runtime: runtimeTypes.Runtime): runtimeTypes.Write {
+  return (effect) => Effect.promise(() => runtime.exclusive(effect));
+}
+
 const runtime = {
   abortThread,
+  lockedWrite,
   nowMillis,
   releaseThread,
 };

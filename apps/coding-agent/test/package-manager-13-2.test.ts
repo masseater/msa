@@ -1,46 +1,34 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-const { readEnv } = platform;
+import packageManagerFixture from "./package-manager-fixture.ts";
 
-const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
-  testing;
+const { usePackageManagerFixture } = packageManagerFixture;
 
-let tempDir: string;
+const fixture = usePackageManagerFixture();
 
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, writeTextFile } = testing;
 
 const shouldDedupeSameLocalPackageInGlobal = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "shared-pkg");
+      const pkgDir = joinPath(fixture.tempDir, "shared-pkg");
       yield* makeDirectory(joinPath(pkgDir, "extensions"));
       yield* writeTextFile(
         joinPath(pkgDir, "extensions", "shared.ts"),
         "export default function() {}",
       );
 
-      settingsManager.resources.setPackages([pkgDir]);
-      settingsManager.resources.setProjectPackages([pkgDir]);
+      fixture.settingsManager.resources.setPackages([pkgDir]);
+      fixture.settingsManager.resources.setProjectPackages([pkgDir]);
 
-      const globalSettings = settingsManager.getGlobalSettings();
-      const projectSettings = settingsManager.getProjectSettings();
+      const globalSettings = fixture.settingsManager.getGlobalSettings();
+      const projectSettings = fixture.settingsManager.getProjectSettings();
       expect(globalSettings.packages).toEqual([pkgDir]);
       expect(projectSettings.packages).toEqual([pkgDir]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
 
       const sharedPaths = result.extensions.filter((r) => r.path.includes("shared-pkg"));
       expect(sharedPaths.length).toBe(1);
@@ -51,8 +39,8 @@ const shouldDedupeSameLocalPackageInGlobal = () =>
 const shouldKeepBothIfDifferentPackages = () =>
   runTest(
     Effect.gen(function* () {
-      const pkg1Dir = joinPath(tempDir, "pkg1");
-      const pkg2Dir = joinPath(tempDir, "pkg2");
+      const pkg1Dir = joinPath(fixture.tempDir, "pkg1");
+      const pkg2Dir = joinPath(fixture.tempDir, "pkg2");
       yield* makeDirectory(joinPath(pkg1Dir, "extensions"));
       yield* makeDirectory(joinPath(pkg2Dir, "extensions"));
       yield* writeTextFile(
@@ -64,10 +52,10 @@ const shouldKeepBothIfDifferentPackages = () =>
         "export default function() {}",
       );
 
-      settingsManager.resources.setPackages([pkg1Dir]);
-      settingsManager.resources.setProjectPackages([pkg2Dir]);
+      fixture.settingsManager.resources.setPackages([pkg1Dir]);
+      fixture.settingsManager.resources.setProjectPackages([pkg2Dir]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.extensions.some((r) => r.path.includes("pkg1"))).toBe(true);
       expect(result.extensions.some((r) => r.path.includes("pkg2"))).toBe(true);
     }),
@@ -79,8 +67,8 @@ const shouldDedupeSshAndHttpsUrlsFor = () =>
       const httpsUrl = "https://github.com/user/repo";
       const sshUrl = "git:git@github.com:user/repo";
 
-      const httpsIdentity = packageManager.sources.getPackageIdentity(httpsUrl);
-      const sshIdentity = packageManager.sources.getPackageIdentity(sshUrl);
+      const httpsIdentity = fixture.packageManager.sources.getPackageIdentity(httpsUrl);
+      const sshIdentity = fixture.packageManager.sources.getPackageIdentity(sshUrl);
 
       expect(httpsIdentity).toBe("git:github.com/user/repo");
       expect(sshIdentity).toBe("git:github.com/user/repo");
@@ -94,8 +82,8 @@ const shouldDedupeSshAndHttpsWithRefs = () =>
       const httpsUrl = "https://github.com/user/repo@v1.0.0";
       const sshUrl = "git:git@github.com:user/repo@v1.0.0";
 
-      const httpsIdentity = packageManager.sources.getPackageIdentity(httpsUrl);
-      const sshIdentity = packageManager.sources.getPackageIdentity(sshUrl);
+      const httpsIdentity = fixture.packageManager.sources.getPackageIdentity(httpsUrl);
+      const sshIdentity = fixture.packageManager.sources.getPackageIdentity(sshUrl);
 
       expect(httpsIdentity).toBe("git:github.com/user/repo");
       expect(sshIdentity).toBe("git:github.com/user/repo");
@@ -109,8 +97,8 @@ const shouldDedupeSshUrlWithSshProtocol = () =>
       const sshProtocol = "ssh://git@github.com/user/repo";
       const gitAt = "git:git@github.com:user/repo";
 
-      const sshProtocolIdentity = packageManager.sources.getPackageIdentity(sshProtocol);
-      const gitAtIdentity = packageManager.sources.getPackageIdentity(gitAt);
+      const sshProtocolIdentity = fixture.packageManager.sources.getPackageIdentity(sshProtocol);
+      const gitAtIdentity = fixture.packageManager.sources.getPackageIdentity(gitAt);
 
       expect(sshProtocolIdentity).toBe("git:github.com/user/repo");
       expect(gitAtIdentity).toBe("git:github.com/user/repo");
@@ -131,7 +119,7 @@ const shouldDedupeAllSupportedUrlFormatsFor = () =>
         "git:git@github.com:user/repo.git",
       ];
 
-      const identities = urls.map((url) => packageManager.sources.getPackageIdentity(url));
+      const identities = urls.map((url) => fixture.packageManager.sources.getPackageIdentity(url));
 
       const uniqueIdentities = [...new Set(identities)];
       expect(uniqueIdentities.length).toBe(1);
@@ -145,8 +133,8 @@ const shouldKeepDifferentReposSeparateHttpsVs = () =>
       const repo1Https = "https://github.com/user/repo1";
       const repo2Ssh = "git:git@github.com:user/repo2";
 
-      const id1 = packageManager.sources.getPackageIdentity(repo1Https);
-      const id2 = packageManager.sources.getPackageIdentity(repo2Ssh);
+      const id1 = fixture.packageManager.sources.getPackageIdentity(repo1Https);
+      const id2 = fixture.packageManager.sources.getPackageIdentity(repo2Ssh);
 
       expect(id1).toBe("git:github.com/user/repo1");
       expect(id2).toBe("git:github.com/user/repo2");
@@ -154,36 +142,7 @@ const shouldKeepDifferentReposSeparateHttpsVs = () =>
     }),
   );
 
-const beforeEachHook2 = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook2 = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook2);
-
-  afterEach(afterEachHook2);
-
   describe("package deduplication", () => {
     it(
       "should dedupe same local package in global and project (project wins)",

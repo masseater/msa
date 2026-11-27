@@ -3,11 +3,11 @@ import type tuiTypes from "@msa/tui/index.types";
 
 import type keybindingsTypes from "../../core/keybindings.types.ts";
 import keybindingHints from "../../modes/interactive/components/keybinding-hints.ts";
+import uiFrame from "../../modes/interactive/components/ui-frame.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 import interop from "../../utils/interop.ts";
 import HuggingFaceSearch from "./huggingface-search.ts";
 import llamaViewContent from "./llama-view-content.ts";
-import uiFrame from "./ui-frame.ts";
 import type uiTypes from "./ui.types.ts";
 
 const { frame, selectTheme } = uiFrame;

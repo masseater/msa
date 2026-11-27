@@ -2,25 +2,17 @@ import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type srcTypes from "../../src/index.types.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 
-const { cleanupAll } = harnessModule;
-
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
-const { harnesses } = agentSessionCompactionSupport;
+const { afterEachHook, harnesses } = agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;
-
-const afterEachHook3 = () => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-  return cleanupAll(harnesses);
-};
 
 const TOOL_RESULT = `large-tool-result:${"x".repeat(8000)}`;
 
@@ -112,7 +104,7 @@ const compactsAfterAnOversizedToolResult = (modelOverride: boolean) =>
   });
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook3);
+  afterEach(afterEachHook);
 
   it.each([false, true])(
     "compacts after an oversized tool result in the same run (model override: %s)",

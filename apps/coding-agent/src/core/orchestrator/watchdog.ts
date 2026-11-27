@@ -10,16 +10,12 @@ import watchdogInspect from "./watchdog-inspect.ts";
 import watchdogReport from "./watchdog-report.ts";
 import type watchdogTypes from "./watchdog.types.ts";
 
-const { abortThread, nowMillis } = runtimeModule;
+const { abortThread, lockedWrite, nowMillis } = runtimeModule;
 const { orchestratorError } = errors;
 const { store } = storeModule;
 const { scheduling } = schedule;
 const { INTERVAL_MS, inspect } = watchdogInspect;
 const { currentPid, processAlive } = processAliveModule;
-
-function locked(runtime: runtimeTypes.Runtime): runtimeTypes.Write {
-  return (effect) => Effect.promise(() => runtime.exclusive(effect));
-}
 
 function resolveFinding(
   runtime: runtimeTypes.Runtime,
@@ -55,7 +51,7 @@ function resolveFinding(
       taskIds,
       finding.taskStatus,
       content,
-      locked(runtime),
+      lockedWrite(runtime),
     ),
     (text) =>
       runtime.options.report(text, {
@@ -76,7 +72,7 @@ function resolveTaskWithoutThread(
   if (task === undefined) return Effect.void;
   store.setTaskStatus(runtime.database, taskId, "stopped", now);
   return Effect.map(
-    watchdogReport.threadlessText(runtime, taskId, now - task.updatedAt, locked(runtime)),
+    watchdogReport.threadlessText(runtime, taskId, now - task.updatedAt, lockedWrite(runtime)),
     (text) =>
       runtime.options.report(text, { role: "worker", started: [], status: "stopped", taskId }),
   );

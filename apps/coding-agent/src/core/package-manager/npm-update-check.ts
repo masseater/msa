@@ -4,10 +4,12 @@ import { gt, maxSatisfying, rcompare } from "semver";
 import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
+import platformEnv from "../platform/env.ts";
 import commandRunner from "./command-runner.ts";
 import packageEnv from "./package-env.ts";
+const { isOfflineModeEnabled } = platformEnv;
 
-const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = packageEnv;
+const { NETWORK_TIMEOUT_MS } = packageEnv;
 const { awaited, awaitingWith } = awaitingModule;
 
 export default class NpmUpdateCheck {

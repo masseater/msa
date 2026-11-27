@@ -3,9 +3,11 @@ import type crashLogTypes from "./crash-log.types.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 import platform from "./platform/index.ts";
 import crashFiles from "./platform/node/crash-files.ts";
+import optionalFile from "./platform/node/optional-file.ts";
 import sourceInfoModule from "./source-info.ts";
 
-const { readCrashFileBeforeExit, writeCrashFileBeforeExit } = crashFiles;
+const { writeCrashFileBeforeExit } = crashFiles;
+const { readOptionalText } = optionalFile;
 const { makeDirectory, readText, remove, writeFile } = platform.files;
 
 const { VERSION, getAgentDir } = config;
@@ -198,7 +200,7 @@ function recordCrash(
       timestamp: nowIso(),
       version: VERSION,
     };
-    const records = parseCrashLog(readCrashFileBeforeExit(path));
+    const records = parseCrashLog(readOptionalText(path));
     writeCrashFileBeforeExit(
       path,
       serializeCrashLog([...records, record].slice(-MAX_CRASH_RECORDS)),

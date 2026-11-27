@@ -1,38 +1,28 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
 const { packagePaths } = packageManagerSupport;
 
-const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
-  testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, writeTextFile } = testing;
 
 const shouldExpandInExclusionAndExactPatterns = () =>
   runTest(
     Effect.gen(function* () {
       const previousHome = readEnv("HOME");
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", fixture.tempDir);
 
       try {
-        const skillsDir = joinPath(tempDir, "extra", "skills");
+        const skillsDir = joinPath(fixture.tempDir, "extra", "skills");
         for (const name of ["keep", "glob-excluded", "exact-excluded"]) {
           yield* makeDirectory(joinPath(skillsDir, name));
           yield* writeTextFile(
@@ -41,13 +31,13 @@ const shouldExpandInExclusionAndExactPatterns = () =>
           );
         }
 
-        settingsManager.resources.setSkillPaths([
+        fixture.settingsManager.resources.setSkillPaths([
           "~/extra/skills",
           "!~/extra/skills/glob-*",
           "-~/extra/skills/exact-excluded",
         ]);
 
-        const result = yield* awaited(packageManager.resolution.resolve());
+        const result = yield* awaited(fixture.packageManager.resolution.resolve());
         expect(result.skills.some((r) => packagePaths.isEnabled(r, "keep/SKILL.md"))).toBe(true);
         expect(
           result.skills.some((r) => packagePaths.isDisabled(r, "glob-excluded/SKILL.md")),
@@ -68,14 +58,14 @@ const shouldExpandInExclusionAndExactPatterns = () =>
 const shouldExcludeExtensionsWithPattern = () =>
   runTest(
     Effect.gen(function* () {
-      const extDir = joinPath(agentDir, "extensions");
+      const extDir = joinPath(fixture.agentDir, "extensions");
       yield* makeDirectory(extDir);
       yield* writeTextFile(joinPath(extDir, "keep.ts"), "export default function() {}");
       yield* writeTextFile(joinPath(extDir, "remove.ts"), "export default function() {}");
 
-      settingsManager.resources.setExtensionPaths(["extensions", "!**/remove.ts"]);
+      fixture.settingsManager.resources.setExtensionPaths(["extensions", "!**/remove.ts"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "keep.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "remove.ts"))).toBe(true);
     }),
@@ -84,15 +74,15 @@ const shouldExcludeExtensionsWithPattern = () =>
 const shouldFilterThemesWithGlobPatterns = () =>
   runTest(
     Effect.gen(function* () {
-      const themesDir = joinPath(agentDir, "themes");
+      const themesDir = joinPath(fixture.agentDir, "themes");
       yield* makeDirectory(themesDir);
       yield* writeTextFile(joinPath(themesDir, "dark.json"), "{}");
       yield* writeTextFile(joinPath(themesDir, "light.json"), "{}");
       yield* writeTextFile(joinPath(themesDir, "funky.json"), "{}");
 
-      settingsManager.resources.setThemePaths(["themes", "!funky.json"]);
+      fixture.settingsManager.resources.setThemePaths(["themes", "!funky.json"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "dark.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "light.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isDisabled(r, "funky.json"))).toBe(true);
@@ -102,14 +92,14 @@ const shouldFilterThemesWithGlobPatterns = () =>
 const shouldFilterPromptsWithExclusionPattern = () =>
   runTest(
     Effect.gen(function* () {
-      const promptsDir = joinPath(agentDir, "prompts");
+      const promptsDir = joinPath(fixture.agentDir, "prompts");
       yield* makeDirectory(promptsDir);
       yield* writeTextFile(joinPath(promptsDir, "review.md"), "Review code");
       yield* writeTextFile(joinPath(promptsDir, "explain.md"), "Explain code");
 
-      settingsManager.resources.setPromptTemplatePaths(["prompts", "!explain.md"]);
+      fixture.settingsManager.resources.setPromptTemplatePaths(["prompts", "!explain.md"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.prompts.some((r) => packagePaths.isEnabled(r, "review.md"))).toBe(true);
       expect(result.prompts.some((r) => packagePaths.isDisabled(r, "explain.md"))).toBe(true);
     }),
@@ -118,7 +108,7 @@ const shouldFilterPromptsWithExclusionPattern = () =>
 const shouldFilterSkillsWithExclusionPattern = () =>
   runTest(
     Effect.gen(function* () {
-      const skillsDir = joinPath(agentDir, "skills");
+      const skillsDir = joinPath(fixture.agentDir, "skills");
       yield* makeDirectory(joinPath(skillsDir, "good-skill"));
       yield* makeDirectory(joinPath(skillsDir, "bad-skill"));
       yield* writeTextFile(
@@ -130,9 +120,9 @@ const shouldFilterSkillsWithExclusionPattern = () =>
         "---\nname: bad-skill\ndescription: Bad\n---\nContent",
       );
 
-      settingsManager.resources.setSkillPaths(["skills", "!**/bad-skill"]);
+      fixture.settingsManager.resources.setSkillPaths(["skills", "!**/bad-skill"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.skills.some((r) => packagePaths.isEnabled(r, "good-skill", "includes"))).toBe(
         true,
       );
@@ -145,48 +135,19 @@ const shouldFilterSkillsWithExclusionPattern = () =>
 const shouldWorkWithoutPatternsBackwardCompatible = () =>
   runTest(
     Effect.gen(function* () {
-      const extDir = joinPath(agentDir, "extensions");
+      const extDir = joinPath(fixture.agentDir, "extensions");
       yield* makeDirectory(extDir);
       const extPath = joinPath(extDir, "my-ext.ts");
       yield* writeTextFile(extPath, "export default function() {}");
 
-      settingsManager.resources.setExtensionPaths(["extensions/my-ext.ts"]);
+      fixture.settingsManager.resources.setExtensionPaths(["extensions/my-ext.ts"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
     }),
   );
 
-const beforeEachHook2 = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook2 = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook2);
-
-  afterEach(afterEachHook2);
-
   describe("pattern filtering in top-level arrays", () => {
     it("should expand ~ in exclusion and exact patterns", shouldExpandInExclusionAndExactPatterns);
 

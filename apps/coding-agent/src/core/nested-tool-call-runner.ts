@@ -1,11 +1,13 @@
 import type agentTypes from "@msa/agent-core/index.types";
-import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
 import NestedCallRecorder from "./nested-call-recorder.ts";
 import type nestedToolCallsTypes from "./nested-tool-calls.types.ts";
 import platform from "./platform/index.ts";
+import toolResultText from "./tool-result-text.ts";
+
+const { textOf } = toolResultText;
 const { awaited, awaitingWith } = awaitingModule;
 const { makeLatch } = platform;
 
@@ -13,12 +15,6 @@ interface CallScope {
   recorder: NestedCallRecorder;
   nextId: number;
   holdsQueue: boolean;
-}
-function textOf(result: agentTypes.AgentToolResult<unknown>): string {
-  return (result.content ?? [])
-    .filter((block): block is aiTypes.TextContent => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
 }
 export default class NestedToolCallRunner {
   private readonly host: nestedToolCallsTypes.NestedToolCallHost;

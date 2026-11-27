@@ -4,12 +4,13 @@ import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
+import platformEnv from "../platform/env.ts";
 import platform from "../platform/index.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
-import packageEnv from "./package-env.ts";
+const { isOfflineModeEnabled } = platformEnv;
 
 const { exists } = platform.files;
-const { isOfflineModeEnabled } = packageEnv;
+
 const { awaited, awaitingWith, performed } = awaitingModule;
 
 type ResolvingSource = {

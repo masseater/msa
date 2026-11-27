@@ -6,7 +6,7 @@ import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 
 const { platform } = nodeOs;
 
-const { join, readEnv } = platformModule;
+const { join } = platformModule;
 const { exists } = platformModule.files;
 const { spawnSync } = nodeChildProcess;
 const { getBinDir } = configModule;
@@ -82,12 +82,6 @@ function getToolPath(tool: "fd" | "rg"): Promise<string | null> {
   return exists(localPath).then((found) => (found ? localPath : systemToolPath(config)));
 }
 
-function isOfflineModeEnabled(): boolean {
-  const value = readEnv("MSA_OFFLINE");
-  if (value === undefined || value === "") return false;
-  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
-}
-
-const toolCatalog = { TERMUX_PACKAGES, TOOLS, TOOLS_DIR, getToolPath, isOfflineModeEnabled };
+const toolCatalog = { TERMUX_PACKAGES, TOOLS, TOOLS_DIR, getToolPath };
 
 export default toolCatalog;

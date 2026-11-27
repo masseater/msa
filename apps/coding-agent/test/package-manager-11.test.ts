@@ -1,14 +1,13 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-const { readEnv } = platform;
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 
 const { packagePaths } = packageManagerSupport;
 
@@ -17,28 +16,16 @@ const {
   joinPath,
   makeDirectory,
   makeSymlink,
-  makeTempDir,
   relativePath,
-  removePath,
   runTest,
   toJsonText,
   writeTextFile,
 } = testing;
 
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
-
 const shouldExpandPositiveGlobManifestEntriesBefore = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "skill-manifest-glob-pkg");
+      const pkgDir = joinPath(fixture.tempDir, "skill-manifest-glob-pkg");
       yield* makeDirectory(joinPath(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown"));
       yield* makeDirectory(joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api"));
       yield* writeTextFile(
@@ -59,7 +46,9 @@ const shouldExpandPositiveGlobManifestEntriesBefore = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),
+      );
       expect(
         result.skills.some((r) => packagePaths.isEnabled(r, "pdf-to-markdown", "includes")),
       ).toBe(true);
@@ -71,7 +60,7 @@ const shouldExpandPositiveGlobManifestEntriesBefore = () =>
 
 const shouldSortManifestGlobMatchesAndUseSetup = () =>
   Effect.gen(function* () {
-    const pkgDir = joinPath(tempDir, "manifest-glob-semantics-pkg");
+    const pkgDir = joinPath(fixture.tempDir, "manifest-glob-semantics-pkg");
     const extensionFilesDir = joinPath(pkgDir, "extension-files");
     const extensionGroupDir = joinPath(pkgDir, "extension-groups", "group");
     const linkedPluginSource = joinPath(pkgDir, "linked-plugin-source");
@@ -122,7 +111,9 @@ const shouldSortManifestGlobMatchesAndUse = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),
+      );
       expect(result.extensions.map((resource) => relativePath(pkgDir, resource.path))).toEqual([
         joinPath("extension-files", "a.ts"),
         joinPath("extension-files", "z.ts"),
@@ -142,36 +133,7 @@ const shouldSortManifestGlobMatchesAndUse = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("pattern filtering in msa manifest", () => {
     it(
       "should expand positive glob manifest entries before collecting skills",

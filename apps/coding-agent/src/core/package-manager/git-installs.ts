@@ -9,11 +9,12 @@ import platformModule from "../platform/index.ts";
 import commandRunner from "./command-runner.ts";
 import gitRemote from "./git-remote.ts";
 import packageEnv from "./package-env.ts";
+const { isOfflineModeEnabled } = platformModule;
 
 const { dirname, join } = platformModule;
 const { exists, makeDirectory, remove, writeFile } = platformModule.files;
 const { ensureExtensionTempFolder } = packageManager;
-const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = packageEnv;
+const { NETWORK_TIMEOUT_MS } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 
 export default class GitInstalls {
