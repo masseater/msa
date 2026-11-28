@@ -5,7 +5,8 @@ import { expect, it } from "vite-plus/test";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import type settingsManagerSupportTypes from "./settings-manager-support.types.ts";
-const { joinPath, makeDirectory, makeTempDir, readJsonFile, removeDirs, writeJsonFile } = testing;
+const { awaited, joinPath, makeDirectory, makeTempDir, readJsonFile, removeDirs, writeJsonFile } =
+  testing;
 
 const tempDirs: string[] = [];
 
@@ -68,9 +69,24 @@ const settingsRead = <A>(
     );
   });
 
+const persistedAfter = (
+  change: (manager: settingsManagerTypes.SettingsManager) => void,
+  options: { check?: (manager: settingsManagerTypes.SettingsManager) => void } = {},
+) =>
+  withSettings(({ settingsPath, openManager }) =>
+    Effect.gen(function* () {
+      const manager = yield* openManager();
+      options.check?.(manager);
+      change(manager);
+      yield* awaited(manager.persistence.flush());
+      return { manager, saved: yield* readSettings(settingsPath) };
+    }),
+  );
+
 const readSettings = (file: string): Effect.Effect<any> => readJsonFile(file) as Effect.Effect<any>;
 
 const settingsManagerSupport = {
+  persistedAfter,
   readSettings,
   readingFrom,
   removeSettingsDirs,

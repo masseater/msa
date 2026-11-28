@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import SettingsManager from "../src/core/settings-manager.ts";
 import settingsManagerSupport from "./settings-manager-support.ts";
-const { readSettings, removeSettingsDirs, withSettings } = settingsManagerSupport;
+const { persistedAfter, readSettings, removeSettingsDirs, settingsRead, withSettings } =
+  settingsManagerSupport;
 
 const { awaited, runTest, writeJsonFile } = testing;
 
@@ -72,50 +73,6 @@ const shouldFallBackToPlatformDefaults = () => {
   expect(SettingsManager.inMemory().terminal.getExternalEditorCommand()).toBe("nano");
 };
 
-const defaultsToFullscreenAndPersistsRegularMode = () =>
-  runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        const manager = yield* openManager();
-
-        expect(manager.terminal.getTuiMode()).toBe("fullscreen");
-
-        manager.terminal.setTuiMode("regular");
-        yield* awaited(manager.persistence.flush());
-
-        expect(manager.terminal.getTuiMode()).toBe("regular");
-        const savedSettings = yield* readSettings(settingsPath);
-        expect(savedSettings.tuiMode).toBe("regular");
-      }),
-    ),
-  );
-
-const fallsBackToFullscreenForUnsupportedValues = () =>
-  runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { tuiMode: "other" });
-
-        const manager = yield* openManager();
-
-        expect(manager.terminal.getTuiMode()).toBe("fullscreen");
-      }),
-    ),
-  );
-
-const doesNotRecognizeTheOldUimodeSetting = () =>
-  runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { uiMode: "regular" });
-
-        const manager = yield* openManager();
-
-        expect(manager.terminal.getTuiMode()).toBe("fullscreen");
-      }),
-    ),
-  );
-
 const validatesAndPersistsFullscreenSettings = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
@@ -171,64 +128,40 @@ const persistsFullscreenWheelScrollLines = () =>
     ),
   );
 
-const shouldDefaultTo1AndPersistBinary = () =>
+const persistsRegularTuiMode = () =>
   runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        const manager = yield* openManager();
-
-        expect(manager.terminal.getOutputPad()).toBe(1);
-
-        manager.terminal.setOutputPad(0);
-        yield* awaited(manager.persistence.flush());
-
-        expect(manager.terminal.getOutputPad()).toBe(0);
-        const savedSettings = yield* readSettings(settingsPath);
-        expect(savedSettings.outputPad).toBe(0);
-      }),
-    ),
+    Effect.gen(function* () {
+      const { manager, saved } = yield* persistedAfter(
+        (opened) => opened.terminal.setTuiMode("regular"),
+        { check: (opened) => expect(opened.terminal.getTuiMode()).toBe("fullscreen") },
+      );
+      expect(manager.terminal.getTuiMode()).toBe("regular");
+      expect(saved.tuiMode).toBe("regular");
+    }),
   );
 
-const shouldTreatUnsupportedOutputpadValuesAsDefault = () =>
+const persistsBinaryOutputPad = () =>
   runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { outputPad: 2 });
-
-        const manager = yield* openManager();
-
-        expect(manager.terminal.getOutputPad()).toBe(1);
-      }),
-    ),
+    Effect.gen(function* () {
+      const { manager, saved } = yield* persistedAfter(
+        (opened) => opened.terminal.setOutputPad(0),
+        { check: (opened) => expect(opened.terminal.getOutputPad()).toBe(1) },
+      );
+      expect(manager.terminal.getOutputPad()).toBe(0);
+      expect(saved.outputPad).toBe(0);
+    }),
   );
 
-const defaultsToStreamingAndPersistsRenderingModes = () =>
+const persistsMermaidRenderingMode = () =>
   runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        const manager = yield* openManager();
-
-        expect(manager.display.getMermaidRenderingMode()).toBe("streaming");
-
-        manager.display.setMermaidRenderingMode("final");
-        yield* awaited(manager.persistence.flush());
-
-        expect(manager.display.getMermaidRenderingMode()).toBe("final");
-        const savedSettings = yield* readSettings(settingsPath);
-        expect(savedSettings.markdown.mermaid).toBe("final");
-      }),
-    ),
-  );
-
-const fallsBackToStreamingForUnsupportedValues = () =>
-  runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { markdown: { mermaid: "sometimes" } });
-
-        expect((yield* openManager()).display.getMermaidRenderingMode()).toBe("streaming");
-      }),
-    ),
+    Effect.gen(function* () {
+      const { manager, saved } = yield* persistedAfter(
+        (opened) => opened.display.setMermaidRenderingMode("final"),
+        { check: (opened) => expect(opened.display.getMermaidRenderingMode()).toBe("streaming") },
+      );
+      expect(manager.display.getMermaidRenderingMode()).toBe("final");
+      expect(saved.markdown.mermaid).toBe("final");
+    }),
   );
 
 const afterEachHook = () => {
@@ -257,17 +190,23 @@ describe("SettingsManager", () => {
   });
 
   describe("TUI mode", () => {
-    it(
-      "defaults to fullscreen and persists regular mode",
-      defaultsToFullscreenAndPersistsRegularMode,
-    );
+    it("defaults to fullscreen and persists regular mode", persistsRegularTuiMode);
 
-    it(
-      "falls back to fullscreen for unsupported values",
-      fallsBackToFullscreenForUnsupportedValues,
+    settingsRead(
+      (manager) => manager.terminal.getTuiMode(),
+      [
+        [
+          "falls back to fullscreen for unsupported values",
+          { global: { tuiMode: "other" } },
+          "fullscreen",
+        ],
+        [
+          "does not recognize the old uiMode setting",
+          { global: { uiMode: "regular" } },
+          "fullscreen",
+        ],
+      ],
     );
-
-    it("does not recognize the old uiMode setting", doesNotRecognizeTheOldUimodeSetting);
   });
 
   describe("fullscreen", () => {
@@ -279,20 +218,32 @@ describe("SettingsManager", () => {
 
 describe("SettingsManager", () => {
   describe("outputPad", () => {
-    it("should default to 1 and persist binary values", shouldDefaultTo1AndPersistBinary);
+    it("should default to 1 and persist binary values", persistsBinaryOutputPad);
 
-    it(
-      "should treat unsupported outputPad values as default padding",
-      shouldTreatUnsupportedOutputpadValuesAsDefault,
+    settingsRead(
+      (manager) => manager.terminal.getOutputPad(),
+      [
+        [
+          "should treat unsupported outputPad values as default padding",
+          { global: { outputPad: 2 } },
+          1,
+        ],
+      ],
     );
   });
 
   describe("markdown.mermaid", () => {
-    it(
-      "defaults to streaming and persists rendering modes",
-      defaultsToStreamingAndPersistsRenderingModes,
-    );
+    it("defaults to streaming and persists rendering modes", persistsMermaidRenderingMode);
 
-    it("falls back to streaming for unsupported values", fallsBackToStreamingForUnsupportedValues);
+    settingsRead(
+      (manager) => manager.display.getMermaidRenderingMode(),
+      [
+        [
+          "falls back to streaming for unsupported values",
+          { global: { markdown: { mermaid: "sometimes" } } },
+          "streaming",
+        ],
+      ],
+    );
   });
 });
