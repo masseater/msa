@@ -10,7 +10,8 @@ const { discoverAndLoadExtensions } = loader;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
-const { discoverCleanly, extensionCode, extensionCodeWithTool } = extensionsDiscoverySupport;
+const { discoverCleanly, extensionCode, extensionCodeWithTool, writeExtensionPackage } =
+  extensionsDiscoverySupport;
 
 const { useExtensionsDir } = tempDirKit;
 
@@ -47,18 +48,10 @@ const keepsPackageJsonMsaExtensionEntriesWith = () =>
 const packageJsonCanDeclareMultipleExtensions = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extTemp.extensionsDir, "my-package");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "ext1.ts"), extensionCode);
-      yield* writeTextFile(joinPath(subdir, "ext2.ts"), extensionCode);
-      yield* writeTextFile(
-        joinPath(subdir, "package.json"),
-        yield* toJsonText({
-          msa: {
-            extensions: ["./ext1.ts", "./ext2.ts"],
-          },
-          name: "my-package",
-        }),
+      yield* writeExtensionPackage(
+        joinPath(extTemp.extensionsDir, "my-package"),
+        { "ext1.ts": extensionCode, "ext2.ts": extensionCode },
+        { msa: { extensions: ["./ext1.ts", "./ext2.ts"] }, name: "my-package" },
       );
 
       yield* discoverCleanly(extTemp, 2);
@@ -68,18 +61,13 @@ const packageJsonCanDeclareMultipleExtensions = () =>
 const packageJsonWithMsaFieldTakesPrecedence = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extTemp.extensionsDir, "my-package");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCodeWithTool("from-index"));
-      yield* writeTextFile(joinPath(subdir, "custom.ts"), extensionCodeWithTool("from-custom"));
-      yield* writeTextFile(
-        joinPath(subdir, "package.json"),
-        yield* toJsonText({
-          msa: {
-            extensions: ["./custom.ts"],
-          },
-          name: "my-package",
-        }),
+      yield* writeExtensionPackage(
+        joinPath(extTemp.extensionsDir, "my-package"),
+        {
+          "custom.ts": extensionCodeWithTool("from-custom"),
+          "index.ts": extensionCodeWithTool("from-index"),
+        },
+        { msa: { extensions: ["./custom.ts"] }, name: "my-package" },
       );
 
       const result = yield* discoverCleanly(extTemp, 1);
@@ -93,15 +81,10 @@ const packageJsonWithMsaFieldTakesPrecedence = () =>
 const ignoresPackageJsonWithoutMsaFieldFalls = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extTemp.extensionsDir, "my-package");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
-      yield* writeTextFile(
-        joinPath(subdir, "package.json"),
-        yield* toJsonText({
-          name: "my-package",
-          version: "1.0.0",
-        }),
+      yield* writeExtensionPackage(
+        joinPath(extTemp.extensionsDir, "my-package"),
+        { "index.ts": extensionCode },
+        { name: "my-package", version: "1.0.0" },
       );
 
       const result = yield* discoverCleanly(extTemp, 1);
@@ -158,16 +141,10 @@ const handlesMixedDirectFilesAndSubdirectories = () =>
 const skipsNonExistentPathsDeclaredInPackage = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extTemp.extensionsDir, "my-package");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "exists.ts"), extensionCode);
-      yield* writeTextFile(
-        joinPath(subdir, "package.json"),
-        yield* toJsonText({
-          msa: {
-            extensions: ["./exists.ts", "./missing.ts"],
-          },
-        }),
+      yield* writeExtensionPackage(
+        joinPath(extTemp.extensionsDir, "my-package"),
+        { "exists.ts": extensionCode },
+        { msa: { extensions: ["./exists.ts", "./missing.ts"] } },
       );
 
       const result = yield* discoverCleanly(extTemp, 1);

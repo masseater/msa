@@ -11,7 +11,7 @@ const { discoverAndLoadExtensions } = loader;
 const { awaited, basenameOf, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } =
   testing;
 
-const { discoverCleanly, extensionCode } = extensionsDiscoverySupport;
+const { discoverCleanly, extensionCode, writeExtensionPackage } = extensionsDiscoverySupport;
 
 const { useExtensionsDir } = tempDirKit;
 
@@ -164,19 +164,10 @@ const prefersIndexTsOverIndexJs = () =>
 const discoversSubdirectoryWithPackageJsonMsaField = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extTemp.extensionsDir, "my-package");
-      const srcDir = joinPath(subdir, "src");
-      yield* makeDirectory(subdir);
-      yield* makeDirectory(srcDir);
-      yield* writeTextFile(joinPath(srcDir, "main.ts"), extensionCode);
-      yield* writeTextFile(
-        joinPath(subdir, "package.json"),
-        yield* toJsonText({
-          msa: {
-            extensions: ["./src/main.ts"],
-          },
-          name: "my-package",
-        }),
+      yield* writeExtensionPackage(
+        joinPath(extTemp.extensionsDir, "my-package"),
+        { "src/main.ts": extensionCode },
+        { msa: { extensions: ["./src/main.ts"] }, name: "my-package" },
       );
 
       const result = yield* discoverCleanly(extTemp, 1);
