@@ -9,7 +9,7 @@ const { usePackageManagerFixture } = packageManagerFixture;
 
 const fixture = usePackageManagerFixture();
 
-const { packagePaths } = packageManagerSupport;
+const { packagePaths, writeSkill } = packageManagerSupport;
 
 const {
   awaited,
@@ -28,13 +28,15 @@ const shouldExpandPositiveGlobManifestEntriesBefore = () =>
       const pkgDir = joinPath(fixture.tempDir, "skill-manifest-glob-pkg");
       yield* makeDirectory(joinPath(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown"));
       yield* makeDirectory(joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api"));
-      yield* writeTextFile(
+      yield* writeSkill(
         joinPath(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown", "SKILL.md"),
-        "---\nname: pdf-to-markdown\ndescription: PDF to Markdown\n---\nContent",
+        "pdf-to-markdown",
+        "PDF to Markdown",
       );
-      yield* writeTextFile(
+      yield* writeSkill(
         joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api", "SKILL.md"),
-        "---\nname: document-processor-api\ndescription: DWS\n---\nContent",
+        "document-processor-api",
+        "DWS",
       );
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
@@ -79,9 +81,11 @@ const shouldSortManifestGlobMatchesAndUseSetup = () =>
       "export default function() {}",
     );
     yield* writeTextFile(joinPath(extensionGroupDir, "index.ts"), "export default function() {}");
-    yield* writeTextFile(
+    yield* writeSkill(
       joinPath(pkgDir, "plugins", "local", "skills", "local-skill", "SKILL.md"),
-      "---\nname: local-skill\ndescription: Local\n---\n",
+      "local-skill",
+      "Local",
+      "",
     );
     return { linkedPluginSource, pkgDir };
   });
@@ -90,9 +94,11 @@ const shouldSortManifestGlobMatchesAndUse = () =>
   runTest(
     Effect.gen(function* () {
       const { linkedPluginSource, pkgDir } = yield* shouldSortManifestGlobMatchesAndUseSetup();
-      yield* writeTextFile(
+      yield* writeSkill(
         joinPath(linkedPluginSource, "skills", "linked-skill", "SKILL.md"),
-        "---\nname: linked-skill\ndescription: Linked\n---\n",
+        "linked-skill",
+        "Linked",
+        "",
       );
       yield* makeSymlink(linkedPluginSource, joinPath(pkgDir, "plugins", "linked"));
       yield* writeTextFile(

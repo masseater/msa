@@ -159,21 +159,6 @@ const returnsEmptyListForInvalidRegex = () => {
   expect(result).toEqual([]);
 };
 
-const returnsAllSessionsWhenNamefilterIsAll = () => {
-  const result = filterAndSortSessions(sessions2, "", "recent", "all");
-  expect(result.map((session) => session.id)).toEqual(["named1", "named2", "other1", "other2"]);
-};
-
-const returnsOnlyNamedSessionsWhenNamefilterIs = () => {
-  const result = filterAndSortSessions(sessions2, "", "recent", "named");
-  expect(result.map((session) => session.id)).toEqual(["named1", "named2"]);
-};
-
-const appliesNameFilterBeforeSearchQuery = () => {
-  const result = filterAndSortSessions(sessions2, "blueberry", "recent", "named");
-  expect(result.map((session) => session.id)).toEqual(["named1", "named2"]);
-};
-
 const excludesWhitespaceOnlyNamesFromNamedFilter = () => {
   const sessionsWithWhitespace: sessionManagerTypes.SessionInfo[] = [
     makeSession({
@@ -218,14 +203,29 @@ describe("session selector search", () => {
   it("returns empty list for invalid regex", returnsEmptyListForInvalidRegex);
 
   describe("name filter", () => {
-    it("returns all sessions when nameFilter is 'all'", returnsAllSessionsWhenNamefilterIsAll);
-
-    it(
-      "returns only named sessions when nameFilter is 'named'",
-      returnsOnlyNamedSessionsWhenNamefilterIs,
-    );
-
-    it("applies name filter before search query", appliesNameFilterBeforeSearchQuery);
+    it.each([
+      {
+        expected: ["named1", "named2", "other1", "other2"],
+        filter: "all",
+        name: "returns all sessions when nameFilter is 'all'",
+        query: "",
+      },
+      {
+        expected: ["named1", "named2"],
+        filter: "named",
+        name: "returns only named sessions when nameFilter is 'named'",
+        query: "",
+      },
+      {
+        expected: ["named1", "named2"],
+        filter: "named",
+        name: "applies name filter before search query",
+        query: "blueberry",
+      },
+    ] as const)("$name", ({ expected, filter, query }) => {
+      const result = filterAndSortSessions(sessions2, query, "recent", filter);
+      expect(result.map((session) => session.id)).toEqual(expected);
+    });
 
     it(
       "excludes whitespace-only names from named filter",

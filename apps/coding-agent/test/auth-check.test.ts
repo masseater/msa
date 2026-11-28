@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 
 import args from "../src/cli/args.ts";
 import authCheck from "../src/cli/auth-check.ts";
@@ -9,7 +9,7 @@ import authCheckSupport from "./auth-check-support.ts";
 const { checkProviderAuth, getProviderCredential } = authCheck;
 const { parseArgs } = args;
 
-const { afterEachHook, beforeEachHook, createRuntime } = authCheckSupport;
+const { createRuntime } = authCheckSupport;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
@@ -153,10 +153,6 @@ const reportsAnUnknownProviderAsNotReady = () =>
   );
 
 describe("auth check command", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   test("reports a configured provider as ready", reportsAConfiguredProviderAsReady);
 
   test("resolves the provider from --model", resolvesTheProviderFromModel);

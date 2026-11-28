@@ -1,18 +1,16 @@
-import type agentTypes from "@msa/agent-core/index.types";
-import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import compaction from "../src/core/compaction/index.ts";
-import type compactionTypes from "../src/core/compaction/index.types.ts";
 import compactionSummaryReasoning1Support from "./compaction-summary-reasoning-1-support.ts";
 
-const { createModel } = compactionSummaryReasoning1Support;
+const { createModel, messages, mockSummaryResponse, splitTurnPreparation } =
+  compactionSummaryReasoning1Support;
 
 const { compact, generateSummary } = compaction;
 
-const { awaited, currentTimeMillis, runTest } = testing;
+const { awaited, runTest } = testing;
 
 const { completeSimpleMock } = vi.hoisted(() => ({
   completeSimpleMock: vi.fn(),
@@ -30,99 +28,70 @@ vi.mock("@msa/ai/compat", (importOriginal) =>
   ),
 );
 
-const mockSummaryResponse: aiTypes.AssistantMessage = {
-  api: "anthropic-messages" as const,
-  content: [{ text: "## Goal\nTest summary", type: "text" as const }],
-  model: "claude-sonnet-4-5",
-  provider: "anthropic-api",
-  role: "assistant",
-  stopReason: "stop",
-  timestamp: currentTimeMillis(),
-  usage: {
-    cacheRead: 0,
-    cacheWrite: 0,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-    input: 10,
-    output: 10,
-    totalTokens: 20,
+const noopCases = [
+  {
+    absent: "reasoning",
+    model: createModel(false),
+    name: "does not set reasoning for non-reasoning models",
+    thinking: "medium",
   },
-};
-const messages: agentTypes.AgentMessage[] = [
-  { content: "Summarize this.", role: "user", timestamp: currentTimeMillis() },
-];
-
-const doesNotSetReasoningForNonReasoning = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* awaited(
-        generateSummary(
-          messages,
-          createModel(false),
-          2000,
-          "test-key",
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          "medium",
-        ),
-      );
-
-      expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-      expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
-        apiKey: "test-key",
-      });
-      expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
+  {
+    absent: "reasoning",
+    model: createModel(true),
+    name: "does not set reasoning when thinking is off",
+    thinking: "off",
+  },
+  {
+    absent: "refusalFallbacks",
+    model: createModel(true, 8192, {
+      allowedFallbackModels: [
+        {
+          cost: { cacheRead: 0.5, cacheWrite: 6.25, input: 5, output: 25 },
+          model: "claude-opus-4-8",
+          provider: "anthropic-api",
+        },
+      ],
     }),
-  );
+    name: "leaves Anthropic refusal fallback handling to msa-ai model metadata",
+    thinking: undefined,
+  },
+  {
+    absent: "refusalFallbacks",
+    model: createModel(true),
+    name: "does not set Anthropic refusal fallback for models without allowed fallback targets",
+    thinking: undefined,
+  },
+] as const;
 
-const leavesAnthropicRefusalFallbackHandlingToMsa = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* awaited(
-        generateSummary(
-          messages,
-          createModel(true, 8192, {
-            allowedFallbackModels: [
-              {
-                cost: { cacheRead: 0.5, cacheWrite: 6.25, input: 5, output: 25 },
-                model: "claude-opus-4-8",
-                provider: "anthropic-api",
-              },
-            ],
-          }),
-          2000,
-          "test-key",
-        ),
-      );
+const requestsWithout = ({ absent, model, thinking }: (typeof noopCases)[number]) =>
+  Effect.gen(function* () {
+    yield* awaited(
+      generateSummary(
+        messages,
+        model,
+        2000,
+        "test-key",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        thinking,
+      ),
+    );
 
-      expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-      expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
-    }),
-  );
-
-const doesNotSetAnthropicRefusalFallbackFor = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* awaited(generateSummary(messages, createModel(true), 2000, "test-key"));
-
-      expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-      expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
-    }),
-  );
+    expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+    expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({ apiKey: "test-key" });
+    expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty(absent);
+  });
 
 const clampsCompactionSummaryMaxtokensToTheModel = () =>
   runTest(
     Effect.gen(function* () {
-      const preparation: compactionTypes.CompactionPreparation = {
-        fileOps: { edited: new Set(), read: new Set(), written: new Set() },
-        firstKeptEntryId: "entry-keep",
-        isSplitTurn: true,
+      const preparation = splitTurnPreparation({
         messagesToSummarize: messages,
         settings: { enabled: true, keepRecentTokens: 20000, reserveTokens: 500000 },
         tokensBefore: 600000,
-        turnPrefixMessages: messages,
-      };
+      });
 
       const result = yield* awaited(compact(preparation, createModel(false, 128000), "test-key"));
 
@@ -144,15 +113,7 @@ describe("generateSummary reasoning options", () => {
     completeSimpleMock.mockReset();
     completeSimpleMock.mockResolvedValue(mockSummaryResponse);
   });
-  it("does not set reasoning for non-reasoning models", doesNotSetReasoningForNonReasoning);
-  it(
-    "leaves Anthropic refusal fallback handling to msa-ai model metadata",
-    leavesAnthropicRefusalFallbackHandlingToMsa,
-  );
-  it(
-    "does not set Anthropic refusal fallback for models without allowed fallback targets",
-    doesNotSetAnthropicRefusalFallbackFor,
-  );
+  it.each(noopCases)("$name", (testCase) => runTest(requestsWithout(testCase)));
   it(
     "clamps compaction summary maxTokens to the model output cap",
     clampsCompactionSummaryMaxtokensToTheModel,

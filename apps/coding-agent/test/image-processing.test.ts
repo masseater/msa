@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import imageConvert from "../src/utils/image-convert.ts";
+import type imageResizeCoreTypes from "../src/utils/image-resize-core.types.ts";
 import imageResize from "../src/utils/image-resize.ts";
 
 const { convertToPng, loadPngTranscoder } = imageConvert;
@@ -140,116 +141,86 @@ const shouldKeepCallerInputBytesIntact = () =>
     }),
   );
 
-const shouldReturnOriginalImageIfWithinLimits = () =>
-  runTest(
-    Effect.gen(function* () {
-      const result = yield* awaited(
-        resizeImage(imageBytes(TINY_PNG), "image/png", {
-          maxBytes: 1024 * 1024,
-          maxHeight: 100,
-          maxWidth: 100,
-        }),
-      );
+type Resized = imageResizeCoreTypes.ResizedImage | null;
 
-      expect(result).not.toBeNull();
-      expect(result!.wasResized).toBe(false);
-      expect(result!.data).toBe(TINY_PNG);
-      expect(result!.originalWidth).toBe(2);
-      expect(result!.originalHeight).toBe(2);
-      expect(result!.width).toBe(2);
-      expect(result!.height).toBe(2);
-    }),
-  );
+const generousLimits = { maxBytes: 1024 * 1024, maxHeight: 100, maxWidth: 100 };
 
-const shouldResizeImageExceedingDimensionLimits = () =>
-  runTest(
-    Effect.gen(function* () {
-      const result = yield* awaited(
-        resizeImage(imageBytes(MEDIUM_PNG_100x100), "image/png", {
-          maxBytes: 1024 * 1024,
-          maxHeight: 50,
-          maxWidth: 50,
-        }),
-      );
-
-      expect(result).not.toBeNull();
-      expect(result!.wasResized).toBe(true);
-      expect(result!.originalWidth).toBe(100);
-      expect(result!.originalHeight).toBe(100);
+const resizeCases: {
+  readonly bytes: Uint8Array;
+  readonly limits: { maxBytes: number; maxHeight: number; maxWidth: number };
+  readonly mime: string;
+  readonly name: string;
+  readonly verify: (result: Resized) => void;
+}[] = [
+  {
+    bytes: imageBytes(TINY_PNG),
+    limits: generousLimits,
+    mime: "image/png",
+    name: "should return original image if within limits",
+    verify: (result) => {
+      expect(result).toMatchObject({
+        data: TINY_PNG,
+        height: 2,
+        originalHeight: 2,
+        originalWidth: 2,
+        wasResized: false,
+        width: 2,
+      });
+    },
+  },
+  {
+    bytes: imageBytes(MEDIUM_PNG_100x100),
+    limits: { maxBytes: 1024 * 1024, maxHeight: 50, maxWidth: 50 },
+    mime: "image/png",
+    name: "should resize image exceeding dimension limits",
+    verify: (result) => {
+      expect(result).toMatchObject({ originalHeight: 100, originalWidth: 100, wasResized: true });
       expect(result!.width).toBeLessThanOrEqual(50);
       expect(result!.height).toBeLessThanOrEqual(50);
-    }),
-  );
-
-const shouldResizeImageExceedingByteLimit = () =>
-  runTest(
-    Effect.gen(function* () {
-      const originalBuffer = Buffer.from(LARGE_PNG_200x200, "base64");
-      const originalSize = originalBuffer.length;
-
-      const result = yield* awaited(
-        resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
-          maxBytes: Math.floor(LARGE_PNG_200x200.length * 0.9),
-          maxHeight: 2000,
-          maxWidth: 2000,
-        }),
+    },
+  },
+  {
+    bytes: imageBytes(LARGE_PNG_200x200),
+    limits: {
+      maxBytes: Math.floor(LARGE_PNG_200x200.length * 0.9),
+      maxHeight: 2000,
+      maxWidth: 2000,
+    },
+    mime: "image/png",
+    name: "should resize image exceeding byte limit",
+    verify: (result) => {
+      expect(Buffer.from(result!.data, "base64").length).toBeLessThan(
+        Buffer.from(LARGE_PNG_200x200, "base64").length,
       );
-
-      expect(result).not.toBeNull();
-      const resultBuffer = Buffer.from(result!.data, "base64");
-      expect(resultBuffer.length).toBeLessThan(originalSize);
       expect(result!.data.length).toBeLessThan(LARGE_PNG_200x200.length);
-    }),
-  );
-
-const shouldReturnNullWhenImageCannotBe = () =>
-  runTest(
-    Effect.gen(function* () {
-      const result = yield* awaited(
-        resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
-          maxBytes: 1,
-          maxHeight: 2000,
-          maxWidth: 2000,
-        }),
-      );
-
+    },
+  },
+  {
+    bytes: imageBytes(LARGE_PNG_200x200),
+    limits: { maxBytes: 1, maxHeight: 2000, maxWidth: 2000 },
+    mime: "image/png",
+    name: "should return null when image cannot be resized below maxBytes",
+    verify: (result) => {
       expect(result).toBeNull();
-    }),
-  );
-
-const shouldHandleJpegInput = () =>
-  runTest(
-    Effect.gen(function* () {
-      const result = yield* awaited(
-        resizeImage(imageBytes(TINY_JPEG), "image/jpeg", {
-          maxBytes: 1024 * 1024,
-          maxHeight: 100,
-          maxWidth: 100,
-        }),
-      );
-
-      expect(result).not.toBeNull();
-      expect(result!.wasResized).toBe(false);
-      expect(result!.originalWidth).toBe(2);
-      expect(result!.originalHeight).toBe(2);
-    }),
-  );
+    },
+  },
+  {
+    bytes: imageBytes(TINY_JPEG),
+    limits: generousLimits,
+    mime: "image/jpeg",
+    name: "should handle JPEG input",
+    verify: (result) => {
+      expect(result).toMatchObject({ originalHeight: 2, originalWidth: 2, wasResized: false });
+    },
+  },
+];
 
 describe("resizeImage", () => {
   it("should keep caller input bytes intact", shouldKeepCallerInputBytesIntact);
 
-  it("should return original image if within limits", shouldReturnOriginalImageIfWithinLimits);
-
-  it("should resize image exceeding dimension limits", shouldResizeImageExceedingDimensionLimits);
-
-  it("should resize image exceeding byte limit", shouldResizeImageExceedingByteLimit);
-
-  it(
-    "should return null when image cannot be resized below maxBytes",
-    shouldReturnNullWhenImageCannotBe,
+  it.each(resizeCases)("$name", ({ bytes, limits, mime, verify }) =>
+    runTest(Effect.map(awaited(resizeImage(bytes, mime, limits)), verify)),
   );
-
-  it("should handle JPEG input", shouldHandleJpegInput);
 });
 
 const shouldReturnUndefinedForNonResizedImages = () => {

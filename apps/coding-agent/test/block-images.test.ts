@@ -1,35 +1,26 @@
-import { tmpdir } from "os";
-
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import fileProcessor from "../src/cli/file-processor.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import read from "../src/core/tools/read.ts";
 import imageFixtureSupport from "./image-fixture-support.ts";
+import tempDir from "./temp-dir.ts";
 
 const { createTinyBmp1x1Red24bpp } = imageFixtureSupport;
 const { createReadTool } = read;
+const { useTempDir } = tempDir;
 const { processFileArguments } = fileProcessor;
 
-const {
-  awaited,
-  currentTimeMillis,
-  joinPath,
-  makeDirectory,
-  removePath,
-  runTest,
-  writeBytesFile,
-  writeTextFile,
-} = testing;
+const readDir = useTempDir("block-images-test-");
+
+const processDir = useTempDir("block-images-process-test-");
+
+const { awaited, joinPath, runTest, writeBytesFile, writeTextFile } = testing;
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
-
-let testDir2: string;
-
-let testDir3: string;
 
 const shouldDefaultBlockimagesToFalse = () => {
   const manager = SettingsManager.inMemory({});
@@ -63,10 +54,10 @@ const shouldHandleBlockimagesAlongsideAutoresize = () => {
 const shouldAlwaysReadImagesFilteringHappensAt = () =>
   runTest(
     Effect.gen(function* () {
-      const imagePath = joinPath(testDir2, "test.png");
+      const imagePath = joinPath(readDir.path, "test.png");
       yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-      const tool = createReadTool(testDir2);
+      const tool = createReadTool(readDir.path);
       const result = yield* awaited(tool.execute("test-1", { path: imagePath }));
 
       expect(result.content.length).toBeGreaterThanOrEqual(1);
@@ -78,10 +69,10 @@ const shouldAlwaysReadImagesFilteringHappensAt = () =>
 const shouldReadTextFilesNormally = () =>
   runTest(
     Effect.gen(function* () {
-      const textPath = joinPath(testDir2, "test.txt");
+      const textPath = joinPath(readDir.path, "test.txt");
       yield* writeTextFile(textPath, "Hello, world!");
 
-      const tool = createReadTool(testDir2);
+      const tool = createReadTool(readDir.path);
       const result = yield* awaited(tool.execute("test-2", { path: textPath }));
 
       expect(result.content).toHaveLength(1);
@@ -94,7 +85,7 @@ const shouldReadTextFilesNormally = () =>
 const shouldAlwaysProcessImagesFilteringHappensAt = () =>
   runTest(
     Effect.gen(function* () {
-      const imagePath = joinPath(testDir3, "test.png");
+      const imagePath = joinPath(processDir.path, "test.png");
       yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
       const result = yield* awaited(processFileArguments([imagePath]));
@@ -107,7 +98,7 @@ const shouldAlwaysProcessImagesFilteringHappensAt = () =>
 const shouldProcessBmpImagesFromDiskAs = () =>
   runTest(
     Effect.gen(function* () {
-      const imagePath = joinPath(testDir3, "test.bmp");
+      const imagePath = joinPath(processDir.path, "test.bmp");
       yield* writeBytesFile(imagePath, createTinyBmp1x1Red24bpp());
 
       const result = yield* awaited(processFileArguments([imagePath]));
@@ -122,21 +113,13 @@ const shouldProcessBmpImagesFromDiskAs = () =>
 const shouldProcessTextFilesNormally = () =>
   runTest(
     Effect.gen(function* () {
-      const textPath = joinPath(testDir3, "test.txt");
+      const textPath = joinPath(processDir.path, "test.txt");
       yield* writeTextFile(textPath, "Hello, world!");
 
       const result = yield* awaited(processFileArguments([textPath]));
 
       expect(result.images).toHaveLength(0);
       expect(result.text).toContain("Hello, world!");
-    }),
-  );
-
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      testDir2 = joinPath(tmpdir(), `block-images-test-${currentTimeMillis()}`);
-      yield* makeDirectory(testDir2);
     }),
   );
 
@@ -158,10 +141,6 @@ describe("blockImages setting", () => {
   });
 
   describe("Read tool", () => {
-    beforeEach(beforeEachHook);
-
-    afterEach(() => runTest(removePath(testDir2)));
-
     it(
       "should always read images (filtering happens at convertToLlm layer)",
       shouldAlwaysReadImagesFilteringHappensAt,
@@ -171,20 +150,8 @@ describe("blockImages setting", () => {
   });
 });
 
-const beforeEachHook2 = () =>
-  runTest(
-    Effect.gen(function* () {
-      testDir3 = joinPath(tmpdir(), `block-images-process-test-${currentTimeMillis()}`);
-      yield* makeDirectory(testDir3);
-    }),
-  );
-
 describe("blockImages setting", () => {
   describe("processFileArguments", () => {
-    beforeEach(beforeEachHook2);
-
-    afterEach(() => runTest(removePath(testDir3)));
-
     it(
       "should always process images (filtering happens at convertToLlm layer)",
       shouldAlwaysProcessImagesFilteringHappensAt,

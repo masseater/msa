@@ -3,6 +3,9 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import packageManagerFixture from "./package-manager-fixture.ts";
+import packageManagerSupport from "./package-manager-support.ts";
+
+const { writeSkill } = packageManagerSupport;
 
 const { usePackageManagerFixture } = packageManagerFixture;
 
@@ -19,17 +22,11 @@ const shouldRespectGitignoreInSkillDirectories = () =>
 
       const goodSkillDir = joinPath(skillsDir, "good-skill");
       yield* makeDirectory(goodSkillDir);
-      yield* writeTextFile(
-        joinPath(goodSkillDir, "SKILL.md"),
-        "---\nname: good-skill\ndescription: Good\n---\nContent",
-      );
+      yield* writeSkill(joinPath(goodSkillDir, "SKILL.md"), "good-skill", "Good");
 
       const ignoredSkillDir = joinPath(skillsDir, "venv", "bad-skill");
       yield* makeDirectory(ignoredSkillDir);
-      yield* writeTextFile(
-        joinPath(ignoredSkillDir, "SKILL.md"),
-        "---\nname: bad-skill\ndescription: Bad\n---\nContent",
-      );
+      yield* writeSkill(joinPath(ignoredSkillDir, "SKILL.md"), "bad-skill", "Bad");
 
       fixture.settingsManager.resources.setSkillPaths(["skills"]);
 
@@ -47,7 +44,7 @@ const shouldNotApplyParentGitignoreToMsa = () =>
       const skillDir = joinPath(fixture.tempDir, ".msa", "skills", "auto-skill");
       yield* makeDirectory(skillDir);
       const skillPath = joinPath(skillDir, "SKILL.md");
-      yield* writeTextFile(skillPath, "---\nname: auto-skill\ndescription: Auto\n---\nContent");
+      yield* writeSkill(skillPath, "auto-skill", "Auto");
 
       const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.skills.some((r) => r.path === skillPath && r.enabled)).toBe(true);
@@ -85,10 +82,7 @@ const shouldHandleDirectoriesWithMsaManifest = () =>
       yield* makeDirectory(joinPath(pkgDir, "src"));
       yield* writeTextFile(joinPath(pkgDir, "src", "index.ts"), "export default function() {}");
       yield* makeDirectory(joinPath(pkgDir, "skills", "my-skill"));
-      yield* writeTextFile(
-        joinPath(pkgDir, "skills", "my-skill", "SKILL.md"),
-        "---\nname: my-skill\ndescription: Test\n---\nContent",
-      );
+      yield* writeSkill(joinPath(pkgDir, "skills", "my-skill", "SKILL.md"), "my-skill", "Test");
 
       const result = yield* awaited(
         fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),

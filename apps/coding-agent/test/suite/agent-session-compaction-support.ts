@@ -4,6 +4,7 @@ import testing from "@msa/testing";
 import { vi } from "vite-plus/test";
 
 import closeAgentSessionModule from "../close-agent-session.ts";
+import utilities from "../utilities.ts";
 import type harnessTypes from "./harness.types.ts";
 
 const { cleanupAll } = closeAgentSessionModule;
@@ -12,16 +13,7 @@ const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
 const { currentTimeMillis } = testing;
 
-function createUsage(totalTokens: number) {
-  return {
-    cacheRead: 0,
-    cacheWrite: 0,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-    input: totalTokens,
-    output: 0,
-    totalTokens,
-  };
-}
+const { usageOf } = utilities;
 
 function createAssistant(
   harness: harnessTypes.Harness,
@@ -42,7 +34,7 @@ function createAssistant(
     api: model.api,
     model: model.id,
     provider: model.provider,
-    usage: createUsage(options.totalTokens ?? 0),
+    usage: usageOf(options.totalTokens ?? 0),
   };
 }
 
@@ -65,7 +57,7 @@ function useSummaryStreamFn(
         api: model.api,
         model: model.id,
         provider: model.provider,
-        usage: createUsage(10),
+        usage: usageOf(10),
       };
       stream.push({ message, reason: "stop", type: "done" });
     });
@@ -103,7 +95,6 @@ const afterEachHook = () => {
 const agentSessionCompactionSupport = {
   afterEachHook,
   createAssistant,
-  createUsage,
   harnesses,
   seedCompactableSession,
   useSummaryStreamFn,

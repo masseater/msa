@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
 import codingAgent from "../src/index.ts";
@@ -8,35 +8,19 @@ import mainModule from "../src/main.ts";
 import ConfigSelectorComponent from "../src/modes/interactive/components/config-selector.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
-import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
 const { DefaultPackageManager, SettingsManager } = codingAgent;
 
 const { initTheme } = themeModule;
 const { main } = mainModule;
 
-const { paths, setupPackageTest, teardownPackageTest, toJsonTextSync } = packageCommandPathsSupport;
+const { captureConsole, mainOutput, paths, toJsonTextSync, usePackageTest } =
+  packageCommandPathsSupport;
+
+const pkg = usePackageTest();
 
 const { awaited, fromJsonText, joinPath, readTextFile, runTest, toJsonText, writeTextFile } =
   testing;
-
-let state: packageCommandPathsSupportTypes.PackageTestState;
-
-let tempDir = "";
-
-let agentDir = "";
-
-let projectDir = "";
-
-const assignState = (
-  next: packageCommandPathsSupportTypes.PackageTestState,
-): packageCommandPathsSupportTypes.PackageTestState => {
-  state = next;
-  tempDir = next.tempDir;
-  agentDir = next.agentDir;
-  projectDir = next.projectDir;
-  return next;
-};
 
 const cyclesProjectPackageOverridesInConfigLocal = () =>
   runTest(
@@ -46,14 +30,14 @@ const cyclesProjectPackageOverridesInConfigLocal = () =>
       const settingsManager = yield* Effect.promise(() =>
         SettingsManager.fromStorage(storage, { projectTrusted: true }),
       );
-      const resolvedPaths = paths.extension(joinPath(tempDir, "pkg"), "npm:msa-tools", "user", [
+      const resolvedPaths = paths.extension(joinPath(pkg.tempDir, "pkg"), "npm:msa-tools", "user", [
         "bar.ts",
       ]);
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
         settingsManager,
-        projectDir,
-        agentDir,
+        pkg.projectDir,
+        pkg.agentDir,
         () => {},
         () => {},
         () => {},
@@ -79,7 +63,7 @@ const cyclesProjectPackageOverridesInConfigLocal = () =>
 const togglesBuiltInExtensionsInConfigGlobal = () =>
   runTest(
     Effect.gen(function* () {
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", pkg.tempDir);
       const settingsManager = yield* Effect.promise(() =>
         SettingsManager.fromStorage(new InMemorySettingsStorage(), {
           projectTrusted: true,
@@ -87,17 +71,17 @@ const togglesBuiltInExtensionsInConfigGlobal = () =>
       );
       const resolvedPaths = yield* awaited(
         new DefaultPackageManager({
-          agentDir,
+          agentDir: pkg.agentDir,
           builtinExtensions: ["llama.cpp", "mcp"],
-          cwd: projectDir,
+          cwd: pkg.projectDir,
           settingsManager,
         }).resolution.resolve(),
       );
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
         settingsManager,
-        projectDir,
-        agentDir,
+        pkg.projectDir,
+        pkg.agentDir,
         () => {},
         () => {},
         () => {},
@@ -119,7 +103,7 @@ const togglesBuiltInExtensionsInConfigGlobal = () =>
 const cyclesProjectBuiltInExtensionOverridesIn = () =>
   runTest(
     Effect.gen(function* () {
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", pkg.tempDir);
       const storage = new InMemorySettingsStorage();
       storage.withLock("global", () => toJsonTextSync({ extensions: ["-builtin:mcp"] }));
       const settingsManager = yield* Effect.promise(() =>
@@ -127,17 +111,17 @@ const cyclesProjectBuiltInExtensionOverridesIn = () =>
       );
       const resolvedPaths = yield* awaited(
         new DefaultPackageManager({
-          agentDir,
+          agentDir: pkg.agentDir,
           builtinExtensions: ["mcp"],
-          cwd: projectDir,
+          cwd: pkg.projectDir,
           settingsManager,
         }).resolution.resolve(),
       );
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
         settingsManager,
-        projectDir,
-        agentDir,
+        pkg.projectDir,
+        pkg.agentDir,
         () => {},
         () => {},
         () => {},
@@ -158,76 +142,50 @@ const cyclesProjectBuiltInExtensionOverridesIn = () =>
 const showsAFriendlyErrorForUnknownInstall = () =>
   runTest(
     Effect.gen(function* () {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["install", "--unknown"])).resolves.toBeUndefined());
-
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain('Unknown option --unknown for "install".');
-        expect(stderr).toContain(
-          'Use "msa --help" or "msa install <source> [-l] [--approve|--no-approve]".',
-        );
-        expect(process.exitCode).toBe(1);
-      } finally {
-        errorSpy.mockRestore();
-      }
+      const stderr = yield* mainOutput(["install", "--unknown"], "error");
+      expect(stderr).toContain('Unknown option --unknown for "install".');
+      expect(stderr).toContain(
+        'Use "msa --help" or "msa install <source> [-l] [--approve|--no-approve]".',
+      );
+      expect(process.exitCode).toBe(1);
     }),
   );
 
 const suggestsTheConfiguredSourceWhenUpdateInput = () =>
   runTest(
     Effect.gen(function* () {
-      const settingsPath = joinPath(agentDir, "settings.json");
+      const settingsPath = joinPath(pkg.agentDir, "settings.json");
       yield* writeTextFile(settingsPath, yield* toJsonText({ packages: ["npm:msa-formatter"] }));
 
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const output = captureConsole();
 
-      try {
-        yield* awaited(expect(main(["update", "msa-formatter"])).resolves.toBeUndefined());
+      yield* awaited(expect(main(["update", "msa-formatter"])).resolves.toBeUndefined());
 
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain("Did you mean npm:msa-formatter?");
-        expect(stdout).not.toContain("Updated msa-formatter");
-        expect(process.exitCode).toBe(1);
+      const stderr = output.stderr();
+      const stdout = output.stdout();
+      expect(stderr).toContain("Did you mean npm:msa-formatter?");
+      expect(stdout).not.toContain("Updated msa-formatter");
+      expect(process.exitCode).toBe(1);
 
-        const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
-          packages?: string[];
-        };
-        expect(settings.packages).toContain("npm:msa-formatter");
-      } finally {
-        errorSpy.mockRestore();
-        logSpy.mockRestore();
-      }
+      const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
+        packages?: string[];
+      };
+      expect(settings.packages).toContain("npm:msa-formatter");
     }),
   );
 
 const showsAFriendlyErrorForMissingInstall = () =>
   runTest(
     Effect.gen(function* () {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["install"])).resolves.toBeUndefined());
-
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain("Missing install source.");
-        expect(stderr).toContain("Usage: msa install <source> [-l]");
-        expect(stderr).not.toContain("at ");
-        expect(process.exitCode).toBe(1);
-      } finally {
-        errorSpy.mockRestore();
-      }
+      const stderr = yield* mainOutput(["install"], "error");
+      expect(stderr).toContain("Missing install source.");
+      expect(stderr).toContain("Usage: msa install <source> [-l]");
+      expect(stderr).not.toContain("at ");
+      expect(process.exitCode).toBe(1);
     }),
   );
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it(
     "cycles project package overrides in config local mode",
     cyclesProjectPackageOverridesInConfigLocal,
@@ -244,10 +202,6 @@ describe("package commands", () => {
 });
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it(
     "suggests the configured source when update input omits the npm prefix",
     suggestsTheConfiguredSourceWhenUpdateInput,

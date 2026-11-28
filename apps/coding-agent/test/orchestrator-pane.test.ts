@@ -1,12 +1,9 @@
-import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import orchestratorPaneScreen from "./orchestrator-pane-screen.ts";
 
-const { awaited, runTest } = testing;
-
-const { prepareUi, screen, stopScreens } = orchestratorPaneScreen;
+const { inScreen, prepareUi, stopScreens } = orchestratorPaneScreen;
 
 const SHIFT_RIGHT = "\x1b[1;2C";
 const CTRL_SHIFT_RIGHT = "\x1b[1;6C";
@@ -21,9 +18,8 @@ const drag = (column: number) => `\x1b[<32;${column + 1};3M`;
 const release = (column: number) => `\x1b[<0;${column + 1};3m`;
 
 const splitsTheScreen73WithA = () =>
-  runTest(
-    Effect.gen(function* () {
-      const view = yield* awaited(screen());
+  inScreen((view) =>
+    Effect.sync(() => {
       expect(view.divider()).toBe(69);
       expect(view.lines().every((line) => line[69] === "│")).toBe(true);
       expect(view.lines()[0]).toContain("Threads");
@@ -31,9 +27,8 @@ const splitsTheScreen73WithA = () =>
   );
 
 const movesTheDividerWhenItIsDragged = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(press(69), drag(55), drag(49), release(49));
       expect(view.divider()).toBe(49);
       expect(view.lines()[0]!.slice(50)).toContain("Threads");
@@ -41,9 +36,8 @@ const movesTheDividerWhenItIsDragged = () =>
   );
 
 const movesTheDividerWithCtrlShiftArrows = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(CTRL_SHIFT_LEFT);
       expect(view.divider()).toBe(67);
       yield* view.send(CTRL_SHIFT_RIGHT);
@@ -52,9 +46,8 @@ const movesTheDividerWithCtrlShiftArrows = () =>
   );
 
 const keepsTheDraggedShareWhenTheTerminal = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(press(69), drag(49), release(49));
       yield* view.resize(200);
       expect(view.divider()).toBe(98);
@@ -62,9 +55,8 @@ const keepsTheDraggedShareWhenTheTerminal = () =>
   );
 
 const hidesThePaneOnceItWouldBe = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.resize(79);
       expect(view.divider()).toBe(-1);
       expect(view.lines().join("\n")).not.toContain("Threads");
@@ -76,9 +68,8 @@ const hidesThePaneOnceItWouldBe = () =>
   );
 
 const hidesAWidenedPaneOnceTheConversation = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(press(69), drag(20), release(20));
       expect(view.divider()).toBe(40);
       yield* view.resize(90);
@@ -89,9 +80,8 @@ const hidesAWidenedPaneOnceTheConversation = () =>
   );
 
 const hidesThePaneWhenDraggedPastIts = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(press(69), drag(90), release(90));
       expect(view.divider()).toBe(-1);
       yield* view.send(CTRL_SHIFT_LEFT);
@@ -100,14 +90,15 @@ const hidesThePaneWhenDraggedPastIts = () =>
   );
 
 const drawsOnePaneWithoutAnOrchestratorAnd = () =>
-  runTest(
-    Effect.gen(function* () {
-      const view = yield* awaited(screen({ orchestrator: undefined }));
-      yield* view.send(SHIFT_RIGHT, CTRL_SHIFT_LEFT);
-      expect(view.divider()).toBe(-1);
-      expect(view.lines().join("\n")).not.toContain("Threads");
-      expect(view.ui.getFocusedComponent()).toBe(view.editor);
-    }),
+  inScreen(
+    (view) =>
+      Effect.gen(function* () {
+        yield* view.send(SHIFT_RIGHT, CTRL_SHIFT_LEFT);
+        expect(view.divider()).toBe(-1);
+        expect(view.lines().join("\n")).not.toContain("Threads");
+        expect(view.ui.getFocusedComponent()).toBe(view.editor);
+      }),
+    { orchestrator: undefined },
   );
 
 describe("orchestrator pane layout", () => {

@@ -1,5 +1,6 @@
-import { Effect, Predicate, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import entryPartsModule from "../apps/coding-agent/src/core/session-search/entry-parts.ts";
 import editReplacement from "./edit-replacement.ts";
 import type editToolScanTypes from "./edit-tool-scan.types.ts";
 import type hostTypes from "./host.types.ts";
@@ -8,7 +9,8 @@ import sessions from "./sessions.ts";
 import toolCalls from "./tool-calls.ts";
 import type toolCallsTypes from "./tool-calls.types.ts";
 
-const { callOriginOf, contentBlocks, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
+const { blockTexts } = entryPartsModule;
+const { callOriginOf, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
 const { analyzeEditArguments } = editReplacement;
 const { collectSessionRecords, forEachDecodedLine, messageOf, sessionScanMeta } = sessions;
 
@@ -32,15 +34,6 @@ interface FileScan {
 }
 
 const decodeEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(EntrySchema));
-
-const textContentOf = (content: Message["content"]): string =>
-  Predicate.isString(content)
-    ? content
-    : contentBlocks(content)
-        .flatMap((block) =>
-          block["type"] === "text" && Predicate.isString(block["text"]) ? [block["text"]] : [],
-        )
-        .join("\n");
 
 const ERROR_KINDS: ReadonlyArray<readonly [kind: string, matches: (text: string) => boolean]> = [
   ["file_not_found", (text) => text.includes("file not found")],
@@ -100,7 +93,7 @@ const trackEditCalls = (scan: FileScan, entry: Entry, message: Message): void =>
 };
 
 const resolveRecord = (record: editToolScanTypes.EditRecord, message: Message): void => {
-  const text = textContentOf(message.content);
+  const text = blockTexts(message.content);
   const isError = message.isError === true;
   record.matchedResult = true;
   record.success = !isError;

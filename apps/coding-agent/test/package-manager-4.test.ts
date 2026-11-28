@@ -11,7 +11,7 @@ const { usePackageManagerFixture } = packageManagerFixture;
 
 const fixture = usePackageManagerFixture();
 
-const { packagePaths } = packageManagerSupport;
+const { packagePaths, writeSkill } = packageManagerSupport;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
@@ -30,14 +30,8 @@ const shouldKeepMsaManifestEntriesWithLeading = () =>
       yield* makeDirectory(joinPath(pkgDir, "~", "skills", "slash-skill"));
       yield* writeTextFile(directExtensionPath, "export default function() {}");
       yield* writeTextFile(slashExtensionPath, "export default function() {}");
-      yield* writeTextFile(
-        directSkillPath,
-        "---\nname: direct-skill\ndescription: Direct\n---\nContent",
-      );
-      yield* writeTextFile(
-        slashSkillPath,
-        "---\nname: slash-skill\ndescription: Slash\n---\nContent",
-      );
+      yield* writeSkill(directSkillPath, "direct-skill", "Direct");
+      yield* writeSkill(slashSkillPath, "slash-skill", "Slash");
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
         yield* toJsonText({
@@ -91,11 +85,8 @@ const shouldStopRecursingWhenAPackageSkill = () =>
       yield* makeDirectory(joinPath(pkgDir, "skills", "root-skill", "nested-skill"));
       const rootSkill = joinPath(pkgDir, "skills", "root-skill", "SKILL.md");
       const nestedSkill = joinPath(pkgDir, "skills", "root-skill", "nested-skill", "SKILL.md");
-      yield* writeTextFile(rootSkill, "---\nname: root-skill\ndescription: Root skill\n---\n");
-      yield* writeTextFile(
-        nestedSkill,
-        "---\nname: nested-skill\ndescription: Nested skill\n---\n",
-      );
+      yield* writeSkill(rootSkill, "root-skill", "Root skill", "");
+      yield* writeSkill(nestedSkill, "nested-skill", "Nested skill", "");
 
       const result = yield* awaited(
         fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),

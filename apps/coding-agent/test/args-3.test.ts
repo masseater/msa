@@ -4,97 +4,62 @@ import args from "../src/cli/args.ts";
 
 const { parseArgs } = args;
 
-const parsesNoToolsFlag = () => {
-  const result = parseArgs(["--no-tools"]);
-  expect(result.noTools).toBe(true);
-};
+const toolFlagCases = [
+  { argv: ["--no-tools"], expected: { noTools: true }, name: "--no-tools flag" },
+  { argv: ["-nt"], expected: { noTools: true }, name: "-nt shorthand" },
+  {
+    argv: ["--no-builtin-tools"],
+    expected: { noBuiltinTools: true },
+    name: "--no-builtin-tools flag",
+  },
+  { argv: ["-nbt"], expected: { noBuiltinTools: true }, name: "-nbt shorthand" },
+  { argv: ["--tools", "read,bash"], expected: { tools: ["read", "bash"] }, name: "--tools flag" },
+  { argv: ["-t", "read,bash"], expected: { tools: ["read", "bash"] }, name: "-t shorthand" },
+  {
+    argv: ["-t", "+codemode,-write"],
+    expected: { diagnostics: [], tools: ["+codemode", "-write"] },
+    name: "+name and -name tool modifiers",
+  },
+  {
+    argv: ["--exclude-tools", "read,bash"],
+    expected: { excludeTools: ["read", "bash"] },
+    name: "--exclude-tools flag",
+  },
+  {
+    argv: ["-xt", "read,bash"],
+    expected: { excludeTools: ["read", "bash"] },
+    name: "-xt shorthand",
+  },
+  {
+    argv: ["--no-tools", "--tools", "read,bash"],
+    expected: { noTools: true, tools: ["read", "bash"] },
+    name: "--no-tools with explicit --tools flags",
+  },
+  {
+    argv: ["--no-builtin-tools", "--tools", "read,bash"],
+    expected: { noBuiltinTools: true, tools: ["read", "bash"] },
+    name: "--no-builtin-tools with explicit --tools flags",
+  },
+];
 
-const parsesNtShorthand = () => {
-  const result = parseArgs(["-nt"]);
-  expect(result.noTools).toBe(true);
-};
-
-const parsesNoBuiltinToolsFlag = () => {
-  const result = parseArgs(["--no-builtin-tools"]);
-  expect(result.noBuiltinTools).toBe(true);
-};
-
-const parsesNbtShorthand = () => {
-  const result = parseArgs(["-nbt"]);
-  expect(result.noBuiltinTools).toBe(true);
-};
-
-const rejectsTheRemovedOrchestratorFlag = () => {
-  const result = parseArgs(["--orchestrator"]);
-  expect(result.tools).toBeUndefined();
-  expect(result.diagnostics).toEqual([
-    {
-      message:
-        "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
-      type: "error",
-    },
-  ]);
-};
-
-const parsesToolsFlag = () => {
-  const result = parseArgs(["--tools", "read,bash"]);
-  expect(result.tools).toEqual(["read", "bash"]);
-};
-
-const parsesTShorthand = () => {
-  const result = parseArgs(["-t", "read,bash"]);
-  expect(result.tools).toEqual(["read", "bash"]);
-};
-
-const parsesNameAndNameToolModifiers = () => {
-  const result = parseArgs(["-t", "+codemode,-write"]);
-  expect(result.tools).toEqual(["+codemode", "-write"]);
-  expect(result.diagnostics).toEqual([]);
-};
-
-const rejectsToolNamesMixedWithModifiers = () => {
-  const result = parseArgs(["--tools", "read,+codemode"]);
-  expect(result.tools).toBeUndefined();
-  expect(result.diagnostics).toEqual([
-    {
-      message: "--tools: tool names cannot be mixed with +name or -name entries",
-      type: "error" as const,
-    },
-  ]);
-};
-
-const rejectsPatternsInToolModifiers = () => {
-  const result = parseArgs(["-t", "+mcp__github__*"]);
-  expect(result.tools).toBeUndefined();
-  expect(result.diagnostics).toEqual([
-    {
-      message: "-t: +name and -name entries take exact tool names, not patterns: +mcp__github__*",
-      type: "error" as const,
-    },
-  ]);
-};
-
-const parsesExcludeToolsFlag = () => {
-  const result = parseArgs(["--exclude-tools", "read,bash"]);
-  expect(result.excludeTools).toEqual(["read", "bash"]);
-};
-
-const parsesXtShorthand = () => {
-  const result = parseArgs(["-xt", "read,bash"]);
-  expect(result.excludeTools).toEqual(["read", "bash"]);
-};
-
-const parsesNoToolsWithExplicitToolsFlags = () => {
-  const result = parseArgs(["--no-tools", "--tools", "read,bash"]);
-  expect(result.noTools).toBe(true);
-  expect(result.tools).toEqual(["read", "bash"]);
-};
-
-const parsesNoBuiltinToolsWithExplicitTools = () => {
-  const result = parseArgs(["--no-builtin-tools", "--tools", "read,bash"]);
-  expect(result.noBuiltinTools).toBe(true);
-  expect(result.tools).toEqual(["read", "bash"]);
-};
+const rejectedToolFlagCases = [
+  {
+    argv: ["--orchestrator"],
+    message:
+      "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
+    name: "the removed --orchestrator flag",
+  },
+  {
+    argv: ["--tools", "read,+codemode"],
+    message: "--tools: tool names cannot be mixed with +name or -name entries",
+    name: "tool names mixed with modifiers",
+  },
+  {
+    argv: ["-t", "+mcp__github__*"],
+    message: "-t: +name and -name entries take exact tool names, not patterns: +mcp__github__*",
+    name: "patterns in tool modifiers",
+  },
+];
 
 const parsesPlainTextMessages = () => {
   const result = parseArgs(["hello", "world"]);
@@ -150,36 +115,15 @@ const parsesMultipleFlagsTogether = () => {
 
 describe("parseArgs", () => {
   describe("tool flags", () => {
-    test("parses --no-tools flag", parsesNoToolsFlag);
+    test.each(toolFlagCases)("parses $name", ({ argv, expected }) => {
+      expect(parseArgs(argv)).toMatchObject(expected);
+    });
 
-    test("parses -nt shorthand", parsesNtShorthand);
-
-    test("parses --no-builtin-tools flag", parsesNoBuiltinToolsFlag);
-
-    test("parses -nbt shorthand", parsesNbtShorthand);
-
-    test("rejects the removed --orchestrator flag", rejectsTheRemovedOrchestratorFlag);
-
-    test("parses --tools flag", parsesToolsFlag);
-
-    test("parses -t shorthand", parsesTShorthand);
-
-    test("parses +name and -name tool modifiers", parsesNameAndNameToolModifiers);
-
-    test("rejects tool names mixed with modifiers", rejectsToolNamesMixedWithModifiers);
-
-    test("rejects patterns in tool modifiers", rejectsPatternsInToolModifiers);
-
-    test("parses --exclude-tools flag", parsesExcludeToolsFlag);
-
-    test("parses -xt shorthand", parsesXtShorthand);
-
-    test("parses --no-tools with explicit --tools flags", parsesNoToolsWithExplicitToolsFlags);
-
-    test(
-      "parses --no-builtin-tools with explicit --tools flags",
-      parsesNoBuiltinToolsWithExplicitTools,
-    );
+    test.each(rejectedToolFlagCases)("rejects $name", ({ argv, message }) => {
+      const result = parseArgs(argv);
+      expect(result.tools).toBeUndefined();
+      expect(result.diagnostics).toEqual([{ message, type: "error" }]);
+    });
   });
 });
 

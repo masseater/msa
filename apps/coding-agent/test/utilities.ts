@@ -1,3 +1,4 @@
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect, Function } from "effect";
 import { inject } from "vite-plus/test";
@@ -6,6 +7,7 @@ import eventBusModule from "../src/core/event-bus.ts";
 import type extensionsTypes from "../src/core/extensions/index.types.ts";
 import loader from "../src/core/extensions/loader.ts";
 import type resourceLoaderTypes from "../src/core/resource-loader.types.ts";
+import type SessionManager from "../src/core/session-manager.ts";
 import type utilitiesTypes from "./utilities.types.ts";
 
 const { createExtensionRuntime, loadExtensionFromFactory } = loader;
@@ -38,6 +40,31 @@ function assistantMsg(text: string) {
     },
   };
 }
+
+type EntryIds<N extends number, Ids extends string[] = []> = Ids["length"] extends N
+  ? Ids
+  : EntryIds<N, [...Ids, string]>;
+
+const appendConversation = <const N extends number>(
+  session: SessionManager,
+  count: N,
+  first = 1,
+): EntryIds<N> =>
+  Array.from({ length: count }, (_unused, offset) => {
+    const number = first + offset;
+    return session.appendMessage(
+      number % 2 === 1 ? userMsg(String(number)) : assistantMsg(String(number)),
+    );
+  }) as EntryIds<N>;
+
+const usageOf = (input: number, cost = 0): compatTypes.Usage => ({
+  cacheRead: 0,
+  cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: cost, output: 0, total: cost },
+  input,
+  output: 0,
+  totalTokens: input,
+});
 
 const roleOf = (line: string) =>
   Effect.map(fromJsonText(line), (value) => {
@@ -126,11 +153,13 @@ function createTestResourceLoader(
 }
 
 const utilities = {
+  appendConversation,
   assistantMsg,
   createTestExtensionsResult,
   createTestResourceLoader,
   hasLiveAuth,
   readSessionFileRoles,
+  usageOf,
   userMsg,
 };
 

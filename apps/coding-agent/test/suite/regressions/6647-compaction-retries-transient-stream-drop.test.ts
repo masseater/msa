@@ -5,11 +5,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import agentSessionCompactionSupport from "../agent-session-compaction-support.ts";
+import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
-const { createUsage } = agentSessionCompactionSupport;
+const { usageOf } = utilities;
 
 const { cleanupAll } = harnessModule;
 
@@ -35,7 +35,7 @@ function seedCompactableSession(harness: harnessTypes.Harness): void {
     api: model.api,
     model: model.id,
     provider: model.provider,
-    usage: createUsage(100),
+    usage: usageOf(100),
   };
   assistant.content = [{ text: "assistant response to compact", type: "text" }];
   harness.sessionManager.appendMessage(assistant);
@@ -83,11 +83,11 @@ const retriesATransientTerminatedSummarizationError = Effect.gen(function* () {
   const model = harness.getModel();
   const error = (errorMessage: string): aiTypes.AssistantMessage => ({
     ...fauxAssistantMessage("", { errorMessage, stopReason: "error" }),
-    usage: createUsage(10),
+    usage: usageOf(10),
   });
   const success: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("recovered summary"),
-    usage: createUsage(10),
+    usage: usageOf(10),
   };
   const getCallCount = useScriptedStreamFn(harness, [
     error("terminated"),
@@ -120,7 +120,7 @@ const doesNotRetryANonRetryable = Effect.gen(function* () {
 
   const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "insufficient_quota", stopReason: "error" }),
-    usage: createUsage(10),
+    usage: usageOf(10),
   };
   const getCallCount = useScriptedStreamFn(harness, [error]);
 
@@ -141,7 +141,7 @@ const doesNotRetryWhenRetryIs = Effect.gen(function* () {
 
   const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
-    usage: createUsage(10),
+    usage: usageOf(10),
   };
   const getCallCount = useScriptedStreamFn(harness, [error]);
 
@@ -162,7 +162,7 @@ const stopsRetryingAfterMaxretriesAndReports = Effect.gen(function* () {
 
   const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
-    usage: createUsage(10),
+    usage: usageOf(10),
   };
   const getCallCount = useScriptedStreamFn(harness, [error, error, error]);
 
@@ -187,7 +187,7 @@ const abortsAnInFlightRetryBackoff = Effect.gen(function* () {
 
   const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
-    usage: createUsage(10),
+    usage: usageOf(10),
   };
   useScriptedStreamFn(harness, [error, error, error]);
 

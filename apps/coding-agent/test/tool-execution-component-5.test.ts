@@ -4,19 +4,16 @@ import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test
 
 import config from "../src/config.ts";
 import read from "../src/core/tools/read.ts";
-import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
-import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
 
 const { getReadmePath } = config;
 const { createReadToolDefinition } = read;
-const { stripAnsi } = ansi;
 const { initTheme } = themeModule;
 
 const { resetCapabilitiesCache } = tui;
 
-const { createFakeTui } = toolExecutionComponentSupport;
+const { createToolComponent, renderedText } = toolExecutionComponentSupport;
 
 const { joinPath, resolvePath } = testing;
 
@@ -73,14 +70,11 @@ const rangeScenarios = [
 ] as const;
 
 const rendersCompactlyUntilExpanded = (scenario: (typeof compactScenarios)[number]) => {
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "read",
     `tool-compact-${scenario.title}`,
     { path: scenario.path },
-    {},
     createReadToolDefinition(process.cwd()),
-    createFakeTui(),
-    process.cwd(),
   );
   component.updateResult(
     {
@@ -91,7 +85,7 @@ const rendersCompactlyUntilExpanded = (scenario: (typeof compactScenarios)[numbe
     false,
   );
 
-  const collapsed = stripAnsi(component.render(120).join("\n"));
+  const collapsed = renderedText(component);
   expect(collapsed).toContain(scenario.compact);
   expect(collapsed).not.toContain(scenario.hidden);
   if (scenario.absent !== undefined && scenario.absent.length > 0) {
@@ -99,7 +93,7 @@ const rendersCompactlyUntilExpanded = (scenario: (typeof compactScenarios)[numbe
   }
 
   component.setExpanded(true);
-  const expanded = stripAnsi(component.render(120).join("\n"));
+  const expanded = renderedText(component);
   expect(expanded).toContain(scenario.hidden);
 };
 
@@ -119,17 +113,14 @@ describe("ToolExecutionComponent parity", () => {
 
   for (const scenario of rangeScenarios) {
     test(`shows the read line range in compact ${scenario.title} reads before the expand hint`, () => {
-      const component = new ToolExecutionComponent(
+      const component = createToolComponent(
         "read",
         `tool-compact-range-${scenario.title}`,
         { limit: 210, offset: 120, path: scenario.path },
-        {},
         createReadToolDefinition(process.cwd()),
-        createFakeTui(),
-        process.cwd(),
       );
 
-      const collapsed = stripAnsi(component.render(120).join("\n"));
+      const collapsed = renderedText(component);
       expect(collapsed).toContain(scenario.compact);
       expect(collapsed.indexOf(":120-329")).toBeLessThan(collapsed.indexOf("to expand"));
     });

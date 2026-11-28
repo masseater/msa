@@ -9,7 +9,7 @@ const { usePackageManagerFixture } = packageManagerFixture;
 
 const fixture = usePackageManagerFixture();
 
-const { packagePaths } = packageManagerSupport;
+const { packagePaths, writeSkill } = packageManagerSupport;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
@@ -58,14 +58,8 @@ const shouldSupportGlobPatternsInManifestSkills = () =>
       const pkgDir = joinPath(fixture.tempDir, "skill-manifest-pkg");
       yield* makeDirectory(joinPath(pkgDir, "skills/good-skill"));
       yield* makeDirectory(joinPath(pkgDir, "skills/bad-skill"));
-      yield* writeTextFile(
-        joinPath(pkgDir, "skills/good-skill", "SKILL.md"),
-        "---\nname: good-skill\ndescription: Good\n---\nContent",
-      );
-      yield* writeTextFile(
-        joinPath(pkgDir, "skills/bad-skill", "SKILL.md"),
-        "---\nname: bad-skill\ndescription: Bad\n---\nContent",
-      );
+      yield* writeSkill(joinPath(pkgDir, "skills/good-skill", "SKILL.md"), "good-skill", "Good");
+      yield* writeSkill(joinPath(pkgDir, "skills/bad-skill", "SKILL.md"), "bad-skill", "Bad");
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
         yield* toJsonText({

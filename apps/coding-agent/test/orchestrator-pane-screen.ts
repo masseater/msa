@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
 import tui from "@msa/tui";
+import { Effect } from "effect";
 
 import KeybindingsManager from "../src/core/keybindings-manager.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
@@ -80,7 +81,13 @@ const screen = (
   return runTest(awaited(terminal.waitForRender())).then(() => view);
 };
 
+const inScreen = <A, E>(
+  body: (view: Awaited<ReturnType<typeof screen>>) => Effect.Effect<A, E>,
+  options: Parameters<typeof screen>[0] = {},
+) => runTest(Effect.flatMap(awaited(screen(options)), body));
+
 const orchestratorPaneScreen = {
+  inScreen,
   prepareUi,
   screen,
   stopScreens,

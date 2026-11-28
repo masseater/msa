@@ -57,15 +57,28 @@ const INTEGRATED: readonly (readonly [
   ],
 ];
 
-const returnsEmptyArrayForEmptySession = () => {
-  const session = SessionManager.inMemory();
-  expect(session.getBranch()).toEqual([]);
-};
-
-const returnsEmptyArrayForEmptySession2 = () => {
-  const session = SessionManager.inMemory();
-  expect(session.getTree()).toEqual([]);
-};
+const emptySessionCases = [
+  {
+    expected: [],
+    name: "getPath returns empty array for empty session",
+    read: (session: ReturnType<typeof SessionManager.inMemory>) => session.getBranch(),
+  },
+  {
+    expected: [],
+    name: "getTree returns empty array for empty session",
+    read: (session: ReturnType<typeof SessionManager.inMemory>) => session.getTree(),
+  },
+  {
+    expected: undefined,
+    name: "getLeafEntry returns undefined for empty session",
+    read: (session: ReturnType<typeof SessionManager.inMemory>) => session.getLeafEntry(),
+  },
+  {
+    expected: undefined,
+    name: "getEntry returns undefined for non-existent id",
+    read: (session: ReturnType<typeof SessionManager.inMemory>) => session.getEntry("nonexistent"),
+  },
+];
 
 const throwsForNonExistentEntry3 = () => {
   const session = SessionManager.inMemory();
@@ -74,17 +87,11 @@ const throwsForNonExistentEntry3 = () => {
   expect(() => session.branch("nonexistent")).toThrow("Entry nonexistent not found");
 };
 
-const returnsUndefinedForEmptySession = () => {
-  const session = SessionManager.inMemory();
-  expect(session.getLeafEntry()).toBeUndefined();
-};
-
-const returnsUndefinedForNonExistentId = () => {
-  const session = SessionManager.inMemory();
-  expect(session.getEntry("nonexistent")).toBeUndefined();
-};
-
 describe("SessionManager append and tree traversal", () => {
+  it.each(emptySessionCases)("$name", ({ expected, read }) => {
+    expect(read(SessionManager.inMemory())).toEqual(expected);
+  });
+
   describe("append operations", () => {
     it(
       "appendMessage creates entry with correct parentId chain",
@@ -110,14 +117,12 @@ describe("SessionManager append and tree traversal", () => {
   });
 
   describe("getPath", () => {
-    it("returns empty array for empty session", returnsEmptyArrayForEmptySession);
     it("returns single entry path", returnsSingleEntryPath);
     it("returns full path from root to leaf", returnsFullPathFromRootTo);
     it("returns path from specified entry to root", returnsPathFromSpecifiedEntryTo);
   });
 
   describe("getTree", () => {
-    it("returns empty array for empty session", returnsEmptyArrayForEmptySession2);
     it("returns single root for linear session", returnsSingleRootForLinearSession);
     it("returns tree with branches after branch", returnsTreeWithBranchesAfterBranch);
     it("handles multiple branches at same point", handlesMultipleBranchesAtSamePoint);
@@ -141,12 +146,10 @@ describe("SessionManager append and tree traversal", () => {
   });
 
   describe("getLeafEntry", () => {
-    it("returns undefined for empty session", returnsUndefinedForEmptySession);
     it("returns current leaf entry", returnsCurrentLeafEntry);
   });
 
   describe("getEntry", () => {
-    it("returns undefined for non-existent id", returnsUndefinedForNonExistentId);
     it("returns entry by id", returnsEntryById);
   });
 

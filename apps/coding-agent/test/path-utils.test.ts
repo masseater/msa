@@ -13,55 +13,6 @@ const { useTempDir } = tempDirKit;
 
 const temp = useTempDir("path-utils-test-");
 
-const shouldExpandToHomeDirectory = () => {
-  const result = expandPath("~");
-  expect(result).not.toContain("~");
-};
-
-const shouldExpandPathToHomeDirectory = () => {
-  const result = expandPath("~/Documents/file.txt");
-  expect(result).not.toContain("~/");
-};
-
-const shouldKeepTildePrefixedFilenamesLiteral = () => {
-  expect(expandPath("~draft.md")).toBe("~draft.md");
-  expect(expandPath("@~draft.md")).toBe("~draft.md");
-};
-
-const shouldNormalizeUnicodeSpaces = () => {
-  const withNBSP = "file\u00A0name.txt";
-  const result = expandPath(withNBSP);
-  expect(result).toBe("file name.txt");
-};
-
-const shouldResolveAbsolutePathsAsIs = () => {
-  const absolutePath = resolvePath(tempRoot(), "absolute", "path", "file.txt");
-  const result = resolveToCwd(absolutePath, resolvePath(tempRoot(), "some", "cwd"));
-  expect(result).toBe(absolutePath);
-};
-
-const shouldResolveRelativePathsAgainstCwd = () => {
-  const result = resolveToCwd("relative/file.txt", "/some/cwd");
-  expect(result).toBe(resolvePath("/some/cwd", "relative/file.txt"));
-};
-
-const shouldResolveTildePrefixedFilenamesAgainstCwd = () => {
-  const cwd = joinPath(tempRoot(), "msa-path-utils-cwd");
-  expect(resolveToCwd("~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
-  expect(resolveToCwd("@~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
-};
-
-const shouldResolveExistingFilePath = () =>
-  runTest(
-    Effect.gen(function* () {
-      const fileName = "test-file.txt";
-      yield* writeTextFile(joinPath(temp.path, fileName), "content");
-
-      const result = yield* awaited(resolveReadPath(fileName, temp.path));
-      expect(result).toBe(joinPath(temp.path, fileName));
-    }),
-  );
-
 const shouldHandleNfcVsNfdUnicodeNormalization = () =>
   runTest(
     Effect.gen(function* () {
@@ -81,114 +32,113 @@ const shouldHandleNfcVsNfdUnicodeNormalization = () =>
     }),
   );
 
-const shouldHandleCurlyQuotesVsStraightQuotes = () =>
-  runTest(
-    Effect.gen(function* () {
-      const curlyQuoteName = "Capture d\u2019cran.txt";
-      const straightQuoteName = "Capture d'cran.txt";
+const homeCases = [
+  { forbidden: "~", input: "~", name: "should expand ~ to home directory" },
+  {
+    forbidden: "~/",
+    input: "~/Documents/file.txt",
+    name: "should expand ~/path to home directory",
+  },
+];
 
-      expect(curlyQuoteName).not.toBe(straightQuoteName);
+const literalCases = [
+  {
+    expected: "~draft.md",
+    inputs: ["~draft.md", "@~draft.md"],
+    name: "should keep tilde-prefixed filenames literal",
+  },
+  {
+    expected: "file name.txt",
+    inputs: ["file\u00A0name.txt"],
+    name: "should normalize Unicode spaces",
+  },
+];
 
-      yield* writeTextFile(joinPath(temp.path, curlyQuoteName), "content");
+const cwdCases = [
+  {
+    cwd: () => resolvePath(tempRoot(), "some", "cwd"),
+    expected: () => resolvePath(tempRoot(), "absolute", "path", "file.txt"),
+    inputs: () => [resolvePath(tempRoot(), "absolute", "path", "file.txt")],
+    name: "should resolve absolute paths as-is",
+  },
+  {
+    cwd: () => "/some/cwd",
+    expected: () => resolvePath("/some/cwd", "relative/file.txt"),
+    inputs: () => ["relative/file.txt"],
+    name: "should resolve relative paths against cwd",
+  },
+  {
+    cwd: () => joinPath(tempRoot(), "msa-path-utils-cwd"),
+    expected: () => resolvePath(joinPath(tempRoot(), "msa-path-utils-cwd"), "~draft.md"),
+    inputs: () => ["~draft.md", "@~draft.md"],
+    name: "should resolve tilde-prefixed filenames against cwd",
+  },
+];
 
-      const result = yield* awaited(resolveReadPath(straightQuoteName, temp.path));
-      expect(result).toBe(joinPath(temp.path, curlyQuoteName));
-    }),
-  );
-
-const shouldHandleCombinedNfcCurlyQuoteFrench = () =>
-  runTest(
-    Effect.gen(function* () {
-      const nfcCurlyName = "Capture d\u2019\u00e9cran.txt";
-      const nfcStraightName = "Capture d'\u00e9cran.txt";
-
-      expect(nfcCurlyName).not.toBe(nfcStraightName);
-
-      yield* writeTextFile(joinPath(temp.path, nfcCurlyName), "content");
-
-      const result = yield* awaited(resolveReadPath(nfcStraightName, temp.path));
-      expect(result).toBe(joinPath(temp.path, nfcCurlyName));
-    }),
-  );
-
-const shouldHandleMacosScreenshotAmPmVariant = () =>
-  runTest(
-    Effect.gen(function* () {
-      const macosName = "Screenshot 2024-01-01 at 10.00.00\u202FAM.png";
-      const userName = "Screenshot 2024-01-01 at 10.00.00 AM.png";
-
-      yield* writeTextFile(joinPath(temp.path, macosName), "content");
-
-      const result = yield* awaited(resolveReadPath(userName, temp.path));
-
-      expect(result).toBe(joinPath(temp.path, macosName));
-    }),
-  );
-
-const shouldHandleMacosScreenshotLowercaseAmPm = () =>
-  runTest(
-    Effect.gen(function* () {
-      const macosName = "Screenshot 2024-01-01 at 10.00.00\u202Fam.png";
-      const userName = "Screenshot 2024-01-01 at 10.00.00 am.png";
-
-      yield* writeTextFile(joinPath(temp.path, macosName), "content");
-
-      const result = yield* awaited(resolveReadPath(userName, temp.path));
-
-      expect(result).toBe(joinPath(temp.path, macosName));
-    }),
-  );
+const readPathCases = [
+  {
+    actual: "test-file.txt",
+    name: "should resolve existing file path",
+    requested: "test-file.txt",
+  },
+  {
+    actual: "Capture d\u2019cran.txt",
+    name: "should handle curly quotes vs straight quotes (macOS filenames)",
+    requested: "Capture d'cran.txt",
+  },
+  {
+    actual: "Capture d\u2019\u00e9cran.txt",
+    name: "should handle combined NFC + curly quote (French macOS screenshots)",
+    requested: "Capture d'\u00e9cran.txt",
+  },
+  {
+    actual: "Screenshot 2024-01-01 at 10.00.00\u202FAM.png",
+    name: "should handle macOS screenshot AM/PM variant with narrow no-break space",
+    requested: "Screenshot 2024-01-01 at 10.00.00 AM.png",
+  },
+  {
+    actual: "Screenshot 2024-01-01 at 10.00.00\u202Fam.png",
+    name: "should handle macOS screenshot lowercase am/pm variant (en_AU locale)",
+    requested: "Screenshot 2024-01-01 at 10.00.00 am.png",
+  },
+];
 
 describe("path-utils", () => {
   describe("expandPath", () => {
-    it("should expand ~ to home directory", shouldExpandToHomeDirectory);
+    it.each(homeCases)("$name", ({ forbidden, input }) => {
+      expect(expandPath(input)).not.toContain(forbidden);
+    });
 
-    it("should expand ~/path to home directory", shouldExpandPathToHomeDirectory);
-
-    it("should keep tilde-prefixed filenames literal", shouldKeepTildePrefixedFilenamesLiteral);
-
-    it("should normalize Unicode spaces", shouldNormalizeUnicodeSpaces);
+    it.each(literalCases)("$name", ({ expected, inputs }) => {
+      for (const input of inputs) {
+        expect(expandPath(input)).toBe(expected);
+      }
+    });
   });
 
   describe("resolveToCwd", () => {
-    it("should resolve absolute paths as-is", shouldResolveAbsolutePathsAsIs);
-
-    it("should resolve relative paths against cwd", shouldResolveRelativePathsAgainstCwd);
-
-    it(
-      "should resolve tilde-prefixed filenames against cwd",
-      shouldResolveTildePrefixedFilenamesAgainstCwd,
-    );
+    it.each(cwdCases)("$name", ({ cwd, expected, inputs }) => {
+      for (const input of inputs()) {
+        expect(resolveToCwd(input, cwd())).toBe(expected());
+      }
+    });
   });
-});
 
-describe("path-utils", () => {
   describe("resolveReadPath", () => {
-    it("should resolve existing file path", shouldResolveExistingFilePath);
+    it.each(readPathCases)("$name", ({ actual, requested }) =>
+      runTest(
+        Effect.gen(function* () {
+          yield* writeTextFile(joinPath(temp.path, actual), "content");
+
+          const result = yield* awaited(resolveReadPath(requested, temp.path));
+          expect(result).toBe(joinPath(temp.path, actual));
+        }),
+      ),
+    );
 
     it(
       "should handle NFC vs NFD Unicode normalization (macOS filenames with accents)",
       shouldHandleNfcVsNfdUnicodeNormalization,
-    );
-
-    it(
-      "should handle curly quotes vs straight quotes (macOS filenames)",
-      shouldHandleCurlyQuotesVsStraightQuotes,
-    );
-
-    it(
-      "should handle combined NFC + curly quote (French macOS screenshots)",
-      shouldHandleCombinedNfcCurlyQuoteFrench,
-    );
-
-    it(
-      "should handle macOS screenshot AM/PM variant with narrow no-break space",
-      shouldHandleMacosScreenshotAmPmVariant,
-    );
-
-    it(
-      "should handle macOS screenshot lowercase am/pm variant (en_AU locale)",
-      shouldHandleMacosScreenshotLowercaseAmPm,
     );
   });
 });

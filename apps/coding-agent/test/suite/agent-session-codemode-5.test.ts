@@ -23,8 +23,8 @@ const {
   checkSavedImages,
   codemodeResult,
   resultText,
-  usage,
   trackCodemodeWorkers,
+  usageOf,
 } = agentSessionCodemodeSupport;
 
 const { fromJsonText } = testing;
@@ -38,7 +38,7 @@ const addsTheUsageOfNestedResults = Effect.gen(function* () {
       Promise.resolve({
         content: [{ text: "ran", type: "text" }],
         details: {},
-        usage: usage(100, 0.25),
+        usage: usageOf(100, 0.25),
       }),
     label: "Billed",
     name: "billed",

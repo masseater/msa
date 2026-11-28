@@ -4,147 +4,141 @@ import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test
 import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import read from "../src/core/tools/read.ts";
 import renderers from "../src/core/tools/renderers/index.ts";
-import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
-import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
 const { withBuiltInRenderers } = renderers;
-const { stripAnsi } = ansi;
 const { createReadTool, createReadToolDefinition } = read;
 const { initTheme } = themeModule;
 
 const { Text, resetCapabilitiesCache } = tui;
 
-const { createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
+const { createBaseToolDefinition, createToolComponent, renderedText } =
+  toolExecutionComponentSupport;
 
 const usesBuiltInRenderingForBuiltIn = () => {
   const overrideDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition("edit"),
   };
 
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "edit",
     "tool-2",
     { newText: "after", oldText: "before", path: "README.md" },
-    {},
     withBuiltInRenderers("edit", overrideDefinition),
-    createFakeTui(),
-    process.cwd(),
   );
   component.updateResult({
     content: [],
     details: { diff: "+1 after", firstChangedLine: 1 },
     isError: false,
   });
-  const rendered = stripAnsi(component.render(120).join("\n"));
+  const rendered = renderedText(component);
   expect(rendered).toContain("edit");
   expect(rendered).toContain("README.md");
   expect(rendered).not.toContain(":1");
 };
 
-const inheritsMissingBuiltInResultRendererSlot = () => {
-  const overrideDefinition: extensionsTypesTypes.ToolDefinition = {
-    ...createBaseToolDefinition("read"),
-    renderCall: () => new Text("override call", 0, 0),
-  };
-
-  const component = new ToolExecutionComponent(
-    "read",
-    "tool-4b",
-    { path: "notes.txt" },
-    {},
-    withBuiltInRenderers("read", overrideDefinition),
-    createFakeTui(),
-    process.cwd(),
-  );
-  component.updateResult(
-    { content: [{ text: "hello", type: "text" as const }], details: undefined, isError: false },
-    false,
-  );
-  component.setExpanded(true);
-  const rendered = stripAnsi(component.render(120).join("\n"));
-  expect(rendered).toContain("override call");
-  expect(rendered).toContain("hello");
+const hello = {
+  content: [{ text: "hello", type: "text" as const }],
+  details: undefined,
+  isError: false,
 };
 
-const inheritsMissingBuiltInCallRendererSlot = () => {
-  const overrideDefinition: extensionsTypesTypes.ToolDefinition = {
-    ...createBaseToolDefinition("read"),
-    renderResult: () => new Text("override result", 0, 0),
-  };
+interface ReadOverrideCase {
+  args: { path: string };
+  definition: () => extensionsTypesTypes.ToolDefinition;
+  expanded: boolean;
+  id: string;
+  inheritsBuiltIn: boolean;
+  name: string;
+  notContains: string[];
+  rendered: string[];
+}
 
-  const component = new ToolExecutionComponent(
-    "read",
-    "tool-4c",
-    { path: "README.md" },
-    {},
-    withBuiltInRenderers("read", overrideDefinition),
-    createFakeTui(),
-    process.cwd(),
-  );
-  component.updateResult(
-    { content: [{ text: "hello", type: "text" as const }], details: undefined, isError: false },
-    false,
-  );
-  const rendered = stripAnsi(component.render(120).join("\n"));
-  expect(rendered).toContain("read");
-  expect(rendered).toContain("README.md");
-  expect(rendered).toContain("override result");
-};
-
-const usesCustomRenderersForBuiltInOverrides = () => {
-  const builtInDefinition = createReadToolDefinition(process.cwd());
-  const component = new ToolExecutionComponent(
-    "read",
-    "tool-4d",
-    { path: "README.md" },
-    {},
-    {
-      ...builtInDefinition,
+const readOverrideCases: ReadOverrideCase[] = [
+  {
+    args: { path: "notes.txt" },
+    definition: () => ({
+      ...createBaseToolDefinition("read"),
+      renderCall: () => new Text("override call", 0, 0),
+    }),
+    expanded: true,
+    id: "tool-4b",
+    inheritsBuiltIn: true,
+    name: "inherits missing built-in result renderer slot from the built-in tool",
+    notContains: [],
+    rendered: ["override call", "hello"],
+  },
+  {
+    args: { path: "README.md" },
+    definition: () => ({
+      ...createBaseToolDefinition("read"),
+      renderResult: () => new Text("override result", 0, 0),
+    }),
+    expanded: false,
+    id: "tool-4c",
+    inheritsBuiltIn: true,
+    name: "inherits missing built-in call renderer slot from the built-in tool",
+    notContains: [],
+    rendered: ["read", "README.md", "override result"],
+  },
+  {
+    args: { path: "README.md" },
+    definition: () => ({
+      ...createReadToolDefinition(process.cwd()),
       renderCall: () => new Text("override call", 0, 0),
       renderResult: () => new Text("override result", 0, 0),
-    },
-    createFakeTui(),
-    process.cwd(),
-  );
-  component.updateResult(
-    { content: [{ text: "hello", type: "text" as const }], details: undefined, isError: false },
-    false,
-  );
-  const rendered = stripAnsi(component.render(120).join("\n"));
-  expect(rendered).toContain("override call");
-  expect(rendered).toContain("override result");
-  expect(rendered).not.toContain("read README.md");
-};
-
-const usesCustomRenderersForBuiltInOverrides2 = () => {
-  const builtInTool = createReadTool(process.cwd());
-  const component = new ToolExecutionComponent(
-    "read",
-    "tool-4e",
-    { path: "README.md" },
-    {},
-    {
+    }),
+    expanded: false,
+    id: "tool-4d",
+    inheritsBuiltIn: false,
+    name: "uses custom renderers for built-in overrides that reuse built-in definition parameters",
+    notContains: ["read README.md"],
+    rendered: ["override call", "override result"],
+  },
+  {
+    args: { path: "README.md" },
+    definition: () => ({
       ...createBaseToolDefinition("read"),
-      parameters: builtInTool.parameters,
+      parameters: createReadTool(process.cwd()).parameters,
       renderCall: () => new Text("wrapped override call", 0, 0),
       renderResult: () => new Text("wrapped override result", 0, 0),
-    },
-    createFakeTui(),
-    process.cwd(),
+    }),
+    expanded: false,
+    id: "tool-4e",
+    inheritsBuiltIn: false,
+    name: "uses custom renderers for built-in overrides that reuse wrapped built-in tool parameters",
+    notContains: [],
+    rendered: ["wrapped override call", "wrapped override result"],
+  },
+];
+
+const rendersReadOverride = ({
+  args,
+  definition,
+  expanded,
+  id,
+  inheritsBuiltIn,
+  notContains,
+  rendered,
+}: ReadOverrideCase) => {
+  const component = createToolComponent(
+    "read",
+    id,
+    args,
+    inheritsBuiltIn ? withBuiltInRenderers("read", definition()) : definition(),
   );
-  component.updateResult(
-    { content: [{ text: "hello", type: "text" as const }], details: undefined, isError: false },
-    false,
-  );
-  const rendered = stripAnsi(component.render(120).join("\n"));
-  expect(rendered).toContain("wrapped override call");
-  expect(rendered).toContain("wrapped override result");
+  component.updateResult(hello, false);
+  component.setExpanded(expanded);
+  const text = renderedText(component);
+  for (const expected of rendered) expect(text).toContain(expected);
+  for (const unexpected of notContains) expect(text).not.toContain(unexpected);
 };
 
 describe("ToolExecutionComponent parity", () => {
   beforeAll(() => {
     initTheme("dark");
+    resetCapabilitiesCache();
+    vi.useRealTimers();
   });
 
   afterEach(() => {
@@ -156,68 +150,6 @@ describe("ToolExecutionComponent parity", () => {
     "uses built-in rendering for built-in overrides without custom renderers",
     usesBuiltInRenderingForBuiltIn,
   );
-});
 
-describe("ToolExecutionComponent parity", () => {
-  beforeAll(() => {
-    initTheme("dark");
-  });
-
-  afterEach(() => {
-    resetCapabilitiesCache();
-    vi.useRealTimers();
-  });
-
-  test(
-    "inherits missing built-in result renderer slot from the built-in tool",
-    inheritsMissingBuiltInResultRendererSlot,
-  );
-});
-
-describe("ToolExecutionComponent parity", () => {
-  beforeAll(() => {
-    initTheme("dark");
-  });
-
-  afterEach(() => {
-    resetCapabilitiesCache();
-    vi.useRealTimers();
-  });
-
-  test(
-    "inherits missing built-in call renderer slot from the built-in tool",
-    inheritsMissingBuiltInCallRendererSlot,
-  );
-});
-
-describe("ToolExecutionComponent parity", () => {
-  beforeAll(() => {
-    initTheme("dark");
-  });
-
-  afterEach(() => {
-    resetCapabilitiesCache();
-    vi.useRealTimers();
-  });
-
-  test(
-    "uses custom renderers for built-in overrides that reuse built-in definition parameters",
-    usesCustomRenderersForBuiltInOverrides,
-  );
-});
-
-describe("ToolExecutionComponent parity", () => {
-  beforeAll(() => {
-    initTheme("dark");
-  });
-
-  afterEach(() => {
-    resetCapabilitiesCache();
-    vi.useRealTimers();
-  });
-
-  test(
-    "uses custom renderers for built-in overrides that reuse wrapped built-in tool parameters",
-    usesCustomRenderersForBuiltInOverrides2,
-  );
+  test.each(readOverrideCases)("$name", rendersReadOverride);
 });

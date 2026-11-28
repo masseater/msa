@@ -1,8 +1,26 @@
 import testing from "@msa/testing";
 import { Effect, Stream } from "effect";
 import { ChildProcess } from "effect/process";
+import { afterEach, beforeEach } from "vite-plus/test";
 
-const { joinPath, provideNode, readTextFile, writeTextFile } = testing;
+import DefaultPackageManager from "../src/core/default-package-manager.ts";
+import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import testNetworkEnv from "./test-network-env.ts";
+
+const { allowNetwork } = testNetworkEnv;
+
+const {
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  provideNode,
+  readTextFile,
+  removeDirIfSet,
+  runTest,
+  writeTextFile,
+} = testing;
 
 const text = <E>(stream: Stream.Stream<Uint8Array, E>) =>
   stream.pipe(Stream.decodeText(), Stream.mkString);
@@ -58,6 +76,42 @@ const getFileContent = (repoDir: string, filename: string) =>
 
 const gitSource = "git:github.com/test/extension";
 
+interface GitUpdateFixture {
+  agentDir: string;
+  installedDir: string;
+  packageManager: packageManagerTypes.DefaultPackageManager;
+  remoteDir: string;
+  settingsManager: settingsManagerTypes.SettingsManager;
+  tempDir: string;
+}
+
+const useGitUpdateFixture = (): GitUpdateFixture => {
+  const fixture = {} as GitUpdateFixture;
+
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        allowNetwork();
+        fixture.tempDir = yield* makeTempDir("git-update-test-");
+        fixture.remoteDir = joinPath(fixture.tempDir, "remote");
+        fixture.agentDir = joinPath(fixture.tempDir, "agent");
+        fixture.installedDir = joinPath(fixture.agentDir, "git", "github.com", "test", "extension");
+        yield* makeDirectory(fixture.agentDir);
+        fixture.settingsManager = SettingsManager.inMemory();
+        fixture.packageManager = new DefaultPackageManager({
+          agentDir: fixture.agentDir,
+          cwd: fixture.tempDir,
+          settingsManager: fixture.settingsManager,
+        });
+      }),
+    ),
+  );
+
+  afterEach(() => runTest(removeDirIfSet(fixture.tempDir)));
+
+  return fixture;
+};
+
 const gitUpdateSupport = {
   createCommit,
   getCurrentCommit,
@@ -66,6 +120,7 @@ const gitUpdateSupport = {
   gitSource,
   initGitRepo,
   runCommand,
+  useGitUpdateFixture,
 };
 
 export default gitUpdateSupport;

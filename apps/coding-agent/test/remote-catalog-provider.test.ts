@@ -121,11 +121,17 @@ const overlaysImageAndClassifierModelsAndDrops = () =>
     }),
   );
 
+const queueFetchResponses = (responses: Response[]) =>
+  Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    return vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() => effectRunPromise(awaited(responses.shift() as Response)));
+  });
+
 const prefersTheNewerOfTheGeneratedAnd = () =>
   runTest(
     Effect.gen(function* () {
-      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
       const localGeneratedAt = Date.parse("2026-07-23T10:00:00.000Z");
       const newerHeader = dateFromMillis(localGeneratedAt + 60_000).toUTCString();
       const responses = [
@@ -136,9 +142,7 @@ const prefersTheNewerOfTheGeneratedAnd = () =>
           headers: { "last-modified": newerHeader },
         }),
       ];
-      vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-        effectRunPromise(awaited(responses.shift() as Response)),
-      );
+      yield* queueFetchResponses(responses);
       const provider = testProvider(localGeneratedAt);
       const store = new InMemoryModelsStore();
 
@@ -156,17 +160,13 @@ const prefersTheNewerOfTheGeneratedAnd = () =>
 const revalidatesAStoredCatalogWithItsEtag = () =>
   runTest(
     Effect.gen(function* () {
-      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
       const responses = [
         new Response(yield* toJsonText({ dynamic: model("dynamic") }), {
           headers: { "content-type": "application/json", etag: '"catalog-1"' },
         }),
         new Response(null, { headers: { etag: '"catalog-1"' }, status: 304 }),
       ];
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation(() => effectRunPromise(awaited(responses.shift() as Response)));
+      const fetchSpy = yield* queueFetchResponses(responses);
       const provider = testProvider();
       const store = new InMemoryModelsStore();
 

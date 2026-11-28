@@ -35,67 +35,70 @@ const ignoresStalePreCompactionUsage = () =>
     }),
   );
 
-const triggersThresholdCompactionFromLastSuccess = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { session, settingsManager } = harness();
-      const contextWindow = session.model!.contextWindow ?? 200_000;
-      const thresholdTokens =
-        contextWindow - settingsManager.context.getCompactionSettings().reserveTokens + 1;
-      const errorAssistant = overloaded(currentTimeMillis() + 1000);
-      session.agent.state.messages = [
-        userMessage("hello", currentTimeMillis() - 1000),
-        modelMessage({
-          input: thresholdTokens - 10_000,
-          output: 10_000,
-          text: "large successful response",
-        }),
-        userMessage("another prompt", currentTimeMillis() + 500),
-        errorAssistant,
-      ];
-      const spy = spyAutoCompaction();
-      yield* checkCompaction(errorAssistant);
-      expect(spy).toHaveBeenCalledWith("threshold", false);
+const arrangeLastSuccess = () => {
+  const { session, settingsManager } = harness();
+  const contextWindow = session.model!.contextWindow ?? 200_000;
+  const thresholdTokens =
+    contextWindow - settingsManager.context.getCompactionSettings().reserveTokens + 1;
+  const errorAssistant = overloaded(currentTimeMillis() + 1000);
+  session.agent.state.messages = [
+    userMessage("hello", currentTimeMillis() - 1000),
+    modelMessage({
+      input: thresholdTokens - 10_000,
+      output: 10_000,
+      text: "large successful response",
     }),
-  );
+    userMessage("another prompt", currentTimeMillis() + 500),
+    errorAssistant,
+  ];
+  return errorAssistant;
+};
 
-const skipsThresholdCompactionWithoutUsage = () =>
-  runTest(
-    Effect.gen(function* () {
-      const errorAssistant = overloaded();
-      harness().session.agent.state.messages = [
-        userMessage("hello", currentTimeMillis() - 1000),
-        errorAssistant,
-      ];
-      const spy = spyAutoCompaction();
-      yield* checkCompaction(errorAssistant);
-      expect(spy).not.toHaveBeenCalled();
-    }),
-  );
+const arrangeWithoutUsage = () => {
+  const errorAssistant = overloaded();
+  harness().session.agent.state.messages = [
+    userMessage("hello", currentTimeMillis() - 1000),
+    errorAssistant,
+  ];
+  return errorAssistant;
+};
 
-const skipsThresholdCompactionWithKeptUsageOnly = () =>
-  runTest(
-    Effect.gen(function* () {
-      const preCompactionTimestamp = currentTimeMillis() - 10_000;
-      const keptAssistant = modelMessage({
-        input: 180_000,
-        output: 10_000,
-        text: "kept response from before compaction",
-        timestamp: preCompactionTimestamp,
-      });
-      appendCompactedHistory(keptAssistant, "before compaction");
-      const errorAssistant = overloaded();
-      harness().session.agent.state.messages = [
-        userMessage("kept user msg", preCompactionTimestamp - 1000),
-        keptAssistant,
-        userMessage("new prompt", currentTimeMillis() - 500),
-        errorAssistant,
-      ];
-      const spy = spyAutoCompaction();
-      yield* checkCompaction(errorAssistant);
-      expect(spy).not.toHaveBeenCalled();
-    }),
-  );
+const arrangeKeptUsageOnly = () => {
+  const preCompactionTimestamp = currentTimeMillis() - 10_000;
+  const keptAssistant = modelMessage({
+    input: 180_000,
+    output: 10_000,
+    text: "kept response from before compaction",
+    timestamp: preCompactionTimestamp,
+  });
+  appendCompactedHistory(keptAssistant, "before compaction");
+  const errorAssistant = overloaded();
+  harness().session.agent.state.messages = [
+    userMessage("kept user msg", preCompactionTimestamp - 1000),
+    keptAssistant,
+    userMessage("new prompt", currentTimeMillis() - 500),
+    errorAssistant,
+  ];
+  return errorAssistant;
+};
+
+const thresholdCases = [
+  {
+    arrange: arrangeLastSuccess,
+    name: "should trigger threshold compaction for error messages using last successful usage",
+    triggers: true,
+  },
+  {
+    arrange: arrangeWithoutUsage,
+    name: "should not trigger threshold compaction for error messages when no prior usage exists",
+    triggers: false,
+  },
+  {
+    arrange: arrangeKeptUsageOnly,
+    name: "should not trigger threshold compaction for error messages when only kept pre-compaction usage exists",
+    triggers: false,
+  },
+];
 
 describe("AgentSession auto-compaction queue resume", () => {
   beforeEach(prepare);
@@ -107,18 +110,18 @@ describe("AgentSession auto-compaction queue resume", () => {
     ignoresStalePreCompactionUsage,
   );
 
-  it(
-    "should trigger threshold compaction for error messages using last successful usage",
-    triggersThresholdCompactionFromLastSuccess,
-  );
-
-  it(
-    "should not trigger threshold compaction for error messages when no prior usage exists",
-    skipsThresholdCompactionWithoutUsage,
-  );
-
-  it(
-    "should not trigger threshold compaction for error messages when only kept pre-compaction usage exists",
-    skipsThresholdCompactionWithKeptUsageOnly,
+  it.each(thresholdCases)("$name", ({ arrange, triggers }) =>
+    runTest(
+      Effect.gen(function* () {
+        const errorAssistant = arrange();
+        const spy = spyAutoCompaction();
+        yield* checkCompaction(errorAssistant);
+        if (triggers) {
+          expect(spy).toHaveBeenCalledWith("threshold", false);
+        } else {
+          expect(spy).not.toHaveBeenCalled();
+        }
+      }),
+    ),
   );
 });

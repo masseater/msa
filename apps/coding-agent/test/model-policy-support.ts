@@ -6,6 +6,7 @@ import InMemoryCodingAgentModelsStore from "../src/core/in-memory-coding-agent-m
 import modelPolicy from "../src/core/model-policy.ts";
 import type modelPolicyTypes from "../src/core/model-policy.types.ts";
 import ModelRuntime from "../src/core/model-runtime.ts";
+import bashOutputSupport from "./bash-output-support.ts";
 import modelLifecycleSupport from "./model-lifecycle-support.ts";
 
 const { model } = modelLifecycleSupport;
@@ -59,16 +60,14 @@ function createRuntime(settings: Partial<Record<string, unknown>> = {}) {
   );
 }
 
-function text(result: { content: Array<{ type: string; text?: string }> }): string {
-  return result.content.map((part) => part.text ?? "").join("\n");
-}
+const { getTextOutput } = bashOutputSupport;
 
 const modelPolicySupport = {
   cleanupRuntimeDirs,
   createRuntime,
   model,
   policy,
-  text,
+  text: getTextOutput,
 };
 
 export default modelPolicySupport;

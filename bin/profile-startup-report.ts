@@ -102,42 +102,59 @@ const metricLines = (startupMs: number, timings: ReadonlyMap<string, Summary>) =
   ),
 ];
 
+const reportLines = (
+  heading: string,
+  context: profileStartupReportTypes.ReportContext,
+  runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+  elapsedLines: ReadonlyArray<string>,
+  labelSuffix: string,
+  startupMs: number,
+) => {
+  const timings = summarizeTimingMaps(runs);
+  return [
+    heading,
+    `  runtime:          ${context.runtimeLabel}`,
+    `  mode:             ${context.mode}`,
+    ...elapsedLines,
+    ...[...timings.entries()].map(
+      ([label, summary]) => `  ${label}${labelSuffix}: ${formatMs(summary.median)}`,
+    ),
+    ...profileLines(context, runs),
+    ...metricLines(startupMs, timings),
+  ];
+};
+
 const singleRunReport = (
   context: profileStartupReportTypes.ReportContext,
   run: profileStartupReportTypes.RunResult,
-): ReadonlyArray<string> => {
-  const timings = summarizeTimingMaps([run]);
-  return [
+): ReadonlyArray<string> =>
+  reportLines(
     "\nResult",
-    `  runtime:          ${context.runtimeLabel}`,
-    `  mode:             ${context.mode}`,
-    `  elapsed:          ${formatMs(run.elapsedMs)}`,
-    ...[...timings.entries()].map(([label, summary]) => `  ${label}: ${formatMs(summary.median)}`),
-    ...profileLines(context, [run]),
-    ...metricLines(run.elapsedMs, timings),
-  ];
-};
+    context,
+    [run],
+    [`  elapsed:          ${formatMs(run.elapsedMs)}`],
+    "",
+    run.elapsedMs,
+  );
 
 const multiRunReport = (
   context: profileStartupReportTypes.ReportContext,
   runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
 ): ReadonlyArray<string> => {
   const elapsed = summarize(runs.map((run) => run.elapsedMs));
-  const timings = summarizeTimingMaps(runs);
-  return [
+  return reportLines(
     "\nSummary",
-    `  runtime:          ${context.runtimeLabel}`,
-    `  mode:             ${context.mode}`,
-    `  elapsed min:      ${formatMs(elapsed.min)}`,
-    `  elapsed median:   ${formatMs(elapsed.median)}`,
-    `  elapsed avg:      ${formatMs(elapsed.avg)}`,
-    `  elapsed max:      ${formatMs(elapsed.max)}`,
-    ...[...timings.entries()].map(
-      ([label, summary]) => `  ${label} median: ${formatMs(summary.median)}`,
-    ),
-    ...profileLines(context, runs),
-    ...metricLines(elapsed.median, timings),
-  ];
+    context,
+    runs,
+    [
+      `  elapsed min:      ${formatMs(elapsed.min)}`,
+      `  elapsed median:   ${formatMs(elapsed.median)}`,
+      `  elapsed avg:      ${formatMs(elapsed.avg)}`,
+      `  elapsed max:      ${formatMs(elapsed.max)}`,
+    ],
+    " median",
+    elapsed.median,
+  );
 };
 
 const buildReport: {

@@ -63,99 +63,97 @@ const relativizesCustomGlobResultsAgainstA = Effect.gen(function* () {
   expect(result.content[0]?.text).toBe("home/user/project/\nhome/user/project/file.txt");
 });
 
-const preservesTheFirstSegmentAndEmitsOne = () => {
-  expect(relativizeFindResultPath("I:\\AI\\Models\\TextGen\\gemma4\\", searchRoot, win32)).toBe(
-    "AI/Models/TextGen/gemma4/",
-  );
-};
-
-const handlesFdOutputThatUsesForwardSlashes = () => {
-  expect(relativizeFindResultPath("I:/AI/Models/TextGen/gemma4/", searchRoot, win32)).toBe(
-    "AI/Models/TextGen/gemma4/",
-  );
-};
-
-const keepsDeeperSearchPathsUnchanged = () => {
-  expect(relativizeFindResultPath("I:\\AI\\Models\\", "I:\\AI", win32)).toBe("Models/");
-};
-
-const doesNotRelativizeASiblingDirectoryThat = () => {
-  expect(relativizeFindResultPath("I:\\AI\\Models2\\file.txt", "I:\\AI\\Models", win32)).toBe(
-    "../Models2/file.txt",
-  );
-};
-
-const normalizesRelativeCustomGlobResultsWithoutCorrupting = () => {
-  expect(relativizeFindResultPath("AI\\Models\\TextGen\\gemma4\\", searchRoot, win32)).toBe(
-    "AI/Models/TextGen/gemma4/",
-  );
-};
-
-const preservesTheFirstSegmentForFilesUnder = () => {
-  expect(relativizeFindResultPath("/home/user/file.txt", "/", posix)).toBe("home/user/file.txt");
-};
-
-const preservesTheFirstSegmentAndOneTrailing = () => {
-  expect(relativizeFindResultPath("/home/user/project/", "/", posix)).toBe("home/user/project/");
-};
-
-const preservesBackslashesInPosixFilenames = () => {
-  expect(relativizeFindResultPath("/home/user/file\\", "/home/user", posix)).toBe("file\\");
-};
-
-const fallsBackToPathRelativeWhenThe = () => {
-  expect(relativizeFindResultPath("/tmp/results/file.txt", "/workspace/project", posix)).toBe(
-    "../../tmp/results/file.txt",
-  );
-};
-
-const keepsATrailingSlashOnDirectoriesResolved = () => {
-  expect(relativizeFindResultPath("/tmp/results/dir/", "/workspace/project", posix)).toBe(
-    "../../tmp/results/dir/",
-  );
-};
+const relativizeCases = [
+  {
+    expected: "AI/Models/TextGen/gemma4/",
+    group: "Windows drive root",
+    name: "preserves the first segment and emits one trailing slash for fd directory output",
+    path: "I:\\AI\\Models\\TextGen\\gemma4\\",
+    platform: win32,
+    root: searchRoot,
+  },
+  {
+    expected: "AI/Models/TextGen/gemma4/",
+    group: "Windows drive root",
+    name: "handles fd output that uses forward slashes under a drive root",
+    path: "I:/AI/Models/TextGen/gemma4/",
+    platform: win32,
+    root: searchRoot,
+  },
+  {
+    expected: "Models/",
+    group: "Windows drive root",
+    name: "keeps deeper search paths unchanged",
+    path: "I:\\AI\\Models\\",
+    platform: win32,
+    root: "I:\\AI",
+  },
+  {
+    expected: "../Models2/file.txt",
+    group: "Windows drive root",
+    name: "does not relativize a sibling directory that shares a name prefix",
+    path: "I:\\AI\\Models2\\file.txt",
+    platform: win32,
+    root: "I:\\AI\\Models",
+  },
+  {
+    expected: "AI/Models/TextGen/gemma4/",
+    group: "Windows drive root",
+    name: "normalizes relative custom-glob results without corrupting them",
+    path: "AI\\Models\\TextGen\\gemma4\\",
+    platform: win32,
+    root: searchRoot,
+  },
+  {
+    expected: "home/user/file.txt",
+    group: "POSIX root",
+    name: "preserves the first segment for files under /",
+    path: "/home/user/file.txt",
+    platform: posix,
+    root: "/",
+  },
+  {
+    expected: "home/user/project/",
+    group: "POSIX root",
+    name: "preserves the first segment and one trailing slash for directories under /",
+    path: "/home/user/project/",
+    platform: posix,
+    root: "/",
+  },
+  {
+    expected: "file\\",
+    group: "POSIX root",
+    name: "preserves backslashes in POSIX filenames",
+    path: "/home/user/file\\",
+    platform: posix,
+    root: "/home/user",
+  },
+  {
+    expected: "../../tmp/results/file.txt",
+    group: "absolute results outside the search path",
+    name: "falls back to path.relative when the absolute paths do not share a prefix",
+    path: "/tmp/results/file.txt",
+    platform: posix,
+    root: "/workspace/project",
+  },
+  {
+    expected: "../../tmp/results/dir/",
+    group: "absolute results outside the search path",
+    name: "keeps a trailing slash on directories resolved through path.relative",
+    path: "/tmp/results/dir/",
+    platform: posix,
+    root: "/workspace/project",
+  },
+];
 
 const relativizesCustomGlobResultsAgainstARoot = () =>
   Effect.runPromise(relativizesCustomGlobResultsAgainstA);
 
 describe("issue #6104 find relativizes root search paths", () => {
-  describe("Windows drive root", () => {
-    it(
-      "preserves the first segment and emits one trailing slash for fd directory output",
-      preservesTheFirstSegmentAndEmitsOne,
-    );
-    it(
-      "handles fd output that uses forward slashes under a drive root",
-      handlesFdOutputThatUsesForwardSlashes,
-    );
-    it("keeps deeper search paths unchanged", keepsDeeperSearchPathsUnchanged);
-    it(
-      "does not relativize a sibling directory that shares a name prefix",
-      doesNotRelativizeASiblingDirectoryThat,
-    );
-    it(
-      "normalizes relative custom-glob results without corrupting them",
-      normalizesRelativeCustomGlobResultsWithoutCorrupting,
-    );
+  it.each(relativizeCases)("$group $name", ({ expected, path, platform, root }) => {
+    expect(relativizeFindResultPath(path, root, platform)).toBe(expected);
   });
-  describe("POSIX root", () => {
-    it("preserves the first segment for files under /", preservesTheFirstSegmentForFilesUnder);
-    it(
-      "preserves the first segment and one trailing slash for directories under /",
-      preservesTheFirstSegmentAndOneTrailing,
-    );
-    it("preserves backslashes in POSIX filenames", preservesBackslashesInPosixFilenames);
-  });
-  describe("absolute results outside the search path", () => {
-    it(
-      "falls back to path.relative when the absolute paths do not share a prefix",
-      fallsBackToPathRelativeWhenThe,
-    );
-    it(
-      "keeps a trailing slash on directories resolved through path.relative",
-      keepsATrailingSlashOnDirectoriesResolved,
-    );
-  });
+
   describe("through the find tool", () => {
     it(
       "relativizes custom glob results against a root search path",

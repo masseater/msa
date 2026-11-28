@@ -1,3 +1,6 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
+
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
 
 function normalizeForMatch(value: string): string {
@@ -29,9 +32,22 @@ const isDisabled = (
 };
 const packagePaths = { isDisabled, isEnabled, pathEndsWith };
 
+const { dirnameOf, makeDirectory, writeTextFile } = testing;
+
+const skillOf = (name: string, description: string, body = "Content"): string =>
+  `---\nname: ${name}\ndescription: ${description}\n---\n${body}`;
+
+const writeSkill = (file: string, name: string, description: string, body = "Content") =>
+  Effect.gen(function* () {
+    yield* makeDirectory(dirnameOf(file));
+    yield* writeTextFile(file, skillOf(name, description, body));
+  });
+
 const packageManagerSupport = {
   normalizeForMatch,
   packagePaths,
+  skillOf,
+  writeSkill,
 };
 
 export default packageManagerSupport;

@@ -107,6 +107,18 @@ const removingModelOverrideRestoresBuiltInValues = () =>
     }),
   );
 
+const demoModels = [
+  {
+    contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "demo-model",
+    input: ["text" as const],
+    maxTokens: 4096,
+    name: "Demo Model",
+    reasoning: false,
+  },
+];
+
 const expectBuiltInNamesAndRegisterProvider = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -121,17 +133,7 @@ const expectBuiltInNamesAndRegisterProvider = () =>
       api: "openai-completions",
       apiKey: "test-key",
       baseUrl: "https://provider.test/v1",
-      models: [
-        {
-          contextWindow: 128000,
-          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-          id: "demo-model",
-          input: ["text"],
-          maxTokens: 4096,
-          name: "Demo Model",
-          reasoning: false,
-        },
-      ],
+      models: demoModels,
       name: "Named Provider",
     });
     return { effectRunPromise, registry };
@@ -146,17 +148,7 @@ const getproviderdisplaynameResolvesRegisteredOauthBuiltInAnd = () =>
       registry.registerProvider("oauth-provider", {
         api: "openai-completions",
         baseUrl: "https://provider.test/v1",
-        models: [
-          {
-            contextWindow: 128000,
-            cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-            id: "demo-model",
-            input: ["text"],
-            maxTokens: 4096,
-            name: "Demo Model",
-            reasoning: false,
-          },
-        ],
+        models: demoModels,
         oauth: {
           getApiKey: (credentials) => credentials.access,
           login: () =>
