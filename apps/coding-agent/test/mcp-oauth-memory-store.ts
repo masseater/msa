@@ -14,6 +14,11 @@ const memoryServerStore = (serverUrl: string, options: MemoryStoreOptions = {}) 
     serverUrl,
   );
 
-const mcpOAuthMemoryStore = { memoryBackend, memoryServerStore };
+const oauthState = (serverUrl: string, accessToken: string) => ({
+  serverUrl,
+  tokens: { access_token: accessToken, token_type: "Bearer" },
+});
+
+const mcpOAuthMemoryStore = { memoryBackend, memoryServerStore, oauthState };
 
 export default mcpOAuthMemoryStore;

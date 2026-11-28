@@ -5,14 +5,12 @@ import { describe, expect, it } from "vite-plus/test";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
 import McpOAuthCredentialStore from "../src/extensions/mcp/mcp-oauth-credential-store.ts";
+import mcpOAuthMemoryStore from "./mcp-oauth-memory-store.ts";
 
 const { awaited, runTest, toJsonText } = testing;
+const { oauthState } = mcpOAuthMemoryStore;
 
 const SERVER_URL = "https://mcp.example.com/mcp";
-
-function state(accessToken: string) {
-  return { serverUrl: SERVER_URL, tokens: { access_token: accessToken, token_type: "Bearer" } };
-}
 
 const storedKeys = (backend: authStorageTypes.InMemoryAuthStorageBackend) =>
   Effect.map(
@@ -24,8 +22,12 @@ const keepsSeparateCredentialsForServersSharingA = () =>
   runTest(
     Effect.gen(function* () {
       const store = new McpOAuthCredentialStore(new InMemoryAuthStorageBackend());
-      yield* awaited(store.forServer("work", SERVER_URL).save(state("work-token")));
-      yield* awaited(store.forServer("personal", SERVER_URL).save(state("personal-token")));
+      yield* awaited(
+        store.forServer("work", SERVER_URL).save(oauthState(SERVER_URL, "work-token")),
+      );
+      yield* awaited(
+        store.forServer("personal", SERVER_URL).save(oauthState(SERVER_URL, "personal-token")),
+      );
 
       expect(
         (yield* awaited(store.forServer("work", SERVER_URL).load()))?.tokens?.access_token,
@@ -46,7 +48,7 @@ const movesCredentialsStoredByServerUrlTo = () =>
   runTest(
     Effect.gen(function* () {
       const backend = new InMemoryAuthStorageBackend(
-        yield* toJsonText({ [SERVER_URL]: state("legacy-token") }),
+        yield* toJsonText({ [SERVER_URL]: oauthState(SERVER_URL, "legacy-token") }),
       );
       const store = new McpOAuthCredentialStore(backend);
 
@@ -69,7 +71,7 @@ const signsOutOfCredentialsStoredByServer = () =>
   runTest(
     Effect.gen(function* () {
       const backend = new InMemoryAuthStorageBackend(
-        yield* toJsonText({ [SERVER_URL]: state("legacy-token") }),
+        yield* toJsonText({ [SERVER_URL]: oauthState(SERVER_URL, "legacy-token") }),
       );
       const store = new McpOAuthCredentialStore(backend);
 

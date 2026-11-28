@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import mcpConfig from "../src/extensions/mcp/config.ts";
 import SecretStoreAuthBackend from "../src/extensions/mcp/credentials/secret-store-backend.ts";
 import McpOAuthCredentialStore from "../src/extensions/mcp/mcp-oauth-credential-store.ts";
+import mcpOAuthMemoryStore from "./mcp-oauth-memory-store.ts";
 
 const {
   awaited,
@@ -20,6 +21,7 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
+const { oauthState } = mcpOAuthMemoryStore;
 const { loadMcpConfig } = mcpConfig;
 
 const SERVER_URL = "https://mcp.example.com/mcp";
@@ -55,11 +57,6 @@ afterEach(() =>
     }),
   ),
 );
-
-const state = (accessToken: string) => ({
-  serverUrl: SERVER_URL,
-  tokens: { access_token: accessToken, token_type: "Bearer" },
-});
 
 const workspace = Effect.gen(function* () {
   const root = yield* makeTempDir("msa-secret-store-");
@@ -113,7 +110,9 @@ const keepsSignInsInTheCredentialHelper = () =>
       const { agentDir, storeFile, useHelper } = yield* workspace;
       yield* useHelper;
       const first = new McpOAuthCredentialStore(new SecretStoreAuthBackend({ agentDir }), agentDir);
-      yield* awaited(first.forServer("docs", SERVER_URL).save(state("token-in-helper")));
+      yield* awaited(
+        first.forServer("docs", SERVER_URL).save(oauthState(SERVER_URL, "token-in-helper")),
+      );
 
       const second = new McpOAuthCredentialStore(
         new SecretStoreAuthBackend({ agentDir }),
@@ -137,7 +136,7 @@ const movesMcpAuthJsonIntoTheStore = () =>
       const legacy = joinPath(agentDir, "mcp-auth.json");
       yield* writeTextFile(
         legacy,
-        yield* toJsonText({ [`mcp__docs|${SERVER_URL}`]: state("old") }),
+        yield* toJsonText({ [`mcp__docs|${SERVER_URL}`]: oauthState(SERVER_URL, "old") }),
       );
 
       const store = new McpOAuthCredentialStore(new SecretStoreAuthBackend({ agentDir }), agentDir);
@@ -155,7 +154,9 @@ const keepsSignInsInMemoryWithoutAStore = () =>
       const { agentDir } = yield* workspace;
       const backend = new SecretStoreAuthBackend({ agentDir, defaultStore: failingStore });
       const store = new McpOAuthCredentialStore(backend, agentDir);
-      yield* awaited(store.forServer("docs", SERVER_URL).save(state("token-in-memory")));
+      yield* awaited(
+        store.forServer("docs", SERVER_URL).save(oauthState(SERVER_URL, "token-in-memory")),
+      );
 
       expect((yield* awaited(store.tokens("docs", SERVER_URL)))?.access_token).toBe(
         "token-in-memory",
@@ -180,7 +181,9 @@ const fallsBackWhenTheStoreRejectsWrites = () =>
         new SecretStoreAuthBackend({ agentDir, defaultStore: readOnlyStore }),
         agentDir,
       );
-      yield* awaited(store.forServer("docs", SERVER_URL).save(state("token-after-refusal")));
+      yield* awaited(
+        store.forServer("docs", SERVER_URL).save(oauthState(SERVER_URL, "token-after-refusal")),
+      );
       expect((yield* awaited(store.tokens("docs", SERVER_URL)))?.access_token).toBe(
         "token-after-refusal",
       );
@@ -196,7 +199,7 @@ const deletesMcpAuthJsonWithoutAStore = () =>
       const legacy = joinPath(agentDir, "mcp-auth.json");
       yield* writeTextFile(
         legacy,
-        yield* toJsonText({ [`mcp__docs|${SERVER_URL}`]: state("old") }),
+        yield* toJsonText({ [`mcp__docs|${SERVER_URL}`]: oauthState(SERVER_URL, "old") }),
       );
       const store = new McpOAuthCredentialStore(
         new SecretStoreAuthBackend({ agentDir, defaultStore: failingStore }),
@@ -217,7 +220,7 @@ const failsWhenTheConfiguredHelperFails = () =>
       );
       const store = new McpOAuthCredentialStore(new SecretStoreAuthBackend({ agentDir }), agentDir);
       const saved = yield* Effect.exit(
-        awaited(store.forServer("docs", SERVER_URL).save(state("never-stored"))),
+        awaited(store.forServer("docs", SERVER_URL).save(oauthState(SERVER_URL, "never-stored"))),
       );
       expect(Exit.isFailure(saved)).toBe(true);
       expect(yield* filesHolding(agentDir, "never-stored")).toEqual([]);
@@ -233,7 +236,9 @@ const readsAgainOnceTheHelperUnlocks = () =>
         new SecretStoreAuthBackend({ agentDir }),
         agentDir,
       );
-      yield* awaited(saving.forServer("docs", SERVER_URL).save(state("token-after-unlock")));
+      yield* awaited(
+        saving.forServer("docs", SERVER_URL).save(oauthState(SERVER_URL, "token-after-unlock")),
+      );
       const lock = `${storeFile}.locked`;
       yield* writeTextFile(lock, "");
 

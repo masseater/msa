@@ -4,41 +4,11 @@ import args from "../src/cli/args.ts";
 
 const { parseArgs } = args;
 
-const parsesVersionFlag = () => {
-  const result = parseArgs(["--version"]);
-  expect(result.version).toBe(true);
-};
-
-const parsesVShorthand = () => {
-  const result = parseArgs(["-v"]);
-  expect(result.version).toBe(true);
-};
-
 const versionTakesPrecedenceOverOtherArgs = () => {
   const result = parseArgs(["--version", "--help", "some message"]);
   expect(result.version).toBe(true);
   expect(result.help).toBe(true);
   expect(result.messages).toContain("some message");
-};
-
-const parsesHelpFlag = () => {
-  const result = parseArgs(["--help"]);
-  expect(result.help).toBe(true);
-};
-
-const parsesHShorthand = () => {
-  const result = parseArgs(["-h"]);
-  expect(result.help).toBe(true);
-};
-
-const parsesPrintFlag = () => {
-  const result = parseArgs(["--print"]);
-  expect(result.print).toBe(true);
-};
-
-const parsesPShorthand = () => {
-  const result = parseArgs(["-p"]);
-  expect(result.print).toBe(true);
 };
 
 const parsesPromptAfterPEvenWhenIt = () => {
@@ -56,25 +26,18 @@ const doesNotConsumeOptionsAfterPAs = () => {
   expect(result.messages).toEqual(["Say hi."]);
 };
 
-const parsesContinueFlag = () => {
-  const result = parseArgs(["--continue"]);
-  expect(result.continue).toBe(true);
-};
-
-const parsesCShorthand = () => {
-  const result = parseArgs(["-c"]);
-  expect(result.continue).toBe(true);
-};
-
-const parsesResumeFlag = () => {
-  const result = parseArgs(["--resume"]);
-  expect(result.resume).toBe(true);
-};
-
-const parsesRShorthand = () => {
-  const result = parseArgs(["-r"]);
-  expect(result.resume).toBe(true);
-};
+const booleanFlagCases = [
+  { argv: ["--version"], expected: { version: true }, name: "--version flag" },
+  { argv: ["-v"], expected: { version: true }, name: "-v shorthand" },
+  { argv: ["--help"], expected: { help: true }, name: "--help flag" },
+  { argv: ["-h"], expected: { help: true }, name: "-h shorthand" },
+  { argv: ["--print"], expected: { print: true }, name: "--print flag" },
+  { argv: ["-p"], expected: { print: true }, name: "-p shorthand" },
+  { argv: ["--continue"], expected: { continue: true }, name: "--continue flag" },
+  { argv: ["-c"], expected: { continue: true }, name: "-c shorthand" },
+  { argv: ["--resume"], expected: { resume: true }, name: "--resume flag" },
+  { argv: ["-r"], expected: { resume: true }, name: "-r shorthand" },
+];
 
 const valueFlagCases = [
   { argv: ["--provider", "openai"], expected: { provider: "openai" }, name: "--provider" },
@@ -128,43 +91,21 @@ const valueFlagCases = [
 ];
 
 describe("parseArgs", () => {
+  test.each(booleanFlagCases)("parses $name", ({ argv, expected }) => {
+    expect(parseArgs(argv)).toMatchObject(expected);
+  });
+
   describe("--version flag", () => {
-    test("parses --version flag", parsesVersionFlag);
-
-    test("parses -v shorthand", parsesVShorthand);
-
     test("--version takes precedence over other args", versionTakesPrecedenceOverOtherArgs);
   });
 
-  describe("--help flag", () => {
-    test("parses --help flag", parsesHelpFlag);
-
-    test("parses -h shorthand", parsesHShorthand);
-  });
-
   describe("--print flag", () => {
-    test("parses --print flag", parsesPrintFlag);
-
-    test("parses -p shorthand", parsesPShorthand);
-
     test(
       "parses prompt after -p even when it starts with YAML frontmatter",
       parsesPromptAfterPEvenWhenIt,
     );
 
     test("does not consume options after -p as prompts", doesNotConsumeOptionsAfterPAs);
-  });
-
-  describe("--continue flag", () => {
-    test("parses --continue flag", parsesContinueFlag);
-
-    test("parses -c shorthand", parsesCShorthand);
-  });
-
-  describe("--resume flag", () => {
-    test("parses --resume flag", parsesResumeFlag);
-
-    test("parses -r shorthand", parsesRShorthand);
   });
 });
 

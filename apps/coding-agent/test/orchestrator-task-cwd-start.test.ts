@@ -3,10 +3,10 @@ import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
-import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import goalChecksSupport from "./orchestrator-goal-checks-support.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
+import taskCwdFollowUpSupport from "./task-cwd-follow-up-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, makeTempDir, removePath } = testing;
@@ -16,6 +16,7 @@ const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { sh, withRepository } = worktreeSupport;
 const { runCommand } = orchestratorCallbacks;
+const { refusalsOf, threadsOf } = taskCwdFollowUpSupport;
 
 type Session = ReturnType<typeof setup>;
 
@@ -24,16 +25,6 @@ function withOutside<A, E>(body: (outside: string) => Effect.Effect<A, E>) {
     removePath(outside),
   );
 }
-
-const threadsOf = (orchestrator: orchestratorTypes.Orchestrator, taskId: string) =>
-  orchestrator.snapshot.threads.filter((thread) =>
-    thread.tasks.some((assignment) => assignment.taskId === taskId),
-  ).length;
-
-const refusalsOf = (session: Session, taskId: string) =>
-  session.reports.filter(
-    (report) => report.details.taskId === taskId && report.details.status === "stopped",
-  );
 
 function lintAfterABlocker(session: Session, cwd: string) {
   return Effect.gen(function* () {
