@@ -8,6 +8,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 const { joinPath, makeTempDir, removePath } = testing;
 
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 
 const { setup, taskStatus, waitFor } = harness;
 
@@ -31,10 +32,8 @@ const addsADependencyToAWaitingTask = () =>
       yield* waitFor(() => taskStatus(orchestrator, c.id) === "completed");
       expect(taskStatus(orchestrator, b.id)).toBe("waiting");
 
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 4);
-      workers[3]?.complete("a reviewed");
-      yield* waitFor(() => workers.length === 5);
+      yield* completing(workers[0], "a done", () => workers.length === 4);
+      yield* completing(workers[3], "a reviewed", () => workers.length === 5);
       expect(taskStatus(orchestrator, b.id)).toBe("running");
       expect(workers[4]?.prompts[0]).toContain("b works");
       expect(workers[4]?.prompts[0]).toContain("a reviewed");

@@ -5,7 +5,8 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
 const { harness } = orchestratorHarness;
-const { taskStatus, waitFor } = harness;
+const { completing } = harness;
+const { taskStatus } = harness;
 const { openedTask, withRemote } = pullRequestSupport;
 
 const stopsWhenTheWorkerMergedItsOwnPullRequest = () =>
@@ -17,8 +18,11 @@ const stopsWhenTheWorkerMergedItsOwnPullRequest = () =>
           yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "success");
         const commit = yield* github.mergeOutside(number, "someone-else");
-        workers[0]!.complete(`merged #${number} myself`);
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        yield* completing(
+          workers[0],
+          `merged #${number} myself`,
+          () => taskStatus(orchestrator, taskId) === "stopped",
+        );
         expect(workers).toHaveLength(1);
         expect(github.merged).toEqual([]);
         const report = reports.at(-1);
@@ -43,11 +47,13 @@ const stopsWhenThePullRequestWasMergedDuringTheReview = () =>
         const { orchestrator, reports, workers, branch, number, taskId } =
           yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "success");
-        workers[0]!.complete("CI is green");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "CI is green", () => workers.length === 2);
         const commit = yield* github.mergeOutside(number, "reviewer-account");
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        yield* completing(
+          workers[1],
+          "acceptable",
+          () => taskStatus(orchestrator, taskId) === "stopped",
+        );
         expect(github.merged).toEqual([]);
         const report = reports.at(-1);
         expect(report?.details.status).toBe("stopped");
@@ -71,8 +77,11 @@ const stopsWhenTheWorkerEnabledAutoMerge = () =>
           yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "success");
         github.enableAutoMerge(number, "worker-account");
-        workers[0]!.complete("CI is green");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        yield* completing(
+          workers[0],
+          "CI is green",
+          () => taskStatus(orchestrator, taskId) === "stopped",
+        );
         expect(workers).toHaveLength(1);
         expect(github.merged).toEqual([]);
         expect(reports.at(-1)?.text).toContain("auto-merge enabled by worker-account");
@@ -93,11 +102,13 @@ const stopsWhenAutoMergeWasEnabledDuringTheReview = () =>
         const { orchestrator, reports, workers, branch, number, taskId } =
           yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "success");
-        workers[0]!.complete("CI is green");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "CI is green", () => workers.length === 2);
         github.enableAutoMerge(number, "reviewer-account");
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        yield* completing(
+          workers[1],
+          "acceptable",
+          () => taskStatus(orchestrator, taskId) === "stopped",
+        );
         expect(github.merged).toEqual([]);
         expect(reports.at(-1)?.text).toContain("auto-merge enabled by reviewer-account");
       }),

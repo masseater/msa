@@ -4,7 +4,7 @@ import { expect, it } from "vite-plus/test";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
-const { taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, taskStatus, waitFor } = orchestratorHarness.harness;
 const { cleanedUp, commitAndPush, reviewed, reviewedScenario, withRemote } = pullRequestSupport;
 
 type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
@@ -114,8 +114,11 @@ const completesWhenGitHubConfirmsTheMergeButItCannotBeRead = reviewedScenario((r
       github.unavailable = UNREADABLE;
       unreadFrom = github.calls;
     });
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     expect(github.calls).toBeGreaterThan(unreadFrom);
     github.unavailable = undefined;
     expect(taskStatus(orchestrator, taskId)).toBe("completed");

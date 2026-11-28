@@ -4,7 +4,7 @@ import { expect, it } from "vite-plus/test";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
-const { taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, taskStatus } = orchestratorHarness.harness;
 const { acceptedMerge, exists, reviewed, withRemote } = pullRequestSupport;
 
 const REFUSED = { code: 1, stderr: "gh: Base branch was modified. (HTTP 405)", stdout: "" };
@@ -59,8 +59,7 @@ const harnessMergeThenStopAndRerun = () =>
             Effect.sleep(RERUN_WAIT_MS),
           );
         });
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => rerun !== undefined);
+        yield* completing(workers[1], "acceptable", () => rerun !== undefined);
         yield* Effect.promise(() => rerun!);
         expect(github.merged).toMatchObject([{ number, sha: head }]);
         yield* Effect.sleep(300);

@@ -4,7 +4,7 @@ import { expect, it } from "vite-plus/test";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
-const { taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, taskStatus, waitFor } = orchestratorHarness.harness;
 const { cleanedUp, commitAndPush, reviewedScenario } = pullRequestSupport;
 
 const stopsWhenAnotherHeadIsMergedWhileTheHarnessMerges = reviewedScenario((run) =>
@@ -18,8 +18,11 @@ const stopsWhenAnotherHeadIsMergedWhileTheHarnessMerges = reviewedScenario((run)
       github.ci.set(yield* github.head(branch), "success");
       commit = yield* github.mergeOutside(number, "someone-else");
     });
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     expect(taskStatus(orchestrator, taskId)).toBe("stopped");
     expect(github.merged).toEqual([]);
     expect(reports.at(-1)?.text).toContain("someone-else");
@@ -45,8 +48,11 @@ const completesWhenTheTaskIsReadWhileTheHarnessMerges = reviewedScenario((run) =
       yield* waitFor(() => github.answered > answered);
       readAs = github.pulls[0]?.state;
     });
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     yield* Effect.promise(() => reading!);
     expect(readAs).toBe("OPEN");
     expect(taskStatus(orchestrator, taskId)).toBe("completed");
@@ -76,8 +82,11 @@ const stopsWhenTheSameHeadIsMergedOutsideRightAfterTheHarnessMergeFails = review
       github.beforeMerge = undefined;
       commit = yield* github.mergeOutside(number, "someone-else");
     });
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     expect(taskStatus(orchestrator, taskId)).toBe("stopped");
     expect(github.merged).toEqual([]);
     expect(github.pulls[0]).toMatchObject({ head, state: "MERGED" });

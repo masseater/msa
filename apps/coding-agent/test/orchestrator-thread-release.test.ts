@@ -11,6 +11,7 @@ const { runTest } = testing;
 const { create, createNamed } = orchestratorSupport;
 const { replan, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { advance, fakeClock } = watchdogSupport;
 
@@ -27,8 +28,7 @@ it("stops the pr watches of a thread that completes, and only that thread's", ()
     Effect.gen(function* () {
       const { workers } = yield* twoTasks;
       expect(workers.map((worker) => worker.prWatchClosed)).toEqual([0, 0]);
-      workers[0]?.complete("done");
-      yield* waitFor(() => workers.length === 3);
+      yield* completing(workers[0], "done", () => workers.length === 3);
       expect(workers.map((worker) => worker.prWatchClosed)).toEqual([1, 0, 0]);
     }),
   ));

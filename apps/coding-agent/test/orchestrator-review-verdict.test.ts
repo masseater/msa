@@ -12,6 +12,7 @@ const { joinPath, makeDirectory, makeTempDir, removePath } = testing;
 const { escalateTriage, runningTriage } = triageSupport;
 const { create, finishWorkAndReview } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { classifierDecide, reportOf } = reviewVerdictSupport;
 
@@ -51,8 +52,7 @@ const startCacheTask = (
       goalState: GOAL,
       title: "cache reads",
     });
-    setUp.workers[0]?.complete("added the cache");
-    yield* waitFor(() => setUp.workers.length === 2);
+    yield* completing(setUp.workers[0], "added the cache", () => setUp.workers.length === 2);
     return { ...setUp, task };
   });
 
@@ -74,8 +74,7 @@ const sendsAFailedReviewBackToTheWorker = () =>
       const seen: aiTypes.JsonObject[] = [];
       const { orchestrator, reports, task, workers } = yield* startCacheTask(findingsFail(seen));
 
-      workers[1]?.complete(`Not acceptable.\n${FINDING}`);
-      yield* waitFor(() => workers.length === 3);
+      yield* completing(workers[1], `Not acceptable.\n${FINDING}`, () => workers.length === 3);
       expect(seen.at(-1)).toEqual({ goalState: GOAL, report: `Not acceptable.\n${FINDING}` });
       expect(workers[2]?.prompts[0]).toContain(FINDING);
       expect(taskStatus(orchestrator, task.id)).toBe("running");
@@ -85,11 +84,13 @@ const sendsAFailedReviewBackToTheWorker = () =>
       expect(reports.at(-1)?.details).toMatchObject({ started: [task.id], status: "sent-back" });
       expectReported(reports, "sent-back", "fail");
 
-      workers[2]?.complete("covered the second read");
-      yield* waitFor(() => workers.length === 4);
+      yield* completing(workers[2], "covered the second read", () => workers.length === 4);
       expect(workers[3]?.prompts[0]).toContain("covered the second read");
-      workers[3]?.complete("Acceptable. Nothing within the goal remains.");
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+      yield* completing(
+        workers[3],
+        "Acceptable. Nothing within the goal remains.",
+        () => taskStatus(orchestrator, task.id) === "completed",
+      );
       const passed = yield* Effect.promise(() => orchestrator.read(task.id));
       expect(passed.reports.at(-1)?.content).toContain("pass 0.90");
       expectReported(reports, "completed", "pass");
@@ -252,8 +253,7 @@ const judgesAgainstTheFindingsBeforeARestart = () =>
       yield* makeDirectory(cwd);
       const decide = findingsFail();
       const first = yield* startCacheTask(decide, { cwd, databasePath });
-      first.workers[1]?.complete(FINDING);
-      yield* waitFor(() => first.workers.length === 3);
+      yield* completing(first.workers[1], FINDING, () => first.workers.length === 3);
       yield* Effect.promise(() => first.orchestrator.dispose());
 
       const { orchestrator, reports, workers } = setup({

@@ -10,6 +10,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { GIT, read, runCommand, sh, shortId } = worktreeSupport;
 const { advanceMain, commitAndPush, exists, rebaseAndPush, withRemote } = pullRequestSupport;
@@ -80,8 +81,11 @@ function mergesAfterTheReview(run: Merging, opened: { head: string; number: numb
     expect(github.merged).toEqual([]);
     expect(taskStatus(orchestrator, taskId)).toBe("running");
 
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) === "completed",
+    );
     expect(github.merged).toEqual([
       {
         body: expect.stringMatching(/^Msa-Merge: [0-9a-f-]{36}$/u),
@@ -169,8 +173,7 @@ const sendsBackAFailingUnpushedOrConflictingPullRequest = () =>
         yield* sendsBackUntilClean(run, number);
 
         github.conflicting.delete(number);
-        workers[0]!.complete("resolved the conflict");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "resolved the conflict", () => workers.length === 2);
         expect((yield* read(orchestrator, task.id)).pullRequest?.verified?.sha).toBe(
           yield* github.head(branch),
         );
@@ -225,8 +228,7 @@ function sendsBackWhenBehindAtMerge(
   const { orchestrator, workers, github, taskId, reports } = run;
   return Effect.gen(function* () {
     yield* advanceMain(origin, "other.txt");
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => workers.length === 3);
+    yield* completing(workers[1], "acceptable", () => workers.length === 3);
     expect(github.merged).toEqual([]);
     expect(taskStatus(orchestrator, taskId)).toBe("running");
     expect(reports.at(-1)?.details.status).toBe("sent-back");
@@ -240,12 +242,10 @@ function sendsBackWhenTheHeadMovedAfterReview(
   return Effect.gen(function* () {
     yield* rebaseAndPush(workers[2]!.cwd, github.origin, branch);
     github.ci.set(yield* github.head(branch), "success");
-    workers[2]!.complete("rebased");
-    yield* waitFor(() => workers.length === 4);
+    yield* completing(workers[2], "rebased", () => workers.length === 4);
     yield* commitAndPush(workers[2]!.cwd, "late.txt", branch);
     github.ci.set(yield* github.head(branch), "success");
-    workers[3]!.complete("acceptable");
-    yield* waitFor(() => workers.length === 5);
+    yield* completing(workers[3], "acceptable", () => workers.length === 5);
     expect(github.merged).toEqual([]);
     expect(reports.at(-1)?.details.status).toBe("sent-back");
   });
@@ -264,18 +264,19 @@ const sendsBackWhenThePullRequestCannotMergeAfterReview = () =>
         yield* commitAndPush(workers[0]!.cwd, "c.txt", branch);
         const number = yield* github.open(branch);
         github.ci.set(yield* github.head(branch), "success");
-        workers[0]!.complete("green");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "green", () => workers.length === 2);
         const run = { branch, github, orchestrator, reports, taskId: task.id, workers };
 
         yield* sendsBackWhenBehindAtMerge(run, origin);
         yield* sendsBackWhenTheHeadMovedAfterReview(run);
 
         const late = yield* github.head(branch);
-        workers[4]!.complete("the late commit is the work");
-        yield* waitFor(() => workers.length === 6);
-        workers[5]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+        yield* completing(workers[4], "the late commit is the work", () => workers.length === 6);
+        yield* completing(
+          workers[5],
+          "acceptable",
+          () => taskStatus(orchestrator, task.id) === "completed",
+        );
         expect(github.merged).toMatchObject([{ number, sha: late }]);
       }),
     ),

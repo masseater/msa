@@ -10,7 +10,7 @@ import worktreeSupport from "./worktree-support.ts";
 const TRAILER = /\n\nMsa-Merge: [0-9a-f-]{36}$/u;
 const { joinPath, writeTextFile } = testing;
 const { create } = orchestratorSupport;
-const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, setup, taskStatus } = orchestratorHarness.harness;
 const { GIT, runCommand, sh, shortId } = worktreeSupport;
 const { withRemote } = pullRequestSupport;
 
@@ -40,6 +40,23 @@ function commitlint(message: string, cwd: string) {
   });
 }
 
+const pushTwoCommits = (worktree: string, branch: string) =>
+  Effect.gen(function* () {
+    yield* writeTextFile(joinPath(worktree, "first.msg"), FIRST);
+    yield* writeTextFile(joinPath(worktree, "second.msg"), SECOND);
+    yield* sh(
+      [
+        "echo on > feature.txt && git add feature.txt",
+        `${GIT} commit -q -F first.msg`,
+        "echo check > check.txt && git add check.txt",
+        `${GIT} commit -q -F second.msg`,
+        "rm first.msg second.msg",
+        `git push -q origin ${branch}`,
+      ].join(" && "),
+      worktree,
+    );
+  });
+
 const squashesWithTheCommitBodies = () =>
   Effect.runPromise(
     withRemote(({ github, repository }) =>
@@ -52,27 +69,17 @@ const squashesWithTheCommitBodies = () =>
         });
         const branch = `task/${shortId(task.id)}`;
         const worktree = run.workers[0]!.cwd;
-        yield* writeTextFile(joinPath(worktree, "first.msg"), FIRST);
-        yield* writeTextFile(joinPath(worktree, "second.msg"), SECOND);
-        yield* sh(
-          [
-            "echo on > feature.txt && git add feature.txt",
-            `${GIT} commit -q -F first.msg`,
-            "echo check > check.txt && git add check.txt",
-            `${GIT} commit -q -F second.msg`,
-            "rm first.msg second.msg",
-            `git push -q origin ${branch}`,
-          ].join(" && "),
-          worktree,
-        );
+        yield* pushTwoCommits(worktree, branch);
         const number = yield* github.open(branch, "main", `## Summary\n\n${LONG_LINE}\n`);
         github.pulls[0]!.title = "feat: add the feature flag";
         github.ci.set(yield* github.head(branch), "success");
 
-        run.workers[0]!.complete("opened");
-        yield* waitFor(() => run.workers.length === 2);
-        run.workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(run.orchestrator, task.id) === "completed");
+        yield* completing(run.workers[0], "opened", () => run.workers.length === 2);
+        yield* completing(
+          run.workers[1],
+          "acceptable",
+          () => taskStatus(run.orchestrator, task.id) === "completed",
+        );
 
         const [merged] = github.merged;
         expect(merged?.subject).toBe(`feat: add the feature flag (#${number})`);

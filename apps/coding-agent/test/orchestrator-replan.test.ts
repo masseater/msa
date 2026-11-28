@@ -12,6 +12,7 @@ const { create, createNamed, failureMessageOf, read, replan, stopAndWrapUp } =
   orchestratorReplanSupport;
 
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 
 const { setup, taskStatus, waitFor } = harness;
 
@@ -39,8 +40,7 @@ const stopsAtTheTurnBoundaryHandsThe = Effect.gen(function* () {
   });
 
   yield* waitFor(() => orchestrator.replanning);
-  workers[0]?.complete("first pass");
-  yield* waitFor(() => (workers[0]?.prompts.length ?? 0) === 2);
+  yield* completing(workers[0], "first pass", () => (workers[0]?.prompts.length ?? 0) === 2);
   expect(workers[0]?.prompts[1]).toContain("Commit and push");
   expect(taskStatus(orchestrator, a.id)).toBe("running");
 
@@ -89,8 +89,7 @@ const abortsWithoutTouchingThePlanWhenThe = Effect.gen(function* () {
     tasks: [{ from: [a.id], goalState: "a works again", title: "a2" }],
   });
   yield* waitFor(() => orchestrator.replanning);
-  workers[0]?.complete("first pass");
-  yield* waitFor(() => (workers[0]?.prompts.length ?? 0) === 2);
+  yield* completing(workers[0], "first pass", () => (workers[0]?.prompts.length ?? 0) === 2);
   workers[0]?.fail(new Error("push rejected"));
 
   const result = (yield* Effect.promise(() => pending)) as Awaited<

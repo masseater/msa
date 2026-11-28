@@ -11,7 +11,7 @@ import triageRequestSupport from "./triage-request-support.ts";
 import triageSupport from "./triage-support.ts";
 
 const { dirnameOf, joinPath } = testing;
-const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, setup, taskStatus, waitFor } = orchestratorHarness.harness;
 const { create } = orchestratorSupport;
 const { HOUR, sessionLimit } = providerWaitSupport;
 const { REQUEST } = triageRequestSupport;
@@ -54,8 +54,9 @@ const doesNotCountARefusedTriageResumeAsStarted = (fromSessionFile: boolean) =>
 
         yield* removeTaskCwd(repository);
         vi.setSystemTime((yield* Clock.currentTimeMillis) + 2 * HOUR);
-        session.workers[1]!.complete("the notes are in notes.md");
-        yield* waitFor(() => session.reports.some((report) => report.details.taskId === other.id));
+        yield* completing(session.workers[1], "the notes are in notes.md", () =>
+          session.reports.some((report) => report.details.taskId === other.id),
+        );
 
         expect(refusalsOf(session, lint.id)).toHaveLength(1);
         expect(taskStatus(orchestrator, lint.id)).toBe("stopped");

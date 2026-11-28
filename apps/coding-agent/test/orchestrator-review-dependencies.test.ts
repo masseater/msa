@@ -7,6 +7,7 @@ import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
 const { create } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 
 type Orchestrator = orchestratorTypes.Orchestrator;
@@ -169,8 +170,7 @@ it("stops a running task review and makes the task wait when set_task_depends ad
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 1 });
       const a = yield* create(orchestrator, work("a"));
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 2);
+      yield* completing(workers[0], "a done", () => workers.length === 2);
       expect(reviewerThreads(orchestrator, a.id)).toBe(1);
       const before = yield* create(orchestrator, { ...work("before a"), round: "later" });
 

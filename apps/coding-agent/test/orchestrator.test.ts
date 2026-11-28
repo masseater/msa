@@ -14,6 +14,7 @@ const { makeTempDir, removePath } = testing;
 const { create, createNamed, failureMessageOf, finishWorkAndReview, read } = orchestratorSupport;
 
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 
 const { setup, taskStatus, waitFor } = harness;
 
@@ -144,15 +145,17 @@ const runsAWorkerThenASeparateReviewer = () =>
       expect(workers[0]?.model.id).toBe("flash");
       expect(workers[0]?.thinkingLevel).toBe("low");
 
-      workers[0]?.complete("did a");
-      yield* waitFor(() => workers.length === 2);
+      yield* completing(workers[0], "did a", () => workers.length === 2);
       expect(workers[1]?.model.id).toBe("fable");
       expect(workers[1]?.thinkingLevel).toBe("high");
       expect(workers[1]?.prompts[0]).toContain("did a");
       expect(workers[1]?.prompts[0]).toContain("reviewing work another thread");
 
-      workers[1]?.complete("looks good");
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+      yield* completing(
+        workers[1],
+        "looks good",
+        () => taskStatus(orchestrator, task.id) === "completed",
+      );
       const view = yield* read(orchestrator, task.id);
       expect(view.reports.map((report) => report.role)).toEqual(["worker", "reviewer"]);
       expect(view.assignments.map((assignment) => assignment.role)).toEqual(["worker", "reviewer"]);

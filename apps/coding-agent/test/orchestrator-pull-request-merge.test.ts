@@ -7,6 +7,7 @@ import triageSupport from "./triage-support.ts";
 
 const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { taskStatus, waitFor } = harness;
 const { advanceMain, openedTask, rebaseAndPush, withRemote } = pullRequestSupport;
 const MANY_ROUNDS = 5;
@@ -20,13 +21,11 @@ const waitsForPendingCiBeforeMerging = () =>
         const { orchestrator, workers, branch, number, taskId } = yield* openedTask(remote);
         const head = yield* github.head(branch);
         github.ci.set(head, "success");
-        workers[0]!.complete("CI is green");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "CI is green", () => workers.length === 2);
 
         github.ci.set(head, "pending");
         const polled = github.calls + 3;
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => github.calls >= polled);
+        yield* completing(workers[1], "acceptable", () => github.calls >= polled);
         expect(workers).toHaveLength(2);
         expect(github.merged).toEqual([]);
         expect(taskStatus(orchestrator, taskId)).toBe("running");
@@ -53,8 +52,11 @@ const waitsForChecksToRegister = () =>
         });
         const head = yield* github.head(branch);
         const polled = github.calls + 3;
-        workers[0]!.complete("pushed; CI has not shown up yet");
-        yield* waitFor(() => github.calls >= polled);
+        yield* completing(
+          workers[0],
+          "pushed; CI has not shown up yet",
+          () => github.calls >= polled,
+        );
         expect(workers).toHaveLength(1);
         expect(workers[0]!.prompts).toHaveLength(1);
 
@@ -62,8 +64,7 @@ const waitsForChecksToRegister = () =>
         yield* waitFor(() => workers.length === 2);
         github.ci.delete(head);
         const merging = github.calls + 3;
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => github.calls >= merging);
+        yield* completing(workers[1], "acceptable", () => github.calls >= merging);
         expect(workers).toHaveLength(2);
         expect(github.merged).toEqual([]);
 

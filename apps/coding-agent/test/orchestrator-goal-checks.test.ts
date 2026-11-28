@@ -14,6 +14,7 @@ const { LINT_CHECK, SHORTCUT_CHECK, inCheckedRepository, inHeldRepository, lintT
   goalChecksSupport;
 const { create, failureMessageOf } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { advance, fakeClock } = watchdogSupport;
 
@@ -31,8 +32,7 @@ const returnsAFailingReportToTheWorker = () =>
       yield* writeTextFile(joinPath(worktree, "src.txt"), "class Base {}\n");
       expect(workers[0]?.prompts[0]).toContain("`cat lint.txt` → exit 0, output matching");
 
-      workers[0]?.complete("lint is clean");
-      yield* waitFor(() => workers[0]?.prompts.length === 2);
+      yield* completing(workers[0], "lint is clean", () => workers[0]?.prompts.length === 2);
       expect(workers[0]?.prompts[1]).toContain("goal-checks-failed");
       expect(workers[0]?.prompts[1]).toContain(
         '<check command="cat lint.txt" expected="exit 0, output matching /^0 errors$/m" got="exit 0" passed="false">\n3 errors',
@@ -43,20 +43,21 @@ const returnsAFailingReportToTheWorker = () =>
 
       yield* writeTextFile(joinPath(worktree, "lint.txt"), "0 errors\n");
       yield* writeTextFile(joinPath(worktree, "src.txt"), "class layer-1 {}\n");
-      workers[0]?.complete("lint is clean now");
-      yield* waitFor(() => workers[0]?.prompts.length === 3);
+      yield* completing(workers[0], "lint is clean now", () => workers[0]?.prompts.length === 3);
       expect(workers[0]?.prompts[2]).toContain(
         `<check command="grep -c &apos;layer-[0-9]&apos; src.txt" expected="exit 1" got="exit 0" passed="false">\n1`,
       );
       expect(workers).toHaveLength(1);
 
       yield* writeTextFile(joinPath(worktree, "src.txt"), "class Base {}\n");
-      workers[0]?.complete("removed the layering");
-      yield* waitFor(() => workers.length === 2);
+      yield* completing(workers[0], "removed the layering", () => workers.length === 2);
       expect(workers[1]?.prompts[0]).toContain("removed the layering");
 
-      workers[1]?.complete("acceptable");
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+      yield* completing(
+        workers[1],
+        "acceptable",
+        () => taskStatus(orchestrator, task.id) === "completed",
+      );
     }),
   );
 
@@ -75,15 +76,17 @@ const asksForADecisionWhenTheChecksStopMoving = () =>
       const worktree = workers[0]!.cwd;
       yield* writeTextFile(joinPath(worktree, "lint.txt"), "9 errors\n");
       for (let attempt = 1; attempt <= 5; attempt++) {
-        workers[0]?.complete(`done, try ${attempt}`);
-        yield* waitFor(() => workers[0]?.prompts.length === attempt + 1);
+        yield* completing(
+          workers[0],
+          `done, try ${attempt}`,
+          () => workers[0]?.prompts.length === attempt + 1,
+        );
         yield* writeTextFile(joinPath(worktree, "lint.txt"), `${9 - attempt} errors\n`);
       }
       expect(taskStatus(orchestrator, task.id)).toBe("running");
       expect(reports).toEqual([]);
 
-      workers[0]?.complete("done, try 6");
-      yield* waitFor(() => workers[0]?.prompts.length === 7);
+      yield* completing(workers[0], "done, try 6", () => workers[0]?.prompts.length === 7);
       workers[0]?.complete("done, try 7");
       yield* escalateTriage(workers);
       yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
@@ -96,8 +99,7 @@ const asksForADecisionWhenTheChecksStopMoving = () =>
       yield* Effect.promise(() => orchestrator.sendMessage(task.id, "Fix the remaining four."));
       yield* waitFor(() => workers[0]?.prompts.length === 8);
       expect(workers[0]?.prompts[7]).toContain("Fix the remaining four.");
-      workers[0]?.complete("fixed the remaining four");
-      yield* waitFor(() => workers.length === 3);
+      yield* completing(workers[0], "fixed the remaining four", () => workers.length === 3);
     }),
   );
 
@@ -110,16 +112,14 @@ const deliversANoteSentWhileTheChecksRun = () =>
   inHeldRepository(({ held, orchestrator, workers }) =>
     Effect.gen(function* () {
       const task = yield* create(orchestrator, lintTaskOf([LINT_CHECK]));
-      workers[0]?.complete("lint is clean");
-      yield* waitFor(() => held.calls.length === 1);
+      yield* completing(workers[0], "lint is clean", () => held.calls.length === 1);
       yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
       held.calls[0]?.release();
       yield* waitFor(() => workers[0]?.prompts.length === 2);
       expect(workers[0]?.prompts[1]).toContain("also keep the old API");
       expect(workers).toHaveLength(1);
 
-      workers[0]?.complete("kept the old API");
-      yield* waitFor(() => held.calls.length === 2);
+      yield* completing(workers[0], "kept the old API", () => held.calls.length === 2);
       held.calls[1]?.release();
       yield* waitFor(() => workers.length === 2);
       expect(workers[1]?.prompts[0]).toContain("kept the old API");
@@ -135,8 +135,7 @@ const abortsTheChecksOfAStoppedTask = () =>
   inHeldRepository(({ held, orchestrator, workers }) =>
     Effect.gen(function* () {
       const task = yield* create(orchestrator, lintTaskOf([LINT_CHECK, SHORTCUT_CHECK]));
-      workers[0]?.complete("lint is clean");
-      yield* waitFor(() => held.calls.length === 1);
+      yield* completing(workers[0], "lint is clean", () => held.calls.length === 1);
       yield* Effect.promise(() => orchestrator.stop(task.id));
       yield* waitFor(() => held.calls[0]?.signal.aborted === true);
       yield* Effect.sleep(20);

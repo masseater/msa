@@ -9,6 +9,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, writeTextFile } = testing;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { taskStatus, waitFor } = harness;
 const { DECIDED, REQUEST, decideOnce, stoppedTask } = triageRequestSupport;
 const { withRepository } = worktreeSupport;
@@ -45,8 +46,11 @@ const resumesTheWorkerWithTheTriageDecision = () =>
 
         worker.complete("added the adapter and removed the old API");
         yield* waitFor(() => workers.length === 3);
-        workers[2]!.complete("Acceptable.");
-        yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+        yield* completing(
+          workers[2],
+          "Acceptable.",
+          () => taskStatus(orchestrator, task.id) === "completed",
+        );
         yield* waitFor(() => taskStatus(orchestrator, dependent.id) === "running");
         expect(statuses).not.toContain("needs-decision");
       }),
