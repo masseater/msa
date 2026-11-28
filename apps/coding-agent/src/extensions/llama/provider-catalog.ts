@@ -1,6 +1,5 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import platform from "../../core/platform/index.ts";
@@ -9,7 +8,7 @@ import LlamaClient from "./llama-client.ts";
 import llamaModels from "./llama-models.ts";
 import type providerInternalTypes from "./provider-internal.types.ts";
 
-const { awaited, awaiting, promisedWith } = awaitingModule;
+const { awaited, promised, promisedWith } = awaitingModule;
 const { nowMs } = platform;
 const { isModelType } = ai;
 const {
@@ -120,14 +119,12 @@ function chatModelWithProps(
   contextWindows: ContextWindows,
   signal: AbortSignal,
 ): Promise<ChatModel> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const cachedContextWindow = contextWindows.get(model.id);
-      if (model.status.value !== "loaded") {
-        return toMsaModel(model, serverUrl, undefined, cachedContextWindow);
-      }
-      const props = yield* awaited(client.props({ model: model.id, signal }));
-      return toMsaModel(model, serverUrl, props, cachedContextWindow);
-    }),
-  );
+  return promised(function* () {
+    const cachedContextWindow = contextWindows.get(model.id);
+    if (model.status.value !== "loaded") {
+      return toMsaModel(model, serverUrl, undefined, cachedContextWindow);
+    }
+    const props = yield* awaited(client.props({ model: model.id, signal }));
+    return toMsaModel(model, serverUrl, props, cachedContextWindow);
+  });
 }

@@ -1,6 +1,5 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import type modelConfigTypes from "../model-config.types.ts";
@@ -11,7 +10,7 @@ import providerCapabilities from "./provider-capabilities.ts";
 import providerModels from "./provider-models.ts";
 
 const { isModelType } = ai;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { applyExtension, applyModelsJson, getAllProviderModels } = providerModels;
 const { applyModelOverride } = modelOverrides;
 const { composeAuth } = apiKeyAuth;
@@ -111,7 +110,7 @@ export default class ComposedProvider {
   }
 
   private refreshModels(context: aiTypes.RefreshModelsContext): Promise<void> {
-    return Effect.runPromise(awaiting(() => this.refreshModelsSteps(context)));
+    return promised(() => this.refreshModelsSteps(context));
   }
 
   private *refreshModelsSteps(context: aiTypes.RefreshModelsContext) {

@@ -7,29 +7,27 @@ import packageEnv from "./package-env.ts";
 const { isOfflineModeEnabled } = platformEnv;
 
 const { NETWORK_TIMEOUT_MS } = packageEnv;
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, awaiting, performed, promised } = awaitingModule;
 
 function gitHasAvailableUpdate(installedPath: string): Promise<boolean> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (isOfflineModeEnabled()) {
-        return false;
-      }
+  return promised(function* () {
+    if (isOfflineModeEnabled()) {
+      return false;
+    }
 
-      try {
-        const localHead = yield* awaited(
-          commandRunner.runCommandCapture("git", ["rev-parse", "HEAD"], {
-            cwd: installedPath,
-            timeoutMs: NETWORK_TIMEOUT_MS,
-          }),
-        );
-        const remoteHead = yield* performed(getRemoteGitHead(installedPath));
-        return localHead.trim() !== remoteHead.trim();
-      } catch {
-        return false;
-      }
-    }),
-  );
+    try {
+      const localHead = yield* awaited(
+        commandRunner.runCommandCapture("git", ["rev-parse", "HEAD"], {
+          cwd: installedPath,
+          timeoutMs: NETWORK_TIMEOUT_MS,
+        }),
+      );
+      const remoteHead = yield* performed(getRemoteGitHead(installedPath));
+      return localHead.trim() !== remoteHead.trim();
+    } catch {
+      return false;
+    }
+  });
 }
 
 function getRemoteGitHead(installedPath: string): Effect.Effect<string> {
@@ -73,23 +71,21 @@ const capture = (installedPath: string, args: string[]) =>
   });
 
 function upstreamTarget(installedPath: string): Promise<GitUpdateTarget> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const upstream = yield* awaited(
-        capture(installedPath, ["rev-parse", "--abbrev-ref", "@{upstream}"]),
-      );
-      const trimmedUpstream = upstream.trim();
-      if (!trimmedUpstream.startsWith("origin/")) {
-        throw new Error(`Unsupported upstream remote: ${trimmedUpstream}`);
-      }
-      const branch = trimmedUpstream.slice("origin/".length);
-      if (branch === "") {
-        throw new Error("Missing upstream branch name");
-      }
-      const head = yield* awaited(capture(installedPath, ["rev-parse", "@{upstream}"]));
-      return { fetchArgs: branchFetchArgs(branch), head, ref: "@{upstream}" };
-    }),
-  );
+  return promised(function* () {
+    const upstream = yield* awaited(
+      capture(installedPath, ["rev-parse", "--abbrev-ref", "@{upstream}"]),
+    );
+    const trimmedUpstream = upstream.trim();
+    if (!trimmedUpstream.startsWith("origin/")) {
+      throw new Error(`Unsupported upstream remote: ${trimmedUpstream}`);
+    }
+    const branch = trimmedUpstream.slice("origin/".length);
+    if (branch === "") {
+      throw new Error("Missing upstream branch name");
+    }
+    const head = yield* awaited(capture(installedPath, ["rev-parse", "@{upstream}"]));
+    return { fetchArgs: branchFetchArgs(branch), head, ref: "@{upstream}" };
+  });
 }
 
 function originHeadTarget(installedPath: string): Promise<GitUpdateTarget> {

@@ -5,7 +5,7 @@ import errorsModule from "../../../../utils/errors.ts";
 import modelCatalogRefresh from "../../model-catalog-refresh.ts";
 import type ModelSelectorComponent from "../model-selector.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { refreshModelCatalogs } = modelCatalogRefresh;
 const { toErrorMessage } = errorsModule;
 
@@ -36,7 +36,7 @@ export default class ModelRefresh {
   }
 
   refreshModels(): Promise<void> {
-    return Effect.runPromise(awaiting(() => this.refreshCatalog()));
+    return promised(() => this.refreshCatalog());
   }
 
   private *refreshCatalog() {

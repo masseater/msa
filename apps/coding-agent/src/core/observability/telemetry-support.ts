@@ -21,7 +21,7 @@ import PodmanError from "./podman-error.ts";
 import Telemetry from "./telemetry.ts";
 import type telemetryTypesNs from "./telemetry.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const { GRAFANA_URL, LGTM_CONTAINER, LGTM_OTLP_ENDPOINT, ensureLgtm, findPodman } = lgtm;
 const { OtlpTelemetry, layer: otlpLayer } = otlp;
@@ -88,20 +88,18 @@ const SHUTDOWN_TIMEOUT = Duration.seconds(5);
 function startTelemetry(
   inputs: telemetryTypesNs.TelemetryInputs,
 ): Promise<telemetryTypesNs.TelemetryHandle> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const runtime = ManagedRuntime.make(layer(inputs));
-      const telemetry = yield* awaited(runtime.runPromise(Effect.service(Telemetry)));
-      return yield* awaited({
-        context: telemetry.context,
-        dispose: () =>
-          Effect.runPromise(
-            Effect.promise(() => runtime.dispose()).pipe(Effect.timeoutOption(SHUTDOWN_TIMEOUT)),
-          ).then(() => undefined),
-        status: () => Effect.runSync(telemetry.status),
-      });
-    }),
-  );
+  return promised(function* () {
+    const runtime = ManagedRuntime.make(layer(inputs));
+    const telemetry = yield* awaited(runtime.runPromise(Effect.service(Telemetry)));
+    return yield* awaited({
+      context: telemetry.context,
+      dispose: () =>
+        Effect.runPromise(
+          Effect.promise(() => runtime.dispose()).pipe(Effect.timeoutOption(SHUTDOWN_TIMEOUT)),
+        ).then(() => undefined),
+      status: () => Effect.runSync(telemetry.status),
+    });
+  });
 }
 const receiverReady = HttpClient.get(`${LGTM_OTLP_ENDPOINT}/v1/traces`).pipe(
   Effect.asVoid,

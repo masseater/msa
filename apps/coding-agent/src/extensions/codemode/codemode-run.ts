@@ -1,5 +1,4 @@
 import codemode from "@msa/codemode";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import usageTotals from "../../core/usage-totals.ts";
@@ -10,7 +9,7 @@ import toolModule from "./tool.ts";
 import type toolTypes from "./tool.types.ts";
 
 const { CODEMODE_STORE_ENTRY_TYPE, getCodemodeCallableTools, toCodemodeDeclaration } = toolModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { combineUsage } = usageTotals;
 const { createSandbox } = codemodeSandbox;
 const { readCodemodeStore } = codemodeStore;
@@ -79,44 +78,42 @@ function persistStoreWrites(
 }
 
 const runCodemode = (call: CodemodeCall): Promise<toolTypes.CodemodeRunResult> =>
-  Effect.runPromise(
-    awaiting(function* () {
-      const startedAt = performance.now();
-      const { code, options: sourceOptions } = parseCodemodeSource(call.input.code);
-      const { run, totals } = startRun(call);
-      run.publish();
-      const callable = call.ctx === undefined ? [] : getCodemodeCallableTools(call.ctx.tools);
-      const timeoutMs = sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY;
-      const sandbox = yield* awaited(
-        createSandbox(run, callable, toolSamples(callable, call.options), timeoutMs),
+  promised(function* () {
+    const startedAt = performance.now();
+    const { code, options: sourceOptions } = parseCodemodeSource(call.input.code);
+    const { run, totals } = startRun(call);
+    run.publish();
+    const callable = call.ctx === undefined ? [] : getCodemodeCallableTools(call.ctx.tools);
+    const timeoutMs = sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY;
+    const sandbox = yield* awaited(
+      createSandbox(run, callable, toolSamples(callable, call.options), timeoutMs),
+    );
+    let result: Awaited<ReturnType<typeof sandbox.execute>>;
+    try {
+      const store =
+        call.ctx === undefined ? {} : readCodemodeStore(call.ctx.sessionManager.getBranch());
+      const { signal } = call;
+      result = yield* awaited(
+        sandbox.execute(code, { ...(signal === undefined ? {} : { signal }), store }),
       );
-      let result: Awaited<ReturnType<typeof sandbox.execute>>;
-      try {
-        const store =
-          call.ctx === undefined ? {} : readCodemodeStore(call.ctx.sessionManager.getBranch());
-        const { signal } = call;
-        result = yield* awaited(
-          sandbox.execute(code, { ...(signal === undefined ? {} : { signal }), store }),
-        );
-      } finally {
-        yield* awaited(sandbox.close());
-      }
-      for (const entry of run.calls) {
-        if (entry.status === "running") entry.status = "cancelled";
-      }
-      persistStoreWrites(result, call.options);
-      return yield* awaited(
-        renderScriptResult({
-          calls: run.calls,
-          generatedImages: totals.images,
-          maxOutputTokens: sourceOptions.maxOutputTokens,
-          result,
-          startedAt,
-          usage: totals.usage,
-        }),
-      );
-    }),
-  );
+    } finally {
+      yield* awaited(sandbox.close());
+    }
+    for (const entry of run.calls) {
+      if (entry.status === "running") entry.status = "cancelled";
+    }
+    persistStoreWrites(result, call.options);
+    return yield* awaited(
+      renderScriptResult({
+        calls: run.calls,
+        generatedImages: totals.images,
+        maxOutputTokens: sourceOptions.maxOutputTokens,
+        result,
+        startedAt,
+        usage: totals.usage,
+      }),
+    );
+  });
 
 const codemodeRun = { runCodemode };
 

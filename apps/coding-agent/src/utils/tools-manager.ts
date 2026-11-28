@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -13,7 +12,7 @@ const { isOfflineModeEnabled } = platformModule;
 
 const { platform } = nodeOs;
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { makeDirectory, remove } = platformModule.files;
 const { TERMUX_PACKAGES, getToolPath, TOOLS } = toolCatalog;
 const { extractBinary } = archiveExtract;
@@ -21,36 +20,34 @@ const { downloadReleaseArchive } = releaseDownload;
 const { getLatestVersion } = latestVersion;
 
 function downloadTool(tool: "fd" | "rg"): Promise<string> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const config = TOOLS[tool];
-      if (config === undefined) throw new Error(`Unknown tool: ${tool}`);
+  return promised(function* () {
+    const config = TOOLS[tool];
+    if (config === undefined) throw new Error(`Unknown tool: ${tool}`);
 
-      const plat = platform();
-      const { extractDir, assetName, archivePath, binaryExt, binaryPath } =
-        yield* downloadReleaseArchive(tool, plat, config);
-      yield* awaited(makeDirectory({ path: extractDir }));
+    const plat = platform();
+    const { extractDir, assetName, archivePath, binaryExt, binaryPath } =
+      yield* downloadReleaseArchive(tool, plat, config);
+    yield* awaited(makeDirectory({ path: extractDir }));
 
-      try {
-        yield* awaited(
-          extractBinary({
-            archivePath,
-            assetName,
-            binaryExt,
-            binaryPath,
-            config,
-            extractDir,
-            plat,
-          }),
-        );
-      } finally {
-        yield* awaited(remove({ force: true, path: archivePath }));
-        yield* awaited(remove({ force: true, path: extractDir, recursive: true }));
-      }
+    try {
+      yield* awaited(
+        extractBinary({
+          archivePath,
+          assetName,
+          binaryExt,
+          binaryPath,
+          config,
+          extractDir,
+          plat,
+        }),
+      );
+    } finally {
+      yield* awaited(remove({ force: true, path: archivePath }));
+      yield* awaited(remove({ force: true, path: extractDir, recursive: true }));
+    }
 
-      return binaryPath;
-    }),
-  );
+    return binaryPath;
+  });
 }
 
 function describeFailure(error: unknown): string {
@@ -69,48 +66,46 @@ function ensureToolImpl(
   tool: "fd" | "rg",
   onStatus?: (status: toolsManagerTypes.ToolStatus) => void,
 ): Promise<string | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const existingPath = yield* awaited(getToolPath(tool));
-      if (existingPath !== null && existingPath !== "") {
-        return existingPath;
-      }
+  return promised(function* () {
+    const existingPath = yield* awaited(getToolPath(tool));
+    if (existingPath !== null && existingPath !== "") {
+      return existingPath;
+    }
 
-      const config = TOOLS[tool];
-      if (config === undefined) return undefined;
+    const config = TOOLS[tool];
+    if (config === undefined) return undefined;
 
-      if (isOfflineModeEnabled()) {
-        onStatus?.({
-          message: `${config.name} not found. Offline mode enabled, skipping download.`,
-          type: "warning",
-        });
-        return undefined;
-      }
+    if (isOfflineModeEnabled()) {
+      onStatus?.({
+        message: `${config.name} not found. Offline mode enabled, skipping download.`,
+        type: "warning",
+      });
+      return undefined;
+    }
 
-      if (platform() === "android") {
-        const pkgName = TERMUX_PACKAGES[tool] ?? tool;
-        onStatus?.({
-          message: `${config.name} not found. Install with: pkg install ${pkgName}`,
-          type: "warning",
-        });
-        return undefined;
-      }
+    if (platform() === "android") {
+      const pkgName = TERMUX_PACKAGES[tool] ?? tool;
+      onStatus?.({
+        message: `${config.name} not found. Install with: pkg install ${pkgName}`,
+        type: "warning",
+      });
+      return undefined;
+    }
 
-      onStatus?.({ message: `${config.name} not found. Downloading...`, type: "info" });
+    onStatus?.({ message: `${config.name} not found. Downloading...`, type: "info" });
 
-      try {
-        const path = yield* awaited(downloadTool(tool));
-        onStatus?.({ message: `${config.name} installed to ${path}`, type: "info" });
-        return path;
-      } catch (e) {
-        onStatus?.({
-          message: `Failed to download ${config.name}: ${describeFailure(e)}`,
-          type: "warning",
-        });
-        return undefined;
-      }
-    }),
-  );
+    try {
+      const path = yield* awaited(downloadTool(tool));
+      onStatus?.({ message: `${config.name} installed to ${path}`, type: "info" });
+      return path;
+    } catch (e) {
+      onStatus?.({
+        message: `Failed to download ${config.name}: ${describeFailure(e)}`,
+        type: "warning",
+      });
+      return undefined;
+    }
+  });
 }
 
 const ensureTool: {

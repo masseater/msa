@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import config from "../config.ts";
@@ -12,7 +11,7 @@ import trustedSettings from "./trusted-settings.ts";
 
 const { getAgentDir, APP_NAME } = config;
 const { writeError } = platform;
-const { awaiting, awaited } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { trustedSettingsManager } = trustedSettings;
 const { selectPackageResources } = configResources;
 const { CONFIG_COMMAND_USAGE, printConfigCommandHelp } = help;
@@ -48,34 +47,32 @@ function handleConfigCommandImpl(
   args: string[],
   runtimeOptions: packageManagerCliTypes.PackageCommandRuntimeOptions = {},
 ): Promise<boolean> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const [command, ...rest] = args;
-      if (command !== "config") return false;
-      if (rest.includes("-h") || rest.includes("--help")) {
-        printConfigCommandHelp();
-        return true;
-      }
-      const parsed = parseConfigArgs(rest);
-      if (parsed === undefined) return true;
-      const cwd = process.cwd();
-      const agentDir = getAgentDir();
-      const settingsManager = yield* awaited(
-        trustedSettingsManager(
-          {
-            agentDir,
-            cwd,
-            extensionFactories: runtimeOptions.extensionFactories,
-            projectTrustOverride: parsed.projectTrustOverride,
-          },
-          { requested: parsed.local, target: "resource config" },
-        ),
-      );
-      if (settingsManager === undefined) return true;
-      yield* selectPackageResources(settingsManager, runtimeOptions, cwd, agentDir, parsed.local);
-      process.exit(0);
-    }),
-  );
+  return promised(function* () {
+    const [command, ...rest] = args;
+    if (command !== "config") return false;
+    if (rest.includes("-h") || rest.includes("--help")) {
+      printConfigCommandHelp();
+      return true;
+    }
+    const parsed = parseConfigArgs(rest);
+    if (parsed === undefined) return true;
+    const cwd = process.cwd();
+    const agentDir = getAgentDir();
+    const settingsManager = yield* awaited(
+      trustedSettingsManager(
+        {
+          agentDir,
+          cwd,
+          extensionFactories: runtimeOptions.extensionFactories,
+          projectTrustOverride: parsed.projectTrustOverride,
+        },
+        { requested: parsed.local, target: "resource config" },
+      ),
+    );
+    if (settingsManager === undefined) return true;
+    yield* selectPackageResources(settingsManager, runtimeOptions, cwd, agentDir, parsed.local);
+    process.exit(0);
+  });
 }
 
 const handleConfigCommand: {

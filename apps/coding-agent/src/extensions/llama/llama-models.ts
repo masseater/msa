@@ -1,6 +1,5 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import clientModule from "./client.ts";
@@ -8,7 +7,7 @@ import type clientTypes from "./client.types.ts";
 import type providerInternalTypes from "./provider-internal.types.ts";
 
 const { llamaInferenceUrl, normalizeLlamaServerUrl } = clientModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { isModelType } = ai;
 
 const LLAMA_PROVIDER_ID = "llama.cpp";
@@ -26,15 +25,13 @@ function resolveServerUrl(
   ctx: aiTypes.AuthContext,
   credential: aiTypes.ApiKeyCredential | undefined,
 ): Promise<string | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const configured =
-        credentialServerUrl(credential) ?? (yield* awaited(ctx.env("LLAMA_BASE_URL")))?.trim();
-      return configured !== undefined && configured !== ""
-        ? normalizeLlamaServerUrl(configured)
-        : undefined;
-    }),
-  );
+  return promised(function* () {
+    const configured =
+      credentialServerUrl(credential) ?? (yield* awaited(ctx.env("LLAMA_BASE_URL")))?.trim();
+    return configured !== undefined && configured !== ""
+      ? normalizeLlamaServerUrl(configured)
+      : undefined;
+  });
 }
 
 function modelIsSelectable(model: clientTypes.LlamaModelInfo, routerAutoload: boolean): boolean {
@@ -55,17 +52,15 @@ function routerAutoloadEnabled(
   catalog: readonly clientTypes.LlamaModelInfo[],
   signal: AbortSignal,
 ): Promise<boolean> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (!catalog.some((model) => model.status.value === "unloaded" && model.source === "preset"))
-        return false;
-      try {
-        return (yield* awaited(client.props({ signal }))).models_autoload === true;
-      } catch {
-        return false;
-      }
-    }),
-  );
+  return promised(function* () {
+    if (!catalog.some((model) => model.status.value === "unloaded" && model.source === "preset"))
+      return false;
+    try {
+      return (yield* awaited(client.props({ signal }))).models_autoload === true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 function configuredContextWindow(model: clientTypes.LlamaModelInfo): number | undefined {

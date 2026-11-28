@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import type AgentSession from "../agent-session.ts";
 import type agentSessionTypes from "../agent-session.types.ts";
 import awaitingModule from "../awaiting.ts";
@@ -10,7 +8,7 @@ import SessionManager from "../session-manager.ts";
 import sessionFiles from "../session-manager/session-files.ts";
 import type sdkInternalTypes from "./sdk-internal.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { join } = platform;
 const { getDefaultSessionDirPath } = sessionFiles;
 const { ORCHESTRATOR_TOOL_NAMES, isOrchestratorTool } = toolNames;
@@ -118,7 +116,7 @@ function* createWorkerSession(parent: WorkerParent, worker: Worker) {
 const workerSessionFactory =
   (parent: WorkerParent) =>
   (worker: Worker): Promise<AgentSession> =>
-    Effect.runPromise(awaiting(() => createWorkerSession(parent, worker)));
+    promised(() => createWorkerSession(parent, worker));
 
 const workerSessions = { workerSessionFactory };
 

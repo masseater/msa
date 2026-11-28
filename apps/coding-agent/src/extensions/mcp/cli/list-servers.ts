@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import configModule from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import platform from "../../../core/platform/index.ts";
@@ -11,7 +9,7 @@ import type runtimeTypes from "../runtime.types.ts";
 import serverConnection from "./server-connection.ts";
 
 const { APP_NAME } = configModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { join } = platform;
 const { getMcpToolExposure } = mcpConfig;
 const { createConnection, describeTransport } = serverConnection;
@@ -24,44 +22,42 @@ function reportServer(
   options: cliTypes.McpCommandOptions,
   credentials: runtimeTypes.McpOAuthCredentialStore,
 ): Promise<Report> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const report: Report = {
-        enabled: entry.config.enabled !== false,
-        exposure: entry.config.exposure ?? "codemode",
-        name: entry.name,
-        scope: entry.scope ?? "global",
-        source: entry.source,
-        state: "disabled",
-        tools: [],
-        transport: describeTransport(entry),
-        ...(entry.override !== undefined && entry.override !== ""
-          ? { override: entry.override }
-          : {}),
-      };
-      if (!report.enabled) return report;
-      const connection = createConnection(entry, options, credentials);
-      try {
-        yield* awaited(connection.getClient());
-      } catch {}
-      report.state = connection.state;
-      report.tools = connection.tools.map((tool) => tool.name);
-      const overrides = connection.tools.flatMap((tool) => {
-        const exposure = getMcpToolExposure(entry.config, tool.name);
-        return exposure === report.exposure ? [] : [[tool.name, exposure] as const];
-      });
-      if (overrides.length > 0) report.toolExposure = Object.fromEntries(overrides);
-      if (connection.hasResources) report.resources = true;
-      if (
-        connection.state !== "connected" &&
-        connection.error !== undefined &&
-        connection.error !== ""
-      )
-        report.error = connection.error;
-      yield* awaited(connection.close());
-      return report;
-    }),
-  );
+  return promised(function* () {
+    const report: Report = {
+      enabled: entry.config.enabled !== false,
+      exposure: entry.config.exposure ?? "codemode",
+      name: entry.name,
+      scope: entry.scope ?? "global",
+      source: entry.source,
+      state: "disabled",
+      tools: [],
+      transport: describeTransport(entry),
+      ...(entry.override !== undefined && entry.override !== ""
+        ? { override: entry.override }
+        : {}),
+    };
+    if (!report.enabled) return report;
+    const connection = createConnection(entry, options, credentials);
+    try {
+      yield* awaited(connection.getClient());
+    } catch {}
+    report.state = connection.state;
+    report.tools = connection.tools.map((tool) => tool.name);
+    const overrides = connection.tools.flatMap((tool) => {
+      const exposure = getMcpToolExposure(entry.config, tool.name);
+      return exposure === report.exposure ? [] : [[tool.name, exposure] as const];
+    });
+    if (overrides.length > 0) report.toolExposure = Object.fromEntries(overrides);
+    if (connection.hasResources) report.resources = true;
+    if (
+      connection.state !== "connected" &&
+      connection.error !== undefined &&
+      connection.error !== ""
+    )
+      report.error = connection.error;
+    yield* awaited(connection.close());
+    return report;
+  });
 }
 
 function describeState(report: Report): string {
@@ -115,34 +111,28 @@ function list(
   credentials: runtimeTypes.McpOAuthCredentialStore,
   log: Line,
 ): Promise<number> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const reports = yield* awaited(
-        Promise.all(loaded.servers.map((entry) => reportServer(entry, options, credentials))),
+  return promised(function* () {
+    const reports = yield* awaited(
+      Promise.all(loaded.servers.map((entry) => reportServer(entry, options, credentials))),
+    );
+    const signIns = yield* awaited(credentials.persistenceNote());
+    const failed =
+      loaded.errors.length > 0 ||
+      reports.some((report) => report.enabled && report.state !== "connected");
+    if (json) {
+      const note =
+        untrustedNote !== undefined && untrustedNote !== "" ? { note: untrustedNote } : {};
+      const notSaved = signIns === undefined ? {} : { signInsNotSaved: signIns };
+      log(
+        JSON.stringify({ errors: loaded.errors, servers: reports, ...note, ...notSaved }, null, 2),
       );
-      const signIns = yield* awaited(credentials.persistenceNote());
-      const failed =
-        loaded.errors.length > 0 ||
-        reports.some((report) => report.enabled && report.state !== "connected");
-      if (json) {
-        const note =
-          untrustedNote !== undefined && untrustedNote !== "" ? { note: untrustedNote } : {};
-        const notSaved = signIns === undefined ? {} : { signInsNotSaved: signIns };
-        log(
-          JSON.stringify(
-            { errors: loaded.errors, servers: reports, ...note, ...notSaved },
-            null,
-            2,
-          ),
-        );
-      } else {
-        printReports(reports, loaded, untrustedNote, options, log);
-        if (signIns !== undefined)
-          log(`sign-ins are not saved:\n  ${signIns.split("\n").join("\n  ")}`);
-      }
-      return failed ? 1 : 0;
-    }),
-  );
+    } else {
+      printReports(reports, loaded, untrustedNote, options, log);
+      if (signIns !== undefined)
+        log(`sign-ins are not saved:\n  ${signIns.split("\n").join("\n  ")}`);
+    }
+    return failed ? 1 : 0;
+  });
 }
 
 const listServers = { list };

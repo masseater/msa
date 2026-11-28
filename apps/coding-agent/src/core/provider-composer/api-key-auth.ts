@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import type modelConfigTypes from "../model-config.types.ts";
@@ -14,7 +13,7 @@ const {
   getConfigValueEnvVarNames,
   isCommandConfigValue,
 } = resolveConfigValueModule;
-const { performed, awaited, awaiting } = awaitingModule;
+const { awaited, performed, promised } = awaitingModule;
 const { composeOAuthAuth } = oauthAuth;
 const { withConfiguredAuth, configContextEnv, configuredHeaders, configuredApiKey } = providerAuth;
 
@@ -90,14 +89,12 @@ function* resolveApiKeyAuth(setup: ApiKeySetup, input: ResolveInput) {
 }
 
 const promptApiKey = (interaction: aiTypes.AuthInteraction) =>
-  Effect.runPromise(
-    awaiting(function* () {
-      return {
-        key: yield* awaited(interaction.prompt({ message: "Enter API key", type: "secret" })),
-        type: "api_key",
-      } as const;
-    }),
-  );
+  promised(function* () {
+    return {
+      key: yield* awaited(interaction.prompt({ message: "Enter API key", type: "secret" })),
+      type: "api_key",
+    } as const;
+  });
 
 function composeApiKeyAuth(
   providerId: string,
@@ -117,10 +114,10 @@ function composeApiKeyAuth(
     rawKey,
   };
   return {
-    check: (input) => Effect.runPromise(awaiting(() => checkApiKey(setup, input))),
+    check: (input) => promised(() => checkApiKey(setup, input)),
     login: inherited?.login ?? promptApiKey,
     name: inherited?.name ?? "API key",
-    resolve: (input) => Effect.runPromise(awaiting(() => resolveApiKeyAuth(setup, input))),
+    resolve: (input) => promised(() => resolveApiKeyAuth(setup, input)),
   };
 }
 

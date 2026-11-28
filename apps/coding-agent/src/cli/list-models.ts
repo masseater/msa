@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import authGuidance from "../core/auth-guidance.ts";
@@ -9,7 +8,7 @@ import type modelRuntimeTypes from "../core/model-runtime.types.ts";
 import platform from "../core/platform/index.ts";
 import modelTable from "./model-table.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { writeError, writeLog } = platform;
 const { formatNoModelsAvailableMessage } = authGuidance;
 const { hiddenModelsByPolicy } = modelPolicy;
@@ -33,23 +32,21 @@ function listModelsImpl(
   searchPattern?: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const models = yield* loadAvailableModels(modelRuntime, signal);
-      if (models.length === 0) {
-        writeLog(formatNoModelsAvailableMessage());
-        return;
-      }
-      const filteredModels = matchingModels(models, searchPattern);
-      if (filteredModels.length === 0) {
-        writeLog(`No models matching "${searchPattern}"`);
-        return;
-      }
-      for (const line of formatModelTable(filteredModels)) writeLog(line);
-      const notice = hiddenModelsNotice(modelRuntime);
-      if (notice !== undefined) writeLog(chalk.dim(notice));
-    }),
-  );
+  return promised(function* () {
+    const models = yield* loadAvailableModels(modelRuntime, signal);
+    if (models.length === 0) {
+      writeLog(formatNoModelsAvailableMessage());
+      return;
+    }
+    const filteredModels = matchingModels(models, searchPattern);
+    if (filteredModels.length === 0) {
+      writeLog(`No models matching "${searchPattern}"`);
+      return;
+    }
+    for (const line of formatModelTable(filteredModels)) writeLog(line);
+    const notice = hiddenModelsNotice(modelRuntime);
+    if (notice !== undefined) writeLog(chalk.dim(notice));
+  });
 }
 
 const listModels: {

@@ -9,31 +9,29 @@ import McpManagerView from "./mcp-manager-view.ts";
 import type uiTypes from "./ui.types.ts";
 
 const { fromPromise } = platform;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { toErrorMessage } = errors;
 
 function showMcpManagerImpl(
   ctx: extensionsTypesTypes.ExtensionCommandContext,
   manage: (ui: uiTypes.McpUi) => Promise<void>,
 ): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(
-        ctx.ui.custom<void>((tui, theme, keybindings, done) => {
-          const view = new McpManagerView(tui, theme, keybindings);
-          Effect.runFork(
-            fromPromise(() => manage(view)).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
-              ),
-              Effect.ensuring(Effect.sync(() => done())),
+  return promised(function* () {
+    yield* awaited(
+      ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+        const view = new McpManagerView(tui, theme, keybindings);
+        Effect.runFork(
+          fromPromise(() => manage(view)).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
             ),
-          );
-          return view;
-        }),
-      );
-    }),
-  );
+            Effect.ensuring(Effect.sync(() => done())),
+          ),
+        );
+        return view;
+      }),
+    );
+  });
 }
 const showMcpManager: {
   (

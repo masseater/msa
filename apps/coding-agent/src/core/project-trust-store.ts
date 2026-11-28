@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import errors from "../utils/errors.ts";
@@ -15,7 +14,7 @@ const { exists, makeDirectory, readText, writeFile } = platform.files;
 const { stripBom } = text;
 const { toErrorMessage } = errors;
 const { normalizeCwd } = trustManager;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const LOCK_RETRIES = { factor: 1, maxTimeout: 20, minTimeout: 20, retries: 9 };
 
@@ -75,23 +74,21 @@ function writeTrustFile(path: string, data: TrustFile): Promise<void> {
 }
 function withTrustFileLock<T>(path: string, fn: () => Promise<T>): Promise<T> {
   const trustDir = dirname(path);
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(makeDirectory({ path: trustDir }));
-      const release = yield* awaited(
-        lockfile.lock(trustDir, {
-          lockfilePath: `${path}.lock`,
-          realpath: false,
-          retries: LOCK_RETRIES,
-        }),
-      );
-      try {
-        return yield* awaited(fn());
-      } finally {
-        yield* awaited(release());
-      }
-    }),
-  );
+  return promised(function* () {
+    yield* awaited(makeDirectory({ path: trustDir }));
+    const release = yield* awaited(
+      lockfile.lock(trustDir, {
+        lockfilePath: `${path}.lock`,
+        realpath: false,
+        retries: LOCK_RETRIES,
+      }),
+    );
+    try {
+      return yield* awaited(fn());
+    } finally {
+      yield* awaited(release());
+    }
+  });
 }
 export default class ProjectTrustStore {
   private trustPath: string;

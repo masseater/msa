@@ -10,7 +10,7 @@ import startupTui from "./startup-tui.ts";
 import terminalTheme from "./terminal-theme.ts";
 
 const { callbackPromise } = interop;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, awaiting, promised } = awaitingModule;
 const { clearStartupTui, createStartupTui } = startupTui;
 const { startStartupTui } = terminalTheme;
 
@@ -19,39 +19,37 @@ function showStartupSelectorImpl<T>(
   title: string,
   options: Array<{ label: string; value: T }>,
 ): Promise<T | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const ui = yield* awaited(createStartupTui(settingsManager));
-      return yield* awaited(
-        callbackPromise((resolve) => {
-          let settled = false;
-          const finish = (result: T | undefined) =>
-            Effect.runPromise(
-              awaiting(function* () {
-                if (settled) {
-                  return;
-                }
-                settled = true;
-                yield* awaited(clearStartupTui(ui));
-                ui.stop();
-                resolve(result);
-              }),
-            );
-
-          const selector = new ExtensionSelectorComponent(
-            title,
-            options.map((option) => option.label),
-            (option) => void finish(options.find((entry) => entry.label === option)?.value),
-            () => void finish(undefined),
-            { tui: ui },
+  return promised(function* () {
+    const ui = yield* awaited(createStartupTui(settingsManager));
+    return yield* awaited(
+      callbackPromise((resolve) => {
+        let settled = false;
+        const finish = (result: T | undefined) =>
+          Effect.runPromise(
+            awaiting(function* () {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              yield* awaited(clearStartupTui(ui));
+              ui.stop();
+              resolve(result);
+            }),
           );
-          ui.addChild(selector);
-          ui.setFocus(selector);
-          startStartupTui(ui, settingsManager);
-        }),
-      );
-    }),
-  );
+
+        const selector = new ExtensionSelectorComponent(
+          title,
+          options.map((option) => option.label),
+          (option) => void finish(options.find((entry) => entry.label === option)?.value),
+          () => void finish(undefined),
+          { tui: ui },
+        );
+        ui.addChild(selector);
+        ui.setFocus(selector);
+        startStartupTui(ui, settingsManager);
+      }),
+    );
+  });
 }
 
 const showStartupSelector: {
@@ -71,42 +69,40 @@ function showStartupInputImpl(
   title: string,
   placeholder?: string,
 ): Promise<string | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const ui = yield* awaited(createStartupTui(settingsManager));
-      return yield* awaited(
-        callbackPromise((resolve) => {
-          let settled = false;
-          const finish = (result: string | undefined) =>
-            Effect.runPromise(
-              awaiting(function* () {
-                if (settled) {
-                  return;
-                }
-                settled = true;
-                input.dispose();
-                yield* awaited(clearStartupTui(ui));
-                ui.stop();
-                resolve(result);
-              }),
-            );
-
-          const input = new ExtensionInputComponent(
-            title,
-            placeholder,
-            (value) => void finish(value),
-            () => void finish(undefined),
-            {
-              tui: ui,
-            },
+  return promised(function* () {
+    const ui = yield* awaited(createStartupTui(settingsManager));
+    return yield* awaited(
+      callbackPromise((resolve) => {
+        let settled = false;
+        const finish = (result: string | undefined) =>
+          Effect.runPromise(
+            awaiting(function* () {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              input.dispose();
+              yield* awaited(clearStartupTui(ui));
+              ui.stop();
+              resolve(result);
+            }),
           );
-          ui.addChild(input);
-          ui.setFocus(input);
-          startStartupTui(ui, settingsManager);
-        }),
-      );
-    }),
-  );
+
+        const input = new ExtensionInputComponent(
+          title,
+          placeholder,
+          (value) => void finish(value),
+          () => void finish(undefined),
+          {
+            tui: ui,
+          },
+        );
+        ui.addChild(input);
+        ui.setFocus(input);
+        startStartupTui(ui, settingsManager);
+      }),
+    );
+  });
 }
 
 const showStartupInput: {

@@ -24,7 +24,7 @@ const { callbackPromise } = interop;
 const { quarantineWindowsNativeDependencies, cleanupWindowsSelfUpdateQuarantine } =
   windowsSelfUpdate;
 const { writeError, writeLog } = platform;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const { getSelfUpdatePlan } = selfUpdatePlanModule;
 
@@ -45,12 +45,10 @@ function prepareWindowsNpmSelfUpdate(): Promise<void> {
   }
 
   const packageDir = getPackageDir();
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(cleanupWindowsSelfUpdateQuarantine(packageDir));
-      yield* awaited(quarantineWindowsNativeDependencies(packageDir));
-    }),
-  );
+  return promised(function* () {
+    yield* awaited(cleanupWindowsSelfUpdateQuarantine(packageDir));
+    yield* awaited(quarantineWindowsNativeDependencies(packageDir));
+  });
 }
 
 function printSelfUpdateFallback(command: configTypes.SelfUpdateCommand): void {
@@ -67,32 +65,30 @@ function printPnpmSelfUpdateMetadataHint(): void {
 }
 
 function runSelfUpdate(command: configTypes.SelfUpdateCommand): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      writeLog(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
-      for (const step of command.steps ?? [command]) {
-        yield* awaited(
-          callbackPromise<void>((resolve, reject) => {
-            const child = spawnProcess(step.command, step.args, {
-              stdio: "inherit",
-            });
-            child.on("error", (error) => {
-              reject(error);
-            });
-            child.on("close", (code, signal) => {
-              if (code === 0) {
-                resolve();
-              } else if (signal === null) {
-                reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
-              } else {
-                reject(new Error(`${step.display} terminated by signal ${signal}`));
-              }
-            });
-          }),
-        );
-      }
-    }),
-  );
+  return promised(function* () {
+    writeLog(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
+    for (const step of command.steps ?? [command]) {
+      yield* awaited(
+        callbackPromise<void>((resolve, reject) => {
+          const child = spawnProcess(step.command, step.args, {
+            stdio: "inherit",
+          });
+          child.on("error", (error) => {
+            reject(error);
+          });
+          child.on("close", (code, signal) => {
+            if (code === 0) {
+              resolve();
+            } else if (signal === null) {
+              reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
+            } else {
+              reject(new Error(`${step.display} terminated by signal ${signal}`));
+            }
+          });
+        }),
+      );
+    }
+  });
 }
 
 function* resolveSelfUpdateCommand(

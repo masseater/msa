@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -12,7 +11,7 @@ const { tmpdir } = nodeOs;
 const { createWriteStream } = platformNodeFs;
 
 const { join, randomHex } = platformModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { writeFile } = platformModule.files;
 
 const OUTPUT_FILE_MODE = 0o600;
@@ -26,14 +25,12 @@ function writeOutputFileImpl(
   extension: string,
   data: string | Uint8Array,
 ): Promise<string> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const path = createOutputFilePath(prefix, extension);
+  return promised(function* () {
+    const path = createOutputFilePath(prefix, extension);
 
-      yield* awaited(writeFile({ data, flag: "wx", mode: OUTPUT_FILE_MODE, path }));
-      return path;
-    }),
-  );
+    yield* awaited(writeFile({ data, flag: "wx", mode: OUTPUT_FILE_MODE, path }));
+    return path;
+  });
 }
 
 const writeOutputFile: {

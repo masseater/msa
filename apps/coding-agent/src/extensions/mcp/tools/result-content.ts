@@ -2,7 +2,6 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../../../core/awaiting.ts";
@@ -11,7 +10,7 @@ import outputLimit from "./output-limit.ts";
 import resourceBlocks from "./resource-blocks.ts";
 
 const { toLlmContent } = mcp;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { limitMcpContent, textOf } = outputLimit;
 const { describeBinaryResource, describeResourceLink } = resourceBlocks;
 
@@ -20,22 +19,20 @@ function blockToContent(
   block: mcpTypes.ContentBlock,
   options: toolsTypes.ConvertMcpResultOptions,
 ): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (block.type === "resource_link") {
-        return [{ text: describeResourceLink(server, block, options), type: "text" as const }];
-      }
-      if (
-        block.type === "resource" &&
-        "blob" in block.resource &&
-        block.resource.mimeType?.startsWith("image/") !== true
-      ) {
-        const text = yield* awaited(describeBinaryResource(block.resource, options));
-        return [{ text, type: "text" as const }];
-      }
-      return toLlmContent({ content: [block] });
-    }),
-  );
+  return promised(function* () {
+    if (block.type === "resource_link") {
+      return [{ text: describeResourceLink(server, block, options), type: "text" as const }];
+    }
+    if (
+      block.type === "resource" &&
+      "blob" in block.resource &&
+      block.resource.mimeType?.startsWith("image/") !== true
+    ) {
+      const text = yield* awaited(describeBinaryResource(block.resource, options));
+      return [{ text, type: "text" as const }];
+    }
+    return toLlmContent({ content: [block] });
+  });
 }
 
 function toModelContentImpl(
@@ -43,13 +40,11 @@ function toModelContentImpl(
   blocks: readonly mcpTypes.ContentBlock[],
   options: toolsTypes.ConvertMcpResultOptions = {},
 ): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      return (yield* awaited(
-        Promise.all(blocks.map((block) => blockToContent(server, block, options))),
-      )).flat();
-    }),
-  );
+  return promised(function* () {
+    return (yield* awaited(
+      Promise.all(blocks.map((block) => blockToContent(server, block, options))),
+    )).flat();
+  });
 }
 
 const toModelContent: {
@@ -70,31 +65,29 @@ function convertMcpResultImpl(
   result: mcpTypes.CallToolResult,
   options: toolsTypes.ConvertMcpResultOptions = {},
 ): Promise<agentTypes.AgentToolResult<toolsTypes.McpToolDetails>> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const converted: (aiTypes.TextContent | aiTypes.ImageContent)[] =
-        result.content.length > 0
-          ? yield* awaited(toModelContent(server, result.content, options))
-          : toLlmContent(result);
-      if (result.isError === true && textOf(converted) === "") {
-        converted.push({ text: `MCP tool ${server}/${tool} returned an error`, type: "text" });
-      }
-      const { content, fullOutputPath } = yield* awaited(
-        limitMcpContent(converted, options.saveOutput),
-      );
-      const { _meta: _ignored, ...scriptResult } = result;
-      return {
-        content,
-        details: {
-          server,
-          tool,
-          ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
-        },
-        structuredContent: scriptResult as unknown as aiTypes.JsonValue,
-        ...(result.isError === true ? { isError: true } : {}),
-      };
-    }),
-  );
+  return promised(function* () {
+    const converted: (aiTypes.TextContent | aiTypes.ImageContent)[] =
+      result.content.length > 0
+        ? yield* awaited(toModelContent(server, result.content, options))
+        : toLlmContent(result);
+    if (result.isError === true && textOf(converted) === "") {
+      converted.push({ text: `MCP tool ${server}/${tool} returned an error`, type: "text" });
+    }
+    const { content, fullOutputPath } = yield* awaited(
+      limitMcpContent(converted, options.saveOutput),
+    );
+    const { _meta: _ignored, ...scriptResult } = result;
+    return {
+      content,
+      details: {
+        server,
+        tool,
+        ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+      },
+      structuredContent: scriptResult as unknown as aiTypes.JsonValue,
+      ...(result.isError === true ? { isError: true } : {}),
+    };
+  });
 }
 
 const convertMcpResult: {

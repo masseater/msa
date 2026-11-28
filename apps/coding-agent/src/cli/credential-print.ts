@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -11,7 +10,7 @@ import type authCommandTypes from "./auth-command.types.ts";
 import credentialCandidatesModule from "./credential-candidates.ts";
 
 const { getAuthCredential, validateAuthCommandArgs } = authCommand;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { credentialCandidates } = credentialCandidatesModule;
 
 const DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS = 30 * 60_000;
@@ -25,34 +24,32 @@ function resolveCredentialForPrintImpl(
   minExpiryMs?: number,
   signal?: AbortSignal,
 ): Promise<string> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, kind);
-      const listed = yield* awaited(
-        modelRuntime.listCredentials(signal === undefined ? {} : { signal }),
-      );
-      const credentialTypes = new Map<string, aiTypes.CredentialInfo["type"]>(
-        listed.map((credential) => [credential.providerId, credential.type]),
-      );
-      const providers = credentialCandidates({
-        cliModel,
-        cliProvider,
-        credentialTypes,
-        modelRuntime,
-      });
-      const credentials = yield* collectCredentials(providers, credentialTypes, kind, {
-        minExpiryMs,
-        modelRuntime,
-        signal,
-      });
-      const [onlyCredential] = credentials;
-      if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
-      assertCredentialFound(credentials, providers, credentialTypes, cliProvider, kind);
-      throw AuthCommandError.create(
-        `Multiple configured providers matched (${credentials.map(({ providerId }) => providerId).join(", ")}). Specify --provider.`,
-      );
-    }),
-  );
+  return promised(function* () {
+    const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, kind);
+    const listed = yield* awaited(
+      modelRuntime.listCredentials(signal === undefined ? {} : { signal }),
+    );
+    const credentialTypes = new Map<string, aiTypes.CredentialInfo["type"]>(
+      listed.map((credential) => [credential.providerId, credential.type]),
+    );
+    const providers = credentialCandidates({
+      cliModel,
+      cliProvider,
+      credentialTypes,
+      modelRuntime,
+    });
+    const credentials = yield* collectCredentials(providers, credentialTypes, kind, {
+      minExpiryMs,
+      modelRuntime,
+      signal,
+    });
+    const [onlyCredential] = credentials;
+    if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
+    assertCredentialFound(credentials, providers, credentialTypes, cliProvider, kind);
+    throw AuthCommandError.create(
+      `Multiple configured providers matched (${credentials.map(({ providerId }) => providerId).join(", ")}). Specify --provider.`,
+    );
+  });
 }
 
 const resolveCredentialForPrint: {

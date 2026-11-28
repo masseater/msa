@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 import { compare, valid } from "semver";
 
@@ -8,7 +7,7 @@ import managementHttp from "./management-http.ts";
 import userAgent from "./user-agent.ts";
 import type versionCheckTypes from "./version-check.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { readEnv } = platform;
 const { fetchWithRetry } = managementHttp;
 const { getMsaUserAgent } = userAgent;
@@ -73,33 +72,31 @@ function getLatestMsaReleaseImpl(
   currentVersion: string,
   options: { timeoutMs?: number; retry?: boolean } = {},
 ): Promise<versionCheckTypes.LatestMsaRelease | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (readEnv("MSA_OFFLINE") !== undefined && readEnv("MSA_OFFLINE") !== "") return undefined;
+  return promised(function* () {
+    if (readEnv("MSA_OFFLINE") !== undefined && readEnv("MSA_OFFLINE") !== "") return undefined;
 
-      const response = yield* awaited(
-        fetchWithRetry(
-          LATEST_RELEASE_URL,
-          {
-            headers: {
-              "User-Agent": getMsaUserAgent(currentVersion),
-              accept: "application/vnd.github+json",
-            },
+    const response = yield* awaited(
+      fetchWithRetry(
+        LATEST_RELEASE_URL,
+        {
+          headers: {
+            "User-Agent": getMsaUserAgent(currentVersion),
+            accept: "application/vnd.github+json",
           },
-          {
-            maxRetries: options.retry === true ? 2 : 0,
-            timeoutMs: options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS,
-          },
-        ),
-      );
-      if (!response.ok) return undefined;
+        },
+        {
+          maxRetries: options.retry === true ? 2 : 0,
+          timeoutMs: options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS,
+        },
+      ),
+    );
+    if (!response.ok) return undefined;
 
-      const data = (yield* awaited(response.json())) as { tag_name?: unknown };
-      if (typeof data.tag_name !== "string") return undefined;
-      const version = data.tag_name.trim().replace(/^v/u, "");
-      return version === "" ? undefined : { version };
-    }),
-  );
+    const data = (yield* awaited(response.json())) as { tag_name?: unknown };
+    if (typeof data.tag_name !== "string") return undefined;
+    const version = data.tag_name.trim().replace(/^v/u, "");
+    return version === "" ? undefined : { version };
+  });
 }
 
 const getLatestMsaRelease: {
@@ -116,28 +113,23 @@ const getLatestMsaRelease: {
 function checkForNewMsaVersion(
   currentVersion: string,
 ): Promise<versionCheckTypes.LatestMsaRelease | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (
-        readEnv("MSA_SKIP_VERSION_CHECK") !== undefined &&
-        readEnv("MSA_SKIP_VERSION_CHECK") !== ""
-      )
-        return undefined;
+  return promised(function* () {
+    if (readEnv("MSA_SKIP_VERSION_CHECK") !== undefined && readEnv("MSA_SKIP_VERSION_CHECK") !== "")
+      return undefined;
 
-      try {
-        const latestRelease = yield* awaited(getLatestMsaRelease(currentVersion));
-        if (
-          latestRelease !== undefined &&
-          isNewerPackageVersion(latestRelease.version, currentVersion)
-        ) {
-          return latestRelease;
-        }
-        return undefined;
-      } catch {
-        return undefined;
+    try {
+      const latestRelease = yield* awaited(getLatestMsaRelease(currentVersion));
+      if (
+        latestRelease !== undefined &&
+        isNewerPackageVersion(latestRelease.version, currentVersion)
+      ) {
+        return latestRelease;
       }
-    }),
-  );
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  });
 }
 
 const versionCheck = {

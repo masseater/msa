@@ -1,7 +1,6 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import codemode from "@msa/codemode";
 import type codemodeTypes from "@msa/codemode/index.types";
-import * as Effect from "effect/Effect";
 
 import config from "../../config.ts";
 import awaitingModule from "../../core/awaiting.ts";
@@ -10,7 +9,7 @@ import modelGlobals from "./model-globals.ts";
 import scriptText from "./script-text.ts";
 import type toolTypes from "./tool.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { getCodemodeWorkerSpecifier, getQuickJSWasmPath } = config;
 const { createDiscoveryGlobals } = discoveryGlobals;
 const { createModelGlobals } = modelGlobals;
@@ -69,27 +68,25 @@ function sandboxTool(
     name: tool.name,
     ...(description === undefined ? {} : { description }),
     execute: (args, { signal: callSignal }) =>
-      Effect.runPromise(
-        awaiting(function* () {
-          const record: toolTypes.CodemodeNestedCall = {
-            args: previewArgs(args),
-            id: `${run.toolCallId}/?`,
-            name: tool.name,
-            status: "running",
-          };
-          run.calls.push(record);
-          run.publish();
-          const callStartedAt = performance.now();
-          if (run.ctx === undefined) throw new Error("Tool calls need a session");
-          const outcome = yield* awaited(
-            run.ctx.executeTool(tool.name, args, { signal: callSignal }),
-          );
-          record.durationMs = performance.now() - callStartedAt;
-          recordOutcome(record, tool, outcome, callSignal.aborted);
-          run.publish();
-          return toScriptValue(tool, outcome);
-        }),
-      ),
+      promised(function* () {
+        const record: toolTypes.CodemodeNestedCall = {
+          args: previewArgs(args),
+          id: `${run.toolCallId}/?`,
+          name: tool.name,
+          status: "running",
+        };
+        run.calls.push(record);
+        run.publish();
+        const callStartedAt = performance.now();
+        if (run.ctx === undefined) throw new Error("Tool calls need a session");
+        const outcome = yield* awaited(
+          run.ctx.executeTool(tool.name, args, { signal: callSignal }),
+        );
+        record.durationMs = performance.now() - callStartedAt;
+        recordOutcome(record, tool, outcome, callSignal.aborted);
+        run.publish();
+        return toScriptValue(tool, outcome);
+      }),
   };
 }
 

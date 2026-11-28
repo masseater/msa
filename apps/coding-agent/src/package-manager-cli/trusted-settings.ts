@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
 import platform from "../core/platform/index.ts";
@@ -8,7 +7,7 @@ import type packageManagerCliInternalTypes from "../package-manager-cli-internal
 import commandSettings from "./command-settings.ts";
 
 const { writeError } = platform;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { createCommandSettingsManager } = commandSettings;
 
 function reportSettingsErrors(
@@ -34,22 +33,20 @@ function trustedSettingsManager(
   options: packageManagerCliInternalTypes.CommandSettingsOptions,
   localWrite: { requested: boolean; target: string },
 ): Promise<settingsManagerTypes.SettingsManager | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { settingsManager, projectTrustWarnings } = yield* awaited(
-        createCommandSettingsManager(options),
+  return promised(function* () {
+    const { settingsManager, projectTrustWarnings } = yield* awaited(
+      createCommandSettingsManager(options),
+    );
+    reportProjectTrustWarnings(projectTrustWarnings);
+    if (localWrite.requested && !settingsManager.isProjectTrusted()) {
+      writeError(
+        chalk.red(`Project is not trusted. Use --approve to modify local ${localWrite.target}.`),
       );
-      reportProjectTrustWarnings(projectTrustWarnings);
-      if (localWrite.requested && !settingsManager.isProjectTrusted()) {
-        writeError(
-          chalk.red(`Project is not trusted. Use --approve to modify local ${localWrite.target}.`),
-        );
-        process.exitCode = 1;
-        return undefined;
-      }
-      return settingsManager;
-    }),
-  );
+      process.exitCode = 1;
+      return undefined;
+    }
+    return settingsManager;
+  });
 }
 
 const trustedSettings = { reportSettingsErrors, trustedSettingsManager };

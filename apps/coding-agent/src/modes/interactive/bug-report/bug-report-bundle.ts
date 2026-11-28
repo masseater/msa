@@ -1,12 +1,12 @@
 import { Effect } from "effect";
 
-import type agentSessionTypes from "../../../core/agent-session.types.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import bugReportModule from "../../../core/bug-report.ts";
 import type bugReportTypesModule from "../../../core/bug-report.types.ts";
 import crashLog from "../../../core/crash-log.ts";
 import platform from "../../../core/platform/index.ts";
 import sessionExport from "../../../core/session-export.ts";
+import errors from "../../../utils/errors.ts";
 import type bugReportInternalTypes from "../bug-report-internal.types.ts";
 import shareTrailingEntries from "../share-trailing-entries.ts";
 
@@ -17,18 +17,15 @@ const {
   collectBugReportMetadata,
   collectBugReportDiagnostics,
 } = bugReportModule;
+const { toErrorMessage } = errors;
 const { awaited, awaiting } = awaitingModule;
 const { join } = platform;
 const { clearCrashLog, readCrashLog } = crashLog;
 const { createShareTrailingEntries } = shareTrailingEntries;
 const { serializeSessionBranch } = sessionExport;
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error";
-}
-
 function buildBundle(
-  session: agentSessionTypes.AgentSession,
+  session: bugReportInternalTypes.BugReportContext["session"],
   options: bugReportInternalTypes.BugReportOptions,
   summary: string | undefined,
 ): Promise<bugReportTypesModule.BugReportBundle> {
@@ -36,7 +33,7 @@ function buildBundle(
 }
 
 function bundleWith(parts: {
-  readonly session: agentSessionTypes.AgentSession;
+  readonly session: bugReportInternalTypes.BugReportContext["session"];
   readonly options: bugReportInternalTypes.BugReportOptions;
   readonly summary: string | undefined;
   readonly crashes: Awaited<ReturnType<typeof readCrashLog>>;
@@ -70,7 +67,7 @@ function bundleWith(parts: {
 }
 
 function recordInSession(
-  session: agentSessionTypes.AgentSession,
+  session: bugReportInternalTypes.BugReportContext["session"],
   bundle: bugReportTypesModule.BugReportBundle,
   delivery: Pick<bugReportTypesModule.BugReportSessionEntryData, "delivery" | "path">,
 ): Promise<void> {
@@ -94,7 +91,7 @@ function exportZip(
     try {
       yield* awaited(writeBugReportArchive(bundle, archivePath));
     } catch (error: unknown) {
-      context.showError(`Failed to write bug report: ${errorMessage(error)}`);
+      context.showError(`Failed to write bug report: ${toErrorMessage(error)}`);
       return;
     }
     yield* awaited(
@@ -104,6 +101,6 @@ function exportZip(
   });
 }
 
-const bugReportBundle = { buildBundle, errorMessage, exportZip };
+const bugReportBundle = { buildBundle, exportZip };
 
 export default bugReportBundle;

@@ -7,7 +7,7 @@ import providerWaitModule from "./provider-wait.ts";
 import TaskStopped from "./task-stopped.ts";
 import type workerTypes from "./worker.ts";
 
-const { errorText } = errors;
+const { toErrorMessage } = errors;
 
 const { providerWaits } = providerWaitModule;
 
@@ -18,7 +18,7 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
     (message): message is compatTypes.AssistantMessage => message.role === "assistant",
   );
   if (TaskStopped.isStopped(error)) return { content: error.message, status: "stopped" };
-  if (error !== undefined) return { content: errorText(error), status: "failed" };
+  if (error !== undefined) return { content: toErrorMessage(error), status: "failed" };
   if (last?.stopReason === "error" || last?.stopReason === "aborted") {
     const text = contentText(last.content, "\n").trim();
     const content = [text, last.errorMessage].filter(Boolean).join("\n");
@@ -33,7 +33,7 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   };
 }
 
-const outcomes = { errorText, outcomeOf };
+const outcomes = { outcomeOf, toErrorMessage };
 
 const outcome = {
   outcomes,

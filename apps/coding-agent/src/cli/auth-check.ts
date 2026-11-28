@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -10,7 +9,7 @@ import type authCheckTypes from "./auth-check.types.ts";
 import AuthCommandError from "./auth-command-error.ts";
 import authCommand from "./auth-command.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { getAuthCredential, validateAuthCommandArgs } = authCommand;
 const { resolveCliModel } = cliModelFlag;
 
@@ -19,41 +18,36 @@ function checkProviderAuthImpl(
   modelRuntime: modelRuntimeTypes.ModelRuntime,
   options: { refresh: boolean } = { refresh: false },
 ): Promise<authCheckTypes.AuthCheckResult> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
-      let provider = cliProvider;
-      if (cliModel !== undefined && cliModel !== "") {
-        const resolved = resolveCliModel({ cliModel, cliProvider, modelRuntime });
-        if (
-          (resolved.error !== undefined && resolved.error !== "") ||
-          resolved.model === undefined
-        ) {
-          throw AuthCommandError.create(resolved.error ?? `Unable to resolve model "${cliModel}"`);
-        }
-        provider = resolved.model.provider;
+  return promised(function* () {
+    const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
+    let provider = cliProvider;
+    if (cliModel !== undefined && cliModel !== "") {
+      const resolved = resolveCliModel({ cliModel, cliProvider, modelRuntime });
+      if ((resolved.error !== undefined && resolved.error !== "") || resolved.model === undefined) {
+        throw AuthCommandError.create(resolved.error ?? `Unable to resolve model "${cliModel}"`);
       }
-      if (provider === undefined || provider === "")
-        throw AuthCommandError.create("Unable to resolve an auth provider");
-      if (modelRuntime.getError() !== undefined) {
-        return { provider, reason: "invalid_state", status: "invalid" };
+      provider = resolved.model.provider;
+    }
+    if (provider === undefined || provider === "")
+      throw AuthCommandError.create("Unable to resolve an auth provider");
+    if (modelRuntime.getError() !== undefined) {
+      return { provider, reason: "invalid_state", status: "invalid" };
+    }
+    if (modelRuntime.getProvider(provider) === undefined) {
+      return { provider, reason: "provider_not_found", status: "not_ready" };
+    }
+    try {
+      const auth = yield* awaited(modelRuntime.checkAuth(provider));
+      if (auth === undefined)
+        return { provider, reason: "credentials_not_configured", status: "not_ready" };
+      if (options.refresh && (yield* awaited(modelRuntime.getAuth(provider))) === undefined) {
+        return { provider, reason: "credentials_not_configured", status: "not_ready" };
       }
-      if (modelRuntime.getProvider(provider) === undefined) {
-        return { provider, reason: "provider_not_found", status: "not_ready" };
-      }
-      try {
-        const auth = yield* awaited(modelRuntime.checkAuth(provider));
-        if (auth === undefined)
-          return { provider, reason: "credentials_not_configured", status: "not_ready" };
-        if (options.refresh && (yield* awaited(modelRuntime.getAuth(provider))) === undefined) {
-          return { provider, reason: "credentials_not_configured", status: "not_ready" };
-        }
-        return { authType: auth.type, provider, status: "ready" };
-      } catch {
-        return { provider, reason: "invalid_state", status: "invalid" };
-      }
-    }),
-  );
+      return { authType: auth.type, provider, status: "ready" };
+    } catch {
+      return { provider, reason: "invalid_state", status: "invalid" };
+    }
+  });
 }
 
 const checkProviderAuth: {
@@ -74,13 +68,11 @@ function getProviderCredentialImpl(
   credentials: aiTypes.CredentialStore,
   options: { refresh: boolean },
 ): Promise<string | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const credential = yield* awaited(credentials.read(providerId));
-      if (!options.refresh && credential?.type === "oauth") return credential.access;
-      return getAuthCredential(yield* awaited(modelRuntime.getAuth(providerId)));
-    }),
-  );
+  return promised(function* () {
+    const credential = yield* awaited(credentials.read(providerId));
+    if (!options.refresh && credential?.type === "oauth") return credential.access;
+    return getAuthCredential(yield* awaited(modelRuntime.getAuth(providerId)));
+  });
 }
 
 const getProviderCredential: {

@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../core/awaiting.ts";
 import nodeWorkerThreads from "../core/platform/node/worker-threads.ts";
 import errors from "./errors.ts";
@@ -10,7 +8,7 @@ import photon from "./photon.ts";
 const { parentPort } = nodeWorkerThreads;
 
 const { IMAGE_RESIZE_WORKER_RESPONSE_TYPE, resizeImageInProcess } = imageResizeCore;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { toErrorMessage } = errors;
 
 interface ResizeImageWorkerRequest {
@@ -33,30 +31,28 @@ if (port === null) {
 
 port.once("message", (message: unknown) => {
   void (() =>
-    Effect.runPromise(
-      awaiting(function* () {
-        try {
-          if (!isResizeImageWorkerRequest(message)) {
-            throw new Error("Invalid image resize worker request");
-          }
-          if (message.photonWasmPath !== undefined) {
-            photon.setEmbeddedWasmPath(message.photonWasmPath);
-          }
-          const result = yield* awaited(
-            resizeImageInProcess(message.inputBytes, message.mimeType, message.options),
-          );
-          const response: imageResizeCoreTypes.ResizeImageWorkerResponse = {
-            result,
-            type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
-          };
-          port.postMessage(response);
-        } catch (error) {
-          const response: imageResizeCoreTypes.ResizeImageWorkerResponse = {
-            error: toErrorMessage(error),
-            type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
-          };
-          port.postMessage(response);
+    promised(function* () {
+      try {
+        if (!isResizeImageWorkerRequest(message)) {
+          throw new Error("Invalid image resize worker request");
         }
-      }),
-    ))();
+        if (message.photonWasmPath !== undefined) {
+          photon.setEmbeddedWasmPath(message.photonWasmPath);
+        }
+        const result = yield* awaited(
+          resizeImageInProcess(message.inputBytes, message.mimeType, message.options),
+        );
+        const response: imageResizeCoreTypes.ResizeImageWorkerResponse = {
+          result,
+          type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
+        };
+        port.postMessage(response);
+      } catch (error) {
+        const response: imageResizeCoreTypes.ResizeImageWorkerResponse = {
+          error: toErrorMessage(error),
+          type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
+        };
+        port.postMessage(response);
+      }
+    }))();
 });

@@ -95,7 +95,7 @@ function decideRecorded(
   return Effect.map(
     Effect.promise(() =>
       runtime.options.decide(evidence.request).catch((error: unknown) => ({
-        reason: outcomes.errorText(error),
+        reason: outcomes.toErrorMessage(error),
         status: "undecided" as const,
       })),
     ),

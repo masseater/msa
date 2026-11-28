@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import nodeReadline from "../../../core/platform/node/readline.ts";
@@ -12,7 +12,7 @@ import type runtimeTypes from "../runtime.types.ts";
 
 const { createPromiseInterface: createInterface } = nodeReadline;
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { callbackPromise } = interop;
 const { openBrowser } = openBrowserModule;
@@ -24,30 +24,28 @@ function waitForRedirectUrl(
   signal: AbortSignal,
   interactive: boolean,
 ): Promise<string | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (!interactive) {
-        if (!signal.aborted)
-          yield* awaited(
-            callbackPromise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
-          );
-        return undefined;
-      }
-      const readline = createInterface({ input: process.stdin, output: process.stderr });
-      try {
-        return yield* awaited(
-          readline.question(
-            "If the browser cannot reach this machine, paste the URL it was redirected to: ",
-            { signal },
-          ),
+  return promised(function* () {
+    if (!interactive) {
+      if (!signal.aborted)
+        yield* awaited(
+          callbackPromise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
         );
-      } catch {
-        return undefined;
-      } finally {
-        readline.close();
-      }
-    }),
-  );
+      return undefined;
+    }
+    const readline = createInterface({ input: process.stdin, output: process.stderr });
+    try {
+      return yield* awaited(
+        readline.question(
+          "If the browser cannot reach this machine, paste the URL it was redirected to: ",
+          { signal },
+        ),
+      );
+    } catch {
+      return undefined;
+    } finally {
+      readline.close();
+    }
+  });
 }
 
 function signIn(
@@ -87,42 +85,40 @@ function login(
   log: Line,
   error: Line,
 ): Promise<number> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { name } = entry;
-      try {
-        yield* awaited(connection.getClient());
-        log(`Already signed in to MCP server "${name}" (${connection.tools.length} tools).`);
-        return 0;
-      } catch {
-        if (connection.state !== "needs-auth") {
-          error(`MCP server "${name}" failed to connect: ${connection.error ?? "unknown error"}`);
-          return 1;
-        }
-      }
-      try {
-        yield* awaited(signIn(name, connection, url, timeoutMs, options, credentials, log));
-      } catch (signInError) {
-        error(
-          Schema.is(McpSignInCancelledError)(signInError)
-            ? `Sign-in to MCP server "${name}" was cancelled or not completed within ${Math.round(timeoutMs / 1000)} seconds.`
-            : `Sign-in to MCP server "${name}" failed: ${toErrorMessage(signInError)}`,
-        );
-        return 1;
-      }
-      connection.auth.challenge = undefined;
-      try {
-        yield* awaited(connection.reconnect());
-      } catch (connectError) {
-        error(`Signed in, but ${toErrorMessage(connectError)}`);
-        return 1;
-      }
-      log(`Signed in to MCP server "${name}" (${connection.tools.length} tools).`);
-      const note = yield* awaited(credentials.persistenceNote());
-      if (note !== undefined) log(note);
+  return promised(function* () {
+    const { name } = entry;
+    try {
+      yield* awaited(connection.getClient());
+      log(`Already signed in to MCP server "${name}" (${connection.tools.length} tools).`);
       return 0;
-    }),
-  );
+    } catch {
+      if (connection.state !== "needs-auth") {
+        error(`MCP server "${name}" failed to connect: ${connection.error ?? "unknown error"}`);
+        return 1;
+      }
+    }
+    try {
+      yield* awaited(signIn(name, connection, url, timeoutMs, options, credentials, log));
+    } catch (signInError) {
+      error(
+        Schema.is(McpSignInCancelledError)(signInError)
+          ? `Sign-in to MCP server "${name}" was cancelled or not completed within ${Math.round(timeoutMs / 1000)} seconds.`
+          : `Sign-in to MCP server "${name}" failed: ${toErrorMessage(signInError)}`,
+      );
+      return 1;
+    }
+    connection.auth.challenge = undefined;
+    try {
+      yield* awaited(connection.reconnect());
+    } catch (connectError) {
+      error(`Signed in, but ${toErrorMessage(connectError)}`);
+      return 1;
+    }
+    log(`Signed in to MCP server "${name}" (${connection.tools.length} tools).`);
+    const note = yield* awaited(credentials.persistenceNote());
+    if (note !== undefined) log(note);
+    return 0;
+  });
 }
 
 const loginModule = { login, waitForRedirectUrl };

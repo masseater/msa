@@ -10,7 +10,7 @@ import interop from "../utils/interop.ts";
 import appModeModule from "./app-mode.ts";
 import type mainInternalTypes from "./main-internal.types.ts";
 
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, performed, promised } = awaitingModule;
 const { restoreStdout } = outputGuard;
 const { printTimings, time } = timings;
 const { loadInteractiveMode, runPrintMode, runRpcMode } = modeRunners;
@@ -29,59 +29,55 @@ function drain(stream: NodeJS.WriteStream): Promise<void> {
 }
 
 function runInteractive(startup: Startup, runtime: Runtime, input: Input, checks: Checks) {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { parsed } = startup;
-      const [InteractiveMode] = yield* awaited(
-        Promise.all([loadInteractiveMode(), KeybindingsManager.refresh()]),
-      );
-      const interactiveMode = new InteractiveMode(runtime, {
-        autoTrustOnReloadCwd: startup.autoTrustOnReloadCwd,
-        decisionModelPreparation: checks.decisionModel,
-        initialImages: input.initialImages,
-        initialMessage: input.initialMessage,
-        initialMessages: parsed.messages,
-        initialThemeSetting: parsed.useTheme,
-        migratedProviders: startup.migratedProviders,
-        modelFallbackMessage: runtime.modelFallbackMessage,
-        startupDiagnostics: checks.startupDiagnostics,
-        tuiMode: parsed.tuiMode,
-        verbose: parsed.verbose,
-      });
-      if (!checks.startupBenchmark) {
-        printTimings();
-        yield* awaited(interactiveMode.lifecycle.runLoop.run());
-        return;
-      }
-      yield* awaited(interactiveMode.lifecycle.startup.init());
-      time("interactiveMode.init");
-      yield* performed(Effect.sleep(150));
-      interactiveMode.lifecycle.shutdown.stop();
-      stopThemeWatcher();
+  return promised(function* () {
+    const { parsed } = startup;
+    const [InteractiveMode] = yield* awaited(
+      Promise.all([loadInteractiveMode(), KeybindingsManager.refresh()]),
+    );
+    const interactiveMode = new InteractiveMode(runtime, {
+      autoTrustOnReloadCwd: startup.autoTrustOnReloadCwd,
+      decisionModelPreparation: checks.decisionModel,
+      initialImages: input.initialImages,
+      initialMessage: input.initialMessage,
+      initialMessages: parsed.messages,
+      initialThemeSetting: parsed.useTheme,
+      migratedProviders: startup.migratedProviders,
+      modelFallbackMessage: runtime.modelFallbackMessage,
+      startupDiagnostics: checks.startupDiagnostics,
+      tuiMode: parsed.tuiMode,
+      verbose: parsed.verbose,
+    });
+    if (!checks.startupBenchmark) {
       printTimings();
-      yield* awaited(drain(process.stdout));
-      yield* awaited(drain(process.stderr));
-    }),
-  );
+      yield* awaited(interactiveMode.lifecycle.runLoop.run());
+      return;
+    }
+    yield* awaited(interactiveMode.lifecycle.startup.init());
+    time("interactiveMode.init");
+    yield* performed(Effect.sleep(150));
+    interactiveMode.lifecycle.shutdown.stop();
+    stopThemeWatcher();
+    printTimings();
+    yield* awaited(drain(process.stdout));
+    yield* awaited(drain(process.stderr));
+  });
 }
 
 function runPrint(startup: Startup, runtime: Runtime, input: Input) {
-  return Effect.runPromise(
-    awaiting(function* () {
-      printTimings();
-      const exitCode = yield* awaited(
-        runPrintMode(runtime, {
-          initialImages: input.initialImages,
-          initialMessage: input.initialMessage,
-          messages: startup.parsed.messages,
-          mode: toPrintOutputMode(startup.appMode),
-        }),
-      );
-      stopThemeWatcher();
-      restoreStdout();
-      if (exitCode !== 0) process.exitCode = exitCode;
-    }),
-  );
+  return promised(function* () {
+    printTimings();
+    const exitCode = yield* awaited(
+      runPrintMode(runtime, {
+        initialImages: input.initialImages,
+        initialMessage: input.initialMessage,
+        messages: startup.parsed.messages,
+        mode: toPrintOutputMode(startup.appMode),
+      }),
+    );
+    stopThemeWatcher();
+    restoreStdout();
+    if (exitCode !== 0) process.exitCode = exitCode;
+  });
 }
 
 function runMode(startup: Startup, runtime: Runtime, input: Input, checks: Checks): Promise<void> {

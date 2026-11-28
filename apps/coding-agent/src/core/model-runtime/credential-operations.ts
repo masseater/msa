@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import abortModule from "../../utils/abort.ts";
 import awaitingModule from "../awaiting.ts";
@@ -10,7 +9,7 @@ import type runtimeCredentialsTypes from "../runtime-credentials.types.ts";
 import type ModelAvailability from "./model-availability.ts";
 import type ProviderCatalog from "./provider-catalog.ts";
 
-const { awaited, awaiting, performed, promisedWith } = awaitingModule;
+const { awaited, performed, promised, promisedWith } = awaitingModule;
 const { makeLatch } = platform;
 const { operationSignal, raceWithAbortSignal } = abortModule;
 
@@ -89,14 +88,12 @@ export default class CredentialOperations {
   private enqueue<T>(providerId: string, signal: AbortSignal, task: () => Promise<T>): Promise<T> {
     const previous = this.queues.get(providerId) ?? Promise.resolve();
     const startedLatch = makeLatch();
-    const operation = Effect.runPromise(
-      awaiting(function* () {
-        yield* awaited(previous.catch(() => {}));
-        signal.throwIfAborted();
-        startedLatch.open();
-        return yield* awaited(task());
-      }),
-    );
+    const operation = promised(function* () {
+      yield* awaited(previous.catch(() => {}));
+      signal.throwIfAborted();
+      startedLatch.open();
+      return yield* awaited(task());
+    });
     const tail = operation.catch(() => {});
     this.queues.set(providerId, tail);
     void tail.then(() => {

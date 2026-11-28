@@ -1,5 +1,4 @@
 import tui from "@msa/tui";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -10,7 +9,7 @@ import SessionSelectorComponent from "../modes/interactive/components/session-se
 import interop from "../utils/interop.ts";
 import startupUi from "./startup-ui.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { createStartupTui, startStartupTui } = startupUi;
 const { callbackPromise } = interop;
 const { setKeybindings } = tui;
@@ -25,47 +24,45 @@ function selectSessionImpl(
   allSessionsLoader: SessionsLoader,
   settingsManager: settingsManagerTypes.SettingsManager,
 ): Promise<string | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const ui = yield* awaited(createStartupTui(settingsManager));
-      return yield* awaited(
-        callbackPromise((resolve) => {
-          const keybindings = KeybindingsManager.create();
-          setKeybindings(keybindings);
-          let resolved = false;
+  return promised(function* () {
+    const ui = yield* awaited(createStartupTui(settingsManager));
+    return yield* awaited(
+      callbackPromise((resolve) => {
+        const keybindings = KeybindingsManager.create();
+        setKeybindings(keybindings);
+        let resolved = false;
 
-          const selector = new SessionSelectorComponent(
-            currentSessionsLoader,
-            allSessionsLoader,
-            (path: string) => {
-              if (!resolved) {
-                resolved = true;
-                ui.stop();
-                resolve(path);
-              }
-            },
-            () => {
-              if (!resolved) {
-                resolved = true;
-                ui.stop();
-                resolve(null);
-              }
-            },
-            () => {
+        const selector = new SessionSelectorComponent(
+          currentSessionsLoader,
+          allSessionsLoader,
+          (path: string) => {
+            if (!resolved) {
+              resolved = true;
               ui.stop();
-              process.exit(0);
-            },
-            () => ui.requestRender(),
-            { keybindings, showRenameHint: false },
-          );
+              resolve(path);
+            }
+          },
+          () => {
+            if (!resolved) {
+              resolved = true;
+              ui.stop();
+              resolve(null);
+            }
+          },
+          () => {
+            ui.stop();
+            process.exit(0);
+          },
+          () => ui.requestRender(),
+          { keybindings, showRenameHint: false },
+        );
 
-          ui.addChild(selector);
-          ui.setFocus(selector.getSessionList());
-          startStartupTui(ui, settingsManager);
-        }),
-      );
-    }),
-  );
+        ui.addChild(selector);
+        ui.setFocus(selector.getSessionList());
+        startStartupTui(ui, settingsManager);
+      }),
+    );
+  });
 }
 
 const selectSession: {

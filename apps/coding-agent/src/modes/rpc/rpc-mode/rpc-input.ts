@@ -9,7 +9,7 @@ import commands from "./commands.ts";
 import rpcOutput from "./rpc-output.ts";
 import type RpcServer from "./rpc-server.ts";
 
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, performed, promised } = awaitingModule;
 const { waitForRawStdoutBackpressure } = outputGuard;
 const { toErrorMessage } = errors;
 const { attachJsonlLineReader } = jsonl;
@@ -26,41 +26,37 @@ function isUiResponse(parsed: unknown): parsed is rpcTypesTypes.RpcExtensionUIRe
 }
 
 function runCommand(server: RpcServer, command: rpcTypesTypes.RpcCommand): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      try {
-        const response = yield* awaited(handleCommand(server, command));
-        if (response !== undefined) {
-          output(response);
-          yield* awaited(waitForRawStdoutBackpressure());
-        }
-        yield* performed(server.checkShutdownRequested());
-      } catch (commandError: unknown) {
-        output(error(command.id, command.type, toErrorMessage(commandError)));
+  return promised(function* () {
+    try {
+      const response = yield* awaited(handleCommand(server, command));
+      if (response !== undefined) {
+        output(response);
         yield* awaited(waitForRawStdoutBackpressure());
       }
-    }),
-  );
+      yield* performed(server.checkShutdownRequested());
+    } catch (commandError: unknown) {
+      output(error(command.id, command.type, toErrorMessage(commandError)));
+      yield* awaited(waitForRawStdoutBackpressure());
+    }
+  });
 }
 
 function handleInputLine(server: RpcServer, line: string): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch (parseError: unknown) {
-        output(error(undefined, "parse", `Failed to parse command: ${toErrorMessage(parseError)}`));
-        yield* awaited(waitForRawStdoutBackpressure());
-        return;
-      }
-      if (isUiResponse(parsed)) {
-        server.ui.resolve(parsed);
-        return;
-      }
-      yield* awaited(runCommand(server, parsed as rpcTypesTypes.RpcCommand));
-    }),
-  );
+  return promised(function* () {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch (parseError: unknown) {
+      output(error(undefined, "parse", `Failed to parse command: ${toErrorMessage(parseError)}`));
+      yield* awaited(waitForRawStdoutBackpressure());
+      return;
+    }
+    if (isUiResponse(parsed)) {
+      server.ui.resolve(parsed);
+      return;
+    }
+    yield* awaited(runCommand(server, parsed as rpcTypesTypes.RpcCommand));
+  });
 }
 
 function attachInput(server: RpcServer): () => void {

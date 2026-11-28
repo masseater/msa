@@ -10,8 +10,8 @@ export default class TreeFilter {
   }
 
   private getSearchableText(node: sessionManagerTypes.SessionTreeNode): string {
-    const { entry, parts }: { entry: sessionManagerTypes.SessionEntry; parts: string[] } =
-      this.searchableEntryText(node);
+    const { entry } = node;
+    const parts: string[] = node.label !== undefined && node.label !== "" ? [node.label] : [];
 
     switch (entry.type) {
       case "message": {
@@ -55,16 +55,6 @@ export default class TreeFilter {
     }
 
     return parts.join(" ");
-  }
-
-  private searchableEntryText(node: sessionManagerTypes.SessionTreeNode) {
-    const entry = node.entry;
-    const parts: string[] = [];
-
-    if (node.label !== undefined && node.label !== "") {
-      parts.push(node.label);
-    }
-    return { entry, parts };
   }
 
   private searchableMessageText(entry: sessionManagerTypes.SessionMessageEntry, parts: string[]) {

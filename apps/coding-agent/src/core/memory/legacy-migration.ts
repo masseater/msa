@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import pathsModule from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
 import directoryLock from "../directory-lock.ts";
@@ -10,7 +8,7 @@ import memoryRequests from "./memory-requests.ts";
 import type memoryTypes from "./memory.types.ts";
 import secretCheckLazy from "./secret-check.lazy.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { join } = platform;
 const { resolvePath } = pathsModule;
 const { exists, remove, rename } = platform.files;
@@ -64,13 +62,11 @@ function markMigrated(database: DatabaseSync, ids: readonly string[]): void {
 }
 
 function retire(path: string): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(rename({ from: path, to: `${path}${MIGRATED_SUFFIX}` }));
-      for (const suffix of ["-wal", "-shm"])
-        yield* awaited(remove({ force: true, path: `${path}${suffix}` }));
-    }),
-  );
+  return promised(function* () {
+    yield* awaited(rename({ from: path, to: `${path}${MIGRATED_SUFFIX}` }));
+    for (const suffix of ["-wal", "-shm"])
+      yield* awaited(remove({ force: true, path: `${path}${suffix}` }));
+  });
 }
 
 function migrateLegacyMemories(
@@ -79,33 +75,31 @@ function migrateLegacyMemories(
   send: (request: string) => Promise<unknown>,
 ): Promise<memoryTypes.MigrationResult | undefined> {
   return withDirectoryLock(agentDir, "memory-migration", () =>
-    Effect.runPromise(
-      awaiting(function* () {
-        if (!(yield* awaited(exists(path)))) return undefined;
-        const database = new DatabaseSync(path, { timeout: 5_000 });
-        const skipped: { id: string; secrets: readonly string[] }[] = [];
-        let sent = 0;
-        try {
-          const pending = readPending(database);
-          const clean: LegacyRow[] = [];
-          for (const row of pending) {
-            const secrets = yield* awaited(findSecrets(row.content));
-            if (secrets.length === 0) clean.push(row);
-            else skipped.push({ id: row.id, secrets });
-          }
-          for (const batch of migrationRequests(clean, readSent(database))) {
-            yield* awaited(send(batch.request));
-            markMigrated(database, batch.done);
-            sent += batch.memories;
-          }
-          database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-        } finally {
-          database.close();
+    promised(function* () {
+      if (!(yield* awaited(exists(path)))) return undefined;
+      const database = new DatabaseSync(path, { timeout: 5_000 });
+      const skipped: { id: string; secrets: readonly string[] }[] = [];
+      let sent = 0;
+      try {
+        const pending = readPending(database);
+        const clean: LegacyRow[] = [];
+        for (const row of pending) {
+          const secrets = yield* awaited(findSecrets(row.content));
+          if (secrets.length === 0) clean.push(row);
+          else skipped.push({ id: row.id, secrets });
         }
-        yield* awaited(retire(path));
-        return { sent, skipped };
-      }),
-    ),
+        for (const batch of migrationRequests(clean, readSent(database))) {
+          yield* awaited(send(batch.request));
+          markMigrated(database, batch.done);
+          sent += batch.memories;
+        }
+        database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } finally {
+        database.close();
+      }
+      yield* awaited(retire(path));
+      return { sent, skipped };
+    }),
   );
 }
 

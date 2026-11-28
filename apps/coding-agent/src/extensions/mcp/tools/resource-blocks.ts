@@ -1,5 +1,4 @@
 import type mcpTypes from "@msa/mcp/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import mcpServers from "../../../core/mcp-servers.ts";
@@ -9,7 +8,7 @@ import type toolsTypes from "../tools.types.ts";
 import outputLimit from "./output-limit.ts";
 
 const { toErrorMessage } = errors;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { READ_MCP_RESOURCE_TOOL } = mcpServers;
 const { formatSize } = truncate;
 const { saveToTempFile } = outputLimit;
@@ -52,20 +51,18 @@ function describeBinaryResource(
   resource: { uri: string; mimeType?: string | undefined; blob: string },
   options: toolsTypes.ConvertMcpResultOptions,
 ): Promise<string> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { uri, mimeType, blob } = resource;
-      const data = Buffer.from(blob, "base64");
-      if (isTextMimeType(mimeType)) return data.toString("utf8");
-      const kind = `${mimeType ?? "unknown type"}, ${formatSize(data.length)}`;
-      try {
-        const path = yield* awaited((options.saveOutput ?? saveToTempFile)(data, extensionOf(uri)));
-        return `[Binary resource ${uri} (${kind}) saved to ${path}]`;
-      } catch (error) {
-        return `[Binary resource ${uri} (${kind}) could not be saved: ${toErrorMessage(error)}]`;
-      }
-    }),
-  );
+  return promised(function* () {
+    const { uri, mimeType, blob } = resource;
+    const data = Buffer.from(blob, "base64");
+    if (isTextMimeType(mimeType)) return data.toString("utf8");
+    const kind = `${mimeType ?? "unknown type"}, ${formatSize(data.length)}`;
+    try {
+      const path = yield* awaited((options.saveOutput ?? saveToTempFile)(data, extensionOf(uri)));
+      return `[Binary resource ${uri} (${kind}) saved to ${path}]`;
+    } catch (error) {
+      return `[Binary resource ${uri} (${kind}) could not be saved: ${toErrorMessage(error)}]`;
+    }
+  });
 }
 
 const resourceBlocks = { describeBinaryResource, describeResourceLink };

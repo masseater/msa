@@ -1,155 +1,93 @@
-import type agentTypes from "@msa/agent-core/index.types";
-import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import testHarness from "./test-harness.ts";
+import testHarnessSupport from "./test-harness-support.ts";
 import type testHarnessTypes from "./test-harness.types.ts";
 
-const { createHarness } = testHarness;
+const { assistantMessagesOf, textsOf, useHarness, withEchoTool } = testHarnessSupport;
 
-const { awaited, runTest } = testing;
+const { runTest } = testing;
 
-let harness: testHarnessTypes.Harness;
+const run = useHarness();
 
 const simpleTextResponse = () =>
   runTest(
     Effect.gen(function* () {
-      harness = yield* awaited(createHarness({ responses: ["hello world"] }));
-
-      yield* awaited(harness.session.run.prompting.prompt("hi"));
+      const harness = yield* run({ responses: ["hello world"] }, "hi");
 
       expect(harness.faux.callCount).toBe(1);
-
-      const assistantMessages = harness.session.messages.filter((m) => m.role === "assistant");
-      expect(assistantMessages).toHaveLength(1);
-
-      const msg = assistantMessages[0] as aiTypes.AssistantMessage;
-      expect(msg.content).toEqual([{ text: "hello world", type: "text" as const }]);
-      expect(msg.stopReason).toBe("stop");
+      const [message, ...rest] = assistantMessagesOf(harness);
+      expect(rest).toHaveLength(0);
+      expect(message?.content).toEqual([{ text: "hello world", type: "text" as const }]);
+      expect(message?.stopReason).toBe("stop");
     }),
   );
 
 const responseSequence = () =>
   runTest(
     Effect.gen(function* () {
-      harness = yield* awaited(createHarness({ responses: ["first", "second", "third"] }));
-
-      yield* awaited(harness.session.run.prompting.prompt("a"));
-      yield* awaited(harness.session.run.prompting.prompt("b"));
-      yield* awaited(harness.session.run.prompting.prompt("c"));
+      const harness = yield* run({ responses: ["first", "second", "third"] }, "a", "b", "c");
 
       expect(harness.faux.callCount).toBe(3);
-
-      const assistantTexts = harness.session.messages
-        .filter((m): m is aiTypes.AssistantMessage => m.role === "assistant")
-        .map((m) => m.content.find((c) => c.type === "text")?.text);
-
-      expect(assistantTexts).toEqual(["first", "second", "third"]);
+      expect(textsOf(harness)).toEqual(["first", "second", "third"]);
     }),
   );
 
 const toolCallResponseTriggersToolExecution = () =>
   runTest(
     Effect.gen(function* () {
-      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-      let toolExecuted = false;
-      const echoTool: agentTypes.AgentTool = {
-        description: "Echo back",
-        execute: () =>
-          effectRunPromise(
-            Effect.gen(function* () {
-              toolExecuted = true;
-              return yield* awaited({
-                content: [{ text: "echoed", type: "text" as const }],
-                details: {},
-              });
-            }),
-          ),
-        label: "Echo",
-        name: "echo",
-        parameters: Type.Object({ text: Type.String() }),
-      };
-
-      harness = yield* awaited(
-        createHarness({
-          baseToolsOverride: { echo: echoTool },
+      const harness = yield* run(
+        withEchoTool({
           responses: [{ toolCalls: [{ args: { text: "hi" }, name: "echo" }] }, "done after tool"],
-          tools: [echoTool],
         }),
+        "use the tool",
       );
 
-      yield* awaited(harness.session.run.prompting.prompt("use the tool"));
-
-      expect(toolExecuted).toBe(true);
       expect(harness.faux.callCount).toBe(2);
-
-      const toolResults = harness.session.messages.filter((m) => m.role === "toolResult");
-      expect(toolResults).toHaveLength(1);
+      expect(harness.session.messages.filter((m) => m.role === "toolResult")).toHaveLength(1);
     }),
   );
 
-const errorResponse = () =>
+const failedResponses: ReadonlyArray<
+  readonly [name: string, options: testHarnessTypes.HarnessOptions, errorMessage: string]
+> = [
+  ["error response", { responses: [{ error: "something broke" }] }, "something broke"],
+  [
+    "a pending terminal response",
+    {
+      responses: [{ stopReason: "pending", text: "partial" }],
+      settings: { retry: { enabled: false } },
+    },
+    "Faux response ended without a stop reason",
+  ],
+];
+
+const failedResponse = (options: testHarnessTypes.HarnessOptions, errorMessage: string) =>
   runTest(
     Effect.gen(function* () {
-      harness = yield* awaited(
-        createHarness({
-          responses: [{ error: "something broke" }],
-        }),
-      );
+      const harness = yield* run(options, "hi");
 
-      yield* awaited(harness.session.run.prompting.prompt("hi"));
-
-      const assistantMessages = harness.session.messages.filter(
-        (m): m is aiTypes.AssistantMessage => m.role === "assistant",
-      );
-      expect(assistantMessages).toHaveLength(1);
-      expect(assistantMessages[0]?.stopReason).toBe("error");
-      expect(assistantMessages[0]?.errorMessage).toBe("something broke");
-    }),
-  );
-
-const turnsAPendingTerminalResponseIntoAn = () =>
-  runTest(
-    Effect.gen(function* () {
-      harness = yield* awaited(
-        createHarness({
-          responses: [{ stopReason: "pending", text: "partial" }],
-          settings: { retry: { enabled: false } },
-        }),
-      );
-
-      yield* awaited(harness.session.run.prompting.prompt("hi"));
-
-      const assistantMessages = harness.session.messages.filter(
-        (m): m is aiTypes.AssistantMessage => m.role === "assistant",
-      );
-      expect(assistantMessages).toHaveLength(1);
-      expect(assistantMessages[0]?.stopReason).toBe("error");
-      expect(assistantMessages[0]?.errorMessage).toBe("Faux response ended without a stop reason");
+      const [message, ...rest] = assistantMessagesOf(harness);
+      expect(rest).toHaveLength(0);
+      expect(message?.stopReason).toBe("error");
+      expect(message?.errorMessage).toBe(errorMessage);
     }),
   );
 
 const retryOnTransientError = () =>
   runTest(
     Effect.gen(function* () {
-      harness = yield* awaited(
-        createHarness({
+      const harness = yield* run(
+        {
           responses: [{ error: "overloaded_error" }, "recovered"],
           settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
-        }),
+        },
+        "hi",
       );
 
-      yield* awaited(harness.session.run.prompting.prompt("hi"));
-
       expect(harness.faux.callCount).toBe(2);
-
-      const retryStarts = harness.eventsOfType("auto_retry_start");
-      expect(retryStarts).toHaveLength(1);
-
+      expect(harness.eventsOfType("auto_retry_start")).toHaveLength(1);
       const retryEnds = harness.eventsOfType("auto_retry_end");
       expect(retryEnds).toHaveLength(1);
       expect(retryEnds[0]?.success).toBe(true);
@@ -159,34 +97,27 @@ const retryOnTransientError = () =>
 const customUsageNumbers = () =>
   runTest(
     Effect.gen(function* () {
-      harness = yield* awaited(
-        createHarness({
-          responses: [{ text: "big response", usage: { input: 100000, output: 5000 } }],
-        }),
+      const harness = yield* run(
+        { responses: [{ text: "big response", usage: { input: 100000, output: 5000 } }] },
+        "hi",
       );
 
-      yield* awaited(harness.session.run.prompting.prompt("hi"));
-
-      const msg = harness.session.messages.find(
-        (m): m is aiTypes.AssistantMessage => m.role === "assistant",
-      )!;
-      expect(msg.usage.input).toBe(100000);
-      expect(msg.usage.output).toBe(5000);
+      const message = assistantMessagesOf(harness)[0];
+      expect(message?.usage.input).toBe(100000);
+      expect(message?.usage.output).toBe(5000);
     }),
   );
 
 describe("test harness", () => {
-  afterEach(() => harness?.cleanup());
-
   it("simple text response", simpleTextResponse);
 
   it("response sequence", responseSequence);
 
   it("tool call response triggers tool execution", toolCallResponseTriggersToolExecution);
 
-  it("error response", errorResponse);
-
-  it("turns a pending terminal response into an error", turnsAPendingTerminalResponseIntoAn);
+  for (const [name, options, errorMessage] of failedResponses) {
+    it(`turns ${name} into an error`, () => failedResponse(options, errorMessage));
+  }
 
   it("retry on transient error", retryOnTransientError);
 

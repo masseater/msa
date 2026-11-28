@@ -1,11 +1,10 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
 import interop from "./interop.ts";
 import type managementHttpTypes from "./management-http.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { fetchResponse } = interop;
 type FetchInput = Parameters<typeof fetch>[0];
 
@@ -16,48 +15,46 @@ function fetchWithRetryImpl(
   init: RequestInit | undefined = undefined,
   options: managementHttpTypes.FetchRetryOptions = {},
 ): Promise<Response> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const maxRetries =
-        options.maxRetries === undefined || !Number.isFinite(options.maxRetries)
-          ? 2
-          : Math.max(0, Math.floor(options.maxRetries));
-      const retryOnStatus = options.retryOnStatus ?? true;
-      const parentSignal = init?.signal ?? undefined;
-      const { timeoutSignal, attemptTimeoutMs } = retryTimeouts(options);
+  return promised(function* () {
+    const maxRetries =
+      options.maxRetries === undefined || !Number.isFinite(options.maxRetries)
+        ? 2
+        : Math.max(0, Math.floor(options.maxRetries));
+    const retryOnStatus = options.retryOnStatus ?? true;
+    const parentSignal = init?.signal ?? undefined;
+    const { timeoutSignal, attemptTimeoutMs } = retryTimeouts(options);
 
-      for (let attempt = 0; ; attempt++) {
-        parentSignal?.throwIfAborted();
-        timeoutSignal?.throwIfAborted();
-        const attemptTimeoutSignal =
-          attemptTimeoutMs !== undefined && attemptTimeoutMs !== 0
-            ? AbortSignal.timeout(attemptTimeoutMs)
-            : undefined;
-        const signals = [parentSignal, timeoutSignal, attemptTimeoutSignal].filter(
-          (signal): signal is AbortSignal => signal !== undefined,
+    for (let attempt = 0; ; attempt++) {
+      parentSignal?.throwIfAborted();
+      timeoutSignal?.throwIfAborted();
+      const attemptTimeoutSignal =
+        attemptTimeoutMs !== undefined && attemptTimeoutMs !== 0
+          ? AbortSignal.timeout(attemptTimeoutMs)
+          : undefined;
+      const signals = [parentSignal, timeoutSignal, attemptTimeoutSignal].filter(
+        (signal): signal is AbortSignal => signal !== undefined,
+      );
+      const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+
+      try {
+        const response = yield* awaited(
+          fetchResponse(input, signal === undefined ? init : { ...init, signal }),
         );
-        const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
-
+        const shouldRetry =
+          retryOnStatus && RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries;
+        if (!shouldRetry) return response;
         try {
-          const response = yield* awaited(
-            fetchResponse(input, signal === undefined ? init : { ...init, signal }),
-          );
-          const shouldRetry =
-            retryOnStatus && RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries;
-          if (!shouldRetry) return response;
-          try {
-            yield* awaited(response.body?.cancel());
-          } catch {}
-        } catch (error) {
-          const attemptTimedOut =
-            attemptTimeoutSignal?.aborted === true &&
-            parentSignal?.aborted !== true &&
-            timeoutSignal?.aborted !== true;
-          rethrowIfFinal(parentSignal, timeoutSignal, error, attemptTimedOut, attempt, maxRetries);
-        }
+          yield* awaited(response.body?.cancel());
+        } catch {}
+      } catch (error) {
+        const attemptTimedOut =
+          attemptTimeoutSignal?.aborted === true &&
+          parentSignal?.aborted !== true &&
+          timeoutSignal?.aborted !== true;
+        rethrowIfFinal(parentSignal, timeoutSignal, error, attemptTimedOut, attempt, maxRetries);
       }
-    }),
-  );
+    }
+  });
 }
 
 const fetchWithRetry: {

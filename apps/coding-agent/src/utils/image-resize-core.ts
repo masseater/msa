@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -6,7 +5,7 @@ import exifOrientation from "./exif-orientation.ts";
 import type imageResizeCoreTypes from "./image-resize-core.types.ts";
 import photonModule from "./photon.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { loadPhoton } = photonModule;
 const { applyExifOrientation } = exifOrientation;
 
@@ -147,26 +146,24 @@ function resizeImageInProcessImpl(
   mimeType: string,
   options?: imageResizeCoreTypes.ImageResizeOptions,
 ): Promise<imageResizeCoreTypes.ResizedImage | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const photon = yield* awaited(loadPhoton());
-      if (photon === null) return null;
-      let image: PhotonImage | undefined;
-      try {
-        const rawImage = photon.PhotonImage.new_from_byteslice(inputBytes);
-        image = applyExifOrientation(photon, rawImage, inputBytes);
-        if (image !== rawImage) rawImage.free();
-        return resizeDecoded(photon, image, inputBytes, mimeType, {
-          ...DEFAULT_OPTIONS,
-          ...options,
-        });
-      } catch {
-        return null;
-      } finally {
-        image?.free();
-      }
-    }),
-  );
+  return promised(function* () {
+    const photon = yield* awaited(loadPhoton());
+    if (photon === null) return null;
+    let image: PhotonImage | undefined;
+    try {
+      const rawImage = photon.PhotonImage.new_from_byteslice(inputBytes);
+      image = applyExifOrientation(photon, rawImage, inputBytes);
+      if (image !== rawImage) rawImage.free();
+      return resizeDecoded(photon, image, inputBytes, mimeType, {
+        ...DEFAULT_OPTIONS,
+        ...options,
+      });
+    } catch {
+      return null;
+    } finally {
+      image?.free();
+    }
+  });
 }
 
 const resizeImageInProcess: {
