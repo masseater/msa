@@ -127,7 +127,10 @@ const runScript = (script: string, options: Fixture) =>
     yield* fs.writeFileString(openIssues, yield* encodeJson(options.openIssues ?? []));
     yield* fs.writeFileString(path.join(bin, "gh"), GH_STUB);
     yield* fs.chmod(path.join(bin, "gh"), 0o755);
-    const inherited = yield* Config.String("PATH").pipe(Config.withDefault(""));
+    const inherited = (yield* Config.String("PATH").pipe(Config.withDefault("")))
+      .split(":")
+      .filter((entry) => !entry.includes("node_modules/.bin"))
+      .join(":");
     const result = yield* captureProcess({
       args: [path.join(root, ".github/scripts", script)],
       command: "bash",
