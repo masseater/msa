@@ -7,8 +7,21 @@ import decideSupport from "./decide-support.ts";
 
 const { listen, localLlmTests, runTest } = testing;
 const { LIQUID_D1 } = localModule;
-const { FIXTURE, blocking, classifierAt, cleanUp, loadedDecide, localDecide, request } =
-  decideSupport;
+const {
+  FIXTURE,
+  answerOf,
+  blocking,
+  classifierAt,
+  cleanUp,
+  decidedOf,
+  loadedDecide,
+  localDecide,
+  request,
+  triageRequest,
+} = decideSupport;
+
+const OPEN = { route: 0, severity: 0 };
+const STRICT = { route: 1, severity: 1 };
 
 afterEach(() => runTest(cleanUp));
 
@@ -17,10 +30,8 @@ const holdsFromTheThresholdUp = () =>
     Effect.gen(function* () {
       const { decide, recorded } = yield* loadedDecide(classifierAt(FIXTURE));
 
-      const open = yield* decide(blocking(0));
-      if (open.status !== "decided") throw new Error(open.reason);
-      const answer = open.answers["blocking"];
-      if (answer?.type !== "bool") throw new Error("expected a bool answer");
+      const open = decidedOf(yield* decide(blocking(0)));
+      const answer = answerOf(open, "blocking", "bool");
       const { probability } = answer;
       expect(probability).toBeGreaterThan(0);
       expect(probability).toBeLessThan(1);
@@ -38,23 +49,17 @@ const appliesEachQuestionsThreshold = () =>
     Effect.gen(function* () {
       const { decide, recorded } = yield* loadedDecide(classifierAt(FIXTURE));
 
-      const open = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
-      const strict = yield* decide(request("The build fails.", { route: 1, severity: 1 }));
+      const open = decidedOf(yield* decide(triageRequest(OPEN)));
+      const strict = decidedOf(yield* decide(triageRequest(STRICT)));
 
-      if (open.status !== "decided") throw new Error(open.reason);
-      if (strict.status !== "decided") throw new Error(strict.reason);
       expect(open.model).toBe(`${LIQUID_D1.provider}/${LIQUID_D1.id}`);
-      const route = open.answers["route"];
-      const strictRoute = strict.answers["route"];
-      if (route?.type !== "choice" || strictRoute?.type !== "choice")
-        throw new Error("expected choice answers");
+      const route = answerOf(open, "route", "choice");
+      const strictRoute = answerOf(strict, "route", "choice");
       expect(["billing", "technical"]).toContain(route.choice);
       expect(strictRoute.choice).toBeUndefined();
       expect(strictRoute.probabilities).toEqual(route.probabilities);
-      const severity = open.answers["severity"];
-      const strictSeverity = strict.answers["severity"];
-      if (severity?.type !== "score" || strictSeverity?.type !== "score")
-        throw new Error("expected score answers");
+      const severity = answerOf(open, "severity", "score");
+      const strictSeverity = answerOf(strict, "severity", "score");
       expect(severity.level).toBe(Math.round(severity.score));
       expect(strictSeverity.level).toBeUndefined();
       expect(recorded.classifications).toBe(1);
@@ -69,15 +74,10 @@ const letsSettingsOverrideTheThreshold = () =>
         thresholds: { "triage.route": 1 },
       });
 
-      const decision = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
+      const decision = decidedOf(yield* decide(triageRequest(OPEN)));
 
-      if (decision.status !== "decided") throw new Error(decision.reason);
-      const route = decision.answers["route"];
-      const severity = decision.answers["severity"];
-      if (route?.type !== "choice" || severity?.type !== "score")
-        throw new Error("expected choice and score answers");
-      expect(route.choice).toBeUndefined();
-      expect(severity.level).toBeDefined();
+      expect(answerOf(decision, "route", "choice").choice).toBeUndefined();
+      expect(answerOf(decision, "severity", "score").level).toBeDefined();
     }),
   );
 
@@ -86,10 +86,10 @@ const answersTheSameInputFromItsCache = () =>
     Effect.gen(function* () {
       const { decide, recorded } = yield* loadedDecide(classifierAt(FIXTURE));
 
-      const first = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
-      const again = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
+      const first = yield* decide(triageRequest(OPEN));
+      const again = yield* decide(triageRequest(OPEN));
       expect(recorded.classifications).toBe(1);
-      yield* decide(request("The invoice is wrong.", { route: 0, severity: 0 }));
+      yield* decide(request("The invoice is wrong.", OPEN));
 
       expect(again).toEqual(first);
       expect(recorded.classifications).toBe(2);
@@ -104,7 +104,7 @@ const isUndecidedWithoutADecisionModel = () =>
         unavailable: reason,
       });
 
-      const decision = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
+      const decision = yield* decide(triageRequest(OPEN));
 
       expect(decision).toEqual({ reason, status: "undecided" });
       expect(recorded.classifications).toBe(0);
@@ -122,8 +122,8 @@ const retriesAFailedDownloadOnTheNextCall = () =>
         endpoints: { huggingFace: `${origin}/` },
       });
 
-      const first = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
-      const second = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
+      const first = yield* decide(triageRequest(OPEN));
+      const second = yield* decide(triageRequest(OPEN));
 
       expect(first.status).toBe("undecided");
       expect(second.status).toBe("undecided");
