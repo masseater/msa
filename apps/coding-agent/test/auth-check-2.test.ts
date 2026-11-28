@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
 import authCheckRuntime from "../src/cli/auth-check-runtime.ts";
 import authCommand from "../src/cli/auth-command.ts";
@@ -9,14 +9,14 @@ import authCheckSupport from "./auth-check-support.ts";
 const { createAuthCheckModelRuntime } = authCheckRuntime;
 const { parseAuthCommand } = authCommand;
 
-const { afterEachHook, beforeEachHook, checkOpenaiAuth, tempDir } = authCheckSupport;
+const { authDir, checkOpenaiAuth } = authCheckSupport;
 
 const { awaited, joinPath, pathExists, runTest, toJsonText, writeTextFile } = testing;
 
 const doesNotTreatAnUnresolvedStoredEnvironment = () =>
   runTest(
     Effect.gen(function* () {
-      const authPath = joinPath(tempDir, "auth.json");
+      const authPath = joinPath(authDir.path, "auth.json");
       yield* writeTextFile(
         authPath,
         yield* toJsonText({
@@ -34,7 +34,7 @@ const doesNotTreatAnUnresolvedStoredEnvironment = () =>
 const reportsMalformedAuthStateAsInvalid = () =>
   runTest(
     Effect.gen(function* () {
-      const authPath = joinPath(tempDir, "auth.json");
+      const authPath = joinPath(authDir.path, "auth.json");
       yield* writeTextFile(authPath, "{invalid-json");
       expect(yield* checkOpenaiAuth(authPath)).toEqual({
         provider: "openai",
@@ -47,13 +47,13 @@ const reportsMalformedAuthStateAsInvalid = () =>
 const doesNotCreateAnAuthFileOr = () =>
   runTest(
     Effect.gen(function* () {
-      const authPath = joinPath(tempDir, "agent", "auth.json");
+      const authPath = joinPath(authDir.path, "agent", "auth.json");
       expect(yield* checkOpenaiAuth(authPath)).toMatchObject({
         reason: "credentials_not_configured",
         status: "not_ready",
       });
       expect(yield* pathExists(authPath)).toBe(false);
-      expect(yield* pathExists(joinPath(tempDir, "agent"))).toBe(false);
+      expect(yield* pathExists(joinPath(authDir.path, "agent"))).toBe(false);
     }),
   );
 
@@ -93,10 +93,6 @@ const createsAnAuthCheckRuntimeWithoutCatalog = () =>
   );
 
 describe("auth check command", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   test(
     "does not treat an unresolved stored environment reference as configured",
     doesNotTreatAnUnresolvedStoredEnvironment,
@@ -113,10 +109,6 @@ describe("auth check command", () => {
 });
 
 describe("auth check command", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   test(
     "creates an auth-check runtime without catalog storage",
     createsAnAuthCheckRuntimeWithoutCatalog,

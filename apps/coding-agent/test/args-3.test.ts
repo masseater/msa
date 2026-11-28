@@ -42,39 +42,24 @@ const toolFlagCases = [
   },
 ];
 
-const rejectsTheRemovedOrchestratorFlag = () => {
-  const result = parseArgs(["--orchestrator"]);
-  expect(result.tools).toBeUndefined();
-  expect(result.diagnostics).toEqual([
-    {
-      message:
-        "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
-      type: "error",
-    },
-  ]);
-};
-
-const rejectsToolNamesMixedWithModifiers = () => {
-  const result = parseArgs(["--tools", "read,+codemode"]);
-  expect(result.tools).toBeUndefined();
-  expect(result.diagnostics).toEqual([
-    {
-      message: "--tools: tool names cannot be mixed with +name or -name entries",
-      type: "error" as const,
-    },
-  ]);
-};
-
-const rejectsPatternsInToolModifiers = () => {
-  const result = parseArgs(["-t", "+mcp__github__*"]);
-  expect(result.tools).toBeUndefined();
-  expect(result.diagnostics).toEqual([
-    {
-      message: "-t: +name and -name entries take exact tool names, not patterns: +mcp__github__*",
-      type: "error" as const,
-    },
-  ]);
-};
+const rejectedToolFlagCases = [
+  {
+    argv: ["--orchestrator"],
+    message:
+      "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
+    name: "the removed --orchestrator flag",
+  },
+  {
+    argv: ["--tools", "read,+codemode"],
+    message: "--tools: tool names cannot be mixed with +name or -name entries",
+    name: "tool names mixed with modifiers",
+  },
+  {
+    argv: ["-t", "+mcp__github__*"],
+    message: "-t: +name and -name entries take exact tool names, not patterns: +mcp__github__*",
+    name: "patterns in tool modifiers",
+  },
+];
 
 const parsesPlainTextMessages = () => {
   const result = parseArgs(["hello", "world"]);
@@ -134,11 +119,11 @@ describe("parseArgs", () => {
       expect(parseArgs(argv)).toMatchObject(expected);
     });
 
-    test("rejects the removed --orchestrator flag", rejectsTheRemovedOrchestratorFlag);
-
-    test("rejects tool names mixed with modifiers", rejectsToolNamesMixedWithModifiers);
-
-    test("rejects patterns in tool modifiers", rejectsPatternsInToolModifiers);
+    test.each(rejectedToolFlagCases)("rejects $name", ({ argv, message }) => {
+      const result = parseArgs(argv);
+      expect(result.tools).toBeUndefined();
+      expect(result.diagnostics).toEqual([{ message, type: "error" }]);
+    });
   });
 });
 
