@@ -8,7 +8,7 @@ import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import settingsManagerSupport from "./settings-manager-support.ts";
 const { DEFAULT_HTTP_IDLE_TIMEOUT_MS } = httpDispatcher;
 
-const { readSettings, removeSettingsDirs, withSettings } = settingsManagerSupport;
+const { readSettings, removeSettingsDirs, settingsRead, withSettings } = settingsManagerSupport;
 
 const { awaited, joinPath, pathExists, removePath, runTest, writeJsonFile } = testing;
 
@@ -62,33 +62,6 @@ const shouldFailProjectSettingsWritesWhenProject = () =>
         expect(yield* readSettings(projectSettingsPath)).toEqual({
           packages: ["npm:existing"],
         });
-      }),
-    ),
-  );
-
-const shouldReadDefaultProjectTrustFromGlobal = () =>
-  runTest(
-    withSettings(({ settingsPath, projectSettingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { defaultProjectTrust: "always" });
-        yield* writeJsonFile(projectSettingsPath, { defaultProjectTrust: "never" });
-
-        const manager = yield* openManager();
-
-        expect(manager.session.getDefaultProjectTrust()).toBe("always");
-      }),
-    ),
-  );
-
-const shouldDefaultInvalidProjectTrustSettingsTo = () =>
-  runTest(
-    withSettings(({ settingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { defaultProjectTrust: "sometimes" });
-
-        const manager = yield* openManager();
-
-        expect(manager.session.getDefaultProjectTrust()).toBe("ask");
       }),
     ),
   );
@@ -163,30 +136,6 @@ const defaultsAndOverridesAgentRetryDelayCap = () => {
   ).toEqual({ baseDelayMs: 500, enabled: true, maxAgentDelayMs: 5000, maxRetries: 10 });
 };
 
-const shouldDefaultTo5Minutes = () =>
-  runTest(
-    withSettings(({ openManager }) =>
-      Effect.gen(function* () {
-        const manager = yield* openManager();
-        expect(manager.session.getHttpIdleTimeoutMs()).toBe(DEFAULT_HTTP_IDLE_TIMEOUT_MS);
-      }),
-    ),
-  );
-
-const shouldUseMergedGlobalAndProjectSettings = () =>
-  runTest(
-    withSettings(({ settingsPath, projectSettingsPath, openManager }) =>
-      Effect.gen(function* () {
-        yield* writeJsonFile(settingsPath, { httpIdleTimeoutMs: 300000 });
-        yield* writeJsonFile(projectSettingsPath, { httpIdleTimeoutMs: 0 });
-
-        const manager = yield* openManager();
-
-        expect(manager.session.getHttpIdleTimeoutMs()).toBe(0);
-      }),
-    ),
-  );
-
 const shouldRejectInvalidTimeoutValues = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
@@ -218,14 +167,20 @@ describe("SettingsManager", () => {
       shouldFailProjectSettingsWritesWhenProject,
     );
 
-    it(
-      "should read default project trust from global settings only",
-      shouldReadDefaultProjectTrustFromGlobal,
-    );
-
-    it(
-      "should default invalid project trust settings to ask",
-      shouldDefaultInvalidProjectTrustSettingsTo,
+    settingsRead(
+      (manager) => manager.session.getDefaultProjectTrust(),
+      [
+        [
+          "should read default project trust from global settings only",
+          { global: { defaultProjectTrust: "always" }, project: { defaultProjectTrust: "never" } },
+          "always",
+        ],
+        [
+          "should default invalid project trust settings to ask",
+          { global: { defaultProjectTrust: "sometimes" } },
+          "ask",
+        ],
+      ],
     );
   });
 
@@ -252,9 +207,17 @@ describe("SettingsManager", () => {
   });
 
   describe("httpIdleTimeoutMs", () => {
-    it("should default to 5 minutes", shouldDefaultTo5Minutes);
-
-    it("should use merged global and project settings", shouldUseMergedGlobalAndProjectSettings);
+    settingsRead(
+      (manager) => manager.session.getHttpIdleTimeoutMs(),
+      [
+        ["should default to 5 minutes", {}, DEFAULT_HTTP_IDLE_TIMEOUT_MS],
+        [
+          "should use merged global and project settings",
+          { global: { httpIdleTimeoutMs: 300000 }, project: { httpIdleTimeoutMs: 0 } },
+          0,
+        ],
+      ],
+    );
 
     it("should reject invalid timeout values", shouldRejectInvalidTimeoutValues);
   });

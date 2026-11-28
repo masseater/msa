@@ -1,9 +1,11 @@
 import testing from "@msa/testing";
-import { Effect } from "effect";
+import { Array as Arr, Effect } from "effect";
+import { expect, it } from "vite-plus/test";
 
 import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import type settingsManagerSupportTypes from "./settings-manager-support.types.ts";
-const { joinPath, makeDirectory, makeTempDir, readJsonFile, removeDirs } = testing;
+const { joinPath, makeDirectory, makeTempDir, readJsonFile, removeDirs, writeJsonFile } = testing;
 
 const tempDirs: string[] = [];
 
@@ -31,11 +33,48 @@ const withSettings = <A, E>(
     });
   });
 
+const readingFrom =
+  (files: settingsManagerSupportTypes.SettingsFiles) =>
+  <A>(read: (manager: settingsManagerTypes.SettingsManager) => A): Effect.Effect<A> =>
+    withSettings(({ settingsPath, projectSettingsPath, openManager }) =>
+      Effect.gen(function* () {
+        if (files.global !== undefined) {
+          yield* writeJsonFile(settingsPath, files.global);
+        }
+        if (files.project !== undefined) {
+          yield* writeJsonFile(projectSettingsPath, files.project);
+        }
+        return read(yield* openManager());
+      }),
+    );
+
+type ReadRow<A> = readonly [
+  name: string,
+  files: settingsManagerSupportTypes.SettingsFiles,
+  expected: A,
+];
+
+const settingsRead = <A>(
+  read: (manager: settingsManagerTypes.SettingsManager) => A,
+  rows: readonly ReadRow<A>[],
+): void =>
+  Arr.forEach(rows, ([name, files, expected]) => {
+    it(name, () =>
+      testing.runTest(
+        Effect.map(readingFrom(files)(read), (found) => {
+          expect(found).toStrictEqual(expected);
+        }),
+      ),
+    );
+  });
+
 const readSettings = (file: string): Effect.Effect<any> => readJsonFile(file) as Effect.Effect<any>;
 
 const settingsManagerSupport = {
   readSettings,
+  readingFrom,
   removeSettingsDirs,
+  settingsRead,
   withSettings,
 };
 

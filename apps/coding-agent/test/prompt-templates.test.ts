@@ -1,9 +1,7 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, test } from "vite-plus/test";
 
-import promptTemplateArgs from "../src/core/prompt-template-args.ts";
 import promptTemplateArgsSupport from "./prompt-template-args-support.ts";
 
-const { substituteArgs } = promptTemplateArgs;
 const { substitutes } = promptTemplateArgsSupport;
 
 const shouldReplaceArgumentsWithAllArgsJoined = substitutes([
@@ -14,10 +12,10 @@ const shouldReplaceArgumentsWithAllArgsJoined = substitutes([
 
 const shouldReplaceWithAllArgsJoined = substitutes(["Test: $@", ["a", "b", "c"], "Test: a b c"]);
 
-const shouldReplaceAndArgumentsIdentically = () => {
-  const args = ["foo", "bar", "baz"];
-  expect(substituteArgs("Test: $@", args)).toBe(substituteArgs("Test: $ARGUMENTS", args));
-};
+const shouldReplaceAndArgumentsIdentically = substitutes(
+  ["Test: $@", ["foo", "bar", "baz"], "Test: foo bar baz"],
+  ["Test: $ARGUMENTS", ["foo", "bar", "baz"], "Test: foo bar baz"],
+);
 
 const shouldNotRecursivelySubstitutePatternsInArgument = substitutes(
   ["$ARGUMENTS", ["$1", "$ARGUMENTS"], "$1 $ARGUMENTS"],
@@ -127,19 +125,18 @@ const shouldHandleCaseVariationsCaseSensitive = substitutes([
   "$arguments $Arguments a b",
 ]);
 
-const shouldHandleBothSyntaxesInSameCommand = () => {
-  const args = ["x", "y", "z"];
-  const result1 = substituteArgs("$@ and $ARGUMENTS", args);
-  const result2 = substituteArgs("$ARGUMENTS and $@", args);
-  expect(result1).toBe(result2);
-  expect(result1).toBe("x y z and x y z");
-};
+const shouldHandleBothSyntaxesInSameCommand = substitutes(
+  ["$@ and $ARGUMENTS", ["x", "y", "z"], "x y z and x y z"],
+  ["$ARGUMENTS and $@", ["x", "y", "z"], "x y z and x y z"],
+);
 
-const shouldHandleVeryLongArgumentLists = () => {
-  const args = Array.from({ length: 100 }, (_, i) => `arg${i}`);
-  const result = substituteArgs("$ARGUMENTS", args);
-  expect(result).toBe(args.join(" "));
-};
+const LONG_ARGUMENTS = Array.from({ length: 100 }, (_, i) => `arg${i}`);
+
+const shouldHandleVeryLongArgumentLists = substitutes([
+  "$ARGUMENTS",
+  LONG_ARGUMENTS,
+  LONG_ARGUMENTS.join(" "),
+]);
 
 const shouldHandleNumberedPlaceholdersWithSingleDigit = substitutes([
   "$1 $2 $3",
@@ -147,10 +144,11 @@ const shouldHandleNumberedPlaceholdersWithSingleDigit = substitutes([
   "a b c",
 ]);
 
-const shouldHandleNumberedPlaceholdersWithMultipleDigits = () => {
-  const args = Array.from({ length: 15 }, (_, i) => `val${i}`);
-  expect(substituteArgs("$10 $12 $15", args)).toBe("val9 val11 val14");
-};
+const shouldHandleNumberedPlaceholdersWithMultipleDigits = substitutes([
+  "$10 $12 $15",
+  Array.from({ length: 15 }, (_, i) => `val${i}`),
+  "val9 val11 val14",
+]);
 
 const shouldHandleEscapedDollarSignsLiteralBackslash = substitutes([
   "Price: \\$100",
