@@ -7,6 +7,7 @@ import eventBusModule from "../src/core/event-bus.ts";
 import type extensionsTypes from "../src/core/extensions/index.types.ts";
 import loader from "../src/core/extensions/loader.ts";
 import type resourceLoaderTypes from "../src/core/resource-loader.types.ts";
+import type SessionManager from "../src/core/session-manager.ts";
 import type utilitiesTypes from "./utilities.types.ts";
 
 const { createExtensionRuntime, loadExtensionFromFactory } = loader;
@@ -39,6 +40,22 @@ function assistantMsg(text: string) {
     },
   };
 }
+
+type EntryIds<N extends number, Ids extends string[] = []> = Ids["length"] extends N
+  ? Ids
+  : EntryIds<N, [...Ids, string]>;
+
+const appendConversation = <const N extends number>(
+  session: SessionManager,
+  count: N,
+  first = 1,
+): EntryIds<N> =>
+  Array.from({ length: count }, (_unused, offset) => {
+    const number = first + offset;
+    return session.appendMessage(
+      number % 2 === 1 ? userMsg(String(number)) : assistantMsg(String(number)),
+    );
+  }) as EntryIds<N>;
 
 const usageOf = (input: number, cost = 0): compatTypes.Usage => ({
   cacheRead: 0,
@@ -136,6 +153,7 @@ function createTestResourceLoader(
 }
 
 const utilities = {
+  appendConversation,
   assistantMsg,
   createTestExtensionsResult,
   createTestResourceLoader,

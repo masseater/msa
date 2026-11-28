@@ -2,7 +2,7 @@ import { expect } from "vite-plus/test";
 
 import SessionManager from "../../src/core/session-manager.ts";
 import utilities from "../utilities.ts";
-const { assistantMsg, userMsg } = utilities;
+const { appendConversation, assistantMsg, userMsg } = utilities;
 
 const appendmessageCreatesEntryWithCorrectParentid = () => {
   const session = SessionManager.inMemory();
@@ -27,8 +27,7 @@ const appendmessageCreatesEntryWithCorrectParentid = () => {
 const appendcompactionIntegratesIntoTree = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
+  const [id1, id2] = appendConversation(session, 2);
   const usage = {
     cacheRead: 30,
     cacheWrite: 40,
@@ -79,8 +78,7 @@ const returnsSingleEntryPath = () => {
 const returnsFullPathFromRootTo = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
+  const [id1, id2] = appendConversation(session, 2);
   const id3 = session.appendThinkingLevelChange("high");
   const id4 = session.appendMessage(userMsg("3"));
 
@@ -91,10 +89,7 @@ const returnsFullPathFromRootTo = () => {
 const returnsPathFromSpecifiedEntryTo = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
-  session.appendMessage(userMsg("3"));
-  session.appendMessage(assistantMsg("4"));
+  const [id1, id2] = appendConversation(session, 4);
 
   const path = session.getBranch(id2);
   expect(path).toHaveLength(2);
@@ -103,9 +98,7 @@ const returnsPathFromSpecifiedEntryTo = () => {
 const returnsSingleRootForLinearSession = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
-  const id3 = session.appendMessage(userMsg("3"));
+  const [id1, id2, id3] = appendConversation(session, 3);
 
   const tree = session.getTree();
   expect(tree).toHaveLength(1);
@@ -122,9 +115,7 @@ const returnsSingleRootForLinearSession = () => {
 const returnsTreeWithBranchesAfterBranch = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
-  const id3 = session.appendMessage(userMsg("3"));
+  const [id1, id2, id3] = appendConversation(session, 3);
 
   session.branch(id2);
   const id4 = session.appendMessage(userMsg("4-branch"));

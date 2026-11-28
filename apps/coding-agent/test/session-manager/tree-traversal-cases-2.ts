@@ -6,19 +6,15 @@ import SessionManager from "../../src/core/session-manager.ts";
 import utilities from "../utilities.ts";
 const { makeDirectory, makeTempDir, pathExists, removePath, runTest } = testing;
 
-const { assistantMsg, readSessionFileRoles, userMsg } = utilities;
+const { appendConversation, assistantMsg, readSessionFileRoles, userMsg } = utilities;
 
 const handlesDeepBranching = () => {
   const session = SessionManager.inMemory();
 
-  session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
-  const id3 = session.appendMessage(userMsg("3"));
-  session.appendMessage(assistantMsg("4"));
+  const [, id2, id3] = appendConversation(session, 4);
 
   session.branch(id2);
-  const id5 = session.appendMessage(userMsg("5"));
-  session.appendMessage(assistantMsg("6"));
+  const [id5] = appendConversation(session, 2, 5);
 
   session.branch(id5);
   session.appendMessage(userMsg("7"));
@@ -38,9 +34,7 @@ const handlesDeepBranching = () => {
 const movesLeafPointerToSpecifiedEntry = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  session.appendMessage(assistantMsg("2"));
-  const id3 = session.appendMessage(userMsg("3"));
+  const [id1, , id3] = appendConversation(session, 3);
 
   expect(session.getLeafId()).toBe(id3);
 
@@ -50,8 +44,7 @@ const movesLeafPointerToSpecifiedEntry = () => {
 const newAppendsBecomeChildrenOfBranch = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  session.appendMessage(assistantMsg("2"));
+  const [id1] = appendConversation(session, 2);
 
   session.branch(id1);
   const id3 = session.appendMessage(userMsg("branched"));
@@ -63,9 +56,7 @@ const newAppendsBecomeChildrenOfBranch = () => {
 const insertsBranchSummaryWithTheSource = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  session.appendMessage(assistantMsg("2"));
-  const id3 = session.appendMessage(userMsg("3"));
+  const [id1, , id3] = appendConversation(session, 3);
 
   const usage = {
     cacheRead: 30,
@@ -106,8 +97,7 @@ const throwsForNonExistentEntry = () => {
 const returnsCurrentLeafEntry = () => {
   const session = SessionManager.inMemory();
 
-  session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
+  const [, id2] = appendConversation(session, 2);
 
   const leaf = session.getLeafEntry();
   expect(leaf).toBeDefined();
@@ -158,10 +148,7 @@ const throwsForNonExistentEntry2 = () => {
 const createsNewSessionWithPathTo = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
-  const id3 = session.appendMessage(userMsg("3"));
-  session.appendMessage(assistantMsg("4"));
+  const [id1, id2, id3] = appendConversation(session, 4);
 
   session.branch(id3);
   session.appendMessage(userMsg("5"));
@@ -177,9 +164,7 @@ const createsNewSessionWithPathTo = () => {
 const extractsCorrectPathFromBranchedTree = () => {
   const session = SessionManager.inMemory();
 
-  const id1 = session.appendMessage(userMsg("1"));
-  const id2 = session.appendMessage(assistantMsg("2"));
-  session.appendMessage(userMsg("3"));
+  const [id1, id2] = appendConversation(session, 3);
 
   session.branch(id2);
   const id4 = session.appendMessage(userMsg("4"));
