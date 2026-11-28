@@ -7,7 +7,7 @@ import editDiff from "../src/core/tools/edit-diff.ts";
 import src from "../src/index.ts";
 import tools2Support from "./tools-2-support.ts";
 
-const { getTextOutput } = tools2Support;
+const { expectEditRejected, getTextOutput } = tools2Support;
 
 const { createEditTool } = src;
 const { createBashTool, createLocalBashOperations } = bash;
@@ -43,24 +43,15 @@ afterEach(() => {
 
 const shouldNotPartiallyApplyEditsWhenOne = () =>
   runTest(
-    Effect.gen(function* () {
-      const testFile = joinPath(testDir, "edit-no-partial.txt");
-      const originalContent = "alpha\nbeta\ngamma\n";
-      yield* writeTextFile(testFile, originalContent);
-
-      yield* awaited(
-        expect(
-          editTool.execute("test-call-13", {
-            edits: [
-              { newText: "ALPHA\n", oldText: "alpha\n" },
-              { newText: "MISSING\n", oldText: "missing\n" },
-            ],
-            path: testFile,
-          }),
-        ).rejects.toThrow(/Could not find/u),
-      );
-
-      expect(yield* readTextFile(testFile)).toBe(originalContent);
+    expectEditRejected(editTool, {
+      callId: "test-call-13",
+      content: "alpha\nbeta\ngamma\n",
+      edits: [
+        { newText: "ALPHA\n", oldText: "alpha\n" },
+        { newText: "MISSING\n", oldText: "missing\n" },
+      ],
+      path: joinPath(testDir, "edit-no-partial.txt"),
+      pattern: /Could not find/u,
     }),
   );
 

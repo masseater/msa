@@ -8,7 +8,7 @@ import tools2Support from "./tools-2-support.ts";
 
 const { createEditTool } = src;
 
-const { getTextOutput } = tools2Support;
+const { expectEditRejected, getTextOutput } = tools2Support;
 
 const { awaited, joinPath, makeTempDir, readTextFile, removePath, runTest, writeTextFile } =
   testing;
@@ -59,19 +59,12 @@ const shouldReplaceTextInFile = () =>
 
 const shouldFailIfTextNotFound = () =>
   runTest(
-    Effect.gen(function* () {
-      const testFile = joinPath(testDir, "edit-test.txt");
-      const originalContent = "Hello, world!";
-      yield* writeTextFile(testFile, originalContent);
-
-      yield* awaited(
-        expect(
-          editTool.execute("test-call-6", {
-            edits: [{ newText: "testing", oldText: "nonexistent" }],
-            path: testFile,
-          }),
-        ).rejects.toThrow(/Could not find the exact text/u),
-      );
+    expectEditRejected(editTool, {
+      callId: "test-call-6",
+      content: "Hello, world!",
+      edits: [{ newText: "testing", oldText: "nonexistent" }],
+      path: joinPath(testDir, "edit-test.txt"),
+      pattern: /Could not find the exact text/u,
     }),
   );
 
