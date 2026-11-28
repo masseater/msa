@@ -13,17 +13,10 @@ const { readEnv } = platform;
 
 const { fakeTreg } = webToolsSupport;
 
-const {
-  abortController,
-  awaited,
-  changeMode,
-  joinPath,
-  makeTempDir,
-  removePath,
-  runTest,
-  writeTextFile,
-} = testing;
+const { abortController, awaited, changeMode, joinPath, runTest, trackedTempDirs, writeTextFile } =
+  testing;
 
+const { cleanUp, make: tempDirOf } = trackedTempDirs();
 let bin3: string;
 
 const script = Effect.fn("script")(function* (name: string, body: string) {
@@ -119,7 +112,7 @@ const reportsWhetherTregIsSignedInAnd = () =>
 const beforeEachHook2 = () =>
   runTest(
     Effect.gen(function* () {
-      bin3 = yield* makeTempDir("msa-treg-login-");
+      bin3 = yield* tempDirOf("msa-treg-login-");
     }),
   );
 
@@ -127,7 +120,7 @@ const afterEachHook = () =>
   runTest(
     Effect.gen(function* () {
       vi.unstubAllEnvs();
-      yield* removePath(bin3);
+      yield* cleanUp;
     }),
   );
 

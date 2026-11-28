@@ -1,5 +1,3 @@
-import { tmpdir } from "node:os";
-
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -13,25 +11,10 @@ import SessionManager from "../src/core/session-manager.ts";
 const { getMissingSessionCwdIssue } = sessionCwdModule;
 const { createAgentSessionRuntime } = agentSessionRuntimeSupport;
 
-const {
-  awaited,
-  currentDate,
-  currentTimeMillis,
-  joinPath,
-  makeDirectory,
-  randomSuffixSync,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
+const { awaited, currentDate, joinPath, runTest, trackedTempDirs, toJsonText, writeTextFile } =
+  testing;
 
-const createTempDir = (name: string): Effect.Effect<string> =>
-  Effect.gen(function* () {
-    const dir = joinPath(tmpdir(), `${name}-${currentTimeMillis()}-${randomSuffixSync()}`);
-    yield* makeDirectory(dir);
-    return dir;
-  });
+const { cleanUp, make: createTempDir } = trackedTempDirs();
 
 const writeSessionFile = (path: string, cwd: string): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -45,16 +28,13 @@ const writeSessionFile = (path: string, cwd: string): Effect.Effect<void> =>
     yield* writeTextFile(path, `${text}\n`);
   });
 
-const cleanupPaths: string[] = [];
-
 const detectsMissingSessionCwdFromPersistedSessions = () =>
   runTest(
     Effect.gen(function* () {
-      const fallbackCwd = yield* createTempDir("msa-session-cwd-fallback");
+      const fallbackCwd = yield* createTempDir("msa-session-cwd-fallback-");
       const missingCwd = joinPath(fallbackCwd, "does-not-exist");
-      const sessionDir = yield* createTempDir("msa-session-cwd-session-dir");
+      const sessionDir = yield* createTempDir("msa-session-cwd-session-dir-");
       const sessionFile = joinPath(sessionDir, "session.jsonl");
-      cleanupPaths.push(fallbackCwd, sessionDir);
       yield* writeSessionFile(sessionFile, missingCwd);
 
       const sessionManager = yield* Effect.promise(() => SessionManager.open(sessionFile));
@@ -72,11 +52,10 @@ const detectsMissingSessionCwdFromPersistedSessions = () =>
 const supportsOverridingTheEffectiveCwdWhenOpening = () =>
   runTest(
     Effect.gen(function* () {
-      const fallbackCwd = yield* createTempDir("msa-session-cwd-override");
+      const fallbackCwd = yield* createTempDir("msa-session-cwd-override-");
       const missingCwd = joinPath(fallbackCwd, "does-not-exist");
-      const sessionDir = yield* createTempDir("msa-session-cwd-override-session-dir");
+      const sessionDir = yield* createTempDir("msa-session-cwd-override-session-dir-");
       const sessionFile = joinPath(sessionDir, "session.jsonl");
-      cleanupPaths.push(fallbackCwd, sessionDir);
       yield* writeSessionFile(sessionFile, missingCwd);
 
       const sessionManager = yield* Effect.promise(() =>
@@ -94,11 +73,10 @@ const throwsAControlledErrorBeforeRuntimeCreation = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const fallbackCwd = yield* createTempDir("msa-session-cwd-runtime");
+      const fallbackCwd = yield* createTempDir("msa-session-cwd-runtime-");
       const missingCwd = joinPath(fallbackCwd, "does-not-exist");
-      const sessionDir = yield* createTempDir("msa-session-cwd-runtime-session-dir");
+      const sessionDir = yield* createTempDir("msa-session-cwd-runtime-session-dir-");
       const sessionFile = joinPath(sessionDir, "session.jsonl");
-      cleanupPaths.push(fallbackCwd, sessionDir);
       yield* writeSessionFile(sessionFile, missingCwd);
 
       const sessionManager = yield* Effect.promise(() => SessionManager.open(sessionFile));
@@ -124,17 +102,8 @@ const throwsAControlledErrorBeforeRuntimeCreation = () =>
     }),
   );
 
-const afterEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      for (const path of cleanupPaths.splice(0)) {
-        yield* removePath(path);
-      }
-    }),
-  );
-
 describe("session cwd handling", () => {
-  afterEach(afterEachHook);
+  afterEach(() => runTest(cleanUp));
 
   it(
     "detects missing session cwd from persisted sessions",

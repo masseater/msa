@@ -87,8 +87,7 @@ interface WatcherHandle {
   listenerCount(event: string): number;
 }
 
-const { awaited, joinPath, makeTempDir, pollUntil, removeDirIfSet, runTest, writeTextFile } =
-  testing;
+const { awaited, joinPath, pollUntil, runTest, trackedTempDirs, writeTextFile } = testing;
 
 function emitReftableChange(provider: footerDataProviderTypes.FooterDataProvider): void {
   const { reftableWatcher } = provider.gitWatch as unknown as {
@@ -102,6 +101,7 @@ const waitFor = (condition: Effect.Effect<boolean>) => pollUntil(condition, 1000
 
 let originalCwd: string;
 
+const { cleanUp, make: tempDirOf } = trackedTempDirs();
 let tempDir2: string;
 
 const doesNotNotifyListenersWhenReftableUpdates = () =>
@@ -210,7 +210,7 @@ const beforeEachHook2 = () =>
   runTest(
     Effect.gen(function* () {
       originalCwd = process.cwd();
-      tempDir2 = yield* makeTempDir("footer-data-provider-");
+      tempDir2 = yield* tempDirOf("footer-data-provider-");
       gitState.branch = "main";
       watchMode.onlyEmitted = false;
       childProcessMocks.spawnSync.mockClear();
@@ -222,7 +222,7 @@ const afterEachHook2 = () =>
   runTest(
     Effect.gen(function* () {
       process.chdir(originalCwd);
-      yield* removeDirIfSet(tempDir2);
+      yield* cleanUp;
     }),
   );
 

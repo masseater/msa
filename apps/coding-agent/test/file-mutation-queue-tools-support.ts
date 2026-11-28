@@ -2,8 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach } from "vite-plus/test";
 
-const { awaited, gate, makeTempDir, pathExists, readBytesFile, removeDirs, runTest, sleep } =
-  testing;
+const { awaited, gate, pathExists, readBytesFile, runTest, sleep, trackedTempDirs } = testing;
 
 const delay = (ms: number): Promise<void> => runTest(sleep(ms));
 
@@ -26,16 +25,9 @@ const resolvesWithin = (promise: Promise<unknown>, ms: number): Promise<boolean>
   runTest(awaited(Promise.race([promise.then(() => true), delay(ms).then(() => false)])));
 
 const useTempDirs = (): (() => Promise<string>) => {
-  const tempDirs: string[] = [];
-  afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
-  return () =>
-    runTest(
-      Effect.gen(function* () {
-        const dir = yield* makeTempDir("msa-file-mutation-queue-");
-        tempDirs.push(dir);
-        return yield* awaited(dir);
-      }),
-    );
+  const { cleanUp, make } = trackedTempDirs();
+  afterEach(() => runTest(cleanUp));
+  return () => runTest(make("msa-file-mutation-queue-"));
 };
 
 const fileMutationQueueToolsSupport = {

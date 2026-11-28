@@ -15,17 +15,17 @@ const { createAgentSession } = codingAgent;
 const { DefaultResourceLoader, SessionManager, SettingsManager } = codingAgent;
 const { createAssistantMessageEventStream, normalizeContext } = ai;
 
-const { awaited, currentTimeMillis, joinPath, makeDirectory, makeTempDir, removePath, runTest } =
-  testing;
+const { awaited, currentTimeMillis, joinPath, makeDirectory, runTest, trackedTempDirs } = testing;
 
 const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
+const { cleanUp, make: tempDirOf } = trackedTempDirs();
 const dirs = { agentDir: "", cwd: "", tempDir: "" };
 
 const prepareDirs = () =>
   runTest(
     Effect.gen(function* () {
-      dirs.tempDir = yield* makeTempDir("msa-sdk-stream-options-");
+      dirs.tempDir = yield* tempDirOf("msa-sdk-stream-options-");
       dirs.cwd = joinPath(dirs.tempDir, "project");
       dirs.agentDir = joinPath(dirs.tempDir, "agent");
       yield* makeDirectory(dirs.cwd);
@@ -33,7 +33,7 @@ const prepareDirs = () =>
     }),
   );
 
-const cleanupDirs = () => runTest(dirs.tempDir === "" ? Effect.void : removePath(dirs.tempDir));
+const cleanupDirs = () => runTest(cleanUp);
 
 const createModel = (api: aiTypes.Api): aiTypes.Model<aiTypes.Api> => ({
   api,

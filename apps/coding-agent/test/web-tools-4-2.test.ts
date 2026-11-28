@@ -16,8 +16,9 @@ const { getModel } = compat;
 
 const { fakeTreg } = webToolsSupport;
 
-const { awaited, joinPath, makeDirectory, makeTempDir, pathExists, removePath, runTest } = testing;
+const { awaited, joinPath, makeDirectory, runTest, trackedTempDirs } = testing;
 
+const { cleanUp, make: tempDirOf } = trackedTempDirs();
 let tempDir: string;
 
 function createSession() {
@@ -96,7 +97,7 @@ const addsThemToARunningSessionOnce = () =>
 const beforeEachHook3 = () =>
   runTest(
     Effect.gen(function* () {
-      tempDir = yield* makeTempDir("msa-web-tools-");
+      tempDir = yield* tempDirOf("msa-web-tools-");
       yield* makeDirectory(joinPath(tempDir, "agent"));
       yield* makeDirectory(joinPath(tempDir, "bin"));
     }),
@@ -106,7 +107,7 @@ const afterEachHook2 = () =>
   runTest(
     Effect.gen(function* () {
       vi.unstubAllEnvs();
-      if (yield* pathExists(tempDir)) yield* removePath(tempDir);
+      yield* cleanUp;
     }),
   );
 
