@@ -5,7 +5,6 @@ import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test
 
 import bash from "../src/core/tools/bash.ts";
 import type bashTypes from "../src/core/tools/bash.types.ts";
-import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
@@ -16,7 +15,7 @@ const { initTheme } = themeModule;
 
 const { resetCapabilitiesCache } = tui;
 
-const { createFakeTui } = toolExecutionComponentSupport;
+const { createToolComponent, renderedText } = toolExecutionComponentSupport;
 
 const { awaited, runTest } = testing;
 
@@ -75,14 +74,11 @@ const bashRendererDoesNotDuplicateFinalFull = Effect.gen(function* () {
   const result = yield* awaited(
     tool.execute("tool-bash-1b", { command: "generate output" }, undefined, undefined, {} as never),
   );
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "bash",
     "tool-bash-1b",
     { command: "generate output" },
-    {},
     tool,
-    createFakeTui(),
-    process.cwd(),
   );
   component.setExpanded(true);
   component.updateResult({ ...result, isError: false }, false);
@@ -99,14 +95,11 @@ const bashRendererShowsAResultSRecorded = () => {
   const render = (live: boolean): string => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
-    const component = new ToolExecutionComponent(
+    const component = createToolComponent(
       "bash",
       "tool-bash-recorded",
       { command: "sleep 4" },
-      {},
       createBashToolDefinition(process.cwd(), { exposeSessionEnvironment: false }),
-      createFakeTui(),
-      process.cwd(),
     );
     if (live) {
       component.markExecutionStarted();
@@ -115,21 +108,18 @@ const bashRendererShowsAResultSRecorded = () => {
       vi.advanceTimersByTime(3_600_000);
     }
     component.updateResult({ content: [], durationMs: 4_200, isError: false }, false);
-    return stripAnsi(component.render(120).join("\n"));
+    return renderedText(component);
   };
   expect(render(true)).toContain("Took 4.2s");
   expect(render(false)).toContain("Took 4.2s");
 };
 
 const bashCollapsesToTheCommandSFirst = () => {
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "bash",
     "tool-bash-collapsed",
     { command: "echo start\necho middle\necho end" },
-    {},
     createBashToolDefinition(process.cwd(), { exposeSessionEnvironment: false }),
-    createFakeTui(),
-    process.cwd(),
   );
   component.updateResult(
     {
@@ -139,7 +129,7 @@ const bashCollapsesToTheCommandSFirst = () => {
     },
     false,
   );
-  const collapsed = stripAnsi(component.render(120).join("\n"))
+  const collapsed = renderedText(component)
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
@@ -149,7 +139,7 @@ const bashCollapsesToTheCommandSFirst = () => {
   ]);
 
   component.setExpanded(true);
-  const expanded = stripAnsi(component.render(120).join("\n"));
+  const expanded = renderedText(component);
   expect(expanded).toContain("echo middle");
   expect(expanded).toContain("middle\nend".split("\n")[0]);
   expect(expanded).not.toContain("to expand");
@@ -188,25 +178,22 @@ const DURATION_CASES = [
 const renderBashDuration = (ms: number) => {
   vi.useFakeTimers();
   vi.setSystemTime(0);
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "bash",
     "tool-bash-duration",
     { command: "long-running-command" },
-    {},
     createBashToolDefinition(process.cwd(), { exposeSessionEnvironment: false }),
-    createFakeTui(),
-    process.cwd(),
   );
   component.markExecutionStarted();
   component.updateResult({ content: [], isError: false }, true);
   vi.advanceTimersByTime(ms);
   component.invalidate();
-  const running = stripAnsi(component.render(120).join("\n"));
+  const running = renderedText(component);
   component.updateResult({ content: [], isError: false }, false);
-  const completed = stripAnsi(component.render(120).join("\n"));
+  const completed = renderedText(component);
   vi.advanceTimersByTime(1_000);
   component.invalidate();
-  expect(stripAnsi(component.render(120).join("\n"))).toBe(completed);
+  expect(renderedText(component)).toBe(completed);
   return { completed, running };
 };
 

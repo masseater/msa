@@ -5,17 +5,15 @@ import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test
 
 import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import read from "../src/core/tools/read.ts";
-import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
-import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
-const { stripAnsi } = ansi;
 const { createReadToolDefinition } = read;
 const { initTheme } = themeModule;
 
 const { Text, resetCapabilitiesCache, setCapabilities } = tui;
 
-const { TINY_JPEG, createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
+const { createBaseToolDefinition, createToolComponent, renderedText, TINY_JPEG } =
+  toolExecutionComponentSupport;
 
 const { awaited, runTest } = testing;
 
@@ -23,15 +21,7 @@ const convertsNonPngToolImagesOnceThe = () =>
   runTest(
     Effect.gen(function* () {
       setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
-      const component = new ToolExecutionComponent(
-        "tool",
-        "id",
-        {},
-        {},
-        undefined,
-        createFakeTui(),
-        process.cwd(),
-      );
+      const component = createToolComponent("tool", "id", {}, undefined);
       component.updateResult(
         {
           content: [{ data: "cGFydGlhbA==", mimeType: "image/jpeg", type: "image" as const }],
@@ -62,16 +52,8 @@ const stacksCustomCallAndResultRenderersLike = () => {
     renderResult: () => new Text("custom result", 0, 0),
   };
 
-  const component = new ToolExecutionComponent(
-    "custom_tool",
-    "tool-1",
-    {},
-    {},
-    toolDefinition,
-    createFakeTui(),
-    process.cwd(),
-  );
-  expect(stripAnsi(component.render(120).join("\n"))).toContain("custom call");
+  const component = createToolComponent("custom_tool", "tool-1", {}, toolDefinition);
+  expect(renderedText(component)).toContain("custom call");
 
   component.updateResult(
     {
@@ -82,7 +64,7 @@ const stacksCustomCallAndResultRenderersLike = () => {
     false,
   );
 
-  const rendered = stripAnsi(component.render(120).join("\n"));
+  const rendered = renderedText(component);
   expect(rendered).toContain("custom call");
   expect(rendered).toContain("custom result");
 };
@@ -95,14 +77,11 @@ const selfRenderedEmptyToolRowsTakeNo = () => {
     renderShell: "self",
   };
 
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "custom_tool",
     "tool-empty-self-render",
     {},
-    {},
     toolDefinition,
-    createFakeTui(),
-    process.cwd(),
   );
   expect(component.render(120)).toEqual([]);
 
@@ -119,49 +98,35 @@ const selfRenderedEmptyToolRowsTakeNo = () => {
 };
 
 const preservesLegacyFilePathRenderingCompatibilityFor = () => {
-  const component = new ToolExecutionComponent(
-    "read",
-    "tool-3",
-    { file_path: "README.md" },
-    {},
-    undefined,
-    createFakeTui(),
-    process.cwd(),
-  );
-  const rendered = stripAnsi(component.render(120).join("\n"));
+  const component = createToolComponent("read", "tool-3", { file_path: "README.md" }, undefined);
+  const rendered = renderedText(component);
   expect(rendered).toContain("read");
   expect(rendered).toContain("README.md");
 };
 
 const doesNotDuplicateBuiltInHeadersWhen = () => {
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "read",
     "tool-4",
     { path: "README.md" },
-    {},
     createReadToolDefinition(process.cwd()),
-    createFakeTui(),
-    process.cwd(),
   );
   component.updateResult(
     { content: [{ text: "hello", type: "text" as const }], details: undefined, isError: false },
     false,
   );
-  const rendered = stripAnsi(component.render(120).join("\n"));
+  const rendered = renderedText(component);
   expect(rendered.match(/\bread\b/gu)?.length ?? 0).toBe(1);
 };
 
 const rendersReadCallsWithNullOffsetAnd = () => {
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "read",
     "tool-read-null-range",
     { limit: null, offset: null, path: "src/example.ts" },
-    {},
     createReadToolDefinition(process.cwd()),
-    createFakeTui(),
-    process.cwd(),
   );
-  const rendered = stripAnsi(component.render(120).join("\n"));
+  const rendered = renderedText(component);
   expect(rendered).toContain("read src/example.ts");
   expect(rendered).not.toContain("src/example.ts:");
 };

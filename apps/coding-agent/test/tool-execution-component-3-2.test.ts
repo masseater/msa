@@ -4,7 +4,6 @@ import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test
 
 import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import read from "../src/core/tools/read.ts";
-import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
@@ -14,7 +13,8 @@ const { initTheme } = themeModule;
 
 const { Text, resetCapabilitiesCache } = tui;
 
-const { createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
+const { createBaseToolDefinition, createToolComponent, renderedText } =
+  toolExecutionComponentSupport;
 
 const sharesRendererStateAcrossCustomCallAnd = () => {
   type RenderState = { token?: string };
@@ -28,27 +28,19 @@ const sharesRendererStateAcrossCustomCallAnd = () => {
       new Text(`custom result ${context.state.token}`, 0, 0),
   };
 
-  const component = new ToolExecutionComponent(
-    "custom_tool",
-    "tool-5",
-    {},
-    {},
-    toolDefinition,
-    createFakeTui(),
-    process.cwd(),
-  );
+  const component = createToolComponent("custom_tool", "tool-5", {}, toolDefinition);
   component.updateResult(
     { content: [{ text: "done", type: "text" as const }], details: {}, isError: false },
     false,
   );
-  const rendered = stripAnsi(component.render(120).join("\n"));
+  const rendered = renderedText(component);
   expect(rendered).toContain("custom call shared-token");
   expect(rendered).toContain("custom result shared-token");
 };
 
 const showsArgumentsInTheFallbackCallHeader = () => {
   const longValue = "x".repeat(200);
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "custom_tool",
     "tool-args",
     Object.fromEntries([
@@ -56,10 +48,7 @@ const showsArgumentsInTheFallbackCallHeader = () => {
       ["long", longValue],
       ["text", "line one\nline two"],
     ]),
-    {},
     createBaseToolDefinition(),
-    createFakeTui(),
-    process.cwd(),
   );
 
   const collapsed = stripAnsi(component.render(300).join("\n"));
@@ -82,41 +71,30 @@ const collapsesFallbackResultsUntilExpanded = () => {
     ...createBaseToolDefinition(),
   };
 
-  const component = new ToolExecutionComponent(
-    "custom_tool",
-    "tool-6",
-    { foo: "bar" },
-    {},
-    toolDefinition,
-    createFakeTui(),
-    process.cwd(),
-  );
+  const component = createToolComponent("custom_tool", "tool-6", { foo: "bar" }, toolDefinition);
   const output = Array.from({ length: 15 }, (_, index) => `line-${index + 1}`).join("\n");
   component.updateResult(
     { content: [{ text: output, type: "text" as const }], details: {}, isError: false },
     false,
   );
 
-  const collapsed = stripAnsi(component.render(120).join("\n"));
+  const collapsed = renderedText(component);
   expect(collapsed).toContain("custom_tool");
   expect(collapsed).toMatch(/15 lines \(.* to expand\) {2}line-1\b/u);
   expect(collapsed).not.toContain("line-2");
 
   component.setExpanded(true);
-  const expanded = stripAnsi(component.render(120).join("\n"));
+  const expanded = renderedText(component);
   expect(expanded).toContain("line-15");
   expect(expanded).not.toContain("to expand");
 };
 
 const expandsACollapsedToolResultWhenClicked = () => {
-  const component = new ToolExecutionComponent(
+  const component = createToolComponent(
     "read",
     "tool-click-expand",
     { path: "notes.txt" },
-    {},
     createReadToolDefinition(process.cwd()),
-    createFakeTui(),
-    process.cwd(),
   );
   component.updateResult(
     {
