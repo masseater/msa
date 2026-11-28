@@ -23,7 +23,15 @@ beforeAll(prepareUi);
 
 afterEach(stopScreens);
 
-const opensThreadsFullWidthWithShiftRight = () =>
+const returnCases = [
+  {
+    keys: [ESC],
+    name: "opens /threads full width with shift+right and returns with escape",
+  },
+  { keys: [SHIFT_LEFT], name: "returns with shift+left" },
+];
+
+const opensThreadsAndReturns = ({ keys }: (typeof returnCases)[number]) =>
   inScreen((view) =>
     Effect.gen(function* () {
       yield* view.send(SHIFT_RIGHT);
@@ -31,16 +39,7 @@ const opensThreadsFullWidthWithShiftRight = () =>
       expect(view.divider()).toBe(-1);
       expect(view.lines().join("\n")).toContain("build the pane");
 
-      yield* view.send(ESC);
-      expect(view.ui.getFocusedComponent()).toBe(view.editor);
-      expect(view.divider()).toBe(69);
-    }),
-  );
-
-const returnsWithShiftLeft = () =>
-  inScreen((view) =>
-    Effect.gen(function* () {
-      yield* view.send(SHIFT_RIGHT, SHIFT_LEFT);
+      yield* view.send(...keys);
       expect(view.ui.getFocusedComponent()).toBe(view.editor);
       expect(view.divider()).toBe(69);
     }),
@@ -61,12 +60,7 @@ const keepsTheSelectionMadeInThreadsIn = () =>
   );
 
 describe("threads view from the pane", () => {
-  it(
-    "opens /threads full width with shift+right and returns with escape",
-    opensThreadsFullWidthWithShiftRight,
-  );
-
-  it("returns with shift+left", returnsWithShiftLeft);
+  it.each(returnCases)("$name", opensThreadsAndReturns);
 
   it("keeps the selection made in /threads in the pane", keepsTheSelectionMadeInThreadsIn);
 });
