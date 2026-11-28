@@ -1,26 +1,19 @@
 import { NodeServices } from "@effect/platform-node";
-import {
-  Clock,
-  Config,
-  DateTime,
-  Effect,
-  FileSystem,
-  Layer,
-  ManagedRuntime,
-  Path,
-  Schema,
-} from "effect";
+import { Clock, DateTime, Effect, FileSystem, Layer, ManagedRuntime, Path, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import httpServer from "../../libs/testing/src/http-server.ts";
+import globalToolsPathModule from "./global-tools-path.ts";
 import testProcess from "./test-process.ts";
 
+const { globalToolsPath } = globalToolsPathModule;
 const { captureProcess, processRunnerLayer } = testProcess;
 const { closeServers, encodeJson, listen } = httpServer;
 
 const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, processRunnerLayer));
 
 const MIN_AGE_MINUTES = 2880;
+const PNPM_REGISTRY = "https://registry.npmjs.org/";
 const MINUTE = 60_000;
 
 type Published = Readonly<
@@ -120,17 +113,17 @@ const runScript = (script: string, options: Fixture) =>
       workspaceYaml(options.excludes, "minAge" in options ? options.minAge : MIN_AGE_MINUTES),
     );
     yield* fs.writeFileString(path.join(dir, "pnpm-lock.yaml"), lockfileYaml(options.locked));
-    yield* fs.writeFileString(path.join(dir, ".npmrc"), `registry=${origin}/\n`);
+    yield* fs.writeFileString(
+      path.join(dir, ".npmrc"),
+      `registry=${origin}/\n@pnpm:registry=${PNPM_REGISTRY}\n`,
+    );
     const ghLog = path.join(bin, "gh.log");
     const openIssues = path.join(bin, "open-issues.json");
     yield* fs.writeFileString(ghLog, "");
     yield* fs.writeFileString(openIssues, yield* encodeJson(options.openIssues ?? []));
     yield* fs.writeFileString(path.join(bin, "gh"), GH_STUB);
     yield* fs.chmod(path.join(bin, "gh"), 0o755);
-    const inherited = (yield* Config.String("PATH").pipe(Config.withDefault("")))
-      .split(":")
-      .filter((entry) => !entry.includes("node_modules/.bin"))
-      .join(":");
+    const inherited = yield* globalToolsPath;
     const result = yield* captureProcess({
       args: [path.join(root, ".github/scripts", script)],
       command: "bash",
