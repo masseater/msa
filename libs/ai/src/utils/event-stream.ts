@@ -39,7 +39,7 @@ function createEventChannel<T, R>({
       if (complete) Queue.endUnsafe(queue);
     },
     result: () => {
-      finalResultPromise ??= Effect.runPromise(Deferred.await(finalResult));
+      finalResultPromise ??= finalResult.pipe(Deferred.await, Effect.runPromise);
       return finalResultPromise;
     },
     [Symbol.asyncIterator]: () => ({ next: () => takeNext(queue) }),

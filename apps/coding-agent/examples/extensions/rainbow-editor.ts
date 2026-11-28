@@ -45,14 +45,10 @@ class RainbowEditor extends codingAgent.CustomEditor {
 
   private startAnimation(): void {
     if (this.animationFiber !== undefined) return;
-    this.animationFiber = Effect.runFork(
-      Effect.forever(
-        Effect.sync(() => {
-          this.frame++;
-          this.tui.requestRender();
-        }).pipe(Effect.andThen(Effect.sleep(60))),
-      ),
-    );
+    this.animationFiber = Effect.sync(() => {
+      this.frame++;
+      this.tui.requestRender();
+    }).pipe(Effect.andThen(Effect.sleep(60)), Effect.forever, Effect.runFork);
   }
 
   private stopAnimation(): void {

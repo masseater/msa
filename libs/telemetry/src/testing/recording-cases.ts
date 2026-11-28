@@ -100,7 +100,7 @@ const runNestedSpans = (
         runPromise(
           Effect.gen(function* () {
             const first = parent.startSpan({ name: "first-child" }, () =>
-              runPromise(Deferred.await(firstGate)),
+              firstGate.pipe(Deferred.await, runPromise),
             );
             const second = parent.startSpan({ name: "second-child" }, () => "done");
             strictEqual(yield* Effect.promise(() => second), "done");

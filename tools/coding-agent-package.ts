@@ -14,7 +14,7 @@ class Workspace extends Context.Service<
   }
 >()("msa-monorepo/tools/coding-agent-package/Workspace") {}
 
-const workspaceLayer: Layer.Layer<Workspace> = Layer.effect(
+const workspaceLayer = Layer.effect(
   Workspace,
   Effect.gen(function* () {
     const { files: fs, path } = yield* scriptOutput.ScriptOutput;

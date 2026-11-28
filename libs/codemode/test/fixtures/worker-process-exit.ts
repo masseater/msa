@@ -51,7 +51,7 @@ const encodeLine = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const closeSandbox = Effect.promise(() => sandbox.close());
 
 const stopTimer = Effect.suspend(() =>
-  timer === undefined ? Effect.void : Effect.asVoid(Fiber.interrupt(timer)),
+  timer === undefined ? Effect.void : timer.pipe(Fiber.interrupt, Effect.asVoid),
 );
 
 const program = Effect.gen(function* () {

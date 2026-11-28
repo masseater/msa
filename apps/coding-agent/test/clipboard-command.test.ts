@@ -54,16 +54,14 @@ const timesOutWithoutBlockingTheEventLoop = () =>
   runTest(
     Effect.gen(function* () {
       let ticks = 0;
-      const timer = yield* Effect.forkChild(
-        Effect.forever(
-          Effect.sleep(10).pipe(
-            Effect.andThen(
-              Effect.sync(() => {
-                ticks++;
-              }),
-            ),
-          ),
+      const timer = yield* Effect.sleep(10).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            ticks++;
+          }),
         ),
+        Effect.forever,
+        Effect.forkChild,
       );
       try {
         expect(

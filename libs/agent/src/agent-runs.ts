@@ -29,7 +29,7 @@ export default class AgentRuns {
 
   waitForIdle(): Promise<void> {
     const run = this.#active;
-    return run === undefined ? Promise.resolve() : Effect.runPromise(Deferred.await(run.done));
+    return run === undefined ? Promise.resolve() : run.done.pipe(Deferred.await, Effect.runPromise);
   }
 
   run(executor: (signal: AbortSignal) => Effect.Effect<unknown>): Effect.Effect<void> {

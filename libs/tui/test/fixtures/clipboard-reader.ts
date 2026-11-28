@@ -57,7 +57,9 @@ const program = Effect.gen(function* () {
   );
 }).pipe(
   Effect.catchCause((cause) =>
-    Console.error(Cause.squash(cause)).pipe(
+    cause.pipe(
+      Cause.squash,
+      Console.error,
       Effect.andThen(
         Effect.sync(() => {
           process.exitCode = 1;

@@ -124,14 +124,10 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
   ): Promise<resultTypes.Result<typesModule.LineScan, nodeBinaryReaderTypes.FileError>> {
     const unavailable = this.#unavailable<typesModule.LineScan>(context);
     if (unavailable !== undefined) return Promise.resolve(unavailable);
-    const scanner = Effect.runSync(
-      Effect.result(
-        Effect.try({
-          catch: () => FileError.create("invalid", "Invalid line range", this.#path),
-          try: () => new LineScanner(options.startLine, options.endLine),
-        }),
-      ),
-    );
+    const scanner = Effect.try({
+      catch: () => FileError.create("invalid", "Invalid line range", this.#path),
+      try: () => new LineScanner(options.startLine, options.endLine),
+    }).pipe(Effect.result, Effect.runSync);
     if (Result.isFailure(scanner)) return Promise.resolve(err(scanner.failure));
     return this.#run(this.#scan(scanner.success, context));
   }

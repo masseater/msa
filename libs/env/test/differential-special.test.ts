@@ -20,8 +20,9 @@ interface Rooted {
 }
 
 const writeFifo = (fifo: string, text: string): Effect.Effect<void> =>
-  Effect.asVoid(
-    Effect.forkDetach(runStatus(["sh", "-c", `printf '%s' "$1" > "$2"`, "sh", text, fifo])),
+  runStatus(["sh", "-c", `printf '%s' "$1" > "$2"`, "sh", text, fifo]).pipe(
+    Effect.forkDetach,
+    Effect.asVoid,
   );
 
 const readFifo = ({ env, root }: Rooted): Effect.Effect<Record<string, unknown>> =>

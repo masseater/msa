@@ -9,7 +9,7 @@
     "check": "echo 'nothing to check'"
   },
   "dependencies": {
-    "@earendil-works/gondolin": "0.14.0"
+    "@earendil-works/gondolin": "catalog:"
   },
   "msa": {
     "extensions": [

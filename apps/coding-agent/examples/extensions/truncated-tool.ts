@@ -55,7 +55,7 @@ const runRipgrep = (cwd: string, args: string[]) =>
       Effect.gen(function* () {
         const handle = yield* spawner.spawn(ChildProcess.make("rg", args, { cwd }));
         const [stdout, exitCode] = yield* Effect.all(
-          [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
+          [handle.stdout.pipe(Stream.decodeText, Stream.mkString), handle.exitCode],
           { concurrency: 2 },
         );
         return { exitCode, stdout };

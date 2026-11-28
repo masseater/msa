@@ -92,9 +92,6 @@
     "shx": "catalog:",
     "vitest": "catalog:"
   },
-  "overrides": {
-    "protobufjs": "7.6.6"
-  },
   "engines": {
     "node": ">=26"
   },

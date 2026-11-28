@@ -14,7 +14,7 @@ const { awaited } = effectSupport;
 const { bmp, encode, setUpImages } = toolsImagesFixturesSupport;
 const { prepareImageDirectory, removeImageDirectory } = toolsImagesSupport;
 
-beforeAll(() => Effect.runPromise(Effect.asVoid(Effect.suspend(() => setUpImages()))));
+beforeAll(() => Effect.suspend(() => setUpImages()).pipe(Effect.asVoid, Effect.runPromise));
 
 beforeAll(prepareImageDirectory);
 afterAll(removeImageDirectory);

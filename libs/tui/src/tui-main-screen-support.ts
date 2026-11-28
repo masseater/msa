@@ -48,7 +48,7 @@ function extractKittyImageRows(line: string): number {
 }
 
 function nowIso(): string {
-  return DateTime.formatIso(Effect.runSync(DateTime.now));
+  return DateTime.now.pipe(Effect.runSync, DateTime.formatIso);
 }
 
 const appendRedrawLog: {

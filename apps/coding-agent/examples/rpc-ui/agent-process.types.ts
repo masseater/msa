@@ -6,6 +6,11 @@ declare namespace agentProcessTypes {
     readonly onExit: (code: number) => void;
   }
 
+  interface AgentState {
+    running: boolean;
+    stderrText: string;
+  }
+
   interface AgentHandle {
     readonly send: (message: Record<string, unknown>) => void;
     readonly isRunning: () => boolean;

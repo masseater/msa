@@ -53,11 +53,15 @@ function runSquashMessage(args: readonly string[]): Promise<void> {
     fail(`Usage: ${USAGE}`);
     return Promise.resolve();
   }
-  return Effect.runPromise(
-    Effect.map(Effect.result(messageOf(Number(numberArg), head, process.cwd())), (result) => {
-      if (Result.isFailure(result)) fail(result.failure);
-      else process.stdout.write(result.success);
-    }),
+  return messageOf(Number(numberArg), head, process.cwd()).pipe(
+    Effect.result,
+    Effect.andThen((result) =>
+      Effect.sync(() => {
+        if (Result.isFailure(result)) fail(result.failure);
+        else process.stdout.write(result.success);
+      }),
+    ),
+    Effect.runPromise,
   );
 }
 

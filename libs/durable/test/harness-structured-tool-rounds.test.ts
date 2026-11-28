@@ -179,18 +179,14 @@ const endsTurnGenerationStep1 = Effect.gen(function* () {
   let opened: durableTypes.Harness | undefined;
   addHooks(setup.registry, GenerationTask, {
     afterTools: (_assistant, _results, api, callContext) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              opened!.commit(
-                (tx) => tx.createTask(Node, { name: "hooked" }, owned(api.taskId)),
-                callContext,
-              ),
-            ),
+      Effect.suspend(() =>
+        awaited(
+          opened!.commit(
+            (tx) => tx.createTask(Node, { name: "hooked" }, owned(api.taskId)),
+            callContext,
           ),
         ),
-      ),
+      ).pipe(Effect.asVoid, runPromise),
   });
   setup.faux.setResponses([toolCalls(["noop", "c1"]), fauxAssistantMessage([fauxText("done")])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);

@@ -52,7 +52,7 @@ function* runTrash(trashArgs: string[]) {
         stdout: "ignore",
       });
       const [stderr, status] = yield* Effect.all(
-        [Stream.mkString(Stream.decodeText(handle.stderr)), handle.exitCode],
+        [handle.stderr.pipe(Stream.decodeText, Stream.mkString), handle.exitCode],
         { concurrency: 2 },
       );
       return { spawnError: undefined as string | undefined, status, stderr };

@@ -2,15 +2,10 @@ import type { Context, ESTree, Variable } from "vite-plus/lint/plugins";
 import { defineRule } from "vite-plus/lint/plugins";
 
 import type flowTypes from "./flow.types.ts";
+import type restrictedMemberTypes from "./restricted-member.types.ts";
 import scopeLookup from "./scope-lookup.ts";
 
 type Node = flowTypes.Node;
-
-type RestrictedMember = {
-  readonly message: string;
-  readonly module: string;
-  readonly path: readonly string[];
-};
 
 type Walk = {
   readonly context: Context;
@@ -96,7 +91,11 @@ const pathAfterImport = (
   return undefined;
 };
 
-const checkSpecifier = (walk: Walk, specifier: ImportSpecifier, member: RestrictedMember) => {
+const checkSpecifier = (
+  walk: Walk,
+  specifier: ImportSpecifier,
+  member: restrictedMemberTypes.RestrictedMember,
+) => {
   const path = pathAfterImport(specifier, member.path);
   if (path === undefined) return;
   if (path.length === 0) {
@@ -110,7 +109,7 @@ const checkSpecifier = (walk: Walk, specifier: ImportSpecifier, member: Restrict
 const checkImport = (
   context: Context,
   node: ESTree.ImportDeclaration,
-  member: RestrictedMember,
+  member: restrictedMemberTypes.RestrictedMember,
 ): void => {
   if (node.source.value !== member.module) return;
   const walk: Walk = {
@@ -121,8 +120,13 @@ const checkImport = (
   for (const specifier of node.specifiers) checkSpecifier(walk, specifier, member);
 };
 
-const restrictedMembersOf = (context: Context): readonly RestrictedMember[] => {
-  const [options] = context.options as readonly ({ members?: RestrictedMember[] } | undefined)[];
+const restrictedMembersOf = (
+  context: Context,
+): readonly restrictedMemberTypes.RestrictedMember[] => {
+  const [options] = context.options as readonly (
+    | { members?: restrictedMemberTypes.RestrictedMember[] }
+    | undefined
+  )[];
   return options?.members ?? [];
 };
 

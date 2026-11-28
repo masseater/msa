@@ -110,18 +110,14 @@ const orphansAbandonedTaskStep1 = Effect.gen(function* () {
   const started = deferred();
   const Worker = defineTask<null, { phase: "work" }, null>({
     abort: (_task, runtime, abortContext) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ outcome: { status: "aborted" }, status: "terminal" }),
-                abortContext,
-              ),
-            ),
+      Effect.suspend(() =>
+        awaited(
+          runtime.commit(
+            () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+            abortContext,
           ),
         ),
-      ),
+      ).pipe(Effect.asVoid, runPromise),
     initial: () => ({ phase: "work" }),
     name: "test.gone",
     phases: {

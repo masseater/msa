@@ -93,26 +93,22 @@ const occupyCallbackPort = Effect.acquireRelease(
 ).pipe(Effect.exit);
 
 const fallsBackToPastedRedirect = () =>
-  Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        yield* occupyCallbackPort;
-        const auth = stubOpenAIAuth({
-          accessToken: createAccessToken("acct"),
-          interval: "5",
-          poll: () => undefined,
-        });
-        const credential = yield* Effect.promise(() => loginByPastingRedirect().credential);
+  Effect.gen(function* () {
+    yield* occupyCallbackPort;
+    const auth = stubOpenAIAuth({
+      accessToken: createAccessToken("acct"),
+      interval: "5",
+      poll: () => undefined,
+    });
+    const credential = yield* Effect.promise(() => loginByPastingRedirect().credential);
 
-        expect(credential["accountId"]).toBe("acct");
-        expect(auth.requests.map((request) => request.url)).toEqual([
-          "https://auth.openai.com/oauth/token",
-        ]);
-        expect(auth.exchanges[0]?.get("code")).toBe("pasted-code");
-        expect(auth.exchanges[0]?.get("redirect_uri")).toBe("http://localhost:1455/auth/callback");
-      }),
-    ),
-  );
+    expect(credential["accountId"]).toBe("acct");
+    expect(auth.requests.map((request) => request.url)).toEqual([
+      "https://auth.openai.com/oauth/token",
+    ]);
+    expect(auth.exchanges[0]?.get("code")).toBe("pasted-code");
+    expect(auth.exchanges[0]?.get("redirect_uri")).toBe("http://localhost:1455/auth/callback");
+  }).pipe(Effect.scoped, Effect.runPromise);
 
 describe("OpenAI Codex OAuth browser login", () => {
   restoreAfterEach();

@@ -136,7 +136,7 @@ const voteRound = (
             ),
           ),
         ),
-        Effect.forEach(votes, (vote) => Effect.exit(Fiber.join(vote)), {
+        Effect.forEach(votes, (vote) => vote.pipe(Fiber.join, Effect.exit), {
           concurrency: "unbounded",
         }),
       ],
@@ -150,7 +150,7 @@ const voteRound = (
         connection.send({ reload: ballot.id, t: "abort" });
       }
       if (local) yield* reload.rollback();
-      return yield* Effect.die(Cause.squash(failed.cause));
+      return yield* failed.cause.pipe(Cause.squash, Effect.die);
     }
     const report = reload.commit(() => {
       for (const connection of participants) {

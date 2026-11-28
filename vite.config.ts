@@ -1,3 +1,4 @@
+import { betterleaks } from "@r_masseater/h56m/presets";
 import { defineConfig } from "vite-plus";
 
 import fallow from "./fallow.config.ts";
@@ -17,12 +18,8 @@ const {
   lintProbeDir,
   lintProbeRoot,
   loopbackTestServerMembers,
-  platformOnlyImports,
   processEnvWriter,
   requiredStack,
-  restrictedImports,
-  restrictedProperties,
-  restrictedPropertiesExceptLocalDate,
   strictCategoryRules,
   workspacePackages,
 } = lintConfig;
@@ -38,10 +35,6 @@ const withProbes = (files: readonly string[]): string[] => [
   ...files.filter((file) => !file.startsWith("**/")).map((file) => `${lintProbeRoot}/*/${file}`),
 ];
 export default defineConfig({
-  betterleaks: {
-    extend: { useDefault: true },
-    filter: 'matchesAny(finding.line, [`\\bCF_BEACON_TOKEN = "[0-9a-f]{32}"`])',
-  },
   commitlint: {
     extends: ["@commitlint/config-conventional"],
     rules: { "subject-case": [0] as const },
@@ -52,6 +45,15 @@ export default defineConfig({
     ignorePatterns: generated,
     sortImports: true,
     sortPackageJson: true,
+  },
+  h56m: {
+    extend: { path: betterleaks },
+    filter: 'matchesAny(finding.line, [`\\bCF_BEACON_TOKEN = "[0-9a-f]{32}"`])',
+    ignoredSecrets: [
+      "7d811269d13fd7df0fd2cb573cbd1b11679a1ae347c179b3daf22b12408604c4",
+      "efcf30858a13f54daacabfb6324aee1d5e595756e930bedcc3e3edcdbe9a940a",
+      "f2b3b47fd9a71add893f496f8441de86cf6b2a76d87d224a9ad0431601fa9c22",
+    ],
   },
   lint: {
     categories: {
@@ -81,7 +83,6 @@ export default defineConfig({
       {
         files: withProbes(["apps/coding-agent/src/**"]),
         rules: {
-          "eslint/no-restricted-imports": ["error", platformOnlyImports],
           "msa/no-builtin-require": ["error", { modules: builtinModuleBases }],
           "msa/no-local-class-extends": [
             "error",
@@ -89,6 +90,7 @@ export default defineConfig({
           ],
           "msa/no-nested-class": "error",
           "msa/no-prototype-write": "error",
+          "msa/node-builtins-via-platform": "error",
         },
       },
       {
@@ -98,9 +100,9 @@ export default defineConfig({
         ]),
         rules: {
           "effecttsgo/node-builtin-import": "off",
-          "eslint/no-restricted-imports": ["error", restrictedImports],
           "msa/no-builtin-require": "off",
           "msa/no-sync-fs": "off",
+          "msa/node-builtins-via-platform": "off",
         },
       },
       {
@@ -109,9 +111,7 @@ export default defineConfig({
       },
       {
         files: withProbes([localTimeRules.owners.dateGetters]),
-        rules: {
-          "eslint/no-restricted-properties": ["error", ...restrictedPropertiesExceptLocalDate],
-        },
+        rules: { "msa/local-time-via-chord": "off" },
       },
       {
         files: withProbes([localTimeRules.owners.localZone]),
@@ -137,29 +137,21 @@ export default defineConfig({
         files: withProbes(scriptIoRules.files),
         rules: {
           "eslint/no-restricted-globals": ["error", ...scriptIoRules.globals],
-          "eslint/no-restricted-imports": ["error", scriptIoRules.imports(restrictedImports)],
-          "eslint/no-restricted-properties": [
-            "error",
-            ...restrictedProperties,
-            ...scriptIoRules.properties,
-          ],
+          "msa/script-io-via-script-output": "error",
         },
       },
       {
         files: withProbes([scriptIoRules.testProcessOwner]),
         rules: {
-          "eslint/no-restricted-imports": [
+          "msa/script-io-via-script-output": [
             "error",
-            scriptIoRules.imports(restrictedImports, scriptIoRules.testProcessModules),
+            { allowed: scriptIoRules.testProcessModules },
           ],
         },
       },
       {
         files: withProbes(scriptIoRules.testFiles),
-        rules: {
-          "eslint/no-restricted-imports": ["error", restrictedImports],
-          "eslint/no-restricted-properties": ["error", ...restrictedProperties],
-        },
+        rules: { "msa/script-io-via-script-output": "off" },
       },
       {
         files: withProbes(["bin/**"]),
@@ -178,8 +170,6 @@ export default defineConfig({
     rules: {
       "eslint/no-control-regex": "error",
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
-      "eslint/no-restricted-imports": ["error", restrictedImports],
-      "eslint/no-restricted-properties": ["error", ...restrictedProperties],
       "eslint/no-script-url": "error",
       "eslint/no-shadow": "error",
       "eslint/no-undef": "error",
@@ -190,6 +180,8 @@ export default defineConfig({
       "eslint/sort-keys": "error",
       "import/no-named-export": "error",
       "import/prefer-default-export": "error",
+      "msa/env-via-platform": "error",
+      "msa/local-time-via-chord": "error",
       "msa/no-builtin-module-lookup": "error",
       "msa/no-builtin-require": ["error", { modules: effectReplaceableBuiltins }],
       "msa/no-restricted-member": [
@@ -197,6 +189,7 @@ export default defineConfig({
         { members: [...loopbackTestServerMembers, ...localTimeRules.zoneMembers] },
       ],
       "msa/no-sync-fs": ["error", { names: fsSyncFunctions }],
+      "msa/timers-armed-by-the-run": "error",
       "no-comments/disallowComments": "error",
       "node/no-top-level-await": "error",
       "promise/always-return": "error",
@@ -216,13 +209,7 @@ export default defineConfig({
   staged: { "*": "vp check --fix" },
   test: {
     passWithNoTests: testShard !== undefined,
-    projects: [
-      "{apps,libs}/*/vitest.config.ts",
-      "apps/evals/vitest.test.config.ts",
-      "libs/chord",
-      "libs/telemetry",
-      "tools/vitest.config.ts",
-    ],
+    projects: ["{apps,libs}/*/vitest.config.ts", "tools/vitest.config.ts"],
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
     shard: testShard,
   },

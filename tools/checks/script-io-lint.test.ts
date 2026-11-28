@@ -4,7 +4,8 @@ import lintProbe from "./lint-probe.ts";
 
 const { codesOnLine, lintProbes } = lintProbe;
 
-const RESTRICTED = "eslint(no-restricted-";
+const IO_RULE = "msa(script-io-via-script-output)";
+const GLOBALS_RULE = "eslint(no-restricted-globals)";
 const TYPE_ERROR = "typescript(TS";
 
 const TEST_PROCESS = "tools/checks/test-process.ts";
@@ -130,22 +131,22 @@ const allowed: Readonly<Record<string, string>> = {
 
 const filesWith = (
   report: Awaited<ReturnType<typeof lintProbes>>,
-  prefix: string,
+  ...prefixes: readonly string[]
 ): readonly string[] =>
   [
     ...new Set(
       report
-        .filter((diagnostic) => diagnostic.code.startsWith(prefix))
+        .filter((diagnostic) => prefixes.some((prefix) => diagnostic.code.startsWith(prefix)))
         .map((diagnostic) => diagnostic.filename),
     ),
   ].toSorted();
 
 it("refuses file, child process, and stdout access in scripts and tools outside script-output", () =>
   lintProbes({ ...bypasses, ...typeBypasses, ...allowed }).then((report) => {
-    expect(filesWith(report, RESTRICTED)).toEqual(Object.keys(bypasses).toSorted());
-    expect([1, 2].map((line) => codesOnLine(report, TEST_PROCESS, line, RESTRICTED))).toEqual([
+    expect(filesWith(report, IO_RULE, GLOBALS_RULE)).toEqual(Object.keys(bypasses).toSorted());
+    expect([1, 2].map((line) => codesOnLine(report, TEST_PROCESS, line, IO_RULE))).toEqual([
       [],
-      [`${RESTRICTED}imports)`],
+      [IO_RULE],
     ]);
     expect(filesWith(report, TYPE_ERROR).filter((file) => !(file in bypasses))).toEqual(
       Object.keys(typeBypasses).toSorted(),

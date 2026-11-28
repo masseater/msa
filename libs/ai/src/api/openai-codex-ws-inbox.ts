@@ -102,7 +102,7 @@ function inboxListeners(state: InboxState) {
 }
 
 const interruptTimer = (timer: Fiber.Fiber<void> | undefined): void => {
-  if (timer !== undefined) Effect.runFork(Fiber.interrupt(timer));
+  if (timer !== undefined) timer.pipe(Fiber.interrupt, Effect.runFork);
 };
 
 function waitForWake(

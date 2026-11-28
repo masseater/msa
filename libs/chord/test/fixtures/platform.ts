@@ -62,8 +62,8 @@ const collect = (args: readonly string[], cwd: string | undefined) =>
       );
       const [stdout, stderr, status] = yield* Effect.all(
         [
-          Stream.mkString(Stream.decodeText(child.stdout)),
-          Stream.mkString(Stream.decodeText(child.stderr)),
+          child.stdout.pipe(Stream.decodeText, Stream.mkString),
+          child.stderr.pipe(Stream.decodeText, Stream.mkString),
           child.exitCode,
         ],
         { concurrency: "unbounded" },
@@ -106,7 +106,7 @@ const holdNode = (args: readonly string[], pid: Deferred.Deferred<number>) =>
 const startNode = (args: readonly string[]): Effect.Effect<number> =>
   Effect.gen(function* () {
     const pid = yield* Deferred.make<number>();
-    yield* Effect.forkDetach(onPlatform(holdNode(args, pid)));
+    yield* holdNode(args, pid).pipe(onPlatform, Effect.forkDetach);
     return yield* Deferred.await(pid);
   });
 

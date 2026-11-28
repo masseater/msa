@@ -8,11 +8,11 @@ const { captureProcess, processRunnerLayer } = testProcess;
 
 const { lintPlugins, strictCategories, strictCategoryRules } = lintConfig;
 
-const RuleList = Schema.fromJsonString(
-  Schema.Array(
-    Schema.Struct({ category: Schema.String, scope: Schema.String, value: Schema.String }),
-  ),
-);
+const RuleList = Schema.Struct({
+  category: Schema.String,
+  scope: Schema.String,
+  value: Schema.String,
+}).pipe(Schema.Array, Schema.fromJsonString);
 
 const scopes = new Set(["eslint", ...lintPlugins]);
 

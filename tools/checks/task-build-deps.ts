@@ -18,8 +18,6 @@ type Graph = taskBuildDepsTypes.Graph;
 type Host = taskBuildDepsTypes.Host;
 type Problems = taskBuildDepsTypes.Problems;
 type Scope = taskBuildDepsTypes.Scope;
-type Scripts = Readonly<Record<string, string>>;
-type Tasks = taskBuildDepsTypes.Tasks;
 type Workspace = taskBuildDepsTypes.Workspace;
 
 const GRAMMAR = "node_modules/tree-sitter-bash/tree-sitter-bash.wasm";
@@ -43,7 +41,7 @@ const walkVitest = (repo: Scope, run: taskBuildDepsTypes.VitestRun, label: strin
 const withRootScripts = (
   workspaces: ReadonlyArray<Workspace>,
   root: string,
-  scripts: Scripts,
+  scripts: taskBuildDepsTypes.Scripts,
 ): ReadonlyArray<Workspace> =>
   workspaces.map((workspace) =>
     workspace.dir === root
@@ -79,7 +77,7 @@ const unregisteredConfigs = (host: Host, root: string, workspaces: ReadonlyArray
       ),
   );
 
-const makeGraph = (scope: Scope, tasks: Tasks, grammar: Uint8Array) =>
+const makeGraph = (scope: Scope, tasks: taskBuildDepsTypes.Tasks, grammar: Uint8Array) =>
   Effect.gen(function* () {
     const { path, root } = scope;
     const { processes } = yield* scriptOutput.ScriptOutput;
@@ -113,7 +111,10 @@ const hostOf = ({ files, path }: scriptOutputTypes.ScriptOutputShape): Host => (
   read: (file) => files.readText(file).pipe(Effect.orDie),
 });
 
-const collectViolations = (tasks: Tasks, rootScripts: Scripts) =>
+const collectViolations = (
+  tasks: taskBuildDepsTypes.Tasks,
+  rootScripts: taskBuildDepsTypes.Scripts,
+) =>
   Effect.gen(function* () {
     const output = yield* scriptOutput.ScriptOutput;
     const { files, path } = output;
@@ -136,8 +137,10 @@ const collectViolations = (tasks: Tasks, rootScripts: Scripts) =>
 
 const runtime = ManagedRuntime.make(scriptOutput.scriptOutputLayer);
 
-const violationsOf = (tasks: Tasks, rootScripts: Scripts = {}): Promise<ReadonlyArray<string>> =>
-  runtime.runPromise(collectViolations(tasks, rootScripts));
+const violationsOf = (
+  tasks: taskBuildDepsTypes.Tasks,
+  rootScripts: taskBuildDepsTypes.Scripts = {},
+): Promise<ReadonlyArray<string>> => runtime.runPromise(collectViolations(tasks, rootScripts));
 
 const taskBuildDeps = { violationsOf };
 

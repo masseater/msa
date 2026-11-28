@@ -7,6 +7,8 @@ import type vitestImportsTypes from "./vitest-imports.types.ts";
 declare namespace taskBuildDepsTypes {
   type Problems = Effect.Effect<ReadonlyArray<string>>;
 
+  type Scripts = Readonly<Record<string, string>>;
+
   interface TaskDef {
     readonly command: string;
     readonly cwd: string;

@@ -118,10 +118,9 @@ const boundsThirdParty = Effect.gen(function* () {
     yield* awaited(
       session.commit(
         (tx) =>
-          runPromise(
-            Effect.asVoid(
-              Effect.suspend(() => awaited(tx.doc(EventDoc, conversationId, String(seq), seq))),
-            ),
+          Effect.suspend(() => awaited(tx.doc(EventDoc, conversationId, String(seq), seq))).pipe(
+            Effect.asVoid,
+            runPromise,
           ),
         context,
       ),

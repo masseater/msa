@@ -26,7 +26,7 @@ const doesNotSignal = Effect.gen(function* () {
   let aborts = 0;
   const Run = oneStep(
     "test.abort-again",
-    () => runPromise(Effect.asVoid(Effect.suspend(() => awaited(runRelease.promise)))),
+    () => Effect.suspend(() => awaited(runRelease.promise)).pipe(Effect.asVoid, runPromise),
     (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {

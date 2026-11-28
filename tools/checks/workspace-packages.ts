@@ -6,10 +6,6 @@ import taskCommands from "./task-commands.ts";
 
 const { packageTarget } = taskCommands;
 
-type Host = taskBuildDepsTypes.Host;
-type Resolution = taskBuildDepsTypes.Resolution;
-type Resolved = Effect.Effect<Resolution>;
-type Scope = taskBuildDepsTypes.Scope;
 type Workspace = taskBuildDepsTypes.Workspace;
 
 const Manifest = Schema.fromJsonString(
@@ -22,7 +18,7 @@ const Manifest = Schema.fromJsonString(
 );
 const decodeManifest = Schema.decodeUnknownEffect(Manifest);
 
-const firstFile = (host: Host, candidates: ReadonlyArray<string>) =>
+const firstFile = (host: taskBuildDepsTypes.Host, candidates: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     for (const candidate of candidates) {
       if (yield* host.isFile(candidate)) return candidate;
@@ -30,7 +26,7 @@ const firstFile = (host: Host, candidates: ReadonlyArray<string>) =>
     return undefined;
   });
 
-const expandGlob = (host: Host, cwd: string, pattern: string) =>
+const expandGlob = (host: taskBuildDepsTypes.Host, cwd: string, pattern: string) =>
   Effect.gen(function* () {
     const { path } = host;
     if (!pattern.includes("*")) return [path.resolve(cwd, pattern)];
@@ -42,7 +38,7 @@ const expandGlob = (host: Host, cwd: string, pattern: string) =>
       .map((name) => path.resolve(dir, name));
   });
 
-const readWorkspace = (host: Host, dir: string) =>
+const readWorkspace = (host: taskBuildDepsTypes.Host, dir: string) =>
   Effect.gen(function* () {
     const file = host.path.resolve(dir, "package.json");
     if (!(yield* host.isFile(file))) return [];
@@ -57,7 +53,7 @@ const readWorkspace = (host: Host, dir: string) =>
     return [workspace];
   });
 
-const loadWorkspaces = (host: Host, root: string) =>
+const loadWorkspaces = (host: taskBuildDepsTypes.Host, root: string) =>
   Effect.gen(function* () {
     const config = parse(yield* host.read(host.path.resolve(root, "pnpm-workspace.yaml"))) as {
       readonly packages: ReadonlyArray<string>;
@@ -69,12 +65,16 @@ const loadWorkspaces = (host: Host, root: string) =>
     return found.flat();
   });
 
-const findWorkspace = (repo: Scope, spec: string) =>
+const findWorkspace = (repo: taskBuildDepsTypes.Scope, spec: string) =>
   repo.workspaces
     .filter((candidate) => spec === candidate.name || spec.startsWith(`${candidate.name}/`))
     .toSorted((left, right) => right.name.length - left.name.length)[0];
 
-const resolveRelative = (repo: Scope, spec: string, from: string): Resolved => {
+const resolveRelative = (
+  repo: taskBuildDepsTypes.Scope,
+  spec: string,
+  from: string,
+): Effect.Effect<taskBuildDepsTypes.Resolution> => {
   const { path } = repo;
   const base = path.resolve(path.dirname(from), spec);
   return Effect.map(
@@ -86,11 +86,11 @@ const resolveRelative = (repo: Scope, spec: string, from: string): Resolved => {
 };
 
 const resolvePackage = (
-  repo: Scope,
+  repo: taskBuildDepsTypes.Scope,
   workspace: Workspace,
   spec: string,
   conditions: ReadonlySet<string>,
-): Resolved => {
+): Effect.Effect<taskBuildDepsTypes.Resolution> => {
   const subpath = spec === workspace.name ? "." : `.${spec.slice(workspace.name.length)}`;
   const target = packageTarget(workspace, subpath, conditions);
   if (target === undefined) return Effect.succeed({ problem: `${spec} is not exported` });
@@ -102,24 +102,25 @@ const resolvePackage = (
 };
 
 const resolveSpec = (
-  repo: Scope,
+  repo: taskBuildDepsTypes.Scope,
   spec: string,
   from: string,
   conditions: ReadonlySet<string>,
-): Resolved => {
+): Effect.Effect<taskBuildDepsTypes.Resolution> => {
   if (spec.startsWith(".")) return resolveRelative(repo, spec, from);
   const workspace = findWorkspace(repo, spec);
   if (workspace === undefined) return Effect.succeed({ file: undefined });
   return resolvePackage(repo, workspace, spec, conditions);
 };
 
-const problemOf = (result: Resolution): ReadonlyArray<string> =>
+const problemOf = (result: taskBuildDepsTypes.Resolution): ReadonlyArray<string> =>
   "problem" in result ? [result.problem] : [];
 
-const fileOf = (result: Resolution): ReadonlyArray<string> =>
+const fileOf = (result: taskBuildDepsTypes.Resolution): ReadonlyArray<string> =>
   "file" in result && result.file !== undefined ? [result.file] : [];
 
-const relativeTo = (repo: Scope, file: string): string => repo.path.relative(repo.root, file);
+const relativeTo = (repo: taskBuildDepsTypes.Scope, file: string): string =>
+  repo.path.relative(repo.root, file);
 
 const workspacePackages = {
   expandGlob,

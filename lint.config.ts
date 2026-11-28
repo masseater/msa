@@ -3,16 +3,11 @@ import { builtinModules } from "node:module";
 import type { OxlintConfig } from "vite-plus/lint";
 
 import effectRules from "./effect-rules.config.ts";
-import localTimeRules from "./local-time-rules.config.ts";
 import lintedPackages from "./tools/oxlint/workspace-packages.json" with { type: "json" };
 
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
-const ENV_ONLY_VIA_PROCESS_ENV =
-  "環境変数は core/platform の readEnv・writeEnv・envSnapshot だけで扱う";
-const TIMERS_ARMED_BY_THE_RUN =
-  "タイマーはプロセス全体で数えず、@msa/testing の timersArmedBy で計測する処理が張ったものだけを数える";
 const LOOPBACK_TEST_SERVER =
   "テスト用の HTTP サーバーは @msa/testing の listen・serveLoopback で 127.0.0.1 に立てる";
 
@@ -46,32 +41,6 @@ const requiredStack: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-const requiredStackEntries = Object.entries(requiredStack).flatMap(([message, modules]) =>
-  modules.map((module) => ({ message, module })),
-);
-
-const requiredStackPaths: readonly Readonly<{ name: string; message: string }>[] =
-  requiredStackEntries
-    .filter(({ module }) => !module.includes("*"))
-    .map(({ message, module }) => ({ message, name: module }));
-
-const requiredStackPatterns: readonly Readonly<{ group: readonly string[]; message: string }>[] =
-  requiredStackEntries.map(({ message, module }) => {
-    if (module.includes("*")) {
-      return { group: [module, `${module}/**`], message };
-    }
-    return { group: [`${module}/**`], message };
-  });
-
-const envImportPaths: readonly Readonly<{
-  name: string;
-  importNames: readonly string[];
-  message: string;
-}>[] = [
-  { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "node:process" },
-  { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "process" },
-];
-
 const loopbackTestServerMembers: readonly Readonly<{
   module: string;
   path: readonly string[];
@@ -88,23 +57,6 @@ const loopbackTestServerMembers: readonly Readonly<{
     path: ["layerTest"],
   },
 ];
-
-const restrictedPropertiesExceptLocalDate = [
-  { message: TIMERS_ARMED_BY_THE_RUN, property: "getActiveResourcesInfo" },
-  ...localTimeRules.intlProperties,
-];
-
-const restrictedProperties = [
-  ...restrictedPropertiesExceptLocalDate,
-  ...localTimeRules.dateProperties,
-];
-
-const restrictedImports = {
-  paths: [...requiredStackPaths, ...envImportPaths],
-  patterns: [...requiredStackPatterns],
-};
-
-const NODE_BUILTINS_VIA_PLATFORM = "node の組み込みは core/platform/node/ を通して使う";
 
 const effectReplaceableBuiltins: readonly string[] = [
   "child_process",
@@ -169,17 +121,6 @@ const fsSyncFunctions: readonly string[] = [
 const builtinModuleBases: readonly string[] = [
   ...new Set(builtinModules.map((name) => name.replace(/^node:/u, "").split("/")[0] ?? name)),
 ];
-
-const platformOnlyImports = {
-  paths: [
-    ...restrictedImports.paths,
-    ...builtinModules.map((name) => ({ message: NODE_BUILTINS_VIA_PLATFORM, name })),
-  ],
-  patterns: [
-    ...restrictedImports.patterns,
-    { group: ["node:*", "node:*/**"], message: NODE_BUILTINS_VIA_PLATFORM },
-  ],
-};
 
 const generated = [
   "**/dist/**",
@@ -283,12 +224,8 @@ const lintConfig = {
   lintProbeDir,
   lintProbeRoot,
   loopbackTestServerMembers,
-  platformOnlyImports,
   processEnvWriter,
   requiredStack,
-  restrictedImports,
-  restrictedProperties,
-  restrictedPropertiesExceptLocalDate,
   strictCategories,
   strictCategoryRules,
   workspacePackages,

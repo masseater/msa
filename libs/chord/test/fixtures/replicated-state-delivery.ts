@@ -10,7 +10,7 @@ const { replicatedState } = chord;
 function deferred() {
   const gate = Deferred.makeUnsafe<void, Error>();
   return {
-    promise: Effect.runPromise(Deferred.await(gate)),
+    promise: gate.pipe(Deferred.await, Effect.runPromise),
     reject: (error: Error) => {
       Deferred.doneUnsafe(gate, Effect.fail(error));
     },

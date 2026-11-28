@@ -150,10 +150,12 @@ const readResponse = (request: ProxyRequest, read: ProxyRead, received: Received
 
 const readProxy = (request: ProxyRequest, read: ProxyRead) => {
   const received: Received = { statusText: "" };
-  return Effect.scoped(
-    Effect.flatMap(Layer.build(httpLayer(received)), (services) =>
+  return httpLayer(received).pipe(
+    Layer.build,
+    Effect.flatMap((services) =>
       Effect.provideContext(readResponse(request, read, received), services),
     ),
+    Effect.scoped,
   );
 };
 

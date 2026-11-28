@@ -13,6 +13,7 @@ const { builtinModuleBases, effectReplaceableBuiltins, fsSyncFunctions } = lintC
 const LOOKUP = "msa(no-builtin-module-lookup)";
 const REQUIRE = "msa(no-builtin-require)";
 const SYNC_FS = "msa(no-sync-fs)";
+const SCRIPT_IO = "msa(script-io-via-script-output)";
 const NODE_BUILTIN_IMPORT = "effecttsgo(node-builtin-import)";
 
 const cases: readonly (readonly [statement: string, expected: string | undefined])[] = [
@@ -137,7 +138,9 @@ const checkProbes = Effect.gen(function* () {
     lintProbes({ [BYPASS_PROBE]: bypassProbe, [IMPORT_PROBE]: importProbe }),
   );
   for (const [index, [statement, expected]] of cases.entries()) {
-    const codes = msaCodesOnLine(report, BYPASS_PROBE, HEADER.length + index + 1);
+    const codes = msaCodesOnLine(report, BYPASS_PROBE, HEADER.length + index + 1).filter(
+      (code) => code !== SCRIPT_IO,
+    );
     expect({ codes, statement }).toEqual({
       codes: expected === undefined ? [] : [expected],
       statement,

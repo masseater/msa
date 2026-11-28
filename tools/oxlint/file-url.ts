@@ -3,8 +3,6 @@ import type { Context, ESTree } from "vite-plus/lint/plugins";
 import type flowTypes from "./flow.types.ts";
 import scopeLookup from "./scope-lookup.ts";
 
-type Node = flowTypes.Node;
-
 const URL_SPECIFIERS: ReadonlySet<string> = new Set(["node:url", "url"]);
 const FACTORY = "pathToFileURL";
 const WRAPPERS: ReadonlySet<string> = new Set([
@@ -14,10 +12,15 @@ const WRAPPERS: ReadonlySet<string> = new Set([
   "TSSatisfiesExpression",
 ]);
 
-const unwrap = (node: Node): Node =>
-  WRAPPERS.has(node.type) ? unwrap((node as { readonly expression: Node }).expression) : node;
+const unwrap = (node: flowTypes.Node): flowTypes.Node =>
+  WRAPPERS.has(node.type)
+    ? unwrap((node as { readonly expression: flowTypes.Node }).expression)
+    : node;
 
-const importOf = (context: Context, node: Node): ESTree.ImportDeclarationSpecifier | undefined => {
+const importOf = (
+  context: Context,
+  node: flowTypes.Node,
+): ESTree.ImportDeclarationSpecifier | undefined => {
   const def = scopeLookup.variableOf(context, node)?.defs[0];
   if (def?.type !== "ImportBinding") return undefined;
   const declaration = def.parent as ESTree.ImportDeclaration;
@@ -34,7 +37,7 @@ const importsFactory = (specifier: ESTree.ImportDeclarationSpecifier | undefined
 const importsModule = (specifier: ESTree.ImportDeclarationSpecifier | undefined): boolean =>
   specifier !== undefined && specifier.type !== "ImportSpecifier";
 
-const isFactory = (context: Context, callee: Node): boolean => {
+const isFactory = (context: Context, callee: flowTypes.Node): boolean => {
   if (callee.type === "Identifier") return importsFactory(importOf(context, callee));
   return (
     scopeLookup.staticMemberName(callee) === FACTORY &&
@@ -42,18 +45,18 @@ const isFactory = (context: Context, callee: Node): boolean => {
   );
 };
 
-type FormCheck = (context: Context, node: Node) => boolean;
+type FormCheck = (context: Context, node: flowTypes.Node) => boolean;
 
-const leadingExpression = (node: ESTree.TemplateLiteral): Node | undefined =>
+const leadingExpression = (node: ESTree.TemplateLiteral): flowTypes.Node | undefined =>
   node.quasis[0]?.value.cooked === "" ? node.expressions[0] : undefined;
 
-const isFileUrl = (context: Context, raw: Node): boolean => {
+const isFileUrl = (context: Context, raw: flowTypes.Node): boolean => {
   const node = unwrap(raw);
   const check = FILE_URL_FORMS[node.type];
   return check !== undefined && check(context, node);
 };
 
-const followed = (context: Context, node: Node | undefined): boolean =>
+const followed = (context: Context, node: flowTypes.Node | undefined): boolean =>
   node !== undefined && isFileUrl(context, node);
 
 const FILE_URL_FORMS: Readonly<Record<string, FormCheck>> = {

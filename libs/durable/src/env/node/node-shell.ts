@@ -58,7 +58,7 @@ const firstLineOf = Effect.fnUntraced(function* (command: string, args: readonly
         }),
       );
       const [stdout, status] = yield* Effect.all(
-        [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
+        [handle.stdout.pipe(Stream.decodeText, Stream.mkString), handle.exitCode],
         { concurrency: 2 },
       );
       return status === 0 ? stdout.trim().split(/\r?\n/u)[0] : undefined;

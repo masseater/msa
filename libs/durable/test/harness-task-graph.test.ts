@@ -117,18 +117,14 @@ const committedGraphTasksStep1 = Effect.fn("committedGraphTasksStep1")(function*
   const gate = deferred();
   const Work = defineTask<null, { phase: "work" }, null>({
     abort: (_task, runtime, ctx) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ outcome: { reason: "test", status: "aborted" }, status: "terminal" }),
-                ctx,
-              ),
-            ),
+      Effect.suspend(() =>
+        awaited(
+          runtime.commit(
+            () => ({ outcome: { reason: "test", status: "aborted" }, status: "terminal" }),
+            ctx,
           ),
         ),
-      ),
+      ).pipe(Effect.asVoid, runPromise),
     initial: () => ({ phase: "work" }),
     name: "test.graph-work",
     phases: {

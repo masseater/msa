@@ -115,13 +115,14 @@ const heldStream = (started: Deferred.Deferred<void>, held: Deferred.Deferred<vo
   queueMicrotask(() => {
     stream.push({ partial: textMessage(""), type: "start" });
     release(started);
-    Effect.runFork(
+    held.pipe(
+      Deferred.await,
       Effect.andThen(
-        Deferred.await(held),
         Effect.sync(() => {
           stream.push({ message: textMessage("Done"), reason: "stop", type: "done" });
         }),
       ),
+      Effect.runFork,
     );
   });
   return stream;

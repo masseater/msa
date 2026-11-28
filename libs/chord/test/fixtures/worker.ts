@@ -15,7 +15,7 @@ const control = childControl();
 const exitSoon = Effect.sleep(200).pipe(Effect.andThen(Effect.sync(() => process.exit(1))));
 
 const recordGrandchild = Effect.gen(function* () {
-  const file = yield* Effect.orDie(Config.option(Config.String("GRANDCHILD_FILE")));
+  const file = yield* Config.String("GRANDCHILD_FILE").pipe(Config.option, Effect.orDie);
   if (Option.isNone(file) || file.value === "") return;
   const grandchild = yield* startNode(["-e", "setInterval(() => {}, 1000)"]);
   yield* writeText(file.value, String(grandchild));

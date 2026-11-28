@@ -13,14 +13,10 @@ export default class LoadingIndicator implements tuiTypes.Component {
   start(tui: tuiTypes.TUI): void {
     this.tui = tui;
     this.dots = 1;
-    this.fiber = Effect.runFork(
-      Effect.forever(
-        Effect.sync(() => {
-          this.dots = (this.dots % 3) + 1;
-          this.tui?.requestRender();
-        }).pipe(Effect.andThen(Effect.sleep(400))),
-      ),
-    );
+    this.fiber = Effect.sync(() => {
+      this.dots = (this.dots % 3) + 1;
+      this.tui?.requestRender();
+    }).pipe(Effect.andThen(Effect.sleep(400)), Effect.forever, Effect.runFork);
   }
 
   stop(): void {

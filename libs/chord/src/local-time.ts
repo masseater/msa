@@ -31,7 +31,7 @@ const format = (value: string | number, layout: string): string => {
 
 const zone = (): localTimeTypes.LocalTimeZone => ({
   name: DateTime.zoneToString(DateTime.zoneMakeLocal()),
-  offset: DateTime.zonedOffsetIso(zoned(Effect.runSync(Clock.currentTimeMillis))),
+  offset: Clock.currentTimeMillis.pipe(Effect.runSync, zoned, DateTime.zonedOffsetIso),
 });
 
 const dayStart = (value: number, days: number): number =>

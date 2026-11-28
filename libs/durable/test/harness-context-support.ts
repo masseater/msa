@@ -105,8 +105,9 @@ const runInRoot = Effect.fn("runInRoot")(function* (
 
   const Run = defineTask<Record<string, never>, { phase: "run" }, null>({
     abort: (_task, runtime, taskContext) =>
-      runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext))).pipe(
+        Effect.asVoid,
+        runPromise,
       ),
     initial: () => ({ phase: "run" }),
     name,
@@ -146,8 +147,9 @@ function probeTask(
 ) {
   return defineTask<{ name: string }, { phase: "run" }, null>({
     abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext))).pipe(
+        Effect.asVoid,
+        Effect.runPromise,
       ),
     initial: () => ({ phase: "run" }),
     name: "test.context-probe",

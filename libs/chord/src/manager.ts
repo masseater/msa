@@ -43,12 +43,12 @@ const livenessOf = (state: ManagerState): managerTypesModule.Liveness => ({
 });
 
 const serialized = <A>(state: ManagerState, step: Effect.Effect<A>): Promise<A> =>
-  Effect.runPromise(Semaphore.withPermits(state.lock, 1)(step));
+  step.pipe(Semaphore.withPermits(state.lock, 1), Effect.runPromise);
 
 function stopKeepAlive(state: ManagerState): void {
   const fiber = state.keepAlive;
   state.keepAlive = undefined;
-  if (fiber !== undefined) Effect.runFork(Fiber.interrupt(fiber));
+  if (fiber !== undefined) fiber.pipe(Fiber.interrupt, Effect.runFork);
 }
 
 const doStop = (state: ManagerState): Effect.Effect<void> =>
@@ -161,8 +161,10 @@ function startKeepAlive(state: ManagerState): void {
     if (state.status === "running" && !keepAlive(livenessOf(state)))
       void serialized(state, doStop(state));
   });
-  state.keepAlive = Effect.runFork(
-    Effect.forever(Effect.andThen(unrefSleep(state.options.checkInterval ?? 1000), check)),
+  state.keepAlive = unrefSleep(state.options.checkInterval ?? 1000).pipe(
+    Effect.andThen(check),
+    Effect.forever,
+    Effect.runFork,
   );
 }
 

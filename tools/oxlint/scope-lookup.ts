@@ -2,8 +2,6 @@ import type { Context, Reference, Scope, Variable } from "vite-plus/lint/plugins
 
 import type flowTypes from "./flow.types.ts";
 
-type Node = flowTypes.Node;
-
 const findVariable = (scope: Scope | null, name: string): Variable | undefined => {
   let current = scope;
   while (current !== null) {
@@ -14,7 +12,7 @@ const findVariable = (scope: Scope | null, name: string): Variable | undefined =
   return undefined;
 };
 
-const variableOf = (context: Context, identifier: Node): Variable | undefined =>
+const variableOf = (context: Context, identifier: flowTypes.Node): Variable | undefined =>
   identifier.type === "Identifier"
     ? findVariable(context.sourceCode.getScope(identifier), identifier.name)
     : undefined;
@@ -25,19 +23,23 @@ const declaredReferences = (scope: Scope | null, name: string): readonly Referen
 const implicitReferences = (scope: Scope | null, name: string): readonly Reference[] =>
   (scope?.through ?? []).filter((reference) => reference.identifier.name === name);
 
-const globalReferences = (context: Context, name: string): readonly Node[] => {
+const globalReferences = (context: Context, name: string): readonly flowTypes.Node[] => {
   const scope = context.sourceCode.scopeManager.globalScope;
   const references = [...declaredReferences(scope, name), ...implicitReferences(scope, name)];
   return [...new Set(references.map((reference) => reference.identifier))];
 };
 
-const isGlobalNamed = (context: Context, node: Node, names: ReadonlySet<string>): boolean =>
+const isGlobalNamed = (
+  context: Context,
+  node: flowTypes.Node,
+  names: ReadonlySet<string>,
+): boolean =>
   node.type === "Identifier" && names.has(node.name) && context.sourceCode.isGlobalReference(node);
 
-const propertyName = (property: Node): string | undefined =>
+const propertyName = (property: flowTypes.Node): string | undefined =>
   property.type === "Identifier" ? property.name : undefined;
 
-const staticMemberName = (node: Node): string | undefined =>
+const staticMemberName = (node: flowTypes.Node): string | undefined =>
   node.type === "MemberExpression" && !node.computed ? propertyName(node.property) : undefined;
 
 const scopeLookup = { globalReferences, isGlobalNamed, staticMemberName, variableOf };

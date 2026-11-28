@@ -1,8 +1,8 @@
 import { MagicString } from "magic-string";
-import type { SourceMap } from "magic-string";
 import { parseSync } from "vite-plus";
 
 import classOrigin from "./origin.ts";
+import type classSealTransformTypes from "./transform.types.ts";
 
 const RUNTIME = "__msaClassSeal";
 
@@ -30,20 +30,11 @@ type ClassNode = Span & {
   readonly body: Span;
 };
 
-type Sealed = { readonly code: string; readonly map: SourceMap };
-
 type Found = { readonly node: ClassNode; readonly nested: boolean };
 
 type Program = Parameters<typeof classOrigin.moduleOf>[0];
 
 type Scope = ReturnType<typeof classOrigin.moduleOf>;
-
-type Target = {
-  readonly filename: string;
-  readonly module: string;
-  readonly runtime: string;
-  readonly shared: string;
-};
 
 const isNode = (value: unknown): value is Span & { readonly type: string } =>
   typeof value === "object" && value !== null && "type" in value && "start" in value;
@@ -154,12 +145,15 @@ const sealClass =
     );
   };
 
-const sharedOf = (program: object, { module, shared }: Target) =>
+const sharedOf = (program: object, { module, shared }: classSealTransformTypes.Target) =>
   module !== SHARED_MODULE && importsTui(program)
     ? { imported: `import ${SHARED} from ${JSON.stringify(shared)};`, roots: `, ${SHARED}` }
     : { imported: "", roots: "" };
 
-const sealClasses = (code: string, target: Target): Sealed => {
+const sealClasses = (
+  code: string,
+  target: classSealTransformTypes.Target,
+): classSealTransformTypes.Sealed => {
   const { filename, module, runtime } = target;
   if (code.includes(RUNTIME))
     throw new Error(`${filename}: ${RUNTIME} は class の検査が使う名前なので、ソースに書かない`);
@@ -211,7 +205,10 @@ const assertStandalone = (code: string, filename: string): void => {
     throw new Error(`${filename}: class の検査を掛けない入口から src の module を import しない`);
 };
 
-const sealModule = (code: string, target: Target): Sealed | undefined => {
+const sealModule = (
+  code: string,
+  target: classSealTransformTypes.Target,
+): classSealTransformTypes.Sealed | undefined => {
   if (!STANDALONE.has(target.module)) return sealClasses(code, target);
   assertStandalone(code, target.filename);
   return undefined;

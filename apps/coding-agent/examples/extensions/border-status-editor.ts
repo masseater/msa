@@ -121,14 +121,10 @@ class BorderStatusEditor extends codingAgent.CustomEditor {
 
 const startSpinner = (state: StatusState) => {
   state.spinnerFiber?.interruptUnsafe();
-  state.spinnerFiber = Effect.runFork(
-    Effect.forever(
-      Effect.sync(() => {
-        state.spinnerIndex = (state.spinnerIndex + 1) % spinnerFrames.length;
-        state.activeTui?.requestRender();
-      }).pipe(Effect.andThen(Effect.sleep(80))),
-    ),
-  );
+  state.spinnerFiber = Effect.sync(() => {
+    state.spinnerIndex = (state.spinnerIndex + 1) % spinnerFrames.length;
+    state.activeTui?.requestRender();
+  }).pipe(Effect.andThen(Effect.sleep(80)), Effect.forever, Effect.runFork);
 };
 
 const stopSpinner = (state: StatusState) => {

@@ -24,8 +24,9 @@ type Read = Parameters<typeof probeTask>[0];
 function childReadTask(root: durableTypes.Conversation, read: Read) {
   return defineTask<Record<string, never>, { phase: "run" }, null>({
     abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext))).pipe(
+        Effect.asVoid,
+        Effect.runPromise,
       ),
     initial: () => ({ phase: "run" }),
     name: "test.context-child",
@@ -56,8 +57,9 @@ const abortParent: NonNullable<Parameters<typeof defineTask>[0]["abort"]> = (
   runtime,
   taskContext,
 ) =>
-  Effect.runPromise(
-    Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+  Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext))).pipe(
+    Effect.asVoid,
+    Effect.runPromise,
   );
 
 function parentReadTask(

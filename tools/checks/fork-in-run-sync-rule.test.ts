@@ -9,7 +9,7 @@ const { captureProcess, processRunnerLayer } = testProcess;
 const repoRoot = `${import.meta.dirname}/../..`;
 const rule = `${repoRoot}/tools/rules/no-fork-in-run-sync.yml`;
 
-const Matches = Schema.fromJsonString(Schema.Array(Schema.Struct({ file: Schema.String })));
+const Matches = Schema.Struct({ file: Schema.String }).pipe(Schema.Array, Schema.fromJsonString);
 
 const forkedUnderRunSync: readonly string[] = [
   "Effect.runSync(FiberSet.run(this.launched, effect));",

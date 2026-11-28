@@ -10,7 +10,7 @@ const repoRoot = `${import.meta.dirname}/../..`;
 const htmlExitRule = `${repoRoot}/tools/rules/no-html-outside-html-document.yml`;
 const runMainRule = `${repoRoot}/tools/rules/scripts-start-through-run-main.yml`;
 
-const Matches = Schema.fromJsonString(Schema.Array(Schema.Struct({ file: Schema.String })));
+const Matches = Schema.Struct({ file: Schema.String }).pipe(Schema.Array, Schema.fromJsonString);
 
 interface Case {
   readonly file: string;

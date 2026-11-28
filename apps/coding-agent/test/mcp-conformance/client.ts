@@ -107,7 +107,7 @@ const simulatedBrowser = (): oauthTypesNs.McpSignInPrompt => {
             const pending = visit;
             const exit = yield* Effect.exit(Effect.promise(() => pending));
             if (Exit.isFailure(exit)) {
-              log(`browser failed: ${errorMessage(Cause.squash(exit.cause))}`);
+              log(`browser failed: ${exit.cause.pipe(Cause.squash, errorMessage)}`);
               return undefined;
             }
           }
@@ -267,7 +267,7 @@ const main = () =>
       const exit = yield* Effect.exit(run(serverUrl, scenario));
       report = Exit.isSuccess(exit)
         ? { success: true }
-        : { error: errorMessage(Cause.squash(exit.cause)), success: false };
+        : { error: exit.cause.pipe(Cause.squash, errorMessage), success: false };
     }
     if (report.error !== undefined && report.error !== "") log(`error: ${report.error}`);
     if (reportPath !== undefined && reportPath !== "") yield* writeReport(reportPath, report);

@@ -21,11 +21,10 @@ const runAborted = (
   Effect.gen(function* () {
     const controller = abortController();
     const count = stalled.length;
-    const flow = yield* Effect.forkChild(
-      Effect.flip(
-        authorizeMcp(provider, { serverUrl: `${origin}/mcp`, signal: controller.signal }),
-      ),
-    );
+    const flow = yield* authorizeMcp(provider, {
+      serverUrl: `${origin}/mcp`,
+      signal: controller.signal,
+    }).pipe(Effect.flip, Effect.forkChild);
     yield* Effect.promise(() => expect.poll(() => stalled.length).toBe(count + 1));
     controller.abort();
     expect(originalError(yield* Fiber.join(flow))).toMatchObject({ name: "AbortError" });

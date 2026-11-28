@@ -275,7 +275,7 @@ export default class Connection implements remoteTypes.RemoteChannel {
     this.calls.clear();
     for (const vote of this.votes.values()) vote.reject(error);
     this.votes.clear();
-    for (const waiter of this.#syncWaiters) waiter(Effect.die(error));
+    for (const waiter of this.#syncWaiters) error.pipe(Effect.die, waiter);
     this.#syncWaiters.clear();
   }
 }

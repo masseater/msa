@@ -12,12 +12,8 @@ type DuplicateTelemetrySpanNames<
   infer Schema extends schemaTypes.TelemetrySchemaDefinition,
   ...infer Rest extends readonly schemaTypes.TelemetrySchemaDefinition[],
 ]
-  ?
-      | Extract<schemaInferenceTypes.TelemetrySchemaSpanName<Schema>, Seen>
-      | DuplicateTelemetrySpanNames<
-          Rest,
-          Seen | schemaInferenceTypes.TelemetrySchemaSpanName<Schema>
-        >
+  ? | Extract<schemaInferenceTypes.TelemetrySchemaSpanName<Schema>, Seen>
+    | DuplicateTelemetrySpanNames<Rest, Seen | schemaInferenceTypes.TelemetrySchemaSpanName<Schema>>
   : never;
 
 type UniqueTelemetrySchemas<Schemas extends typedSpanStarterTypes.TelemetrySchemaTuple> = [

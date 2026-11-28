@@ -156,7 +156,7 @@ const exitCodeOf = <Value, Failure>(exit: Exit.Exit<Value, Failure>): number => 
   if (Exit.isSuccess(exit)) {
     return EXIT_SUCCESS;
   }
-  if (Option.isSome(findBlocked(exit.cause))) {
+  if (exit.cause.pipe(findBlocked, Option.isSome)) {
     return EXIT_BLOCKING;
   }
   return EXIT_FAILURE;

@@ -32,7 +32,7 @@ export default class ModelRefresh {
   private stopRefreshTimeout(): void {
     const timeout = this.timeout;
     this.timeout = undefined;
-    if (timeout !== undefined) Effect.runFork(Fiber.interrupt(timeout));
+    if (timeout !== undefined) timeout.pipe(Fiber.interrupt, Effect.runFork);
   }
 
   refreshModels(): Promise<void> {

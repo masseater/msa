@@ -12,7 +12,7 @@ const UnknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 
 const ProviderConfig = Schema.Struct({
   modelOverrides: Schema.optional(UnknownRecord),
-  models: Schema.optional(Schema.Array(UnknownRecord)),
+  models: UnknownRecord.pipe(Schema.Array, Schema.optional),
 });
 
 const decodeModelsConfig = Schema.decodeUnknownEffect(

@@ -50,7 +50,7 @@ export default class PrWatch {
     const fiber = this.#fibers.get(key);
     this.#fibers.delete(key);
     const removed = this.#entries.delete(key);
-    if (fiber !== undefined) Effect.runFork(Fiber.interrupt(fiber));
+    if (fiber !== undefined) fiber.pipe(Fiber.interrupt, Effect.runFork);
     return removed;
   }
 
@@ -59,7 +59,7 @@ export default class PrWatch {
   }
 
   dispose(): Promise<void> {
-    for (const fiber of this.#fibers.values()) Effect.runFork(Fiber.interrupt(fiber));
+    for (const fiber of this.#fibers.values()) fiber.pipe(Fiber.interrupt, Effect.runFork);
     this.#fibers.clear();
     this.#entries.clear();
     this.#last = undefined;

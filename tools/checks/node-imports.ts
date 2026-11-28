@@ -9,11 +9,6 @@ import workspacePackages from "./workspace-packages.ts";
 const { expandGlob, fileOf, findWorkspace, problemOf, relativeTo, resolveRelative, resolveSpec } =
   workspacePackages;
 
-type Imports = vitestImportsTypes.Imports;
-type Problems = taskBuildDepsTypes.Problems;
-type Scope = taskBuildDepsTypes.Scope;
-type Step = taskBuildDepsTypes.Step;
-
 interface Walk {
   readonly conditions: ReadonlySet<string>;
   readonly resolver: boolean;
@@ -30,15 +25,24 @@ const SEGMENT = /["']([^"']+)["']/gu;
 const SCRIPT = /\.[cm]?[jt]s$/u;
 const STARTS_NODE = /process\.execPath|\b(?:spawn|execFile|exec)\w*\(\s*["'`]node["'`]/u;
 
-const resolverOf = (repo: Scope): string => repo.path.resolve(repo.root, SOURCE_RESOLVER);
+const resolverOf = (repo: taskBuildDepsTypes.Scope): string =>
+  repo.path.resolve(repo.root, SOURCE_RESOLVER);
 
-const readImports = (repo: Scope, file: string, text: string): Effect.Effect<Imports> =>
+const readImports = (
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  text: string,
+): Effect.Effect<vitestImportsTypes.Imports> =>
   Effect.match(moduleImports.readImports(relativeTo(repo, file), text), {
     onFailure: (problem) => ({ embedded: [], problems: [problem], specs: [] }),
     onSuccess: (found) => ({ embedded: found.embedded, problems: [], specs: found.specs }),
   });
 
-const importsOf = (repo: Scope, file: string, text: string): Effect.Effect<Imports> => {
+const importsOf = (
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  text: string,
+): Effect.Effect<vitestImportsTypes.Imports> => {
   const known = repo.imports.get(file);
   if (known !== undefined) return Effect.succeed(known);
   return Effect.map(readImports(repo, file, text), (imports) => {
@@ -50,7 +54,11 @@ const importsOf = (repo: Scope, file: string, text: string): Effect.Effect<Impor
 const segmentsOf = (match: RegExpExecArray): ReadonlyArray<string> =>
   [...(match[1] ?? "").matchAll(SEGMENT)].map((segment) => segment[1] ?? "");
 
-const pathRefs = (repo: Scope, file: string, text: string): ReadonlyArray<string> => {
+const pathRefs = (
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  text: string,
+): ReadonlyArray<string> => {
   const dir = repo.path.dirname(file);
   const fromUrls = [...text.matchAll(URL_REF)].map((match) =>
     repo.path.resolve(dir, match[1] ?? ""),
@@ -62,7 +70,7 @@ const pathRefs = (repo: Scope, file: string, text: string): ReadonlyArray<string
 };
 
 const childWalk = (
-  repo: Scope,
+  repo: taskBuildDepsTypes.Scope,
   text: string,
   refs: ReadonlyArray<string>,
   seen: Set<string>,
@@ -72,13 +80,13 @@ const childWalk = (
   seen,
 });
 
-const childScripts = (repo: Scope, refs: ReadonlyArray<string>) =>
+const childScripts = (repo: taskBuildDepsTypes.Scope, refs: ReadonlyArray<string>) =>
   Effect.filter(
     refs.filter((ref) => SCRIPT.test(ref) && ref !== resolverOf(repo)),
     (ref) => repo.isFile(ref),
   );
 
-const importsStartingNode = (repo: Scope, file: string, text: string) =>
+const importsStartingNode = (repo: taskBuildDepsTypes.Scope, file: string, text: string) =>
   Effect.gen(function* () {
     const { specs } = yield* importsOf(repo, file, text);
     const local = yield* Effect.forEach(
@@ -89,10 +97,19 @@ const importsStartingNode = (repo: Scope, file: string, text: string) =>
     return texts.some((helper) => STARTS_NODE.test(helper));
   });
 
-const startsNode = (repo: Scope, file: string, text: string): Effect.Effect<boolean> =>
+const startsNode = (
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  text: string,
+): Effect.Effect<boolean> =>
   STARTS_NODE.test(text) ? Effect.succeed(true) : importsStartingNode(repo, file, text);
 
-const embeddedProblems = (repo: Scope, file: string, walk: Walk, embedded: ReadonlyArray<string>) =>
+const embeddedProblems = (
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  walk: Walk,
+  embedded: ReadonlyArray<string>,
+) =>
   Effect.map(
     Effect.forEach(
       embedded.filter((spec) => findWorkspace(repo, spec) !== undefined && !walk.resolver),
@@ -101,11 +118,17 @@ const embeddedProblems = (repo: Scope, file: string, walk: Walk, embedded: Reado
     (results) => results.flatMap(problemOf),
   );
 
-const inChild = (repo: Scope, file: string, started: string) => (problem: string) =>
-  `${relativeTo(repo, file)} starts ${started} in a node process, ` +
-  `which does not inherit --conditions or --import: ${problem}`;
+const inChild =
+  (repo: taskBuildDepsTypes.Scope, file: string, started: string) => (problem: string) =>
+    `${relativeTo(repo, file)} starts ${started} in a node process, ` +
+    `which does not inherit --conditions or --import: ${problem}`;
 
-function childProblems(repo: Scope, file: string, text: string, seen: Set<string>): Problems {
+function childProblems(
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  text: string,
+  seen: Set<string>,
+): taskBuildDepsTypes.Problems {
   return Effect.gen(function* () {
     if (!(yield* startsNode(repo, file, text))) return [];
     const refs = pathRefs(repo, file, text);
@@ -125,7 +148,11 @@ function childProblems(repo: Scope, file: string, text: string, seen: Set<string
 const walkKey = (walk: Walk, file: string): string =>
   `${[...walk.conditions].toSorted().join(",")}|${walk.resolver}|${file}`;
 
-function visit(repo: Scope, file: string, walk: Walk): Problems {
+function visit(
+  repo: taskBuildDepsTypes.Scope,
+  file: string,
+  walk: Walk,
+): taskBuildDepsTypes.Problems {
   return Effect.gen(function* () {
     const key = walkKey(walk, file);
     if (walk.seen.has(key) || file.endsWith(".json")) return [];
@@ -151,13 +178,17 @@ function visit(repo: Scope, file: string, walk: Walk): Problems {
 }
 
 const walkImports = (
-  repo: Scope,
+  repo: taskBuildDepsTypes.Scope,
   entry: string,
   conditions: ReadonlySet<string>,
   resolver: boolean,
-): Problems => visit(repo, entry, { conditions, resolver, seen: new Set() });
+): taskBuildDepsTypes.Problems => visit(repo, entry, { conditions, resolver, seen: new Set() });
 
-const entryProblems = (repo: Scope, entries: ReadonlyArray<string>, files: ReadonlyArray<string>) =>
+const entryProblems = (
+  repo: taskBuildDepsTypes.Scope,
+  entries: ReadonlyArray<string>,
+  files: ReadonlyArray<string>,
+) =>
   Effect.gen(function* () {
     if (entries.length === 0) return ["no file"];
     const missing = yield* Effect.filter(files, (file) =>
@@ -167,7 +198,12 @@ const entryProblems = (repo: Scope, entries: ReadonlyArray<string>, files: Reado
     return missing.length === 0 ? [] : [`${names} does not exist`];
   });
 
-const walkRun = (repo: Scope, step: Step, run: taskCommandTypes.NodeRun, label: string): Problems =>
+const walkRun = (
+  repo: taskBuildDepsTypes.Scope,
+  step: taskBuildDepsTypes.Step,
+  run: taskCommandTypes.NodeRun,
+  label: string,
+): taskBuildDepsTypes.Problems =>
   Effect.gen(function* () {
     const { path } = repo;
     const conditions = new Set([...RUNTIME_CONDITIONS, ...run.conditions]);
@@ -190,7 +226,7 @@ const walkRun = (repo: Scope, step: Step, run: taskCommandTypes.NodeRun, label: 
   });
 
 const nodeImports = {
-  childProblems: (repo: Scope, file: string, text: string) =>
+  childProblems: (repo: taskBuildDepsTypes.Scope, file: string, text: string) =>
     childProblems(repo, file, text, new Set()),
   importsOf,
   ready: moduleImports.ready,

@@ -41,6 +41,8 @@ const adoptedEffectRules = [
   "effecttsgo/flat-map-conditional-to-filter-or-fail",
   "effecttsgo/flat-map-identity-to-flatten",
   "effecttsgo/flat-map-ignored-param-to-and-then",
+  "effecttsgo/flat-map-map-to-zip-with",
+  "effecttsgo/flat-map-provide-service-to-provide-service-effect",
   "effecttsgo/flat-map-to-map",
   "effecttsgo/flat-map-to-tap",
   "effecttsgo/floating-effect",
@@ -104,6 +106,7 @@ const adoptedEffectRules = [
   "effecttsgo/process-env",
   "effecttsgo/process-env-in-effect",
   "effecttsgo/promise-in-effect-success",
+  "effecttsgo/promise-race-in-effect",
   "effecttsgo/provide-layer-succeed-to-provide-service",
   "effecttsgo/provide-merge-all-to-array",
   "effecttsgo/race-first-with-sleep-to-timeout",
@@ -144,6 +147,9 @@ const adoptedEffectRules = [
 ];
 
 const declinedEffectRules = [
+  "effecttsgo/for-loop-push-to-for-each",
+  "effecttsgo/missing-concurrency-option",
+  "effecttsgo/promise-all-in-effect",
   "effecttsgo/global-json",
   "effecttsgo/prefer-effect-array",
   "effecttsgo/prefer-effect-record",

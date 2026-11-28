@@ -89,7 +89,7 @@ class SpaceInvadersComponent {
       this.version++;
       this.tui.requestRender();
     });
-    this.fiber = Effect.runFork(Effect.forever(step.pipe(Effect.andThen(Effect.sleep(TICK_MS)))));
+    this.fiber = step.pipe(Effect.andThen(Effect.sleep(TICK_MS)), Effect.forever, Effect.runFork);
   }
 
   private restart(): void {

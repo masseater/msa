@@ -245,18 +245,14 @@ function paymentTask({ newKey, payments, receiptEntry }: specUsageNamesTypes.Spe
           }),
         ),
       prepare: (_task, runtime, context) =>
-        Effect.runPromise(
-          Effect.asVoid(
-            Effect.suspend(() =>
-              awaited(
-                runtime.commit(
-                  () => ({ checkpoint: { key: newKey(), phase: "charge" }, status: "running" }),
-                  context,
-                ),
-              ),
+        Effect.suspend(() =>
+          awaited(
+            runtime.commit(
+              () => ({ checkpoint: { key: newKey(), phase: "charge" }, status: "running" }),
+              context,
             ),
           ),
-        ),
+        ).pipe(Effect.asVoid, Effect.runPromise),
     },
     version: 1,
   });

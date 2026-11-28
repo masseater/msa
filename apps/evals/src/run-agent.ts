@@ -29,7 +29,7 @@ const runMsaCodingAgent = <TOutput extends JsonValue>(
     });
     const failure = combineFailures({
       cleanupErrors,
-      runError: Exit.isFailure(exit) ? Option.some(Cause.squash(exit.cause)) : Option.none(),
+      runError: Exit.isFailure(exit) ? exit.cause.pipe(Cause.squash, Option.some) : Option.none(),
     });
     if (Option.isSome(failure)) {
       return yield* failRun({ failure: failure.value, input: request.input, startedAt, state });

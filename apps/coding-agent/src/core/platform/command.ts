@@ -21,8 +21,8 @@ const collect = (request: commandTypes.CommandRequest) =>
       );
       const [lines, stderr, exitCode] = yield* Effect.all(
         [
-          Stream.runCollect(Stream.splitLines(Stream.decodeText(handle.stdout))),
-          Stream.mkString(Stream.decodeText(handle.stderr)),
+          handle.stdout.pipe(Stream.decodeText, Stream.splitLines, Stream.runCollect),
+          handle.stderr.pipe(Stream.decodeText, Stream.mkString),
           handle.exitCode,
         ],
         { concurrency: 3 },
@@ -55,11 +55,15 @@ const streamLines = (request: commandTypes.StreamRequest) =>
           ...(request.env === undefined ? {} : { env: request.env, extendEnv: true }),
         }),
       );
-      const stderrFiber = yield* Stream.mkString(Stream.decodeText(handle.stderr)).pipe(
+      const stderrFiber = yield* handle.stderr.pipe(
+        Stream.decodeText,
+        Stream.mkString,
         Effect.forkScoped,
       );
       let stoppedEarly = false;
-      yield* Stream.splitLines(Stream.decodeText(handle.stdout)).pipe(
+      yield* handle.stdout.pipe(
+        Stream.decodeText,
+        Stream.splitLines,
         Stream.takeUntil((line) => {
           stoppedEarly = request.onLine(line);
           return stoppedEarly;

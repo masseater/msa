@@ -1,14 +1,14 @@
 import type { Context, ESTree } from "vite-plus/lint/plugins";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
-import classOrigin from "./class-origin.ts";
-import type flowTypes from "./flow.types.ts";
+import intents from "./intents.ts";
+import localClassExtends from "./local-class-extends.ts";
 import LookupFlow from "./lookup-flow.ts";
 import nestedClass from "./nested-class.ts";
 import prototypeGuard from "./prototype-guard.ts";
+import reporter from "./reporter.ts";
 import RequireFlow from "./require-flow.ts";
 import restrictedMember from "./restricted-member.ts";
-import sharedWrite from "./shared-write.ts";
 import StaticString from "./static-string.ts";
 
 const LOOKUP = "getBuiltinModule";
@@ -20,30 +20,14 @@ const REQUIRE_MESSAGE =
   "require や動的 import で組み込みを読まない。Effect の API か platform 層を通して使う";
 const REQUIRE_UNKNOWN_MESSAGE =
   "require・createRequire・import() をこの形で使うと読み込む先を判定できない。文字列リテラルで直接呼ぶ";
-const LOCAL_EXTENDS_MESSAGE =
-  "同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む";
-const PROTOTYPE_MESSAGE =
-  "setPrototypeOf や __proto__ で prototype を書き換えない。継承は class 宣言の extends だけで決める";
-const SHARED_WRITE_MESSAGE =
-  "package から import した値を書き換えない。差し替える値は引数か Layer で渡す";
-const PROTOTYPE_NAMES: ReadonlySet<string> = new Set(["__proto__", "setPrototypeOf"]);
 const SYNC_FS_MESSAGE =
   "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
 
-type Node = flowTypes.Node;
+type Node = ESTree.Node;
 
 const stringOptions = (context: Context, name: string): ReadonlySet<string> => {
   const [options] = context.options as readonly (Record<string, readonly string[]> | undefined)[];
   return new Set(options?.[name] ?? []);
-};
-
-const createReporter = (context: Context, message: string) => {
-  const reported = new Set<number>();
-  return (node: Node): void => {
-    if (reported.has(node.start)) return;
-    reported.add(node.start);
-    context.report({ message, node });
-  };
 };
 
 const listSchema = (name: string) => [
@@ -56,10 +40,13 @@ const listSchema = (name: string) => [
 
 const noBuiltinModuleLookup = defineRule({
   create(context) {
-    const report = createReporter(context, LOOKUP_MESSAGE);
+    const report = reporter.createReporter(context, LOOKUP_MESSAGE);
     const lookup = new LookupFlow({
       context,
-      report: { restricted: report, unknown: createReporter(context, LOOKUP_UNKNOWN_MESSAGE) },
+      report: {
+        restricted: report,
+        unknown: reporter.createReporter(context, LOOKUP_UNKNOWN_MESSAGE),
+      },
     });
     const reportLookup = (node: Node): void => {
       if (lookup.isLookup(node)) report(node);
@@ -83,8 +70,8 @@ const noBuiltinRequire = defineRule({
     const flow = new RequireFlow({
       context,
       report: {
-        restricted: createReporter(context, REQUIRE_MESSAGE),
-        unknown: createReporter(context, REQUIRE_UNKNOWN_MESSAGE),
+        restricted: reporter.createReporter(context, REQUIRE_MESSAGE),
+        unknown: reporter.createReporter(context, REQUIRE_UNKNOWN_MESSAGE),
       },
     });
     return {
@@ -111,7 +98,7 @@ const noSyncFs = defineRule({
   create(context) {
     const names = stringOptions(context, "names");
     const strings = new StaticString(context);
-    const report = createReporter(context, SYNC_FS_MESSAGE);
+    const report = reporter.createReporter(context, SYNC_FS_MESSAGE);
     const nameOf = (node: Node): string | undefined =>
       node.type === "Identifier" ? node.name : strings.fold(node);
     const reportName = (node: Node): void => {
@@ -127,109 +114,12 @@ const noSyncFs = defineRule({
   meta: { schema: listSchema("names"), type: "problem" },
 });
 
-type WorkspacePackage = { readonly dir: string; readonly specifiers: readonly string[] };
-
-type ClassExtendsOptions = {
-  readonly builtins: readonly string[];
-  readonly packages: readonly WorkspacePackage[];
-  readonly probeRoot: string;
-};
-
-const classExtendsOptions = (context: Context): ClassExtendsOptions => {
-  const [options] = context.options as unknown as readonly (ClassExtendsOptions | undefined)[];
-  if (options === undefined)
-    throw new TypeError("msa/no-local-class-extends には builtins と packages と probeRoot を渡す");
-  return options;
-};
-
-const sourcePathOf = (filename: string, probeRoot: string): string => {
-  if (!filename.startsWith(`${probeRoot}/`)) return filename;
-  const inRun = filename.slice(probeRoot.length + 1);
-  return `${probeRoot.slice(0, probeRoot.lastIndexOf("/"))}/${inRun.slice(inRun.indexOf("/") + 1)}`;
-};
-
-const selfSpecifiersOf = (
-  context: Context,
-  { packages, probeRoot }: ClassExtendsOptions,
-): readonly string[] =>
-  packages
-    .filter(({ dir }) => sourcePathOf(context.filename, probeRoot).startsWith(`${dir}/`))
-    .reduce<WorkspacePackage | undefined>(
-      (owner, candidate) =>
-        owner === undefined || candidate.dir.length > owner.dir.length ? candidate : owner,
-      undefined,
-    )?.specifiers ?? [];
-
-const packagesSchema = {
-  items: [
-    {
-      additionalProperties: false,
-      properties: {
-        builtins: { items: { type: "string" }, type: "array" },
-        packages: {
-          items: {
-            additionalProperties: false,
-            properties: {
-              dir: { type: "string" },
-              specifiers: { items: { type: "string" }, type: "array" },
-            },
-            required: ["dir", "specifiers"],
-            type: "object",
-          },
-          type: "array",
-        },
-        probeRoot: { type: "string" },
-      },
-      required: ["builtins", "packages", "probeRoot"],
-      type: "object",
-    },
-  ],
-  maxItems: 1,
-  minItems: 1,
-  type: "array",
-} as const;
-
-const noLocalClassExtends = defineRule({
-  create(context) {
-    const options = classExtendsOptions(context);
-    const walk = {
-      builtins: new Set(options.builtins),
-      context,
-      selfSpecifiers: selfSpecifiersOf(context, options),
-    };
-    const strings = new StaticString(context);
-    const reportPrototype = createReporter(context, PROTOTYPE_MESSAGE);
-    const checkName = (node: Node, name: string | undefined): void => {
-      if (PROTOTYPE_NAMES.has(name ?? "")) reportPrototype(node);
-    };
-    const checkString = (node: Node): void => checkName(node, strings.fold(node));
-    const shared = sharedWrite.createSharedWrite(
-      walk,
-      createReporter(context, SHARED_WRITE_MESSAGE),
-    );
-    const check = (node: ESTree.Class): void => {
-      if (node.superClass !== null && classOrigin.declaredInPackage(walk, node.superClass))
-        context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
-    };
-    return {
-      ...shared,
-      BinaryExpression: checkString,
-      ClassDeclaration: check,
-      ClassExpression: check,
-      Identifier: (node) => checkName(node, node.name),
-      Literal: checkString,
-      TemplateLiteral: checkString,
-    };
-  },
-  meta: { schema: packagesSchema, type: "problem" },
-});
-
 const noPrototypeWrite = defineRule({
   create(context) {
     const reporters = Object.fromEntries(
       Object.entries(prototypeGuard.MESSAGES).map(([kind, message]) => [
         kind,
-        createReporter(context, message),
+        reporter.createReporter(context, message),
       ]),
     );
     return prototypeGuard.createPrototypeGuard(context, (kind, node) => reporters[kind]!(node));
@@ -275,14 +165,19 @@ const noRestrictedMember = defineRule({
 const msaPlugin = definePlugin({
   meta: { name: "msa" },
   rules: {
+    "env-via-platform": intents.envViaPlatform,
+    "local-time-via-chord": intents.localTimeViaChord,
     "no-builtin-module-lookup": noBuiltinModuleLookup,
     "no-builtin-require": noBuiltinRequire,
-    "no-local-class-extends": noLocalClassExtends,
+    "no-local-class-extends": localClassExtends.noLocalClassExtends,
     "no-nested-class": nestedClass.noNestedClass,
     "no-prototype-write": noPrototypeWrite,
     "no-restricted-member": noRestrictedMember,
     "no-sync-fs": noSyncFs,
+    "node-builtins-via-platform": intents.nodeBuiltinsViaPlatform,
     "process-env-writer": restrictedMember.processEnvWriter,
+    "script-io-via-script-output": intents.scriptIoViaScriptOutput,
+    "timers-armed-by-the-run": intents.timersArmedByTheRun,
   },
 });
 

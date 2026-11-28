@@ -151,15 +151,16 @@ const runSubagentProcess = (request: SpawnRequest) =>
           }),
         );
 
-        yield* Effect.forkScoped(
-          Stream.runForEach(Stream.splitLines(Stream.decodeText(handle.stdout)), (line) =>
-            Effect.sync(() => request.onLine(line)),
-          ),
+        yield* handle.stdout.pipe(
+          Stream.decodeText,
+          Stream.splitLines,
+          Stream.runForEach((line) => Effect.sync(() => request.onLine(line))),
+          Effect.forkScoped,
         );
-        yield* Effect.forkScoped(
-          Stream.runForEach(Stream.decodeText(handle.stderr), (chunk) =>
-            Effect.sync(() => request.onStderr(chunk)),
-          ),
+        yield* handle.stderr.pipe(
+          Stream.decodeText,
+          Stream.runForEach((chunk) => Effect.sync(() => request.onStderr(chunk))),
+          Effect.forkScoped,
         );
 
         return yield* handle.exitCode;
@@ -258,7 +259,7 @@ const runSingleAgent = (
           });
           return finishResult(currentResult, Number(exitCode), request.signal);
         }),
-      (tmp) => removeTempPrompt(Option.getOrUndefined(tmp)),
+      (tmp) => tmp.pipe(Option.getOrUndefined, removeTempPrompt),
     ),
   );
 };

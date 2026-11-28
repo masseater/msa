@@ -47,7 +47,7 @@ const collect = (target: sshArgsTypes.SshTarget, run: runSshTypes.SshRun, stderr
       }).pipe(Effect.mapError((error) => SshError.create(error.message, null, "")));
       const [stdout, , code] = yield* Effect.all(
         [
-          Stream.mkString(Stream.decodeText(child.stdout)),
+          child.stdout.pipe(Stream.decodeText, Stream.mkString),
           Stream.runForEach(child.stderr, (chunk) =>
             Effect.sync(() => {
               stderr.push(chunk);

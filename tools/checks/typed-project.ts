@@ -1,14 +1,8 @@
 import type { Node, SourceFile } from "typescript/ast";
 import { API } from "typescript/sync";
-import type { Checker, Project, Type } from "typescript/sync";
+import type { Checker, Type } from "typescript/sync";
 
-type Scope = {
-  readonly files: (name: string) => boolean;
-  readonly project?: string | undefined;
-  readonly root: string;
-};
-
-type FileScan<F> = (project: Project, file: SourceFile, relative: string) => readonly F[];
+import type typedProjectTypes from "./typed-project.types.ts";
 
 const children = (node: Node): readonly Node[] => {
   const found: Node[] = [];
@@ -47,8 +41,8 @@ const typesOf = (checker: Checker, nodes: readonly Node[]): readonly (Type | und
 };
 
 const scanProject = <F>(
-  { files, project: config = "tsconfig.json", root }: Scope,
-  scanFile: FileScan<F>,
+  { files, project: config = "tsconfig.json", root }: typedProjectTypes.Scope,
+  scanFile: typedProjectTypes.FileScan<F>,
 ): readonly F[] => {
   const api = new API({ cwd: root });
   const prefix = new URL(`file://${root}/`).pathname;

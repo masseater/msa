@@ -172,8 +172,8 @@ const collect = (
       const child = yield* ChildProcess.make(command, args, options);
       const [stdout, stderr, status] = yield* Effect.all(
         [
-          Stream.mkString(Stream.decodeText(child.stdout)),
-          Stream.mkString(Stream.decodeText(child.stderr)),
+          child.stdout.pipe(Stream.decodeText, Stream.mkString),
+          child.stderr.pipe(Stream.decodeText, Stream.mkString),
           child.exitCode,
         ],
         { concurrency: "unbounded" },

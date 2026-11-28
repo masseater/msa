@@ -94,4 +94,4 @@ const addsMissingRoundRowsWhenTheDatabaseOpens = () =>
   });
 
 it("adds missing round rows when the database opens", () =>
-  Effect.runPromise(Effect.scoped(addsMissingRoundRowsWhenTheDatabaseOpens())));
+  addsMissingRoundRowsWhenTheDatabaseOpens().pipe(Effect.scoped, Effect.runPromise));

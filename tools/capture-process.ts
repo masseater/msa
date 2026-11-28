@@ -18,7 +18,7 @@ class ProcessRunner extends Context.Service<
   }
 >()("msa-monorepo/tools/capture-process/ProcessRunner") {}
 
-const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
+const processRunnerLayer = Layer.effect(
   ProcessRunner,
   Effect.gen(function* () {
     const { processes } = yield* ScriptOutput;
@@ -45,14 +45,10 @@ const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
   }),
 ).pipe(Layer.provide(scriptOutputLayer));
 
-const captureProcess = (
-  options: captureProcessTypes.ProcessOptions,
-): Effect.Effect<captureProcessTypes.CaptureResult, never, ProcessRunner> =>
+const captureProcess = (options: captureProcessTypes.ProcessOptions) =>
   ProcessRunner.use((runner) => runner.capture(options));
 
-const runInherit = (
-  options: captureProcessTypes.ProcessOptions,
-): Effect.Effect<void, never, ProcessRunner> =>
+const runInherit = (options: captureProcessTypes.ProcessOptions) =>
   ProcessRunner.use((runner) => runner.inherit(options));
 
 const captureProcessModule = {

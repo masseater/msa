@@ -7,7 +7,7 @@ const { makeDirectory, removePath, runTest } = testing;
 
 const { liveAuthAvailable } = liveAuth;
 
-declare module "vitest" {
+declare module "vite-plus/test" {
   interface ProvidedContext {
     readonly liveAuthAvailable: boolean;
   }

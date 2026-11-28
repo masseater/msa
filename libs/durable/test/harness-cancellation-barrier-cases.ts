@@ -11,18 +11,14 @@ const { aborted } = taskSupport;
 
 const Dormant = defineTask<null, { phase: "work" }, null>({
   abort: (_task, runtime, abortContext) =>
-    Effect.runPromise(
-      Effect.asVoid(
-        Effect.suspend(() =>
-          awaited(
-            runtime.commit(
-              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
-              abortContext,
-            ),
-          ),
+    Effect.suspend(() =>
+      awaited(
+        runtime.commit(
+          () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+          abortContext,
         ),
       ),
-    ),
+    ).pipe(Effect.asVoid, Effect.runPromise),
   initial: () => ({ phase: "work" }),
   name: "test.dormant",
   phases: {

@@ -9,7 +9,7 @@ const { captureProcess, processRunnerLayer } = testProcess;
 const repoRoot = `${import.meta.dirname}/../..`;
 const rule = `${repoRoot}/tools/rules/no-unawaited-test-cleanup.yml`;
 
-const Matches = Schema.fromJsonString(Schema.Array(Schema.Struct({ file: Schema.String })));
+const Matches = Schema.Struct({ file: Schema.String }).pipe(Schema.Array, Schema.fromJsonString);
 
 const discarding: readonly string[] = [
   "harnesses.forEach((h) => h.cleanup());",

@@ -114,13 +114,9 @@ const rejectsRuntimeCommit = Effect.gen(function* () {
         held = storage.holdCommits();
         void harnessRef!.commit(
           (tx) =>
-            runNested(
-              Effect.asVoid(
-                Effect.suspend(() =>
-                  awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),
-                ),
-              ),
-            ),
+            Effect.suspend(() =>
+              awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),
+            ).pipe(Effect.asVoid, runNested),
           context,
         );
         queued = runtime.commit(() => completed(null), context).catch((error: unknown) => error);

@@ -108,8 +108,8 @@ const collectCommand = (request: testPlatformTypes.CommandRequest) =>
       }
       const [stdout, stderr, exitCode] = yield* Effect.all(
         [
-          Stream.mkString(Stream.decodeText(handle.stdout)),
-          Stream.mkString(Stream.decodeText(handle.stderr)),
+          handle.stdout.pipe(Stream.decodeText, Stream.mkString),
+          handle.stderr.pipe(Stream.decodeText, Stream.mkString),
           handle.exitCode,
         ],
         { concurrency: 3 },
@@ -161,7 +161,11 @@ const spawnInScope = (request: testPlatformTypes.ProcessRequest, scope: Scope.Cl
       Stream.runForEach(Stream.decodeText(handle.stdout), (chunk) => Queue.offer(chunks, chunk)),
       scope,
     );
-    const stderr = yield* Effect.forkIn(Stream.mkString(Stream.decodeText(handle.stderr)), scope);
+    const stderr = yield* handle.stderr.pipe(
+      Stream.decodeText,
+      Stream.mkString,
+      Effect.forkIn(scope),
+    );
     const exited = handle.exitCode.pipe(
       Effect.flatMap((code) =>
         Effect.flatMap(Fiber.join(stderr), (output) =>

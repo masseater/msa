@@ -89,14 +89,13 @@ const recoveringProvider = () => {
     onUnauthorized: () => {
       if (refresh === undefined) {
         state.refreshes++;
-        refresh = Effect.runPromise(
-          Deferred.await(refreshGate).pipe(
-            Effect.andThen(
-              Effect.sync(() => {
-                state.token = "new";
-              }),
-            ),
+        refresh = Deferred.await(refreshGate).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              state.token = "new";
+            }),
           ),
+          Effect.runPromise,
         );
       }
       if (++state.waiting === 3) Deferred.doneUnsafe(allWaiting, Effect.void);

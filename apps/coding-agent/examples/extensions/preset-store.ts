@@ -23,7 +23,7 @@ const PresetSchema = Schema.Struct({
   model: Schema.optional(Schema.String),
   provider: Schema.optional(Schema.String),
   thinkingLevel: Schema.optional(ThinkingLevelSchema),
-  tools: Schema.optional(Schema.Array(Schema.String)),
+  tools: Schema.String.pipe(Schema.Array, Schema.optional),
 });
 
 const PresetsSchema = Schema.Record(Schema.String, PresetSchema);

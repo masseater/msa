@@ -49,7 +49,7 @@ class Progress implements progressTypes.Progress {
   #cancelTimer(): void {
     const timer = this.#timer;
     this.#timer = undefined;
-    if (timer !== undefined) Effect.runFork(Fiber.interrupt(timer));
+    if (timer !== undefined) timer.pipe(Fiber.interrupt, Effect.runFork);
   }
 
   #schedule(): void {

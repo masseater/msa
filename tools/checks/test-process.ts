@@ -14,7 +14,7 @@ class ProcessRunner extends Context.Service<
   }
 >()("msa-monorepo/tools/checks/test-process/ProcessRunner") {}
 
-const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
+const processRunnerLayer = Layer.effect(
   ProcessRunner,
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -57,14 +57,10 @@ const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
   }),
 ).pipe(Layer.provide(NodeServices.layer));
 
-const captureProcess = (
-  options: testProcessTypes.ProcessOptions,
-): Effect.Effect<testProcessTypes.CaptureResult, never, ProcessRunner> =>
+const captureProcess = (options: testProcessTypes.ProcessOptions) =>
   ProcessRunner.use((runner) => runner.capture(options));
 
-const runInherit = (
-  options: testProcessTypes.ProcessOptions,
-): Effect.Effect<void, never, ProcessRunner> =>
+const runInherit = (options: testProcessTypes.ProcessOptions) =>
   ProcessRunner.use((runner) => runner.inherit(options));
 
 const testProcess = {

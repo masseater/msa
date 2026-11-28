@@ -50,10 +50,10 @@ const send = (request: httpTypes.HttpRequest) =>
   });
 
 const httpRequest = (request: httpTypes.HttpRequest): Effect.Effect<httpTypes.HttpReply> =>
-  Effect.scoped(
-    Effect.flatMap(Layer.build(httpLayer), (services) =>
-      Effect.provideContext(send(request), services),
-    ),
+  httpLayer.pipe(
+    Layer.build,
+    Effect.flatMap((services) => Effect.provideContext(send(request), services)),
+    Effect.scoped,
   );
 
 const fetchReply = (request: httpTypes.HttpRequest): Promise<httpTypes.HttpReply> =>

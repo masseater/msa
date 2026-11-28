@@ -190,13 +190,9 @@ const createsIndependentConversationsStep1 = Effect.gen(function* () {
     harness.createConversation(
       {
         init: (tx, id) =>
-          runPromise(
-            Effect.asVoid(
-              Effect.suspend(() =>
-                awaited(tx.appendEntry(id, { kind: "message", model: [user("seed")] })),
-              ),
-            ),
-          ),
+          Effect.suspend(() =>
+            awaited(tx.appendEntry(id, { kind: "message", model: [user("seed")] })),
+          ).pipe(Effect.asVoid, runPromise),
         ownership: { kind: "ownerless" },
       },
       context,

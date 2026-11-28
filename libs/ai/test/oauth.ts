@@ -88,7 +88,7 @@ const runtime = ManagedRuntime.make(NodeServices.layer);
 const resolveApiKey = (provider: string): Promise<string | undefined> =>
   runtime.runPromise(
     resolveStored(provider).pipe(
-      Effect.catchCause((cause) => Effect.as(Console.log(Cause.pretty(cause)), undefined)),
+      Effect.catchCause((cause) => cause.pipe(Cause.pretty, Console.log, Effect.as(undefined))),
     ),
   );
 

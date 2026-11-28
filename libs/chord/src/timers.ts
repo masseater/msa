@@ -23,7 +23,7 @@ export default class HostTimers {
     const fiber = Effect.runFork(effect);
     FiberSet.addUnsafe(this.#fibers, fiber);
     return () => {
-      Effect.runFork(Fiber.interrupt(fiber));
+      fiber.pipe(Fiber.interrupt, Effect.runFork);
     };
   }
 }
