@@ -1,5 +1,3 @@
-import { homedir } from "os";
-
 import type aiTypes from "@msa/ai/index.types";
 import codingAgent from "@msa/coding-agent";
 
@@ -7,7 +5,7 @@ import subagentTypes from "./types.ts";
 import type subagentTypesTypes from "./types.types.ts";
 
 const { PER_TASK_OUTPUT_CAP } = subagentTypes;
-const { formatReadLineRange } = codingAgent;
+const { formatReadLineRange, shortenPath } = codingAgent;
 
 type ThemeFg = (
   color: "muted" | "accent" | "warning" | "dim" | "toolOutput",
@@ -38,11 +36,6 @@ const formatUsageStats = (request: {
   }
   if (model !== undefined && model.length > 0) parts.push(model);
   return parts.join(" ");
-};
-
-const shortenPath = (path: string): string => {
-  const home = homedir();
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 };
 
 const preview = (text: string, max: number): string =>

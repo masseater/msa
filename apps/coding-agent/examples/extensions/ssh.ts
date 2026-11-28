@@ -43,82 +43,30 @@ interface SshTarget {
   readonly remoteCwd: string;
 }
 
-const registerReadTool = (
-  msa: codingAgentTypes.ExtensionAPI,
-  localCwd: string,
-  getSsh: () => SshTarget | null,
-): void => {
-  const local = createReadTool(localCwd);
-  msa.registerTool({
-    ...local,
-    execute: (id, params, signal, onUpdate) => {
-      const ssh = getSsh();
-      if (ssh === null) return local.execute(id, params, signal, onUpdate);
-      const remote = createReadTool(localCwd, {
-        operations: createRemoteReadOps({ localCwd, remote: ssh.remote, remoteCwd: ssh.remoteCwd }),
-      });
-      return remote.execute(id, params, signal, onUpdate);
-    },
-  });
-};
+interface RemoteTarget extends SshTarget {
+  readonly localCwd: string;
+}
 
-const registerWriteTool = (
+const registerRemoteTool = <
+  Tool extends codingAgentTypes.ToolDefinition & {
+    execute: (...args: never[]) => unknown;
+  },
+  Operations,
+>(
   msa: codingAgentTypes.ExtensionAPI,
   localCwd: string,
   getSsh: () => SshTarget | null,
+  create: (cwd: string, options?: { operations: Operations }) => Tool,
+  remoteOps: (target: RemoteTarget) => Operations,
 ): void => {
-  const local = createWriteTool(localCwd);
+  const local = create(localCwd);
   msa.registerTool({
     ...local,
-    execute: (id, params, signal, onUpdate) => {
+    execute: (...args: Parameters<Tool["execute"]>) => {
       const ssh = getSsh();
-      if (ssh === null) return local.execute(id, params, signal, onUpdate);
-      const remote = createWriteTool(localCwd, {
-        operations: createRemoteWriteOps({
-          localCwd,
-          remote: ssh.remote,
-          remoteCwd: ssh.remoteCwd,
-        }),
-      });
-      return remote.execute(id, params, signal, onUpdate);
-    },
-  });
-};
-
-const registerEditTool = (
-  msa: codingAgentTypes.ExtensionAPI,
-  localCwd: string,
-  getSsh: () => SshTarget | null,
-): void => {
-  const local = createEditTool(localCwd);
-  msa.registerTool({
-    ...local,
-    execute: (id, params, signal, onUpdate) => {
-      const ssh = getSsh();
-      if (ssh === null) return local.execute(id, params, signal, onUpdate);
-      const remote = createEditTool(localCwd, {
-        operations: createRemoteEditOps({ localCwd, remote: ssh.remote, remoteCwd: ssh.remoteCwd }),
-      });
-      return remote.execute(id, params, signal, onUpdate);
-    },
-  });
-};
-
-const registerBashTool = (
-  msa: codingAgentTypes.ExtensionAPI,
-  localCwd: string,
-  getSsh: () => SshTarget | null,
-): void => {
-  const local = createBashTool(localCwd);
-  msa.registerTool({
-    ...local,
-    execute: (id, params, signal, onUpdate) => {
-      const ssh = getSsh();
-      if (ssh === null) return local.execute(id, params, signal, onUpdate);
-      const remote = createBashTool(localCwd, {
-        operations: createRemoteBashOps({ localCwd, remote: ssh.remote, remoteCwd: ssh.remoteCwd }),
-      });
-      return remote.execute(id, params, signal, onUpdate);
+      const tool =
+        ssh === null ? local : create(localCwd, { operations: remoteOps({ localCwd, ...ssh }) });
+      return tool.execute(...args);
     },
   });
 };
@@ -133,10 +81,10 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
     type: "string",
   });
 
-  registerReadTool(msa, localCwd, getSsh);
-  registerWriteTool(msa, localCwd, getSsh);
-  registerEditTool(msa, localCwd, getSsh);
-  registerBashTool(msa, localCwd, getSsh);
+  registerRemoteTool(msa, localCwd, getSsh, createReadTool, createRemoteReadOps);
+  registerRemoteTool(msa, localCwd, getSsh, createWriteTool, createRemoteWriteOps);
+  registerRemoteTool(msa, localCwd, getSsh, createEditTool, createRemoteEditOps);
+  registerRemoteTool(msa, localCwd, getSsh, createBashTool, createRemoteBashOps);
 
   msa.on("session_start", (_event, ctx) => {
     void runtime.runPromise(

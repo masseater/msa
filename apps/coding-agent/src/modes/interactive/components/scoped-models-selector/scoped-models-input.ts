@@ -37,8 +37,8 @@ export default class ScopedModelsInput {
       [binding("tui.select.down"), () => this.moveCursor(1)],
       [binding("app.models.reorderUp", "app.models.reorderDown"), (step) => this.reorder(step)],
       [binding("tui.select.confirm"), () => this.toggleSelected()],
-      [binding("app.models.enableAll"), () => this.enableAllVisible()],
-      [binding("app.models.clearAll"), () => this.clearAllVisible()],
+      [binding("app.models.enableAll"), () => this.applyToVisible(enableAll)],
+      [binding("app.models.clearAll"), () => this.applyToVisible(clearAll)],
       [binding("app.models.toggleProvider"), () => this.toggleProvider()],
       [binding("app.models.save"), () => this.save()],
       [(_kb, data) => matchesKey(data, Key.ctrl("c")), () => this.clearSearchOrCancel()],
@@ -89,23 +89,20 @@ export default class ScopedModelsInput {
     }
   }
 
-  private clearAllVisible(): void {
+  private applyToVisible(apply: typeof clearAll): void {
     const targetIds =
       this.selector.searchInput.getValue() === ""
         ? undefined
         : this.selector.filteredItems.map((i) => i.fullId);
-    this.selector.enabledIds = clearAll(this.selector.enabledIds, this.selector.allIds, targetIds);
-    this.selector.isDirty = true;
-    this.selector.refresh();
-    this.selector.notifyChange();
+    this.applyTo(apply, targetIds);
   }
 
-  private enableAllVisible(): void {
-    const targetIds =
-      this.selector.searchInput.getValue() === ""
-        ? undefined
-        : this.selector.filteredItems.map((i) => i.fullId);
-    this.selector.enabledIds = enableAll(this.selector.enabledIds, this.selector.allIds, targetIds);
+  private applyTo(apply: typeof clearAll, targetIds: string[] | undefined): void {
+    this.commit(apply(this.selector.enabledIds, this.selector.allIds, targetIds));
+  }
+
+  private commit(enabledIds: typeof this.selector.enabledIds): void {
+    this.selector.enabledIds = enabledIds;
     this.selector.isDirty = true;
     this.selector.refresh();
     this.selector.notifyChange();
@@ -114,14 +111,7 @@ export default class ScopedModelsInput {
   private toggleSelected(): void {
     const item = this.selector.filteredItems[this.selector.selectedIndex];
     if (item !== undefined) {
-      this.selector.enabledIds = toggle(
-        this.selector.enabledIds,
-        this.selector.allIds,
-        item.fullId,
-      );
-      this.selector.isDirty = true;
-      this.selector.refresh();
-      this.selector.notifyChange();
+      this.commit(toggle(this.selector.enabledIds, this.selector.allIds, item.fullId));
     }
   }
 
@@ -133,12 +123,7 @@ export default class ScopedModelsInput {
         (id) => this.selector.modelsById.get(id)!.provider === provider,
       );
       const allEnabled = providerIds.every((id) => isEnabled(this.selector.enabledIds, id));
-      this.selector.enabledIds = allEnabled
-        ? clearAll(this.selector.enabledIds, this.selector.allIds, providerIds)
-        : enableAll(this.selector.enabledIds, this.selector.allIds, providerIds);
-      this.selector.isDirty = true;
-      this.selector.refresh();
-      this.selector.notifyChange();
+      this.applyTo(allEnabled ? clearAll : enableAll, providerIds);
     }
   }
 }

@@ -1,99 +1,82 @@
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-const registerAsk = (msa: codingAgentTypes.ExtensionAPI): void => {
-  msa.registerCommand("ask", {
+type Content = Parameters<codingAgentTypes.ExtensionAPI["sendUserMessage"]>[0];
+
+type WhenBusy =
+  | { readonly refuse: string }
+  | { readonly deliverAs: "steer" | "followUp"; readonly notice?: string };
+
+interface MessageCommand {
+  readonly content: (args: string) => Content;
+  readonly description: string;
+  readonly name: string;
+  readonly whenBusy: WhenBusy;
+}
+
+const plain = (args: string): Content => args;
+
+const messageCommands: readonly MessageCommand[] = [
+  {
+    content: plain,
     description: "Send a user message to the agent",
-    handler: (args, ctx) =>
-      Effect.runPromise(
-        Effect.sync(() => {
-          if (args.trim().length === 0) {
-            ctx.ui.notify("Usage: /ask <message>", "warning");
-            return;
-          }
-
-          if (!ctx.isIdle()) {
-            ctx.ui.notify("Agent is busy. Use /steer or /followup instead.", "warning");
-            return;
-          }
-
-          msa.sendUserMessage(args);
-        }),
-      ),
-  });
-};
-
-const registerSteer = (msa: codingAgentTypes.ExtensionAPI): void => {
-  msa.registerCommand("steer", {
+    name: "ask",
+    whenBusy: { refuse: "Agent is busy. Use /steer or /followup instead." },
+  },
+  {
+    content: plain,
     description: "Send a steering message (interrupts current processing)",
-    handler: (args, ctx) =>
-      Effect.runPromise(
-        Effect.sync(() => {
-          if (args.trim().length === 0) {
-            ctx.ui.notify("Usage: /steer <message>", "warning");
-            return;
-          }
-
-          if (ctx.isIdle()) {
-            msa.sendUserMessage(args);
-          } else {
-            msa.sendUserMessage(args, { deliverAs: "steer" });
-          }
-        }),
-      ),
-  });
-};
-
-const registerFollowup = (msa: codingAgentTypes.ExtensionAPI): void => {
-  msa.registerCommand("followup", {
+    name: "steer",
+    whenBusy: { deliverAs: "steer" },
+  },
+  {
+    content: plain,
     description: "Queue a follow-up message (waits for current processing)",
+    name: "followup",
+    whenBusy: { deliverAs: "followUp", notice: "Follow-up queued" },
+  },
+  {
+    content: (args) => [
+      { text: `User request: ${args}`, type: "text" },
+      { text: "Please respond concisely.", type: "text" },
+    ],
+    description: "Send a user message with structured content",
+    name: "askwith",
+    whenBusy: { refuse: "Agent is busy" },
+  },
+];
+
+const registerMessageCommand = (
+  msa: codingAgentTypes.ExtensionAPI,
+  { content, description, name, whenBusy }: MessageCommand,
+): void => {
+  msa.registerCommand(name, {
+    description,
     handler: (args, ctx) =>
       Effect.runPromise(
         Effect.sync(() => {
           if (args.trim().length === 0) {
-            ctx.ui.notify("Usage: /followup <message>", "warning");
+            ctx.ui.notify(`Usage: /${name} <message>`, "warning");
             return;
           }
 
           if (ctx.isIdle()) {
-            msa.sendUserMessage(args);
-          } else {
-            msa.sendUserMessage(args, { deliverAs: "followUp" });
-            ctx.ui.notify("Follow-up queued", "info");
-          }
-        }),
-      ),
-  });
-};
-
-const registerAskwith = (msa: codingAgentTypes.ExtensionAPI): void => {
-  msa.registerCommand("askwith", {
-    description: "Send a user message with structured content",
-    handler: (args, ctx) =>
-      Effect.runPromise(
-        Effect.sync(() => {
-          if (args.trim().length === 0) {
-            ctx.ui.notify("Usage: /askwith <message>", "warning");
+            msa.sendUserMessage(content(args));
             return;
           }
 
-          if (!ctx.isIdle()) {
-            ctx.ui.notify("Agent is busy", "warning");
+          if ("refuse" in whenBusy) {
+            ctx.ui.notify(whenBusy.refuse, "warning");
             return;
           }
 
-          msa.sendUserMessage([
-            { text: `User request: ${args}`, type: "text" },
-            { text: "Please respond concisely.", type: "text" },
-          ]);
+          msa.sendUserMessage(content(args), { deliverAs: whenBusy.deliverAs });
+          if (whenBusy.notice !== undefined) ctx.ui.notify(whenBusy.notice, "info");
         }),
       ),
   });
 };
 
 export default function (msa: codingAgentTypes.ExtensionAPI) {
-  registerAsk(msa);
-  registerSteer(msa);
-  registerFollowup(msa);
-  registerAskwith(msa);
+  for (const command of messageCommands) registerMessageCommand(msa, command);
 }

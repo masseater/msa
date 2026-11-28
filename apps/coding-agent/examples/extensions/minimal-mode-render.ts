@@ -1,18 +1,11 @@
-import { homedir } from "os";
-
 import type aiTypes from "@msa/ai/index.types";
 import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 
-const { formatReadLineRange } = codingAgent;
+const { formatReadLineRange, shortenPath } = codingAgent;
 
 const { Text } = tui;
-
-const shortenPath = (path: string): string => {
-  const home = homedir();
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
-};
 
 const textOf = (result: {
   content: ReadonlyArray<aiTypes.TextContent | aiTypes.ImageContent>;
@@ -47,6 +40,20 @@ const listResult = (
   }
 
   return new Text(`\n${expandedLines(text, theme)}`, 0, 0);
+};
+
+const messageResult = (
+  result: { content: ReadonlyArray<aiTypes.TextContent | aiTypes.ImageContent> },
+  expanded: boolean,
+  theme: codingAgentTypes.Theme,
+  colorOf: (text: string) => "error" | "toolOutput",
+  options: { hideEmpty?: boolean } = {},
+) => {
+  const text = textOf(result);
+  if (!expanded || text === undefined || (options.hideEmpty === true && text.length === 0)) {
+    return new Text("", 0, 0);
+  }
+  return new Text(`\n${theme.fg(colorOf(text), text)}`, 0, 0);
 };
 
 const renderLsCall: NonNullable<
@@ -157,12 +164,10 @@ const renderEditCall: NonNullable<
 
 const renderEditResult: NonNullable<
   ReturnType<typeof codingAgent.createEditToolDefinition>["renderResult"]
-> = (result, { expanded }, theme) => {
-  const text = textOf(result);
-  if (!expanded || text === undefined) return new Text("", 0, 0);
-  const failed = text.includes("Error") || text.includes("error");
-  return new Text(`\n${theme.fg(failed ? "error" : "toolOutput", text)}`, 0, 0);
-};
+> = (result, { expanded }, theme) =>
+  messageResult(result, expanded, theme, (text) =>
+    text.includes("Error") || text.includes("error") ? "error" : "toolOutput",
+  );
 
 const renderWriteCall: NonNullable<
   ReturnType<typeof codingAgent.createWriteToolDefinition>["renderCall"]
@@ -178,11 +183,8 @@ const renderWriteCall: NonNullable<
 
 const renderWriteResult: NonNullable<
   ReturnType<typeof codingAgent.createWriteToolDefinition>["renderResult"]
-> = (result, { expanded }, theme) => {
-  const text = textOf(result);
-  if (!expanded || text === undefined || text.length === 0) return new Text("", 0, 0);
-  return new Text(`\n${theme.fg("error", text)}`, 0, 0);
-};
+> = (result, { expanded }, theme) =>
+  messageResult(result, expanded, theme, () => "error", { hideEmpty: true });
 
 const toolRenderers = {
   bash: { renderCall: renderBashCall, renderResult: renderBashResult },

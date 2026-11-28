@@ -19,6 +19,7 @@ const toolsKit: {
   readonly formatSize: typeof tools.formatSize;
   readonly generateDiffString: typeof editDiff.generateDiffString;
   readonly generateUnifiedPatch: typeof editDiff.generateUnifiedPatch;
+  readonly shortenPath: typeof renderUtils.shortenPath;
   readonly truncateHead: typeof tools.truncateHead;
   readonly truncateLine: typeof tools.truncateLine;
   readonly truncateTail: typeof tools.truncateTail;
@@ -40,6 +41,7 @@ const toolsKit: {
   formatSize: tools.formatSize,
   generateDiffString: editDiff.generateDiffString,
   generateUnifiedPatch: editDiff.generateUnifiedPatch,
+  shortenPath: renderUtils.shortenPath,
   truncateHead: tools.truncateHead,
   truncateLine: tools.truncateLine,
   truncateTail: tools.truncateTail,
