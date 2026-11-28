@@ -13,34 +13,32 @@ const { authDir, checkOpenaiAuth } = authCheckSupport;
 
 const { awaited, joinPath, pathExists, runTest, toJsonText, writeTextFile } = testing;
 
-const doesNotTreatAnUnresolvedStoredEnvironment = () =>
+const storedAuthCases = [
+  {
+    contents: { openai: { key: "$MISSING_AUTH_CHECK_KEY", type: "api_key" as const } },
+    expected: {
+      provider: "openai",
+      reason: "credentials_not_configured",
+      status: "not_ready",
+    },
+    name: "does not treat an unresolved stored environment reference as configured",
+  },
+  {
+    contents: "{invalid-json",
+    expected: { provider: "openai", reason: "invalid_state", status: "invalid" },
+    name: "reports malformed auth state as invalid",
+  },
+];
+
+const checksStoredAuth = ({ contents, expected }: (typeof storedAuthCases)[number]) =>
   runTest(
     Effect.gen(function* () {
       const authPath = joinPath(authDir.path, "auth.json");
       yield* writeTextFile(
         authPath,
-        yield* toJsonText({
-          openai: { key: "$MISSING_AUTH_CHECK_KEY", type: "api_key" as const },
-        }),
+        typeof contents === "string" ? contents : yield* toJsonText(contents),
       );
-      expect(yield* checkOpenaiAuth(authPath)).toEqual({
-        provider: "openai",
-        reason: "credentials_not_configured",
-        status: "not_ready",
-      });
-    }),
-  );
-
-const reportsMalformedAuthStateAsInvalid = () =>
-  runTest(
-    Effect.gen(function* () {
-      const authPath = joinPath(authDir.path, "auth.json");
-      yield* writeTextFile(authPath, "{invalid-json");
-      expect(yield* checkOpenaiAuth(authPath)).toEqual({
-        provider: "openai",
-        reason: "invalid_state",
-        status: "invalid",
-      });
+      expect(yield* checkOpenaiAuth(authPath)).toEqual(expected);
     }),
   );
 
@@ -93,12 +91,7 @@ const createsAnAuthCheckRuntimeWithoutCatalog = () =>
   );
 
 describe("auth check command", () => {
-  test(
-    "does not treat an unresolved stored environment reference as configured",
-    doesNotTreatAnUnresolvedStoredEnvironment,
-  );
-
-  test("reports malformed auth state as invalid", reportsMalformedAuthStateAsInvalid);
+  test.each(storedAuthCases)("$name", checksStoredAuth);
 
   test("does not create an auth file or its parent directory", doesNotCreateAnAuthFileOr);
 
