@@ -61,22 +61,6 @@ const rejectedToolFlagCases = [
   },
 ];
 
-const parsesPlainTextMessages = () => {
-  const result = parseArgs(["hello", "world"]);
-  expect(result.messages).toEqual(["hello", "world"]);
-};
-
-const parsesFileArguments = () => {
-  const result = parseArgs(["@README.md", "@src/main.ts"]);
-  expect(result.fileArgs).toEqual(["README.md", "src/main.ts"]);
-};
-
-const parsesMixedMessagesAndFileArgs = () => {
-  const result = parseArgs(["@file.txt", "explain this", "@image.png"]);
-  expect(result.fileArgs).toEqual(["file.txt", "image.png"]);
-  expect(result.messages).toEqual(["explain this"]);
-};
-
 const capturesUnknownLongFlagsWithStringValues = () => {
   const result = parseArgs(["--unknown-flag", "message"]);
   expect(result.messages).toEqual([]);
@@ -113,6 +97,24 @@ const parsesMultipleFlagsTogether = () => {
   expect(result.messages).toEqual(["Do the task"]);
 };
 
+const messageCases = [
+  {
+    argv: ["hello", "world"],
+    expected: { messages: ["hello", "world"] },
+    name: "plain text messages",
+  },
+  {
+    argv: ["@README.md", "@src/main.ts"],
+    expected: { fileArgs: ["README.md", "src/main.ts"] },
+    name: "@file arguments",
+  },
+  {
+    argv: ["@file.txt", "explain this", "@image.png"],
+    expected: { fileArgs: ["file.txt", "image.png"], messages: ["explain this"] },
+    name: "mixed messages and file args",
+  },
+];
+
 describe("parseArgs", () => {
   describe("tool flags", () => {
     test.each(toolFlagCases)("parses $name", ({ argv, expected }) => {
@@ -129,11 +131,9 @@ describe("parseArgs", () => {
 
 describe("parseArgs", () => {
   describe("messages and file args", () => {
-    test("parses plain text messages", parsesPlainTextMessages);
-
-    test("parses @file arguments", parsesFileArguments);
-
-    test("parses mixed messages and file args", parsesMixedMessagesAndFileArgs);
+    test.each(messageCases)("parses $name", ({ argv, expected }) => {
+      expect(parseArgs(argv)).toMatchObject(expected);
+    });
 
     test(
       "captures unknown long flags with string values",

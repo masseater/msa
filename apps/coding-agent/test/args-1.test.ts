@@ -19,13 +19,6 @@ const parsesPromptAfterPEvenWhenIt = () => {
   expect(result.unknownFlags.size).toBe(0);
 };
 
-const doesNotConsumeOptionsAfterPAs = () => {
-  const result = parseArgs(["-p", "--provider", "openai", "Say hi."]);
-  expect(result.print).toBe(true);
-  expect(result.provider).toBe("openai");
-  expect(result.messages).toEqual(["Say hi."]);
-};
-
 const booleanFlagCases = [
   { argv: ["--version"], expected: { version: true }, name: "--version flag" },
   { argv: ["-v"], expected: { version: true }, name: "-v shorthand" },
@@ -40,6 +33,11 @@ const booleanFlagCases = [
 ];
 
 const valueFlagCases = [
+  {
+    argv: ["-p", "--provider", "openai", "Say hi."],
+    expected: { messages: ["Say hi."], print: true, provider: "openai" },
+    name: "options after -p instead of consuming them as the prompt",
+  },
   { argv: ["--provider", "openai"], expected: { provider: "openai" }, name: "--provider" },
   { argv: ["--model", "gpt-4o"], expected: { model: "gpt-4o" }, name: "--model" },
   {
@@ -104,8 +102,6 @@ describe("parseArgs", () => {
       "parses prompt after -p even when it starts with YAML frontmatter",
       parsesPromptAfterPEvenWhenIt,
     );
-
-    test("does not consume options after -p as prompts", doesNotConsumeOptionsAfterPAs);
   });
 });
 

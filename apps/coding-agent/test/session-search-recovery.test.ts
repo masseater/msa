@@ -21,7 +21,15 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
-const { currentIndexPath, deeplyNestedCall, header, makeLocations, user, writeSession } = fixture;
+const {
+  currentIndexPath,
+  deeplyNestedCall,
+  header,
+  makeLocations,
+  searchOldest,
+  user,
+  writeSession,
+} = fixture;
 
 const directories: string[] = [];
 
@@ -33,12 +41,10 @@ const sourceResolver = new URL("../src/experimental/source-resolver.ts", import.
 
 const search = (locations: sessionSearchTypes.Locations, query: string) =>
   Effect.promise(() =>
-    sessionSearch
-      .searchSessions(locations, { filters: {}, limit: 50, order: "oldest", query })
-      .then(
-        ({ hits }) => ({ ids: hits.map((hit) => hit.entryId) }),
-        (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
-      ),
+    searchOldest(locations, query).then(
+      ({ hits }) => ({ ids: hits.map((hit) => hit.entryId) }),
+      (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+    ),
   );
 
 const writeOne = (locations: sessionSearchTypes.Locations, ...texts: string[]) =>

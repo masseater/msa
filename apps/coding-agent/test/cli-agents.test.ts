@@ -14,19 +14,20 @@ const { evaluateModelPolicy, hiddenModelsByPolicy } = modelPolicy;
 const { findModelUpgrades } = modelUpgrade;
 
 const { awaited, currentTimeMillis, failure, joinPath, runTest } = testing;
-const { cleanAgentDir, createModelRuntime, currentAgentDir, prepareAgentDir, writeAccounts } =
-  cliAgentsSupport;
+const {
+  cleanAgentDir,
+  createModelRuntime,
+  currentAgentDir,
+  expectAccounts,
+  prepareAgentDir,
+  writeAccounts,
+} = cliAgentsSupport;
 
 beforeEach(() => runTest(prepareAgentDir));
 
 afterEach(() => runTest(cleanAgentDir));
 
-const usesMsaSEnvironmentWhenNoAccounts = () =>
-  runTest(
-    Effect.gen(function* () {
-      expect(yield* Effect.promise(() => loadAccounts())).toEqual([{ name: "default" }]);
-    }),
-  );
+const usesMsaSEnvironmentWhenNoAccounts = () => runTest(expectAccounts([{ name: "default" }]));
 
 const expandsInConfigdir = () =>
   runTest(
