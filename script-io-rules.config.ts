@@ -6,12 +6,7 @@ type ImportRules = Readonly<{
   patterns: readonly Readonly<{ group: readonly string[]; message: string }>[];
 }>;
 
-const files: readonly string[] = [
-  "scripts/**",
-  "tools/**",
-  "apps/*/scripts/**",
-  "libs/*/scripts/**",
-];
+const files: readonly string[] = ["bin/**", "tools/**", "apps/*/bin/**", "libs/*/bin/**"];
 
 const testFiles: readonly string[] = ["**/*.test.*"];
 

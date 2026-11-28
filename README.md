@@ -39,7 +39,7 @@ To run from a checkout instead:
 git clone https://github.com/masseater/msa.git
 cd msa
 vp install
-./scripts/msa-dev.sh
+./bin/msa-dev.sh
 ```
 
 The checkout runs on the Node.js version in `.node-version`; `vp` and version managers that read the file pick it up, and the tests fail on any other version. State lives in `~/.msa/agent`, next to `settings.json`, `auth.json`, and sessions.
@@ -69,7 +69,7 @@ vp install            # Install all dependencies
 vp run build          # Refresh model data, then build all packages
 vp run verify         # Lint, type check, tests, model data check
 ./test.sh             # Run tests (skips LLM-dependent tests without API keys)
-./scripts/msa-dev.sh  # Run msa from sources (can be run from any directory)
+./bin/msa-dev.sh  # Run msa from sources (can be run from any directory)
 vp run install-local  # Build and install the host binary to ~/.local
 ```
 

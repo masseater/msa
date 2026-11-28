@@ -26,40 +26,34 @@ const commandProbe = (options: string) =>
   ].join("\n");
 
 const typeBypasses: Readonly<Record<string, string>> = {
-  "scripts/shell-spawn.ts": commandProbe(
+  "bin/shell-spawn.ts": commandProbe(
     '{ args: ["-c", "cat > probe-report.html"], command: "node", shell: true, stdin: "pipe" }',
   ),
-  "scripts/tee-spawn.ts": commandProbe(
+  "bin/tee-spawn.ts": commandProbe(
     '{ args: ["probe-report.html"], command: "tee", stdin: "pipe" }',
   ),
 };
 
 const bypasses: Readonly<Record<string, string>> = {
-  "apps/coding-agent/scripts/tee.ts": [
+  "apps/coding-agent/bin/tee.ts": [
     'import { spawn } from "child_process";',
     'export const tee = (out: string) => spawn("tee", [out], { stdio: ["pipe", "ignore", "inherit"] });',
   ].join("\n"),
-  "libs/ai/scripts/bun-write.ts": [
-    "export const save = (out: string, page: string) => {",
-    "  const { write } = Bun;",
-    "  return write(out, page);",
-    "};",
-  ].join("\n"),
-  "scripts/child-process.ts": [
+  "bin/child-process.ts": [
     'import { ChildProcess } from "effect/process";',
     'export const tee = ChildProcess.make("tee", ["report.html"]);',
   ].join("\n"),
-  "scripts/console-global.ts":
+  "bin/console-global.ts":
     "export const print = (page: string) => console.log(`<!doctype html>${page}`);",
-  "scripts/console-log.ts": [
+  "bin/console-log.ts": [
     'import { Console } from "effect";',
     "export const print = (page: string) => Console.log(`<!doctype html>${page}`);",
   ].join("\n"),
-  "scripts/effect-console.ts": [
+  "bin/effect-console.ts": [
     'import * as Console from "effect/Console";',
     "export const print = (page: string) => Console.log(page);",
   ].join("\n"),
-  "scripts/effect-open.ts": [
+  "bin/effect-open.ts": [
     'import { Effect, FileSystem } from "effect";',
     "export const save = (out: string, bytes: Uint8Array) =>",
     "  Effect.gen(function* () {",
@@ -68,14 +62,20 @@ const bypasses: Readonly<Record<string, string>> = {
     "    yield* file.write(bytes);",
     "  });",
   ].join("\n"),
-  "scripts/fs-promises.ts": [
+  "bin/fs-promises.ts": [
     'import { open } from "node:fs/promises";',
     'export const save = (out: string) => open(out, "w");',
   ].join("\n"),
-  "scripts/stdout.ts": "export const print = (page: string) => process.stdout.write(page);",
-  "scripts/write-stream.ts": [
+  "bin/stdout.ts": "export const print = (page: string) => process.stdout.write(page);",
+  "bin/write-stream.ts": [
     'import { createWriteStream as toFile } from "node:fs";',
     "export const save = (out: string, page: string) => toFile(out).end(page);",
+  ].join("\n"),
+  "libs/ai/bin/bun-write.ts": [
+    "export const save = (out: string, page: string) => {",
+    "  const { write } = Bun;",
+    "  return write(out, page);",
+    "};",
   ].join("\n"),
   "tools/checks/bun-report.ts": [
     "export const save = (out: string, page: string) => Bun.write(`${out}.html`, page);",
@@ -110,16 +110,16 @@ const bypasses: Readonly<Record<string, string>> = {
 };
 
 const allowed: Readonly<Record<string, string>> = {
-  "scripts/home.ts": [
+  "bin/home.ts": [
     'import { homedir } from "node:os";',
     "export const home = homedir();",
     "export const tty = process.stdin.isTTY;",
   ].join("\n"),
-  "scripts/print.ts": [
+  "bin/print.ts": [
     `import scriptOutput from "${SCRIPT_OUTPUT}";`,
     "export const print = (text: string) => scriptOutput.print(text);",
   ].join("\n"),
-  "scripts/spawn-node.ts": commandProbe(
+  "bin/spawn-node.ts": commandProbe(
     '{ args: ["dist/cli.js", "--mode", "rpc"], command: "node", stdin: "pipe" }',
   ),
   "tools/checks/fixture.test.ts": [

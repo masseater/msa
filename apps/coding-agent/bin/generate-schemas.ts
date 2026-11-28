@@ -5,8 +5,8 @@ import type { SchemaError } from "effect/Schema";
 import type { TSchema } from "typebox";
 import { format } from "vite-plus/fmt";
 
+import hostModule from "../../../bin/host.ts";
 import scriptOutput from "../../../libs/ai/src/utils/script-output.ts";
-import hostModule from "../../../scripts/host.ts";
 import schemaArtifactsModule from "./schema-artifacts.ts";
 import type schemaArtifactsTypes from "./schema-artifacts.types.ts";
 

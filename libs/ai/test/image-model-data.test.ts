@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import buildOpenRouterCatalog from "../scripts/openrouter-catalog.ts";
-import type openrouterCatalogTypes from "../scripts/openrouter-catalog.types.ts";
+import buildOpenRouterCatalog from "../bin/openrouter-catalog.ts";
+import type openrouterCatalogTypes from "../bin/openrouter-catalog.types.ts";
 
 const imageOnly: openrouterCatalogTypes.OpenRouterModelListItem = {
   architecture: {

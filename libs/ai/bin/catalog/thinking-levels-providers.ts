@@ -39,7 +39,7 @@ function applyGatewayThinkingLevels(model: typesModule.Model<any>): void {
   if (model.provider === "opencode-go" && model.id === "glm-5.2") {
     mergeThinkingLevelMap(model, OPENCODE_GO_GLM52_THINKING_LEVEL_MAP);
   }
-  if (model.provider === "opencode-go" && model.id === "kimi-k2.6") {
+  if (model.provider === "opencode-go" && model.id === "kimi-k2.7-code") {
     mergeThinkingLevelMap(model, { low: null, medium: null, minimal: null });
   }
   if (model.provider === "opencode" && model.id === "grok-build-0.1") {

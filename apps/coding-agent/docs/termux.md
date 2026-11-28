@@ -33,14 +33,14 @@ Install Termux from [GitHub or F-Droid](https://github.com/termux/termux-app#ins
 4. Verify the installation:
 
    ```bash
-   ./scripts/msa-dev.sh --version
+   ./bin/msa-dev.sh --version
    ```
 
 5. Open the folder you want to work in and start msa:
 
    ```bash
    cd /path/to/working-folder
-   /path/to/msa/scripts/msa-dev.sh
+   /path/to/msa/bin/msa-dev.sh
    ```
 
 Continue with the main [Quickstart](quickstart.md#3-choose-a-model) to connect a model and run your first task.

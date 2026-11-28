@@ -13,7 +13,7 @@ const { scanOptions } = scanOptionsModule;
 
 const DEFAULT_TOP = 20;
 
-const HELP = `Usage: node scripts/read-tool-stats.ts [options]
+const HELP = `Usage: node bin/read-tool-stats.ts [options]
 
 Options:
   --sessions-dir <path>  Sessions directory (default: ~/.msa/agent/sessions)

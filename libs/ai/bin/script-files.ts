@@ -26,7 +26,7 @@ class ScriptFiles extends Context.Service<
     readonly remove: (path: string) => Effect.Effect<void, ScriptFileError>;
     readonly renamePath: (move: scriptFilesTypes.FileMove) => Effect.Effect<void, ScriptFileError>;
   }
->()("@msa/ai/scripts/script-files/ScriptFiles") {}
+>()("@msa/ai/bin/script-files/ScriptFiles") {}
 
 const toScriptFileError = (error: { readonly message: string }) =>
   ScriptFileError.make({ message: error.message });

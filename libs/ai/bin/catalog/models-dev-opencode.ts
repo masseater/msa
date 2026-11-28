@@ -30,9 +30,9 @@ const OPENCODE_OPENAI_COMPLETIONS_LONG_CACHE_RETENTION_UNSUPPORTED_MODELS = new 
   "opencode:deepseek-v4-flash",
   "opencode:deepseek-v4-pro",
   "opencode:kimi-k2.5",
-  "opencode:kimi-k2.6",
+  "opencode:kimi-k2.7-code",
   "opencode:minimax-m2.7",
-  "opencode-go:kimi-k2.6",
+  "opencode-go:kimi-k2.7-code",
 ]);
 
 function npmRoute(npm: string | undefined, basePath: string): OpenCodeRoute {
@@ -67,8 +67,7 @@ function modelRoute(
   let { api, baseUrl, compat } = route;
   if (variant.provider === "opencode" && id === "grok-build-0.1")
     compat = { ...compat, supportsReasoningEffort: false };
-  if (id === "kimi-k2.6")
-    compat = { ...compat, supportsReasoningEffort: false, thinkingFormat: "deepseek" };
+  if (id === "kimi-k2.7-code") compat = { ...compat, supportsReasoningEffort: false };
   if (variant.provider === "opencode-go" && (id === "qwen3.5-plus" || id === "qwen3.6-plus")) {
     api = "openai-completions";
     baseUrl = `${variant.basePath}/v1`;

@@ -1,8 +1,8 @@
 import { ManagedRuntime } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import hostModule from "../../scripts/host.ts";
-import toolStatsReport from "../../scripts/tool-stats-report.ts";
+import hostModule from "../../bin/host.ts";
+import toolStatsReport from "../../bin/tool-stats-report.ts";
 
 const { hostLayer } = hostModule;
 const { renderReport } = toolStatsReport;

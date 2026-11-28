@@ -83,6 +83,7 @@ catalogs:
     "@effect/vitest": 4.1.4
     effect: 4.1.4
     fallow: 3.42.0
+    fallow-similar-code: 3.42.0
     vite-plus: 1.6.0
 
 overrides:

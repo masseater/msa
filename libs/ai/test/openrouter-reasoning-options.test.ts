@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import getOpenRouterThinkingLevelMap from "../scripts/openrouter-reasoning-options.ts";
+import getOpenRouterThinkingLevelMap from "../bin/openrouter-reasoning-options.ts";
 import openaiCompletions from "../src/api/openai-completions.ts";
 import type typesModule from "../src/types.types.ts";
 import transcript from "../src/utils/transcript.ts";

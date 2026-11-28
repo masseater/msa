@@ -54,7 +54,7 @@ class StatsError extends Schema.TaggedError<StatsError, { readonly brand: unique
   { message: Schema.String },
 ) {}
 
-const HELP = `Usage: scripts/stats.ts [options]
+const HELP = `Usage: bin/stats.ts [options]
 
 Options:
   -n, --days <days>         Number of local calendar days to include (default: 7)

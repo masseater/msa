@@ -1,9 +1,9 @@
 import { Effect, ManagedRuntime, type Scope } from "effect";
 
-import modelData from "../scripts/model-data.ts";
-import type modelDataTypes from "../scripts/model-data.types.ts";
-import scriptFiles from "../scripts/script-files.ts";
-import type scriptFilesTypes from "../scripts/script-files.types.ts";
+import modelData from "../bin/model-data.ts";
+import type modelDataTypes from "../bin/model-data.types.ts";
+import scriptFiles from "../bin/script-files.ts";
+import type scriptFilesTypes from "../bin/script-files.types.ts";
 import jsonCodec from "../src/utils/json-codec.ts";
 import type modelDataFixtureTypes from "./model-data-fixture.types.ts";
 

@@ -1,7 +1,7 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import generateSchemas from "../scripts/generate-schemas.ts";
+import generateSchemas from "../bin/generate-schemas.ts";
 
 const { renderConfigSchemas } = generateSchemas;
 

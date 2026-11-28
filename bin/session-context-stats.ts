@@ -21,7 +21,7 @@ const { REPORT_TIME_ZONE, reportZone } = reportZoneModule;
 const { loadContextWindows } = sessionContextWindows;
 const { scanSessions } = sessionContextScan;
 
-const HELP = `Usage: node scripts/session-context-stats.ts [options]
+const HELP = `Usage: node bin/session-context-stats.ts [options]
 
 Options:
   --sessions-dir <path>  Sessions directory (default: ~/.msa/agent/sessions)

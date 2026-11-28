@@ -46,7 +46,7 @@ const testedPackages: Readonly<Record<TestedName, TestedPackage>> = {
   chord: { dirs: ["libs/chord"], needs: ["testing"], project: "@msa/chord" },
   codemode: { dirs: ["libs/codemode"], needs: ["testing"], project: "@msa/codemode" },
   "coding-agent": {
-    dirs: ["apps/coding-agent", "scripts", "tools/class-seal"],
+    dirs: ["apps/coding-agent", "bin", "tools/class-seal"],
     files: ["tools/checks/class-extends-cases.ts", "tools/oxlint/class-factories.ts"],
     needs: ["agent", "ai", "chord", "codemode", "mcp", "telemetry", "testing", "tui"],
     project: "@msa/coding-agent",
@@ -192,11 +192,11 @@ const run: NonNullable<UserConfig["run"]> = {
       "git ls-files -- ':(glob)**/package-lock.json' ':(glob)**/npm-shrinkwrap.json' ':(glob)**/yarn.lock' ':(glob)**/bun.lock' ':(glob)**/bun.lockb' ':(glob)**/deno.lock' | awk '{ print \"pnpm-lock.yaml 以外の lock がコミットされている: \" $0; found = 1 } END { exit found }'",
     "profile:rpc": {
       cache: false,
-      command: "node scripts/profile-coding-agent-node.ts --mode rpc",
+      command: "node bin/profile-coding-agent-node.ts --mode rpc",
     },
     "profile:tui": {
       cache: false,
-      command: "node scripts/profile-coding-agent-node.ts --mode tui",
+      command: "node bin/profile-coding-agent-node.ts --mode tui",
     },
     "render-homebrew-formula": {
       cache: false,
