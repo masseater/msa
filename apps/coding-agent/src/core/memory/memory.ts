@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import settingsDefaults from "../settings-defaults.ts";
 import SettingsManager from "../settings-manager.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
@@ -47,9 +49,6 @@ function webHost(text: string): string | undefined {
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 function argUrls(arg: unknown): string[] {
   if (typeof arg !== "string") return [];
   const flagValue = arg.startsWith("-") && arg.includes("=") ? arg.slice(arg.indexOf("=") + 1) : "";
@@ -57,7 +56,7 @@ function argUrls(arg: unknown): string[] {
 }
 
 function serverUrls(config: unknown): string[] {
-  if (!isRecord(config)) return [];
+  if (!Predicate.isObject(config)) return [];
   const url = typeof config["url"] === "string" ? [config["url"]] : [];
   const args = Array.isArray(config["args"]) ? config["args"].flatMap(argUrls) : [];
   return [...url, ...args];

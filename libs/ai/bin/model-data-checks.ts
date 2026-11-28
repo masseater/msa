@@ -1,8 +1,6 @@
-import type modelDataChecksTypes from "./model-data-checks.types.ts";
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { Predicate } from "effect";
 
+import type modelDataChecksTypes from "./model-data-checks.types.ts";
 function sortedRecord<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
   return Object.fromEntries(Array.from(entries).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
@@ -112,7 +110,7 @@ function typeErrors(model: ModelRecord, label: string): string[] {
 
 function costErrors(model: ModelRecord, label: string): string[] {
   const cost = model["cost"];
-  if (!isRecord(cost)) return [`${label} has invalid cost metadata`];
+  if (!Predicate.isObject(cost)) return [`${label} has invalid cost metadata`];
   return (["input", "output", "cacheRead", "cacheWrite"] as const).flatMap((field) => {
     const value = cost[field];
     return typeof value === "number" && Number.isFinite(value)
@@ -124,7 +122,7 @@ function costErrors(model: ModelRecord, label: string): string[] {
 function modelValueErrors(expectation: modelDataChecksTypes.ModelValueExpectation): string[] {
   const label = `${expectation.providerId}/${expectation.modelId}`;
   const model = expectation.value;
-  if (!isRecord(model)) return [`${label} must be an object`];
+  if (!Predicate.isObject(model)) return [`${label} must be an object`];
   return [
     ...identityErrors(model, expectation),
     ...modalityErrors(model, label),
@@ -153,7 +151,7 @@ function manifestErrors({
     ...(manifest?.["structureHash"] === structureHash
       ? []
       : ["model data generation stamp does not match the generated catalog"]),
-    ...(isRecord(files)
+    ...(Predicate.isObject(files)
       ? listMismatch("manifest file hashes do not match provider data files")({
           actual: Object.keys(files).sort(),
           expected: expectedFiles,
@@ -170,7 +168,7 @@ function structureFromGroups({
   | { readonly error: string } {
   const models = new Map<string, string>();
   for (const [api, value] of Object.entries(groups)) {
-    if (!isRecord(value))
+    if (!Predicate.isObject(value))
       return { error: `${path} API group ${JSON.stringify(api)} must be an object` };
     for (const modelKey of Object.keys(value)) {
       if (models.has(modelKey))
@@ -193,7 +191,7 @@ function groupedModelErrors({
   const errors: string[] = [];
   const actualModels = new Map<string, string>();
   for (const [api, value] of Object.entries(groups)) {
-    if (!isRecord(value)) {
+    if (!Predicate.isObject(value)) {
       errors.push(`${filename} API group ${JSON.stringify(api)} must be an object`);
       continue;
     }
@@ -205,7 +203,10 @@ function groupedModelErrors({
       actualModels.set(modelKey, api);
       const modelId = modelKey.slice(modelKey.indexOf(":") + 1);
       errors.push(...modelValueErrors({ api, modelId, providerId, value: model }));
-      if (isRecord(model) && modelKey !== `${String(model["type"])}:${String(model["id"])}`)
+      if (
+        Predicate.isObject(model) &&
+        modelKey !== `${String(model["type"])}:${String(model["id"])}`
+      )
         errors.push(`${providerId}/${modelKey} has mismatched type/id identity`);
     }
   }
@@ -231,7 +232,6 @@ const modelDataChecks = {
   apiPlacementErrors,
   describeSetDifference,
   groupedModelErrors,
-  isRecord,
   listMismatch,
   manifestErrors,
   modelValueErrors,

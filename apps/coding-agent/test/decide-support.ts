@@ -110,6 +110,32 @@ const loadedDecide = Effect.fn("loadedDecide")(function* (
   return local;
 });
 
+type Decided = Extract<decideTypes.Decision, { status: "decided" }>;
+type Answer = decideTypes.DecisionAnswer;
+
+const decidedOf = (decision: decideTypes.Decision): Decided => {
+  if (decision.status !== "decided") throw new Error(decision.reason);
+  return decision;
+};
+
+const isAnswerOf = <Type extends Answer["type"]>(
+  answer: Answer,
+  type: Type,
+): answer is Extract<Answer, { type: Type }> => answer.type === type;
+
+const answerOf = <Type extends Answer["type"]>(
+  decision: Decided,
+  name: string,
+  type: Type,
+): Extract<Answer, { type: Type }> => {
+  const answer = decision.answers[name];
+  if (answer !== undefined && isAnswerOf(answer, type)) return answer;
+  throw new Error(`expected a ${type} answer for ${name}`);
+};
+
+const triageRequest = (thresholds: { route: number; severity: number }) =>
+  request("The build fails.", thresholds);
+
 const blocking = (threshold: number): decideTypes.DecideRequest => ({
   name: "triage",
   questions: {
@@ -125,13 +151,16 @@ const blocking = (threshold: number): decideTypes.DecideRequest => ({
 
 const decideSupport = {
   FIXTURE,
+  answerOf,
   blocking,
   classifierAt,
   cleanUp,
+  decidedOf,
   loadedDecide,
   localDecide,
   request,
   tempDirectory,
+  triageRequest,
 };
 
 export default decideSupport;

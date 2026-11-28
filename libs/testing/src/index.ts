@@ -73,6 +73,7 @@ const testing = {
   tempRoot: temp.tempRoot,
   timersArmedBy: timers.timersArmedBy,
   toJsonText: json.toJsonText,
+  trackedTempDirs: temp.trackedTempDirs,
   writeBytesFile: files.writeBytesFile,
   writeJsonFile: json.writeJsonFile,
   writeTextFile: files.writeTextFile,

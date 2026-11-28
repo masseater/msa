@@ -19,33 +19,27 @@ const {
   isAbsolutePath,
   joinPath,
   makeDirectory,
-  makeTempDir,
   pathExists,
   readDirectory,
   relativePath,
-  removePath,
   runTest,
+  trackedTempDirs,
 } = testing;
 
 const originalAgentDir = readEnv(ENV_AGENT_DIR);
-const directories: string[] = [];
+const { cleanUp, make: tempDirectoryOf } = trackedTempDirs();
 
 afterEach(() =>
   runTest(
     Effect.gen(function* () {
       if (originalAgentDir === undefined) deleteEnv(ENV_AGENT_DIR);
       else writeEnv(ENV_AGENT_DIR, originalAgentDir);
-      for (const directory of directories.splice(0)) yield* removePath(directory);
+      yield* cleanUp;
     }),
   ),
 );
 
-const tempDirectory = (name: string) =>
-  Effect.gen(function* () {
-    const directory = yield* makeTempDir(`msa-agent-dir-${name}-`);
-    directories.push(directory);
-    return directory;
-  });
+const tempDirectory = (name: string) => tempDirectoryOf(`msa-agent-dir-${name}-`);
 
 it("keeps the orchestrator database and the handoffs in the agent dir the session was given", () =>
   runTest(

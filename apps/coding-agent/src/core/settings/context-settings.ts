@@ -1,11 +1,12 @@
 import type aiTypes from "@msa/ai/index.types";
+import { Predicate } from "effect";
 
 import settingsDefaults from "../settings-defaults.ts";
 import settingsManagerHelpers from "../settings-manager-helpers.ts";
 import type SettingsManager from "../settings-manager.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 
-const { DEFAULT_COMPACTION_TOKEN_SETTINGS, isMergeableObject } = settingsManagerHelpers;
+const { DEFAULT_COMPACTION_TOKEN_SETTINGS } = settingsManagerHelpers;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 
 export default class ContextSettings {
@@ -73,7 +74,7 @@ export default class ContextSettings {
       modelKey === undefined
         ? undefined
         : new Map(Object.entries(compaction?.modelOverrides ?? {})).get(modelKey);
-    if (entry !== undefined && !isMergeableObject(entry)) {
+    if (entry !== undefined && !Predicate.isObject(entry)) {
       throw new Error(
         `Invalid compaction.modelOverrides["${modelKey}"] setting: ${String(entry)}. Expected an object.`,
       );

@@ -1,4 +1,4 @@
-import { Function } from "effect";
+import { Function, Predicate } from "effect";
 
 import type envTypes from "../../env/index.types.ts";
 import ids from "../../ids.ts";
@@ -10,9 +10,6 @@ const { seqFromNumber } = ids;
 
 const FORMAT_VERSION = 1;
 const MAIN_FILE = "main.jsonl";
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isSafeInteger = (value: unknown): value is number => Number.isSafeInteger(value);
 
@@ -67,16 +64,18 @@ const parseJson = (text: string, description: string): unknown => {
 };
 
 const hasRecordId = (value: Record<string, unknown>): boolean =>
-  isObject(value["value"]) && isSafeInteger(value["value"]["id"]);
+  Predicate.isObject(value["value"]) && isSafeInteger(value["value"]["id"]);
 
 const taskState = (value: Record<string, unknown>): unknown => {
   const task = value["value"];
-  return isObject(task) ? task["state"] : undefined;
+  return Predicate.isObject(task) ? task["state"] : undefined;
 };
 
 const hasTaskStatus = (value: Record<string, unknown>, terminal: boolean): boolean => {
   const state = taskState(value);
-  return hasRecordId(value) && isObject(state) && (state["status"] === "terminal") === terminal;
+  return (
+    hasRecordId(value) && Predicate.isObject(state) && (state["status"] === "terminal") === terminal
+  );
 };
 
 const isTerminalTask = (value: Record<string, unknown>): boolean => hasTaskStatus(value, true);
@@ -91,7 +90,7 @@ const operationChecks: Readonly<
   ],
   "document.create": [
     (value) =>
-      isObject(value["record"]) &&
+      Predicate.isObject(value["record"]) &&
       isSafeInteger(value["record"]["id"]) &&
       isOrdinal(value["ordinal"]),
     "Invalid document creation",
@@ -107,7 +106,7 @@ const operationChecks: Readonly<
 };
 
 const validateMainOperation = (value: unknown, description: string): formatTypes.MainOperation => {
-  if (!isObject(value) || typeof value["type"] !== "string") {
+  if (!Predicate.isObject(value) || typeof value["type"] !== "string") {
     throw JsonlCorruptionError.create(`Invalid write in ${description}`);
   }
   const check = Object.hasOwn(operationChecks, value["type"])
@@ -126,7 +125,7 @@ const parseMainMarker: {
   const description = `${MAIN_FILE} line ${line}`;
   const value = parseJson(text, description);
   if (
-    !isObject(value) ||
+    !Predicate.isObject(value) ||
     value["format"] !== FORMAT_VERSION ||
     value["type"] !== "commit" ||
     !isSafeInteger(value["seq"]) ||
@@ -147,10 +146,10 @@ const validateDocumentContent = (
   value: unknown,
   description: string,
 ): typesModule.DocumentContent => {
-  if (!isObject(value) || !isSafeInteger(value["version"]) || value["version"] < 1) {
+  if (!Predicate.isObject(value) || !isSafeInteger(value["version"]) || value["version"] < 1) {
     throw JsonlCorruptionError.create(`Invalid document content in ${description}`);
   }
-  if (value["kind"] === "base" && isObject(value["value"]))
+  if (value["kind"] === "base" && Predicate.isObject(value["value"]))
     return value as typesModule.DocumentContent;
   if (value["kind"] === "delta" && Array.isArray(value["ops"]))
     return value as typesModule.DocumentContent;
@@ -158,13 +157,13 @@ const validateDocumentContent = (
 };
 
 const isRecordShape = (value: unknown): value is Record<string, unknown> =>
-  isObject(value) &&
+  Predicate.isObject(value) &&
   value["format"] === FORMAT_VERSION &&
   value["type"] === "record" &&
   isSafeInteger(value["seq"]) &&
   value["seq"] >= 1 &&
   isOrdinal(value["ordinal"]) &&
-  isObject(value["payload"]) &&
+  Predicate.isObject(value["payload"]) &&
   typeof value["payload"]["type"] === "string";
 
 const validatePayload = (payload: Record<string, unknown>, description: string): void => {

@@ -1,15 +1,16 @@
-import { Clock, Effect, Function } from "effect";
+import { Clock, Effect, Function, Predicate } from "effect";
 
 import type typesModule from "../types.types.ts";
 import errorBody from "../utils/error-body.ts";
 import classifierShared from "./classifier-shared.ts";
 import type systemOneSharedTypes from "./system-one-shared.types.ts";
 
-const { classifierRequest, isRecord, parseClassifierUsage, requiredNumber } = classifierShared;
+const { classifierRequest, parseClassifierUsage, requiredNumber } = classifierShared;
 const { formatProviderError, normalizeProviderError } = errorBody;
 
 function probabilities(label: string, value: unknown, id: string): Record<string, number> {
-  if (!isRecord(value)) throw new Error(`${label} returned invalid probabilities for ${id}`);
+  if (!Predicate.isObject(value))
+    throw new Error(`${label} returned invalid probabilities for ${id}`);
   return Object.fromEntries(
     Object.entries(value).map(([key, probability]) => [
       key,
@@ -23,11 +24,11 @@ function parseAnswers(
   value: unknown,
   context: typesModule.ClassifierContext,
 ): Record<string, typesModule.ClassifierAnswer> {
-  if (!isRecord(value)) throw new Error(`${label} returned an unexpected response`);
+  if (!Predicate.isObject(value)) throw new Error(`${label} returned an unexpected response`);
   const answers: Array<[string, typesModule.ClassifierAnswer]> = [];
   for (const [id, question] of Object.entries(context.questions)) {
     const answer = value[id];
-    if (!isRecord(answer)) throw new Error(`${label} did not return an answer for ${id}`);
+    if (!Predicate.isObject(answer)) throw new Error(`${label} did not return an answer for ${id}`);
     if (question.type === "choice") {
       if (answer["type"] !== "choice" || typeof answer["choice"] !== "string") {
         throw new Error(`${label} did not return a choice answer for ${id}`);

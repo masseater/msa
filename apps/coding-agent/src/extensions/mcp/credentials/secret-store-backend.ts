@@ -1,5 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
+import { Effect, Predicate } from "effect";
 
 import type authStorageTypes from "../../../core/auth-storage.types.ts";
 import awaitingModule from "../../../core/awaiting.ts";
@@ -31,9 +31,7 @@ interface Options {
 const parseStates = (text: string | undefined): Record<string, unknown> => {
   if (text === undefined || text.trim() === "") return {};
   const parsed: unknown = JSON.parse(text);
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
-    : {};
+  return Predicate.isObject(parsed) ? (parsed as Record<string, unknown>) : {};
 };
 
 const MCP_NAMESPACE_PREFIX = "mcp__";

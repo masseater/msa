@@ -1,4 +1,4 @@
-import { Effect, Function } from "effect";
+import { Effect, Function, Predicate } from "effect";
 import { Hex } from "effect/encoding";
 
 import cryptoModule from "../src/utils/crypto.ts";
@@ -15,7 +15,6 @@ const { decodeJson, encodeJson } = jsonCodec;
 const {
   apiPlacementErrors,
   groupedModelErrors,
-  isRecord,
   listMismatch,
   manifestErrors,
   sortedRecord,
@@ -38,7 +37,7 @@ const readJsonObject = Effect.fn("readJsonObject")(function* (path: string, desc
       ModelDataError.make({ message: `${description} is not valid JSON: ${error.message}` }),
     ),
   );
-  if (!isRecord(parsed)) return yield* fail(`${description} must contain a JSON object`);
+  if (!Predicate.isObject(parsed)) return yield* fail(`${description} must contain a JSON object`);
   return parsed;
 });
 const collectJsonObject = (path: string, description: string, errors: string[]) =>
@@ -206,7 +205,7 @@ const validateModelDataDirectory: {
       }),
     );
     const hashes = manifest?.["files"];
-    const manifestFiles = isRecord(hashes) ? hashes : undefined;
+    const manifestFiles = Predicate.isObject(hashes) ? hashes : undefined;
     for (const entry of Object.entries(structure))
       errors.push(...(yield* providerFileErrors(entry, dataDir, manifestFiles)));
     if (errors.length > 0) return yield* validationFailure(errors);

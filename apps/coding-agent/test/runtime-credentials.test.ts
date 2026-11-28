@@ -7,29 +7,25 @@ import AuthStorage from "../src/core/auth-storage.ts";
 import RuntimeCredentials from "../src/core/runtime-credentials.ts";
 const { abortController, awaited, currentTimeMillis, runTest } = testing;
 
+const apiKeyOf = (key: string) => ({ key, type: "api_key" as const });
+
+const storedKeyWithRuntimeOverride = () => {
+  const storage = AuthStorage.inMemory({ "anthropic-api": apiKeyOf("stored-key") });
+  const credentials = new RuntimeCredentials(storage);
+  credentials.setRuntimeApiKey("anthropic-api", "runtime-key");
+  return { credentials, storage };
+};
+
 const runtimeOverridesMaskStoredCredentialsWithoutPersisting = () =>
   runTest(
     Effect.gen(function* () {
-      const storage = AuthStorage.inMemory({
-        "anthropic-api": { key: "stored-key", type: "api_key" as const },
-      });
-      const credentials = new RuntimeCredentials(storage);
+      const { credentials, storage } = storedKeyWithRuntimeOverride();
 
-      credentials.setRuntimeApiKey("anthropic-api", "runtime-key");
-      expect(yield* awaited(credentials.read("anthropic-api"))).toEqual({
-        key: "runtime-key",
-        type: "api_key" as const,
-      });
-      expect(yield* awaited(storage.read("anthropic-api"))).toEqual({
-        key: "stored-key",
-        type: "api_key" as const,
-      });
+      expect(yield* awaited(credentials.read("anthropic-api"))).toEqual(apiKeyOf("runtime-key"));
+      expect(yield* awaited(storage.read("anthropic-api"))).toEqual(apiKeyOf("stored-key"));
 
       credentials.removeRuntimeApiKey("anthropic-api");
-      expect(yield* awaited(credentials.read("anthropic-api"))).toEqual({
-        key: "stored-key",
-        type: "api_key" as const,
-      });
+      expect(yield* awaited(credentials.read("anthropic-api"))).toEqual(apiKeyOf("stored-key"));
     }),
   );
 
@@ -123,12 +119,8 @@ const keepsARuntimeOverrideWhenPersistentDeletion = () =>
     Effect.gen(function* () {
       const aborted = new Error("cancelled");
       aborted.name = "AbortError";
-      const storage = AuthStorage.inMemory({
-        "anthropic-api": { key: "stored-key", type: "api_key" as const },
-      });
+      const { credentials, storage } = storedKeyWithRuntimeOverride();
       const deleteSpy = vi.spyOn(storage, "delete").mockRejectedValueOnce(aborted);
-      const credentials = new RuntimeCredentials(storage);
-      credentials.setRuntimeApiKey("anthropic-api", "runtime-key");
 
       yield* awaited(
         expect(
@@ -136,21 +128,14 @@ const keepsARuntimeOverrideWhenPersistentDeletion = () =>
         ).rejects.toBe(aborted),
       );
       expect(deleteSpy).toHaveBeenCalledTimes(1);
-      expect(yield* awaited(credentials.read("anthropic-api"))).toEqual({
-        key: "runtime-key",
-        type: "api_key" as const,
-      });
+      expect(yield* awaited(credentials.read("anthropic-api"))).toEqual(apiKeyOf("runtime-key"));
     }),
   );
 
 const deleteClearsBothTheOverrideAndPersisted = () =>
   runTest(
     Effect.gen(function* () {
-      const storage = AuthStorage.inMemory({
-        "anthropic-api": { key: "stored-key", type: "api_key" as const },
-      });
-      const credentials = new RuntimeCredentials(storage);
-      credentials.setRuntimeApiKey("anthropic-api", "runtime-key");
+      const { credentials } = storedKeyWithRuntimeOverride();
 
       yield* awaited(credentials.delete("anthropic-api"));
 

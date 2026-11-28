@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import configModule from "../../config.ts";
 import platform from "../platform/index.ts";
 import memoryModule from "./memory.ts";
@@ -7,17 +9,14 @@ const { join } = platform;
 const { exists, readText } = platform.files;
 const { ignoredMcpServerNotice, isSepiaceServer, readSepiaceUrl } = memoryModule;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 function sepiaceEntries(path: string, memoryUrl: string): Promise<string[]> {
   return exists(path)
     .then((found) => (found ? readText(path) : undefined))
     .then((content) => {
       if (content === undefined) return [];
       const parsed: unknown = JSON.parse(content);
-      const servers = isRecord(parsed) ? parsed["mcpServers"] : undefined;
-      if (!isRecord(servers)) return [];
+      const servers = Predicate.isObject(parsed) ? parsed["mcpServers"] : undefined;
+      if (!Predicate.isObject(servers)) return [];
       return Object.entries(servers).flatMap(([name, value]) =>
         isSepiaceServer(name, value, memoryUrl) ? [ignoredMcpServerNotice(path, name)] : [],
       );

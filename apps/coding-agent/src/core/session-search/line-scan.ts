@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import toolNames from "../orchestrator/tool-names.ts";
 import platform from "../platform/index.ts";
 import sessionFormat from "../session-manager/session-format.ts";
@@ -7,7 +9,7 @@ import terms from "./terms.ts";
 
 const { isAbsolute, relative, toEpochMs } = platform;
 const { parseSessionEntryLine } = sessionFormat;
-const { entryParts, isRecord } = entryPartsModule;
+const { entryParts } = entryPartsModule;
 const { isOrchestratorTool } = toolNames;
 
 const NEWLINE = 10;
@@ -46,7 +48,7 @@ function headerOf(entry: Record<string, unknown>): sessionSearchTypes.SessionHea
 
 function scanLine(scan: LineScan, line: string, offset: number, length: number): void {
   const entry = parseSessionEntryLine(line);
-  if (!isRecord(entry)) return;
+  if (!Predicate.isObject(entry)) return;
   scan.header ??= headerOf(entry);
   const entryId = typeof entry["id"] === "string" ? entry["id"] : null;
   const at = timeOf(entry["timestamp"]);

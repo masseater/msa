@@ -1,9 +1,7 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, test } from "vite-plus/test";
 
-import promptTemplateArgs from "../src/core/prompt-template-args.ts";
 import promptTemplateArgsSupport from "./prompt-template-args-support.ts";
 
-const { substituteArgs } = promptTemplateArgs;
 const { substitutes } = promptTemplateArgsSupport;
 
 const shouldUseDefaultWhenPositionalArgIs = substitutes([
@@ -12,14 +10,16 @@ const shouldUseDefaultWhenPositionalArgIs = substitutes([
   "List exactly 7 next steps",
 ]);
 
-const shouldSupportDefaultsForAllArguments = () => {
-  const template = `\${@:-default}\n\${ARGUMENTS:-default}`;
+const DEFAULTS_FOR_ALL = `\${@:-default}\n\${ARGUMENTS:-default}`;
 
-  expect(substituteArgs(template, [])).toBe("default\ndefault");
-  expect(substituteArgs(template, ["This", "would", "be", "the", "arguments"])).toBe(
+const shouldSupportDefaultsForAllArguments = substitutes(
+  [DEFAULTS_FOR_ALL, [], "default\ndefault"],
+  [
+    DEFAULTS_FOR_ALL,
+    ["This", "would", "be", "the", "arguments"],
     "This would be the arguments\nThis would be the arguments",
-  );
-};
+  ],
+);
 
 const shouldUsePositionalArgWhenPresent = substitutes([
   `List exactly \${1:-7} next steps`,
@@ -179,13 +179,11 @@ const shouldHandleUnicodeInSlicedArgs = substitutes([
   "日本語 🎉 café",
 ]);
 
-const shouldCombinePositionalSliceAndWildcardPlaceholders = () => {
-  const template = `Run $1 on \${@:2:2}, then process $@`;
-  const args = ["eslint", "file1.ts", "file2.ts", "file3.ts"];
-  expect(substituteArgs(template, args)).toBe(
-    "Run eslint on file1.ts file2.ts, then process eslint file1.ts file2.ts file3.ts",
-  );
-};
+const shouldCombinePositionalSliceAndWildcardPlaceholders = substitutes([
+  `Run $1 on \${@:2:2}, then process $@`,
+  ["eslint", "file1.ts", "file2.ts", "file3.ts"],
+  "Run eslint on file1.ts file2.ts, then process eslint file1.ts file2.ts file3.ts",
+]);
 
 const shouldHandleSliceWithNoSpacing = substitutes([
   `prefix\${@:2}suffix`,
@@ -193,10 +191,11 @@ const shouldHandleSliceWithNoSpacing = substitutes([
   "prefixb csuffix",
 ]);
 
-const shouldHandleLargeSliceLengthsGracefully = () => {
-  const args = Array.from({ length: 10 }, (_, i) => `arg${i + 1}`);
-  expect(substituteArgs(`\${@:5:100}`, args)).toBe("arg5 arg6 arg7 arg8 arg9 arg10");
-};
+const shouldHandleLargeSliceLengthsGracefully = substitutes([
+  `\${@:5:100}`,
+  Array.from({ length: 10 }, (_, i) => `arg${i + 1}`),
+  "arg5 arg6 arg7 arg8 arg9 arg10",
+]);
 
 describe("substituteArgs - array slicing", () => {
   test(`should slice from index (\${@:N})`, shouldSliceFromIndex);

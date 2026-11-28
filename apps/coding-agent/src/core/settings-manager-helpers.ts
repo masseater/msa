@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import httpDispatcher from "./http-dispatcher.ts";
 import modelPolicyModule from "./model-policy.ts";
 import type modelPolicyTypes from "./model-policy.types.ts";
@@ -16,10 +18,6 @@ const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<settingsSchemaTypes.Compaction
   reserveTokens: SETTINGS_DEFAULTS.compaction.reserveTokens,
 };
 
-function isMergeableObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function deepMergeObjects(
   base: Record<string, unknown>,
   overrides: Record<string, unknown>,
@@ -34,7 +32,7 @@ function deepMergeObjects(
         return [
           [
             key,
-            isMergeableObject(baseValue) && isMergeableObject(overrideValue)
+            Predicate.isObject(baseValue) && Predicate.isObject(overrideValue)
               ? deepMergeObjects(baseValue, overrideValue)
               : overrideValue,
           ] as const,
@@ -95,9 +93,6 @@ function parseTimeoutSetting(value: unknown, settingName: string): number | unde
   return undefined;
 }
 
-const isSettingsRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const KEPT_RECALL_KEYS = new Set(["enabled"]);
 
 function removedSettingNotices(
@@ -105,7 +100,7 @@ function removedSettingNotices(
   scope: settingsManagerTypes.SettingsScope = "global",
 ): string[] {
   const memory: unknown = settings.memory;
-  if (!isSettingsRecord(memory)) return [];
+  if (!Predicate.isObject(memory)) return [];
   const notices: string[] = [];
   if (scope === "project" && memory["url"] !== undefined)
     notices.push("memory.url is read only from the global settings.json; remove it here.");
@@ -114,14 +109,14 @@ function removedSettingNotices(
       "memory.database is read only to move its memories to sepiace once; remove it after the move.",
     );
   const embedding = memory["embedding"];
-  const embeddingKeys = isSettingsRecord(embedding) ? Object.keys(embedding) : [];
+  const embeddingKeys = Predicate.isObject(embedding) ? Object.keys(embedding) : [];
   if (embedding !== undefined && embeddingKeys.length === 0) embeddingKeys.push("");
   for (const key of embeddingKeys)
     notices.push(
       `${key === "" ? "memory.embedding" : `memory.embedding.${key}`} is no longer used, because sepiace keeps memories; remove it.`,
     );
   const recall = memory["recall"];
-  for (const key of isSettingsRecord(recall) ? Object.keys(recall) : [])
+  for (const key of Predicate.isObject(recall) ? Object.keys(recall) : [])
     if (!KEPT_RECALL_KEYS.has(key))
       notices.push(`memory.recall.${key} is no longer used, because sepiace recalls; remove it.`);
   return notices;
@@ -143,7 +138,6 @@ const settingsManagerHelpers = {
   DEFAULT_COMPACTION_TOKEN_SETTINGS,
   deepMergeObjects,
   deepMergeSettings,
-  isMergeableObject,
   mergeDefaultTools,
   parseTimeoutSetting,
   readModelPolicy,

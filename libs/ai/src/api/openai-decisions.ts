@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Predicate } from "effect";
 
 import type typesModule from "../types.types.ts";
 import errorBody from "../utils/error-body.ts";
@@ -6,7 +6,7 @@ import modelCallModule from "../utils/model-call.ts";
 import classifierShared from "./classifier-shared.ts";
 import type classifierSharedTypes from "./classifier-shared.types.ts";
 
-const { classifierRequest, isRecord, parseClassifierUsage, requiredNumber } = classifierShared;
+const { classifierRequest, parseClassifierUsage, requiredNumber } = classifierShared;
 const { formatProviderError, normalizeProviderError } = errorBody;
 const { modelCall } = modelCallModule;
 
@@ -81,7 +81,7 @@ function choiceProbabilities(value: unknown, id: string): Record<string, number>
   if (!Array.isArray(value)) throw new Error(`${LABEL} returned invalid probabilities for ${id}`);
   return Object.fromEntries(
     value.map((entry) => {
-      if (!isRecord(entry) || typeof entry["value"] !== "string") {
+      if (!Predicate.isObject(entry) || typeof entry["value"] !== "string") {
         throw new Error(`${LABEL} returned invalid probabilities for ${id}`);
       }
       return [
@@ -133,7 +133,8 @@ function parseAnswers(
   if (!Array.isArray(value)) throw new Error(`${LABEL} returned an unexpected response`);
   const byName = new Map<string, Record<string, unknown>>();
   for (const answer of value) {
-    if (isRecord(answer) && typeof answer["name"] === "string") byName.set(answer["name"], answer);
+    if (Predicate.isObject(answer) && typeof answer["name"] === "string")
+      byName.set(answer["name"], answer);
   }
   return Object.fromEntries(
     Object.entries(context.questions).map(([id, question]) => {
@@ -175,7 +176,7 @@ const requestDecisions = Effect.fn("requestDecisions")(function* (
     options,
     url: new URL("decisions", `${model.baseUrl.replace(/\/+$/u, "")}/`),
   });
-  if (!isRecord(body))
+  if (!Predicate.isObject(body))
     return yield* Effect.die(new Error(`${LABEL} returned an unexpected response`));
   const usage = parseClassifierUsage(body["usage"], model);
   if (usage !== undefined) output.usage = usage;

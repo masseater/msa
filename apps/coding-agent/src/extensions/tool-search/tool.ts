@@ -1,20 +1,18 @@
+import { Predicate } from "effect";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
-import json from "../../utils/json.ts";
 import Bm25Ranker from "./bm-25-ranker.ts";
 import type toolTypes from "./tool.types.ts";
-
-const { isObject } = json;
 
 const TOOL_SEARCH_TOOL_NAME = "tool_search";
 const DEFAULT_TOOL_SEARCH_LIMIT = 8;
 function schemaText(schema: unknown, parts: string[]): void {
-  if (!isObject(schema)) return;
+  if (!Predicate.isObject(schema)) return;
   if (typeof schema["description"] === "string") parts.push(schema["description"]);
-  if (isObject(schema["properties"])) {
+  if (Predicate.isObject(schema["properties"])) {
     for (const [name, property] of Object.entries(schema["properties"])) {
       parts.push(name);
       schemaText(property, parts);

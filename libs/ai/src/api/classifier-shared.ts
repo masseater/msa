@@ -1,4 +1,4 @@
-import { Effect, Function } from "effect";
+import { Effect, Function, Predicate } from "effect";
 
 import modelsModule from "../models.ts";
 import type typesModule from "../types.types.ts";
@@ -35,10 +35,6 @@ function timeoutError(timeoutMs: number): classifierSharedTypes.ClassifierHttpEr
   error.headers = undefined;
   error.body = "";
   return error;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 const requiredNumber: {
@@ -159,7 +155,7 @@ const parseClassifierUsage: {
     model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
   ): typesModule.Usage | undefined {
     if (
-      !isRecord(value) ||
+      !Predicate.isObject(value) ||
       (value["input_tokens"] === undefined && value["output_tokens"] === undefined)
     )
       return undefined;
@@ -180,7 +176,6 @@ const parseClassifierUsage: {
 
 const classifierShared = {
   classifierRequest,
-  isRecord,
   parseClassifierUsage,
   requiredNumber,
 };

@@ -5,29 +5,20 @@ import cli from "../src/extensions/mcp/cli.ts";
 
 const { runMcpCommand } = cli;
 
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  removePath,
-  resolvePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
+const { awaited, joinPath, resolvePath, runTest, toJsonText, trackedTempDirs, writeTextFile } =
+  testing;
 
 const FIXTURE = resolvePath(
   import.meta.dirname,
   "../../../libs/mcp/test/fixtures/stdio-server.mjs",
 );
 
-const dirs: string[] = [];
+const { cleanUp, make: tempDirOf } = trackedTempDirs();
 
 function run(args: string[], servers: Record<string, unknown> | undefined, dir?: string) {
   return runTest(
     Effect.gen(function* () {
-      const agentDir = dir ?? (yield* makeTempDir("msa-mcp-command-"));
-      if (!(dir !== undefined && dir.length > 0)) dirs.push(agentDir);
+      const agentDir = dir ?? (yield* tempDirOf("msa-mcp-command-"));
       if (servers !== undefined)
         yield* writeTextFile(
           joinPath(agentDir, "mcp.json"),
@@ -58,17 +49,11 @@ const servers2: Record<string, unknown> = Object.fromEntries([
   ["bad", { args: ["no command"] }],
 ]);
 
-const afterEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      while (dirs.length > 0) yield* removePath(dirs.pop() ?? "");
-    }),
-  );
+const afterEachHook = () => runTest(cleanUp);
 
 const mcpCommandSupport = {
   FIXTURE,
   afterEachHook,
-  dirs,
   fixtureServer,
   parkedServer,
   run,

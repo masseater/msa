@@ -52,6 +52,19 @@ const removeDirRetrying = (directory: string): Effect.Effect<void> =>
 const removeDirs = (directories: Iterable<string>): Effect.Effect<void> =>
   Effect.forEach(directories, removeDir, { discard: true });
 
+const trackedTempDirs = (): tempTypes.TrackedTempDirs => {
+  const created: string[] = [];
+  return {
+    cleanUp: Effect.suspend(() => removeDirs(created.splice(0))),
+    make: (prefix) =>
+      Effect.tap(makeTempDir(prefix), (directory) =>
+        Effect.sync(() => {
+          created.push(directory);
+        }),
+      ),
+  };
+};
+
 const temp = {
   makeTempDir,
   makeTempFile,
@@ -61,6 +74,7 @@ const temp = {
   removeDirs,
   tempPath,
   tempRoot,
+  trackedTempDirs,
 };
 
 export default temp;

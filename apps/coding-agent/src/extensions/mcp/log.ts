@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import platform from "../../core/platform/index.ts";
 
 const { appendText, fileSize, makeDirectory, rename } = platform.files;
@@ -5,10 +7,6 @@ const { appendText, fileSize, makeDirectory, rename } = platform.files;
 const { dirname, nowMs, toDate } = platform;
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function formatData(data: unknown): string {
   if (typeof data === "string") return data;
@@ -20,7 +18,7 @@ function formatData(data: unknown): string {
 }
 
 function formatMcpLogMessage(server: string, params: unknown, now: Date = toDate(nowMs())): string {
-  const message = isRecord(params) ? params : { data: params };
+  const message = Predicate.isObject(params) ? params : { data: params };
   const level = typeof message["level"] === "string" ? message["level"] : "info";
   const logger =
     typeof message["logger"] === "string" && message["logger"] !== ""

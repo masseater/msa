@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import type mcpServersTypes from "./mcp-servers.types.ts";
 
 const MCP_EXPOSURES: readonly string[] = [
@@ -33,12 +35,10 @@ function isLoopbackRedirectUri(value: string): boolean {
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isStringRecord(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
+  return (
+    Predicate.isObject(value) && Object.values(value).every((entry) => typeof entry === "string")
+  );
 }
 
 const optionalString =
@@ -98,7 +98,7 @@ function checkOAuthMetadataUrl(value: Record<string, unknown>): string | undefin
 
 function validateOAuth(value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (!isRecord(value)) return "oauth must be an object";
+  if (!Predicate.isObject(value)) return "oauth must be an object";
   return firstError([
     optionalString(value, "clientId"),
     optionalString(value, "clientSecret"),
@@ -126,7 +126,7 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
   const { exposure, toolExposure } = value;
   const resolved: Record<string, unknown> = { ...value };
   if (exposure !== undefined) resolved["exposure"] = resolveExposureAlias(exposure);
-  if (isRecord(toolExposure)) {
+  if (Predicate.isObject(toolExposure)) {
     resolved["toolExposure"] = Object.fromEntries(
       Object.entries(toolExposure).map(([tool, entry]) => [tool, resolveExposureAlias(entry)]),
     );
@@ -141,7 +141,7 @@ function checkExposure(value: Record<string, unknown>): string | undefined {
     return `exposure must be one of ${exposures}`;
   }
   if (toolExposure === undefined) return undefined;
-  if (!isRecord(toolExposure)) return "toolExposure must map tool names to exposures";
+  if (!Predicate.isObject(toolExposure)) return "toolExposure must map tool names to exposures";
   const invalid = Object.entries(toolExposure).find(([, toolValue]) => !isExposure(toolValue));
   return invalid === undefined
     ? undefined
@@ -174,7 +174,11 @@ function checkCommonFields(value: Record<string, unknown>): string | undefined {
 function checkHttpAuth(value: Record<string, unknown>, url: URL): string | undefined {
   const auth = value["auth"];
   if (auth === undefined) return undefined;
-  if (!isRecord(auth) || typeof auth["provider"] !== "string" || auth["provider"] === "") {
+  if (
+    !Predicate.isObject(auth) ||
+    typeof auth["provider"] !== "string" ||
+    auth["provider"] === ""
+  ) {
     return "auth.provider must be a provider name";
   }
   return url.protocol !== "https:" && !LOOPBACK_HOSTS.includes(url.hostname)
@@ -220,7 +224,7 @@ function validateMcpServerConfig(
 ): mcpServersTypes.McpServerConfig | string {
   if (!SERVER_NAME.test(name))
     return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
-  if (!isRecord(raw)) return `server "${name}" must be an object`;
+  if (!Predicate.isObject(raw)) return `server "${name}" must be an object`;
   const value = resolveExposureAliases(raw);
   const { type } = value;
   const isHttp =
