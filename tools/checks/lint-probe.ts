@@ -102,10 +102,13 @@ const lintAndInspectProbes = <A>(
 ): Promise<{ readonly diagnostics: lintProbeTypes.Diagnostics; readonly inspected: A }> =>
   probeRuntime.runPromise(
     withProbes(probes, (run, lint) =>
-      Effect.all({
-        diagnostics: lint,
-        inspected: Effect.sync(() => inspect(run)),
-      }),
+      Effect.all(
+        {
+          diagnostics: lint,
+          inspected: Effect.sync(() => inspect(run)),
+        },
+        { concurrency: 1 },
+      ),
     ),
   );
 

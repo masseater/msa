@@ -69,10 +69,12 @@ export default class ObjectActivation {
     );
   }
 
-  withinReadyTimeout<T>(work: Promise<T>, waiting: () => readonly string[]): Effect.Effect<T> {
+  withinReadyTimeout<T>(
+    settled: Effect.Effect<T>,
+    waiting: () => readonly string[],
+  ): Effect.Effect<T> {
     const object = this.#object;
     const ms = object.host.readyTimeout;
-    const settled = Effect.promise(() => work);
     if (!Number.isFinite(ms)) return settled;
     const timedOut = Effect.flatMap(unrefSleep(ms), () => {
       const list = waiting();
@@ -106,8 +108,11 @@ export default class ObjectActivation {
         );
         opening.set(resource, yield* Effect.cached(open));
       }
-      const ready = this.withinReadyTimeout(Promise.all(refs.map((ref) => ref.ready)), () =>
-        refs.filter((ref) => ref.status === "loading").map((ref) => ref.address),
+      const ready = this.withinReadyTimeout(
+        Effect.forEach(refs, (ref) => Effect.promise(() => ref.ready), {
+          concurrency: "unbounded",
+        }),
+        () => refs.filter((ref) => ref.status === "loading").map((ref) => ref.address),
       );
       yield* settleAll([...resources.map((resource) => opening.get(resource)!), ready]);
     });
@@ -119,7 +124,9 @@ export default class ObjectActivation {
     const pending = unhydrated([...run.created.derives, ...exposed.map(([, value]) => value)]);
     if (pending.length === 0) return Effect.void;
     return this.withinReadyTimeout(
-      Promise.all(pending.map((hydration) => hydration.whenHydrated())),
+      Effect.forEach(pending, (hydration) => Effect.promise(() => hydration.whenHydrated()), {
+        concurrency: "unbounded",
+      }),
       () => [
         ...exposed
           .filter(([, value]) => hydrationOf(value)?.hydrated === false)

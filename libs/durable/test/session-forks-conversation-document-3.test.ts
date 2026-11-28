@@ -136,14 +136,14 @@ const copiesEveryFamily = Effect.gen(function* () {
           Effect.gen(function* () {
             const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
-            yield* awaited(
-              Promise.all(
-                Array.from({ length: 260 }, (_, index) =>
-                  Effect.suspend(() =>
-                    awaited(tx.doc(Family, parentId, `member-${index}`, index)),
-                  ).pipe(Effect.asVoid, runNested),
-                ),
+            yield* Effect.forEach(
+              Array.from({ length: 260 }, (_, index) =>
+                Effect.suspend(() =>
+                  awaited(tx.doc(Family, parentId, `member-${index}`, index)),
+                ).pipe(Effect.asVoid, runNested),
               ),
+              awaited,
+              { concurrency: "unbounded" },
             );
           }),
         ),

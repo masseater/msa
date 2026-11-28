@@ -50,40 +50,40 @@ const keepsProviderSessionStep1 = Effect.gen(function* () {
     ),
   );
   harness.resume();
-  yield* awaited(
-    Promise.all(
-      [root, child].map((conversation, index) =>
-        runPromise(
-          Effect.gen(function* () {
-            yield* awaited(
-              (yield* awaited(
-                conversation.submit({ content: `first-${index}`, type: "input" }, context),
-              )).wait(context),
-            );
-          }),
-        ),
+  yield* Effect.forEach(
+    [root, child].map((conversation, index) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(
+            (yield* awaited(
+              conversation.submit({ content: `first-${index}`, type: "input" }, context),
+            )).wait(context),
+          );
+        }),
       ),
     ),
+    awaited,
+    { concurrency: "unbounded" },
   );
   return { child, harness, root, runPromise, seen };
 });
 
 const keepsProviderSession = Effect.gen(function* () {
   const { runPromise, seen, harness, root, child } = yield* keepsProviderSessionStep1;
-  yield* awaited(
-    Promise.all(
-      [root, child].map((conversation, index) =>
-        runPromise(
-          Effect.gen(function* () {
-            yield* awaited(
-              (yield* awaited(
-                conversation.submit({ content: `second-${index}`, type: "input" }, context),
-              )).wait(context),
-            );
-          }),
-        ),
+  yield* Effect.forEach(
+    [root, child].map((conversation, index) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(
+            (yield* awaited(
+              conversation.submit({ content: `second-${index}`, type: "input" }, context),
+            )).wait(context),
+          );
+        }),
       ),
     ),
+    awaited,
+    { concurrency: "unbounded" },
   );
   const rootId = (yield* awaited(harness.snapshot(ProviderDoc, root.id, context)))!.sessionId;
   const childId = (yield* awaited(harness.snapshot(ProviderDoc, child.id, context)))!.sessionId;

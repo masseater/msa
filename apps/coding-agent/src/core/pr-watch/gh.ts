@@ -138,10 +138,13 @@ function readTimeouts(
       () => Effect.succeed([]),
     ),
     Effect.flatMap((paths) =>
-      Effect.forEach(paths, (path) =>
-        exec(ghWorkflowFileArgs(target, path, headRefOid)).pipe(
-          Effect.map((result) => workflowTimeout(path, result.stdout)),
-        ),
+      Effect.forEach(
+        paths,
+        (path) =>
+          exec(ghWorkflowFileArgs(target, path, headRefOid)).pipe(
+            Effect.map((result) => workflowTimeout(path, result.stdout)),
+          ),
+        { concurrency: 1 },
       ),
     ),
     Effect.map((timeouts) => timeouts.filter((timeout) => timeout !== undefined)),

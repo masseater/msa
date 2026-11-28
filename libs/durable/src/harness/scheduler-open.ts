@@ -20,8 +20,10 @@ const openIn = Effect.fnUntraced(function* (
   tx: schedulerTypesModule.Transaction,
 ) {
   const { graph } = state;
-  const scans = yield* Effect.forEach(LIVE_STATUSES, (status) =>
-    scanAll((cursor) => tx.scanTasks({ status }, SCAN_PAGE_SIZE, cursor)),
+  const scans = yield* Effect.forEach(
+    LIVE_STATUSES,
+    (status) => scanAll((cursor) => tx.scanTasks({ status }, SCAN_PAGE_SIZE, cursor)),
+    { concurrency: 1 },
   );
   for (const record of scans.flat()) {
     graph.track(undefined, record);
@@ -52,8 +54,10 @@ const openScheduler = Effect.fnUntraced(function* (
 const joinScheduler = Effect.fnUntraced(function* (state: schedulerStateTypes.SchedulerState) {
   const invocations = [...state.invocations.values()];
   for (const invocation of invocations) invocation.controller.abort();
-  yield* Effect.promise(() =>
-    Promise.allSettled([...state.invocations.values()].map((invocation) => invocation.done)),
+  yield* Effect.forEach(
+    invocations,
+    (invocation) => Effect.exit(Effect.promise(() => invocation.done)),
+    { concurrency: "unbounded", discard: true },
   );
 });
 

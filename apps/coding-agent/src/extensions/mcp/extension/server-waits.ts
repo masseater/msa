@@ -69,9 +69,10 @@ export default class McpServerWaits {
       if (ready.length === 0) return;
       const finished = Option.isSome(
         yield* performed(
-          Effect.promise(() => Promise.all(ready)).pipe(
-            Effect.timeoutOption(this.host.state.startupWaitMs),
-          ),
+          Effect.forEach(ready, (server) => Effect.promise(() => server), {
+            concurrency: "unbounded",
+            discard: true,
+          }).pipe(Effect.timeoutOption(this.host.state.startupWaitMs)),
         ),
       );
       if (!finished) {

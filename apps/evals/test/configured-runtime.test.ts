@@ -32,7 +32,7 @@ const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 afterEach(() =>
   Effect.runPromise(
-    Effect.forEach(temporaryDirectories.splice(0), files.remove, { discard: true }),
+    Effect.forEach(temporaryDirectories.splice(0), files.remove, { concurrency: 1, discard: true }),
   ),
 );
 beforeAll(() => Effect.runPromise(server.start));

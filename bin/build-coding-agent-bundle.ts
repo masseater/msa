@@ -98,6 +98,7 @@ const requireInputs = (host: hostTypes.HostShape, layout: Layout) =>
           message: `Bundle input is missing: ${host.relative(layout.repoRoot, entry)}. Build the workspace packages first.`,
         });
       }),
+    { concurrency: 1 },
   );
 
 const lazyEntryPointsOf = (host: hostTypes.HostShape, layout: Layout): Record<string, string> => ({

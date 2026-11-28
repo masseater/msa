@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
@@ -25,7 +26,11 @@ const withLargeStreamsWaitingBehindA = Effect.gen(function* () {
   serveBlob(server, (name) => (name === "small" ? 1 : 500));
   const { host, link } = client(server, 64 * 1024);
   const bigs = ["a", "b", "c"].map((name) => host.hold(Blob, { name }));
-  yield* Effect.promise(() => Promise.all(bigs.map((big) => big.ready)));
+  yield* Effect.forEach(
+    bigs.map((big) => big.ready),
+    testing.awaited,
+    { concurrency: "unbounded" },
+  );
   link.paused = true;
   for (const big of bigs)
     for (let i = 0; i < 50; i++) yield* Effect.promise(() => big.push(`${i}:${"y".repeat(2000)}`));
@@ -94,7 +99,11 @@ const waitingOpsStayUnderThePer = Effect.gen(function* () {
   const { host, link, connection } = client(server, 1024, cap);
   const K = 6;
   const blobs = Array.from({ length: K }, (_, i) => host.hold(Blob, { name: `s${i}` }));
-  yield* Effect.promise(() => Promise.all(blobs.map((blob) => blob.ready)));
+  yield* Effect.forEach(
+    blobs.map((blob) => blob.ready),
+    testing.awaited,
+    { concurrency: "unbounded" },
+  );
   link.paused = true;
   let peak = 0;
   for (let round = 0; round < 30; round++) {
@@ -205,7 +214,9 @@ const eachOriginHoldIsOneDownstream = Effect.gen(function* () {
   const a2 = one.host.hold(Counter, { session: "S1" });
   const b = two.host.hold(Counter, { session: "S1" });
   const d = three.host.hold(Counter, { session: "S1" });
-  yield* Effect.promise(() => Promise.all([a.ready, a2.ready, b.ready, d.ready]));
+  yield* Effect.forEach([a.ready, a2.ready, b.ready, d.ready], testing.awaited, {
+    concurrency: "unbounded",
+  });
   assert.equal(
     c.toWorker().count("sent", "hold"),
     3,
@@ -228,7 +239,7 @@ const aStalledTabOverflowsAndGets = Effect.gen(function* () {
   const fast = c.browser({ guest: "g" });
   const stalled = slow.host.hold(Counter, { session: "S1" });
   const live = fast.host.hold(Counter, { session: "S1" });
-  yield* Effect.promise(() => Promise.all([stalled.ready, live.ready]));
+  yield* Effect.forEach([stalled.ready, live.ready], testing.awaited, { concurrency: "unbounded" });
   slow.link.paused = true;
   const seen: number[] = [];
   live.n.subscribe((value) => seen.push(value));

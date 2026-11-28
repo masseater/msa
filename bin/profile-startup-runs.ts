@@ -51,22 +51,25 @@ const runBuild = (options: {
       `Building dependencies and the ${bundle ? "bundled" : "unbundled"} coding-agent Node entrypoint...`,
     );
     const startedAt = yield* nowMs;
-    yield* Effect.forEach(BUILD_COMMANDS(bundle), (command) =>
-      Effect.gen(function* () {
-        const result = yield* host.run({
-          args: command.args,
-          command: "npm",
-          cwd: repoRoot,
-          stdin: "ignore",
-        });
-        if (result.exitCode === 0) return;
-        if (result.stdout.trim() !== "")
-          yield* scriptOutput.print(withoutTrailingNewline(result.stdout));
-        if (result.stderr.trim() !== "") {
-          yield* scriptOutput.printError(withoutTrailingNewline(result.stderr));
-        }
-        return yield* fail(`${command.label} failed with exit code ${result.exitCode}`);
-      }),
+    yield* Effect.forEach(
+      BUILD_COMMANDS(bundle),
+      (command) =>
+        Effect.gen(function* () {
+          const result = yield* host.run({
+            args: command.args,
+            command: "npm",
+            cwd: repoRoot,
+            stdin: "ignore",
+          });
+          if (result.exitCode === 0) return;
+          if (result.stdout.trim() !== "")
+            yield* scriptOutput.print(withoutTrailingNewline(result.stdout));
+          if (result.stderr.trim() !== "") {
+            yield* scriptOutput.printError(withoutTrailingNewline(result.stderr));
+          }
+          return yield* fail(`${command.label} failed with exit code ${result.exitCode}`);
+        }),
+      { concurrency: 1 },
     );
     yield* scriptOutput.print(`Build completed in ${formatMs((yield* nowMs) - startedAt)}`);
   });

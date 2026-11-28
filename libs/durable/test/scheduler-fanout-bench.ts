@@ -37,12 +37,12 @@ function fanModels() {
     execute: (args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const results = yield* awaited(
-            Promise.all(
-              Array.from({ length: args.count }, (_, n) =>
-                api.executeTool("leaf", { n }, callContext, { progress: false }),
-              ),
+          const results = yield* Effect.forEach(
+            Array.from({ length: args.count }, (_, n) =>
+              api.executeTool("leaf", { n }, callContext, { progress: false }),
             ),
+            awaited,
+            { concurrency: "unbounded" },
           );
           const failed = results.filter((result) => result.isError).length;
           return { isError: failed > 0, output: [{ text: `${failed} failed`, type: "text" }] };

@@ -38,7 +38,9 @@ function readPullRequests(
   taskIds: readonly string[],
 ): Effect.Effect<orchestratorTypesTypes.UnreadPullRequest[]> {
   return Effect.map(
-    Effect.forEach(taskIds, (taskId) => pullRequestRefresh.refreshOrUnread(runtime, taskId)),
+    Effect.forEach(taskIds, (taskId) => pullRequestRefresh.refreshOrUnread(runtime, taskId), {
+      concurrency: 1,
+    }),
     (reads) => reads.flatMap((unread) => unread ?? []),
   );
 }

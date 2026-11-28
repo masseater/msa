@@ -70,42 +70,45 @@ function attemptEveryPath(
   outside: string,
 ) {
   const nested = joinPath(outside, "missing");
-  return Effect.all([
-    Effect.map(
-      refusal(() => orchestrator.createTask({ ...LINT, dependsOn: [plain], title: "lint" })),
-      (message) => ({ cwd: outside, message }),
-    ),
-    Effect.map(
-      refusal(() =>
-        orchestrator.createTask({ ...LINT, cwd: nested, dependsOn: [plain], title: "lint" }),
+  return Effect.all(
+    [
+      Effect.map(
+        refusal(() => orchestrator.createTask({ ...LINT, dependsOn: [plain], title: "lint" })),
+        (message) => ({ cwd: outside, message }),
       ),
-      (message) => ({ cwd: nested, message }),
-    ),
-    Effect.map(
-      refusal(() =>
-        orchestrator.replan({
-          reason: "add lint",
-          stop: false,
-          tasks: [{ ...LINT, title: "lint" }],
-        }),
+      Effect.map(
+        refusal(() =>
+          orchestrator.createTask({ ...LINT, cwd: nested, dependsOn: [plain], title: "lint" }),
+        ),
+        (message) => ({ cwd: nested, message }),
       ),
-      (message) => ({ cwd: outside, message }),
-    ),
-    Effect.map(
-      refusal(() =>
-        orchestrator.replan({
-          reason: "measure the notes",
-          stop: false,
-          tasks: [{ checks: [LINT_CHECK], from: [plain], title: "gather notes, checked" }],
-        }),
+      Effect.map(
+        refusal(() =>
+          orchestrator.replan({
+            reason: "add lint",
+            stop: false,
+            tasks: [{ ...LINT, title: "lint" }],
+          }),
+        ),
+        (message) => ({ cwd: outside, message }),
       ),
-      (message) => ({ cwd: outside, message }),
-    ),
-    Effect.map(
-      refusal(() => orchestrator.setState({ checks: [LINT_CHECK], taskId: plain })),
-      (message) => ({ cwd: outside, message }),
-    ),
-  ]);
+      Effect.map(
+        refusal(() =>
+          orchestrator.replan({
+            reason: "measure the notes",
+            stop: false,
+            tasks: [{ checks: [LINT_CHECK], from: [plain], title: "gather notes, checked" }],
+          }),
+        ),
+        (message) => ({ cwd: outside, message }),
+      ),
+      Effect.map(
+        refusal(() => orchestrator.setState({ checks: [LINT_CHECK], taskId: plain })),
+        (message) => ({ cwd: outside, message }),
+      ),
+    ],
+    { concurrency: 1 },
+  );
 }
 
 const refusesChecksOutsideARepositoryOnEveryPath = () =>

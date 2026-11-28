@@ -177,10 +177,13 @@ function readCiHistory(
   if (current.checks.pending === 0) return Effect.void;
   if (entry.ciHistory?.headRefOid === current.headRefOid) return Effect.void;
   const { gh } = options;
-  return Effect.all({
-    runs: gh.runs(entry.target),
-    timeouts: gh.timeouts(entry.target, current.headRefOid),
-  }).pipe(
+  return Effect.all(
+    {
+      runs: gh.runs(entry.target),
+      timeouts: gh.timeouts(entry.target, current.headRefOid),
+    },
+    { concurrency: 1 },
+  ).pipe(
     Effect.tap((history) =>
       Effect.sync(() => {
         entry.ciHistory = { headRefOid: current.headRefOid, ...history };

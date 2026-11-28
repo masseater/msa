@@ -23,8 +23,10 @@ const settingsManagers: SettingsManager[] = [];
 
 const removeSessionDirs: Effect.Effect<void> = Effect.suspend(() =>
   Effect.andThen(
-    Effect.promise(() =>
-      Promise.all(settingsManagers.splice(0).map((manager) => manager.persistence.flush())),
+    Effect.forEach(
+      settingsManagers.splice(0).map((manager) => manager.persistence.flush()),
+      (promise) => Effect.promise(() => promise),
+      { concurrency: "unbounded" },
     ),
     removeDirs(tempDirs.splice(0)),
   ),

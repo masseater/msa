@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
+import testing from "@msa/testing";
 import { Cause, Console, Effect } from "effect";
 
 import nativeAddon from "../../src/native-addon.ts";
@@ -55,12 +56,12 @@ const workerExit = (addon: string): Effect.Effect<void> =>
 const concurrentReads = (helper: WorkerTestHelper): Effect.Effect<void> =>
   Effect.gen(function* () {
     const concurrentStarted = performance.now();
-    const concurrent = Array.from({ length: 20 }, (_, index) =>
+    const concurrent: Promise<unknown>[] = Array.from({ length: 20 }, (_, index) =>
       index % 2 === 1 ? helper.getText() : helper.getImage(),
     );
     yield* readFileBytes(selfPath);
     assert.deepEqual(
-      yield* Effect.promise(() => Promise.all(concurrent)),
+      yield* Effect.forEach(concurrent, testing.awaited, { concurrency: "unbounded" }),
       Array.from({ length: 20 }, () => undefined),
     );
     assert.ok(

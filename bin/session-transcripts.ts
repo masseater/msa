@@ -96,13 +96,16 @@ const collectTranscripts = (host: hostTypes.HostShape, sessionDir: string) =>
     const names = yield* host.readDirectory(sessionDir);
     const sessionFiles = [...names.filter((name) => name.endsWith(".jsonl"))].sort();
     yield* scriptOutput.print(`Found ${sessionFiles.length} session files in ${sessionDir}`);
-    const transcripts = yield* Effect.forEach(sessionFiles, (file) =>
-      Effect.gen(function* () {
-        const messages = yield* parseSession(host, host.join(sessionDir, file));
-        return messages.length > 0
-          ? [`=== SESSION: ${file} ===\n${messages.join("\n---\n")}\n=== END SESSION ===`]
-          : [];
-      }),
+    const transcripts = yield* Effect.forEach(
+      sessionFiles,
+      (file) =>
+        Effect.gen(function* () {
+          const messages = yield* parseSession(host, host.join(sessionDir, file));
+          return messages.length > 0
+            ? [`=== SESSION: ${file} ===\n${messages.join("\n---\n")}\n=== END SESSION ===`]
+            : [];
+        }),
+      { concurrency: 1 },
     );
     return transcripts.flat();
   });
@@ -155,8 +158,10 @@ const writeTranscriptFiles = (
   transcripts: ReadonlyArray<string>,
 ) =>
   Effect.gen(function* () {
-    const outputFiles = yield* Effect.forEach(chunkTranscripts(transcripts), (chunk, index) =>
-      writeChunk({ chunk, host, index, outputDir }),
+    const outputFiles = yield* Effect.forEach(
+      chunkTranscripts(transcripts),
+      (chunk, index) => writeChunk({ chunk, host, index, outputDir }),
+      { concurrency: 1 },
     );
     yield* scriptOutput.print(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
     return outputFiles;
@@ -283,8 +288,10 @@ const program = Effect.gen(function* () {
   const { agentsMdFiles, section } = yield* agentsMdSectionFor(host, args.cwd);
   const prompt = analysisPrompt(section);
   yield* scriptOutput.print("\nSpawning subagents for analysis...");
-  yield* Effect.forEach(outputFiles, (file) =>
-    analyzeFile({ file, host, outputDir: args.outputDir, prompt }),
+  yield* Effect.forEach(
+    outputFiles,
+    (file) => analyzeFile({ file, host, outputDir: args.outputDir, prompt }),
+    { concurrency: 1 },
   );
   yield* aggregate({ agentsMdFiles, host, outputDir: args.outputDir });
 });

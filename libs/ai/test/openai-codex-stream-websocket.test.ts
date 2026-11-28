@@ -82,15 +82,18 @@ const scopesCachedSocketsToAccount = () =>
         reply: (_sent, _socket, all) => [completedResponse(`resp_${all.length}`)],
       });
       const context = normalizeContext({ messages: [], systemPrompt: "" });
-      yield* Effect.forEach(["account-a", "account-b", "account-a"], (account) =>
-        runCodex(
-          {
-            apiKey: mockToken(account),
-            sessionId: "shared-session",
-            transport: "websocket-cached",
-          },
-          { context },
-        ),
+      yield* Effect.forEach(
+        ["account-a", "account-b", "account-a"],
+        (account) =>
+          runCodex(
+            {
+              apiKey: mockToken(account),
+              sessionId: "shared-session",
+              transport: "websocket-cached",
+            },
+            { context },
+          ),
+        { concurrency: 1 },
       );
 
       expect(sockets.records.map((socket) => socket.headers["chatgpt-account-id"])).toEqual([

@@ -98,7 +98,10 @@ describe("NodeExecutionEnv readers", () => {
     Effect.tap((dir) => Effect.sync(() => dirs.push(dir))),
   );
   afterEach(
-    () => Effect.runPromise(Effect.forEach(dirs.splice(0), removeDirRetrying, { discard: true })),
+    () =>
+      Effect.runPromise(
+        Effect.forEach(dirs.splice(0), removeDirRetrying, { concurrency: 1, discard: true }),
+      ),
     15_000,
   );
 

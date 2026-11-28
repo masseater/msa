@@ -121,8 +121,10 @@ const voteRound = (
   ballot: Ballot,
 ): Effect.Effect<reloadTypes.ReloadReport> =>
   Effect.gen(function* () {
-    const votes = yield* Effect.forEach(participants, (connection) =>
-      requestVote(connection, ballot),
+    const votes = yield* Effect.forEach(
+      participants,
+      (connection) => requestVote(connection, ballot),
+      { concurrency: 1 },
     );
     let local = false;
     const [localExit, voteExits] = yield* Effect.all(

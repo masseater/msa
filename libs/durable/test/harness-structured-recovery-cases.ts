@@ -32,8 +32,13 @@ const seedStep1 = Effect.fn("seedStep1")(function* (path: string, children: read
                 { ...OWN_CONVERSATION, conversationId: root.id },
               ),
             );
-            const ids: durableTypes.TaskId[] = [];
-            for (const name of children) ids.push(yield* awaited(spawn(tx, parent, name)));
+            const ids = yield* Effect.forEach(
+              children,
+              (name) => awaited(spawn(tx, parent, name)),
+              {
+                concurrency: 1,
+              },
+            );
             return { children: ids, parent };
           }),
         ),

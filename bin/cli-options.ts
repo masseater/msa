@@ -81,7 +81,7 @@ const parseOptions = <A, E>(config: {
       const option = config.options.get(arg);
       return option === undefined ? config.unknown(arg) : option.apply(config.parsed, value);
     },
-    { discard: true },
+    { concurrency: 1, discard: true },
   ).pipe(Effect.as(config.parsed));
 
 const parseCommandLine = <A, E>(config: {

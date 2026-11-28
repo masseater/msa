@@ -107,7 +107,7 @@ export default class ReloadPrepare {
             (object.status === "live" || object.status === "activating"),
         );
         if (todo.length === 0) return;
-        yield* Effect.promise(() => Promise.allSettled(todo.map((object) => object.ready)));
+        yield* errorsModule.settlePromises(todo.map((object) => object.ready));
         reload.alive();
         for (const object of todo) {
           if (object.status === "live" && object.service !== reload.services.get(object.typeName)) {

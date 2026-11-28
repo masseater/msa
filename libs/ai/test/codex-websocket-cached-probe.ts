@@ -140,6 +140,7 @@ const program = Effect.gen(function* () {
   const elapsed = yield* Effect.forEach(
     Array.from({ length: args.turns }, (_, index) => index + 1),
     (turn) => runTurn(probe, turn),
+    { concurrency: 1 },
   );
   yield* summarize(args, elapsed);
 });

@@ -15,15 +15,18 @@ const fixtures = new Map<string, typesModule.Message[]>();
 
 const generateFixtures = () =>
   Effect.runPromise(
-    Effect.forEach(authorizedTargets, (target) =>
-      generateFixture(target).pipe(
-        Effect.tap((fixture) =>
-          Option.match(fixture, {
-            onNone: () => Console.log(`[${target.label}] Failed to generate fixture, skipping`),
-            onSome: (messages) => Effect.sync(() => fixtures.set(target.label, messages)),
-          }),
+    Effect.forEach(
+      authorizedTargets,
+      (target) =>
+        generateFixture(target).pipe(
+          Effect.tap((fixture) =>
+            Option.match(fixture, {
+              onNone: () => Console.log(`[${target.label}] Failed to generate fixture, skipping`),
+              onSome: (messages) => Effect.sync(() => fixtures.set(target.label, messages)),
+            }),
+          ),
         ),
-      ),
+      { concurrency: 1 },
     ),
   );
 

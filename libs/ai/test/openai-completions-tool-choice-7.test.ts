@@ -150,6 +150,7 @@ const omitsUnsupportedReasoningEffort = () =>
           const { payload } = yield* promptModel(model, "Hi", { options: { reasoning: "high" } });
           expect(payload["reasoning_effort"], model.id).toBeUndefined();
         }),
+      { concurrency: 1 },
     ),
   );
 

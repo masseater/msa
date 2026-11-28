@@ -174,6 +174,7 @@ const applyDocumentActions: {
     seq: typesModule.Seq,
   ) =>
     Effect.forEach(actions, ([id, action]) => applyDocumentAction(executor, id, action, seq), {
+      concurrency: 1,
       discard: true,
     }),
 );

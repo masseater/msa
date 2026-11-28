@@ -56,7 +56,7 @@ const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> = {
       return reference;
     };
     const references = [run("write"), run("writes"), run("insert"), run("override")];
-    yield* Effect.forEach(references, collect, { discard: true });
+    yield* Effect.forEach(references, collect, { concurrency: 1, discard: true });
     for (const held of retainedSettledChanges)
       assert.throws(() => Reflect.get(held, "length"), /settled/u);
   }),

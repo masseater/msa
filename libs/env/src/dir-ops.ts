@@ -26,10 +26,13 @@ const fileInfoAt = (
     runFileOp({
       ...request,
       operation: (resolved) =>
-        Effect.all([
-          remoteRequest({ connection, json: { path: resolved }, op: "lstat" }),
-          remotePath(connection),
-        ]).pipe(Effect.map(([json, paths]) => toInfo(resolved, remoteFileInfo(json), paths))),
+        Effect.all(
+          [
+            remoteRequest({ connection, json: { path: resolved }, op: "lstat" }),
+            remotePath(connection),
+          ],
+          { concurrency: 1 },
+        ).pipe(Effect.map(([json, paths]) => toInfo(resolved, remoteFileInfo(json), paths))),
     }).pipe(Effect.map((result) => (result.ok ? result.value : result))),
   );
 };

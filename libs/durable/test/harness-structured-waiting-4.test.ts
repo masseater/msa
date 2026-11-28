@@ -136,10 +136,10 @@ const rejectsCycleHold = Effect.gen(function* () {
     }),
   );
   ids["reviewer"] = yield* awaited(start(root, "reviewer"));
-  const outcomes = yield* awaited(
-    Promise.all(
-      ["orchestrator", "worker", "reviewer"].map((name) => outcomeOf(harness, ids[name]!)),
-    ),
+  const outcomes = yield* Effect.forEach(
+    ["orchestrator", "worker", "reviewer"].map((name) => outcomeOf(harness, ids[name]!)),
+    awaited,
+    { concurrency: "unbounded" },
   );
   expect(outcomes).toEqual(["completed", "faulted", "completed"]);
   const worker = (yield* awaited(harness.waitForTask(ids["worker"]!, context))).state.outcome;

@@ -74,7 +74,7 @@ const tapOutput = (handle: Handle, onOutput: OutputTap) =>
           }),
         ),
       ),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 
 const signalOf = (error: unknown): string =>

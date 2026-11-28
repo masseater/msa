@@ -46,7 +46,9 @@ const checkSavedLine = Effect.fn("checkSavedLine")(function* (line: string) {
 });
 
 const checkSavedImages = (text: string) =>
-  Effect.map(Effect.forEach(text.split("\n"), checkSavedLine), (lines) => lines.join("\n"));
+  Effect.map(Effect.forEach(text.split("\n"), checkSavedLine, { concurrency: 1 }), (lines) =>
+    lines.join("\n"),
+  );
 
 const workerSpy: { current?: MockInstance<Worker["once"]> } = {};
 

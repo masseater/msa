@@ -64,8 +64,11 @@ const labelTokens = Effect.fn("labelTokens")(function* (
   request: llamaCppHttpTypes.RequestContext,
   labels: readonly string[],
 ) {
-  const pending = labels.map((label) => cachedLabelToken(request, label));
-  const ids = yield* Effect.promise(() => Promise.all(pending));
+  const ids = yield* Effect.forEach(
+    labels,
+    (label) => Effect.promise(() => cachedLabelToken(request, label)),
+    { concurrency: "unbounded" },
+  );
   const tokens: number[] = [];
   for (const [index, id] of ids.entries()) {
     if (id === undefined)

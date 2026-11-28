@@ -76,7 +76,10 @@ const renameAt = (
   return run(
     Effect.gen(function* () {
       const resolved = yield* fileResult(
-        Effect.all([resolveIn({ path, target }), resolveIn({ path: request.destination, target })]),
+        Effect.all(
+          [resolveIn({ path, target }), resolveIn({ path: request.destination, target })],
+          { concurrency: 1 },
+        ),
         path,
       );
       if (!resolved.ok) return resolved;

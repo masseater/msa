@@ -119,17 +119,20 @@ const applyBoundary: typesModule.Dual4<
           boundary,
           items[index] as chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
         ),
-      { discard: true },
+      { concurrency: 1, discard: true },
     );
-    const placed = yield* Effect.forEach(users, (index) =>
-      applyUser(
-        tx,
-        conversationId,
-        items[index] as chordTypes.Draft<
-          Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>
-        >,
-        now,
-      ),
+    const placed = yield* Effect.forEach(
+      users,
+      (index) =>
+        applyUser(
+          tx,
+          conversationId,
+          items[index] as chordTypes.Draft<
+            Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>
+          >,
+          now,
+        ),
+      { concurrency: 1 },
     );
     const removed = [...writes, ...users].sort((a, b) => b - a);
     for (const index of removed) items.splice(index, 1);

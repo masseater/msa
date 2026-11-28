@@ -61,29 +61,33 @@ const checkImageResizeWorker = (metafile: Metafile) =>
       (output.entryPoint ?? "").replaceAll("\\", "/").endsWith("utils/image-resize-worker.js"),
     ),
     (output) => refuseInputs(output, TUI_INPUTS, "Image resize worker must not bundle @msa/tui"),
+    { concurrency: 1 },
   );
 
 const checkCodemodeWorker = (host: hostTypes.HostShape, repoRoot: string, metafile: Metafile) =>
-  Effect.forEach(Object.entries(metafile.outputs), ([outputPath, output]) =>
-    Effect.gen(function* () {
-      yield* refuseInputs(
-        output,
-        [CLASS_GUARD_INPUT, ...TUI_INPUTS],
-        "Codemode worker must not bundle the class guard or @msa/tui",
-      );
-      const invalid = output.imports.filter(
-        (imported) => imported.kind !== "import-statement" || !isBuiltin(imported.path),
-      );
-      if (invalid.length > 0) {
-        return yield* BundleError.make({
-          message: `Codemode worker must only import Node builtins: ${invalid.map((imported) => imported.path).join(", ")}`,
-        });
-      }
-      const contents = yield* host.readText(host.resolve(repoRoot, outputPath));
-      if (contents.includes("import.meta")) {
-        return yield* BundleError.make({ message: "Codemode worker must not use import.meta" });
-      }
-    }),
+  Effect.forEach(
+    Object.entries(metafile.outputs),
+    ([outputPath, output]) =>
+      Effect.gen(function* () {
+        yield* refuseInputs(
+          output,
+          [CLASS_GUARD_INPUT, ...TUI_INPUTS],
+          "Codemode worker must not bundle the class guard or @msa/tui",
+        );
+        const invalid = output.imports.filter(
+          (imported) => imported.kind !== "import-statement" || !isBuiltin(imported.path),
+        );
+        if (invalid.length > 0) {
+          return yield* BundleError.make({
+            message: `Codemode worker must only import Node builtins: ${invalid.map((imported) => imported.path).join(", ")}`,
+          });
+        }
+        const contents = yield* host.readText(host.resolve(repoRoot, outputPath));
+        if (contents.includes("import.meta")) {
+          return yield* BundleError.make({ message: "Codemode worker must not use import.meta" });
+        }
+      }),
+    { concurrency: 1 },
   );
 
 const codingAgentBundleChecks = {

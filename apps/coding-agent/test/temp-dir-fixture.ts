@@ -6,7 +6,9 @@ const { makeTempDir, removePath, runTest } = testing;
 
 const useTempDir = (prefix: string): Effect.Effect<string> => {
   const created: string[] = [];
-  afterEach(() => runTest(Effect.forEach(created.splice(0), removePath, { discard: true })));
+  afterEach(() =>
+    runTest(Effect.forEach(created.splice(0), removePath, { concurrency: 1, discard: true })),
+  );
   return Effect.tap(makeTempDir(prefix), (dir) => Effect.sync(() => created.push(dir)));
 };
 

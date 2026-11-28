@@ -145,7 +145,7 @@ const protectEvaluatorSources = (uid: number, gid: number) =>
       "/repo/apps/evals/vitest.container.config.ts",
     ],
     (path) => Effect.andThen(assertRootOnly(path), assertSandboxCannotRead(path, uid, gid)),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 
 const prepareAgentDirectory = (identity: { uid: number; gid: number }) =>

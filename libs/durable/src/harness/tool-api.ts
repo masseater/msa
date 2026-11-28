@@ -210,9 +210,16 @@ const buildApi = (input: ApiInput): Omit<typesModule.ToolExecutionApi, "env"> =>
   };
 };
 
+const settleAdmissions = (state: toolApiTypes.ApiState): Effect.Effect<void> =>
+  Effect.forEach(state.admissions, (admission) => Effect.exit(Effect.promise(() => admission)), {
+    concurrency: "unbounded",
+    discard: true,
+  });
+
 const toolApi = {
   buildApi,
   newApiState,
+  settleAdmissions,
 };
 
 export default toolApi;

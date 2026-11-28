@@ -91,8 +91,10 @@ const jsonlFilesRecursive = (options: {
       .filter((name) => name.endsWith(".jsonl"))
       .sort()
       .map((name) => host.join(directory, name));
-    const found = yield* Effect.forEach(paths, (path) =>
-      Effect.map(host.stat(path), (info) => (info.isFile ? [path] : [])),
+    const found = yield* Effect.forEach(
+      paths,
+      (path) => Effect.map(host.stat(path), (info) => (info.isFile ? [path] : [])),
+      { concurrency: 1 },
     );
     return found.flat();
   });
@@ -113,17 +115,20 @@ const forEachSessionFile = (options: {
   Effect.gen(function* () {
     const { counts, host } = options;
     const files = yield* jsonlFilesRecursive({ directory: options.sessionsDir, host });
-    yield* Effect.forEach(files, (sessionFile) =>
-      Effect.gen(function* () {
-        counts.sessionFilesScanned += 1;
-        const sessionMillis = sessionFileMillis({ file: sessionFile, host });
-        if (isOlderThan(sessionMillis, options.sinceMs)) {
-          counts.sessionFilesSkippedOlderThanSince += 1;
-          return;
-        }
-        counts.sessionFilesIncluded += 1;
-        yield* options.scan({ sessionFile, sessionMillis });
-      }),
+    yield* Effect.forEach(
+      files,
+      (sessionFile) =>
+        Effect.gen(function* () {
+          counts.sessionFilesScanned += 1;
+          const sessionMillis = sessionFileMillis({ file: sessionFile, host });
+          if (isOlderThan(sessionMillis, options.sinceMs)) {
+            counts.sessionFilesSkippedOlderThanSince += 1;
+            return;
+          }
+          counts.sessionFilesIncluded += 1;
+          yield* options.scan({ sessionFile, sessionMillis });
+        }),
+      { concurrency: 1 },
     );
   });
 

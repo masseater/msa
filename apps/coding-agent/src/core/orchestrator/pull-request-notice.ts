@@ -31,7 +31,9 @@ function openPullRequests(
   write?: runtimeTypes.Write,
 ): Effect.Effect<string | undefined> {
   return Effect.map(
-    Effect.forEach([...new Set(taskIds)], (taskId) => openLine(runtime, taskId, write)),
+    Effect.forEach([...new Set(taskIds)], (taskId) => openLine(runtime, taskId, write), {
+      concurrency: 1,
+    }),
     (lines) => (lines.flat().length === 0 ? undefined : lines.flat().join("\n")),
   );
 }

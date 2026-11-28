@@ -102,7 +102,7 @@ function disposeOne(orchestrator: Orchestrator): Effect.Effect<void> {
 }
 
 function disposeRunning(): Effect.Effect<void> {
-  return Effect.forEach([...running], disposeOne, { discard: true });
+  return Effect.forEach([...running], disposeOne, { concurrency: 1, discard: true });
 }
 
 function withTempDir<A, E>(prefix: string, body: (directory: string) => Effect.Effect<A, E>) {

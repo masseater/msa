@@ -121,18 +121,23 @@ const migrate = Effect.fnUntraced(function* (
     );
   }
   const pending = migrations.filter((migration) => migration.version > row.version);
-  yield* Effect.forEach(pending, (migration) =>
-    Effect.gen(function* () {
-      yield* Effect.forEach(migration.statements, (statement) =>
-        Effect.promise(() => transaction.exec(statement)),
-      );
-      yield* Effect.promise(() =>
-        transaction.run(
-          "UPDATE durable_schema SET version = ? WHERE singleton = 1",
-          migration.version,
-        ),
-      );
-    }),
+  yield* Effect.forEach(
+    pending,
+    (migration) =>
+      Effect.gen(function* () {
+        yield* Effect.forEach(
+          migration.statements,
+          (statement) => Effect.promise(() => transaction.exec(statement)),
+          { concurrency: 1 },
+        );
+        yield* Effect.promise(() =>
+          transaction.run(
+            "UPDATE durable_schema SET version = ? WHERE singleton = 1",
+            migration.version,
+          ),
+        );
+      }),
+    { concurrency: 1 },
   );
 });
 

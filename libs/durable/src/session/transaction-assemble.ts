@@ -54,7 +54,7 @@ const validateOwners = (state: transactionTypesModule.TxState): Effect.Effect<vo
   return Effect.forEach(
     checks.slice(at),
     (check) => Effect.map(currentTask(state, check.taskId), (task) => checkOwner(check, task)),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 };
 
@@ -158,7 +158,7 @@ const loadPublications = (state: transactionTypesModule.TxState): Effect.Effect<
           if (current !== undefined) task.publicationConversationId = current.conversationId;
         });
       }),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 };
 
@@ -190,7 +190,7 @@ const applySubmissionChanges = (state: transactionTypesModule.TxState): Effect.E
           if (next !== current) state.submissions.set(id, next);
         },
       ),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 };
 

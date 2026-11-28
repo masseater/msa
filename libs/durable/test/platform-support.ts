@@ -61,7 +61,7 @@ const removeDirRetrying = (directory: string): Effect.Effect<void> =>
     );
 
 const removeDirs = (directories: Iterable<string>) =>
-  Effect.forEach(directories, removeDir, { discard: true });
+  Effect.forEach(directories, removeDir, { concurrency: 1, discard: true });
 
 const writeTempFile = Effect.fn("writeTempFile")(function* (
   directory: string,

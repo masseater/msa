@@ -64,16 +64,19 @@ interface PreparedDefinition {
 const prepareDefinitions = (
   definitions: Readonly<Record<string, TSchema>>,
 ): Effect.Effect<ReadonlyArray<PreparedDefinition>, SchemaError | SchemaRenderError> =>
-  Effect.forEach(Object.entries(definitions), ([name, definition]) =>
-    Effect.gen(function* () {
-      if (!DEFINITION_NAME.test(name)) {
-        return yield* SchemaRenderError.make({
-          message: `Invalid schema definition name: ${name}`,
-        });
-      }
-      const { shape } = splitAnnotations(definition);
-      return { name, shape, shapeKey: yield* encodeCompactJson(shape) };
-    }),
+  Effect.forEach(
+    Object.entries(definitions),
+    ([name, definition]) =>
+      Effect.gen(function* () {
+        if (!DEFINITION_NAME.test(name)) {
+          return yield* SchemaRenderError.make({
+            message: `Invalid schema definition name: ${name}`,
+          });
+        }
+        const { shape } = splitAnnotations(definition);
+        return { name, shape, shapeKey: yield* encodeCompactJson(shape) };
+      }),
+    { concurrency: 1 },
   );
 
 const makeReplacer = (
@@ -154,18 +157,24 @@ const renderArtifact = (artifact: schemaArtifactsTypes.SchemaArtifact) =>
 const renderConfigSchemas: Effect.Effect<
   ReadonlyMap<string, string>,
   SchemaError | SchemaRenderError
-> = Effect.map(Effect.forEach(schemaArtifacts, renderArtifact), (entries) => new Map(entries));
+> = Effect.map(
+  Effect.forEach(schemaArtifacts, renderArtifact, { concurrency: 1 }),
+  (entries) => new Map(entries),
+);
 
 const program = Effect.gen(function* () {
   const host = yield* Host;
   const rendered = yield* renderConfigSchemas;
-  yield* Effect.forEach([...rendered], ([relativePath, content]) =>
-    Effect.gen(function* () {
-      const path = host.resolve(packageDirectory, relativePath);
-      yield* host.makeDirectory(host.dirname(path));
-      yield* host.writeTextFile(path, content);
-      yield* scriptOutput.print(`Generated apps/coding-agent/${relativePath}`);
-    }),
+  yield* Effect.forEach(
+    [...rendered],
+    ([relativePath, content]) =>
+      Effect.gen(function* () {
+        const path = host.resolve(packageDirectory, relativePath);
+        yield* host.makeDirectory(host.dirname(path));
+        yield* host.writeTextFile(path, content);
+        yield* scriptOutput.print(`Generated apps/coding-agent/${relativePath}`);
+      }),
+    { concurrency: 1 },
   );
 });
 

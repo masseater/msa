@@ -80,7 +80,7 @@ const abortGeneration = Effect.fnUntraced(function* (
               harnessError("aborted", `Tool ${call.name} was aborted`),
               { timestamp: runtime.now() },
             ),
-          { discard: true },
+          { concurrency: 1, discard: true },
         );
         endRun(tx, live, runtime.taskId, { reason: "aborted", status: "unanswered" });
         return { outcome: { status: "aborted" }, status: "terminal" };

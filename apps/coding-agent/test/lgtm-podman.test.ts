@@ -76,6 +76,7 @@ describe("msa-grafana-lgtm reuse decision against real podman", () => {
   afterEach(() =>
     runTest(
       Effect.forEach(pods.splice(0), (pod) => runPodman(["pod", "rm", "--force", pod]), {
+        concurrency: 1,
         discard: true,
       }),
     ),

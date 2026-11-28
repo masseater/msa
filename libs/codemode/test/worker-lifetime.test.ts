@@ -87,7 +87,9 @@ const reportsTheActualExitOfExecute = Effect.gen(function* () {
     expect(yield* Effect.promise(() => run.result)).toMatchObject({ ok: true, value: 2 });
     expect(run.finished).toBe(true);
     expect(exits).toHaveLength(2);
-    yield* Effect.promise(() => Promise.all(exits));
+    yield* Effect.forEach(exits, (promise) => Effect.promise(() => promise), {
+      concurrency: "unbounded",
+    });
     expect(acquireWorker).toHaveBeenCalledTimes(2);
     expect(releaseWorker).toHaveBeenCalledTimes(2);
   } finally {

@@ -225,7 +225,9 @@ const updateWith = Effect.fnUntraced(function* (
 ) {
   const rows = yield* whileLocked(indexPath, () => indexStore.fileRows(database));
   const known = new Map(rows.map((row) => [row.path, row]));
-  const listed = yield* Effect.forEach([...new Set(roots)], (root) => walk(fileSystem, root, 0));
+  const listed = yield* Effect.forEach([...new Set(roots)], (root) => walk(fileSystem, root, 0), {
+    concurrency: 1,
+  });
   const found = new Map(listed.flat().map((file) => [file.path, file]));
   const removed = rows
     .map((row) => row.path)

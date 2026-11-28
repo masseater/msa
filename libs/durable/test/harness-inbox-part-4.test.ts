@@ -75,9 +75,11 @@ const withdrawsMiddleItem = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
-  const items = [];
-  for (const text of ["x", "y", "z"])
-    items.push(yield* awaited(root.submit({ content: text, type: "input" }, context)));
+  const items = yield* Effect.forEach(
+    ["x", "y", "z"],
+    (text) => awaited(root.submit({ content: text, type: "input" }, context)),
+    { concurrency: 1 },
+  );
   const ops: deltaTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {

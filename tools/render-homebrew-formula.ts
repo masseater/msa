@@ -189,10 +189,11 @@ const renderFormula = (
 const program = Effect.gen(function* () {
   const context = yield* makeContext(yield* parseFlags());
   const checksums = yield* readChecksums(context);
-  const entries = [];
-  for (const platformName of PLATFORM_NAMES) {
-    entries.push(yield* checksumFor(context, checksums, platformName));
-  }
+  const entries = yield* Effect.forEach(
+    PLATFORM_NAMES,
+    (platformName) => checksumFor(context, checksums, platformName),
+    { concurrency: 1 },
+  );
   yield* context.fs.makeDirectory(context.path.dirname(context.outPath));
   yield* (yield* ScriptOutput).writeTextFile(context.outPath, renderFormula(context, entries));
   yield* scriptOutput.print(

@@ -33,7 +33,9 @@ const stubTokenExchange = (reply: () => Response | Promise<Response>) => {
     return Promise.resolve(reply());
   });
   vi.stubGlobal("fetch", fetchMock);
-  const exchanges = Effect.suspend(() => Effect.forEach(bodies, (body) => decodeJson(body)));
+  const exchanges = Effect.suspend(() =>
+    Effect.forEach(bodies, (body) => decodeJson(body), { concurrency: 1 }),
+  );
   return { exchanges, fetchMock };
 };
 

@@ -99,10 +99,10 @@ const seedForks = Effect.fnUntraced(function* (
         },
       },
     ]);
-    const ids = yield* Effect.promise(() =>
-      Promise.all(
-        Array.from({ length: ENTRIES_PER_FORK }, () => storage.mintId<typesModule.EntryId>()),
-      ),
+    const ids = yield* Effect.forEach(
+      Array.from({ length: ENTRIES_PER_FORK }),
+      () => Effect.promise(() => storage.mintId<typesModule.EntryId>()),
+      { concurrency: "unbounded" },
     );
     yield* commit(
       storage,

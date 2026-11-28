@@ -125,7 +125,7 @@ const startToolRound = Effect.fnUntraced(function* (
               offered,
               sequential,
             }),
-          { discard: true },
+          { concurrency: 1, discard: true },
         );
         delete live.generation;
         live.tools = round.slots;

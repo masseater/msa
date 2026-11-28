@@ -35,7 +35,7 @@ const totalUsage = Effect.fnUntraced(function* (
           if (state !== undefined) addUsageState(total, state);
         },
       ),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
   return total;
 });

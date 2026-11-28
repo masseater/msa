@@ -180,16 +180,19 @@ const scanToolUsage = ({
       parseErrors: 0,
       tools: new Map<string, toolStatsScanTypes.ToolStats>(),
     };
-    yield* Effect.forEach(files, (file) =>
-      forEachDecodedLine({
-        decode: decodeEntry,
-        file,
-        host,
-        onEntry: (entry) => recordEntry(aggregate, entry),
-        onMalformed: () => {
-          aggregate.parseErrors += 1;
-        },
-      }),
+    yield* Effect.forEach(
+      files,
+      (file) =>
+        forEachDecodedLine({
+          decode: decodeEntry,
+          file,
+          host,
+          onEntry: (entry) => recordEntry(aggregate, entry),
+          onMalformed: () => {
+            aggregate.parseErrors += 1;
+          },
+        }),
+      { concurrency: 1 },
     );
     return aggregate;
   });

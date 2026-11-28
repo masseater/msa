@@ -51,13 +51,16 @@ const collectProblems = Effect.gen(function* () {
   const path = yield* Path.Path;
   const directory = path.resolve(import.meta.dirname, "../../.github/workflows");
   const files = (yield* fs.readDirectory(directory)).filter((name) => /\.ya?ml$/u.test(name));
-  const problems = yield* Effect.forEach(files, (name) =>
-    Effect.gen(function* () {
-      const workflow = yield* Schema.decodeUnknownEffect(Workflow)(
-        parse(yield* fs.readFileString(path.join(directory, name))),
-      );
-      return problemsOf(name, workflow);
-    }),
+  const problems = yield* Effect.forEach(
+    files,
+    (name) =>
+      Effect.gen(function* () {
+        const workflow = yield* Schema.decodeUnknownEffect(Workflow)(
+          parse(yield* fs.readFileString(path.join(directory, name))),
+        );
+        return problemsOf(name, workflow);
+      }),
+    { concurrency: 1 },
   );
   return problems.flat();
 });

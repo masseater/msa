@@ -94,7 +94,10 @@ const executePreparedToolCall = ({
     );
     const durationMs = Math.round(performance.now() - startedAt);
     acceptingUpdates = false;
-    yield* Effect.promise(() => Promise.all(updateEvents));
+    yield* Effect.forEach(updateEvents, (event) => Effect.promise(() => event), {
+      concurrency: "unbounded",
+      discard: true,
+    });
     if (Exit.isSuccess(exit)) {
       return { durationMs, isError: exit.value.isError === true, result: exit.value };
     }

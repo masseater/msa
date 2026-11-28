@@ -44,35 +44,44 @@ const collectRuns = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const root = path.resolve(import.meta.dirname, "../..");
-  const children = yield* Effect.forEach(PACKAGE_GROUPS, (group) =>
-    Effect.gen(function* () {
-      const dir = path.join(root, group);
-      if (!(yield* fs.exists(dir))) return [];
-      return (yield* fs.readDirectory(dir)).map((name) => path.join(dir, name));
-    }),
+  const children = yield* Effect.forEach(
+    PACKAGE_GROUPS,
+    (group) =>
+      Effect.gen(function* () {
+        const dir = path.join(root, group);
+        if (!(yield* fs.exists(dir))) return [];
+        return (yield* fs.readDirectory(dir)).map((name) => path.join(dir, name));
+      }),
+    { concurrency: 1 },
   );
   const dirs = [root, path.join(root, ".claude"), ...children.flat()];
-  const manifests = yield* Effect.forEach(dirs, (dir) =>
-    Effect.gen(function* () {
-      const file = path.join(dir, "package.json");
-      if (!(yield* fs.exists(file).pipe(Effect.orElseSucceed(() => false)))) return [];
-      const manifest = yield* Schema.decodeEffect(Manifest)(yield* fs.readFileString(file));
-      return scriptRuns(dir, path.relative(root, file) || "package.json", manifest.scripts ?? {});
-    }),
+  const manifests = yield* Effect.forEach(
+    dirs,
+    (dir) =>
+      Effect.gen(function* () {
+        const file = path.join(dir, "package.json");
+        if (!(yield* fs.exists(file).pipe(Effect.orElseSucceed(() => false)))) return [];
+        const manifest = yield* Schema.decodeEffect(Manifest)(yield* fs.readFileString(file));
+        return scriptRuns(dir, path.relative(root, file) || "package.json", manifest.scripts ?? {});
+      }),
+    { concurrency: 1 },
   );
   const runs = [...taskRuns(root, path), ...manifests.flat()].filter((run) =>
     CARGO.test(run.command),
   );
-  const problems = yield* Effect.forEach(runs, (run) =>
-    Effect.gen(function* () {
-      const pinned = yield* fs.exists(path.join(run.cwd, TOOLCHAIN_FILE));
-      return [
-        ...(run.command.includes("--manifest-path")
-          ? [`${run.origin}: --manifest-path skips ${TOOLCHAIN_FILE}; run cargo in the crate`]
-          : []),
-        ...(pinned ? [] : [`${run.origin}: runs cargo where there is no ${TOOLCHAIN_FILE}`]),
-      ];
-    }),
+  const problems = yield* Effect.forEach(
+    runs,
+    (run) =>
+      Effect.gen(function* () {
+        const pinned = yield* fs.exists(path.join(run.cwd, TOOLCHAIN_FILE));
+        return [
+          ...(run.command.includes("--manifest-path")
+            ? [`${run.origin}: --manifest-path skips ${TOOLCHAIN_FILE}; run cargo in the crate`]
+            : []),
+          ...(pinned ? [] : [`${run.origin}: runs cargo where there is no ${TOOLCHAIN_FILE}`]),
+        ];
+      }),
+    { concurrency: 1 },
   );
   return { problems: problems.flat(), runs };
 });

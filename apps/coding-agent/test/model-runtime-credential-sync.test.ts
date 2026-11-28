@@ -115,7 +115,7 @@ const allowsDifferentProvidersToRunCredentialFlows = Effect.gen(function* () {
     notify: () => {},
     prompt: () => effectRunPromise(awaited("unused")),
   });
-  yield* Effect.all([first.promise, second.promise]);
+  yield* Effect.all([first.promise, second.promise], { concurrency: 1 });
   blocked.open();
   yield* awaited(Promise.all([one, two]));
 });

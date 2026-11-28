@@ -68,7 +68,9 @@ const prepareModel = <TOutput extends JsonValue>({
         credentials.modify(selection.provider, () => Promise.resolve(storedCredential)),
       );
     }
-    yield* Effect.all([files.makeDirectory(paths.workspace), files.makeDirectory(paths.agentDir)]);
+    yield* Effect.all([files.makeDirectory(paths.workspace), files.makeDirectory(paths.agentDir)], {
+      concurrency: 1,
+    });
     const modelRuntime = yield* Effect.promise(() =>
       ModelRuntime.create({
         credentials,

@@ -113,6 +113,7 @@ const readTree: (
     const nested = yield* Effect.forEach(
       entries.filter((entry) => !SKIPPED_ENTRIES.has(entry)).toSorted(),
       (entry) => readTree(root, path.join(relative, entry)),
+      { concurrency: 1 },
     );
     return nested.flat();
   }).pipe(

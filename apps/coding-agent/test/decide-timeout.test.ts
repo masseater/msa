@@ -52,10 +52,11 @@ const decidesRightAfterSlowInferencesTimeOut = () =>
         const fibers = yield* Effect.forEach(
           Array.from({ length: 12 }, (_, index) => index),
           slow,
+          { concurrency: 1 },
         );
         yield* Effect.yieldNow;
         yield* clock.adjust(Duration.sum(DECISION_TIMEOUT, Duration.millis(1)));
-        const late = yield* Effect.forEach(fibers, Fiber.join);
+        const late = yield* Effect.forEach(fibers, Fiber.join, { concurrency: 1 });
         const next = yield* decide({ ...blocking(0.5), state: { ticket: "The deploy fails." } });
 
         expect(late.map((decision) => decision.status)).toEqual(Array(12).fill("undecided"));

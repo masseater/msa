@@ -129,7 +129,7 @@ describe("Markdown component", () => {
                 ),
             );
           },
-          { discard: true },
+          { concurrency: 1, discard: true },
         ).pipe(resetCapabilities),
       ));
 

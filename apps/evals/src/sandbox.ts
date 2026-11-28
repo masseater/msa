@@ -50,7 +50,9 @@ const protectCache = (directoryName: string): Effect.Effect<string[]> =>
     const ssrRoot = pathOperations.join(cacheRoot, "ssr");
     const entries = yield* files.readDirectoryIfPresent(ssrRoot);
     if (Option.isNone(entries)) return [];
-    yield* Effect.all([files.chmod(cacheRoot, 0o755), files.chmod(ssrRoot, 0o755)]);
+    yield* Effect.all([files.chmod(cacheRoot, 0o755), files.chmod(ssrRoot, 0o755)], {
+      concurrency: 1,
+    });
     const protectedPaths: string[] = [];
     for (const name of entries.value) {
       const path = pathOperations.join(ssrRoot, name);
@@ -63,7 +65,7 @@ const protectCache = (directoryName: string): Effect.Effect<string[]> =>
 
 const protectTransformedModules: Effect.Effect<string[]> = Effect.gen(function* () {
   const names = yield* files.readDirectory(tmpdir());
-  const protectedPaths = yield* Effect.forEach(names, protectCache);
+  const protectedPaths = yield* Effect.forEach(names, protectCache, { concurrency: 1 });
   return protectedPaths.flat();
 });
 
@@ -108,7 +110,7 @@ const enter = (root: string, identity: sandboxTypes.SandboxIdentity): Effect.Eff
     const protectedPaths = yield* protectTransformedModules;
     yield* chownTree(root, identity);
     yield* Effect.sync(() => dropPrivileges(identity));
-    yield* Effect.forEach(protectedPaths, assertUnreadable, { discard: true });
+    yield* Effect.forEach(protectedPaths, assertUnreadable, { concurrency: 1, discard: true });
   });
 
 const enterToolSandbox: {

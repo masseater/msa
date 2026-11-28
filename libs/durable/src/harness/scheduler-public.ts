@@ -136,7 +136,10 @@ const abortConversation = Effect.fnUntraced(function* (
   );
   const reached = yield* Effect.promise(() => state.options.session.commitWith(change, context));
   if (background) {
-    yield* Effect.forEach(reached, (id) => waitForTask(state, id, context), { discard: true });
+    yield* Effect.forEach(reached, (id) => waitForTask(state, id, context), {
+      concurrency: 1,
+      discard: true,
+    });
   }
   yield* Effect.promise(() => state.waitForIdle(conversationId, context));
 });

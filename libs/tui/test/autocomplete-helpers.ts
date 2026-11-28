@@ -40,9 +40,13 @@ const setupFolder: {
     structure: autocompleteHelpersTypes.FolderStructure = {},
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
-      yield* Effect.forEach(structure.dirs ?? [], (dir) => makeDirectory(join(baseDir, dir)));
-      yield* Effect.forEach(Object.entries(structure.files ?? {}), ([filePath, contents]) =>
-        writeFileString(join(baseDir, filePath), contents),
+      yield* Effect.forEach(structure.dirs ?? [], (dir) => makeDirectory(join(baseDir, dir)), {
+        concurrency: 1,
+      });
+      yield* Effect.forEach(
+        Object.entries(structure.files ?? {}),
+        ([filePath, contents]) => writeFileString(join(baseDir, filePath), contents),
+        { concurrency: 1 },
       );
     }),
 );
