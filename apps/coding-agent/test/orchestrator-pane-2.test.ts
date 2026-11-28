@@ -1,4 +1,3 @@
-import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -11,11 +10,9 @@ import orchestratorPaneScreen from "./orchestrator-pane-screen.ts";
 const { stripAnsi } = ansi;
 const { viewHelpers } = tasksViewHelpers;
 
-const { awaited, runTest } = testing;
-
 const { FIRST, orchestratorFor, paneTasks } = orchestratorPaneFixtures;
 
-const { prepareUi, screen, stopScreens } = orchestratorPaneScreen;
+const { inScreen, prepareUi, stopScreens } = orchestratorPaneScreen;
 
 const SHIFT_RIGHT = "\x1b[1;2C";
 const SHIFT_LEFT = "\x1b[1;2D";
@@ -27,9 +24,8 @@ beforeAll(prepareUi);
 afterEach(stopScreens);
 
 const opensThreadsFullWidthWithShiftRight = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(SHIFT_RIGHT);
       expect(view.ui.getFocusedComponent()).toBeInstanceOf(TasksView);
       expect(view.divider()).toBe(-1);
@@ -42,9 +38,8 @@ const opensThreadsFullWidthWithShiftRight = () =>
   );
 
 const returnsWithShiftLeft = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(SHIFT_RIGHT, SHIFT_LEFT);
       expect(view.ui.getFocusedComponent()).toBe(view.editor);
       expect(view.divider()).toBe(69);
@@ -52,9 +47,8 @@ const returnsWithShiftLeft = () =>
   );
 
 const keepsTheSelectionMadeInThreadsIn = () =>
-  runTest(
+  inScreen((view) =>
     Effect.gen(function* () {
-      const view = yield* awaited(screen());
       yield* view.send(SHIFT_RIGHT, DOWN, ESC);
       expect(view.state.selectedId).toBe("b");
       const pane = view
