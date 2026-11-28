@@ -95,7 +95,7 @@ const exportSessionWith = (viewedInSrcdoc: boolean) =>
       version: CURRENT_SESSION_VERSION,
     } satisfies sessionManagerTypes.SessionHeader;
     const sessionPath = joinPath(dirs.temp, "session.jsonl");
-    const lines = yield* Effect.forEach([header, ...entries], toJsonText);
+    const lines = yield* Effect.forEach([header, ...entries], toJsonText, { concurrency: 1 });
     yield* writeTextFile(sessionPath, `${lines.join("\n")}\n`);
     return yield* readTextFile(
       yield* awaited(

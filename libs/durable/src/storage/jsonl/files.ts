@@ -142,7 +142,7 @@ const reclaimSidecars: {
     yield* Effect.forEach(
       replacements,
       ([file, content]) => replaceSidecar(files, file, content, context),
-      { discard: true },
+      { concurrency: 1, discard: true },
     );
   }),
 );

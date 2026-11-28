@@ -173,7 +173,7 @@ export default class ConversationViews {
             version: loaded.version,
           });
         }),
-      { discard: true },
+      { concurrency: 1, discard: true },
     );
     return {
       docs: incarnations,

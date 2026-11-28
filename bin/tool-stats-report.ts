@@ -51,8 +51,10 @@ const markup = (data: toolStatsReportTypes.ReportData): string => `<main class="
 const renderReport = (data: toolStatsReportTypes.ReportData) =>
   Effect.gen(function* () {
     const host = yield* Host;
-    const libraries = yield* Effect.forEach(STYLESHEETS, (sheet) =>
-      host.readText(fileURLToPath(import.meta.resolve(sheet))),
+    const libraries = yield* Effect.forEach(
+      STYLESHEETS,
+      (sheet) => host.readText(fileURLToPath(import.meta.resolve(sheet))),
+      { concurrency: 1 },
     );
     const css = [
       ...libraries,

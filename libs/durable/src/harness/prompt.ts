@@ -81,6 +81,7 @@ const renderSections: {
     const desired = new Map<string, string>();
     const request = { context, input, report, shown };
     yield* Effect.forEach(sections, (section) => renderSection(section, request, desired), {
+      concurrency: 1,
       discard: true,
     });
     return desired;

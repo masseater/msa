@@ -24,7 +24,10 @@ const track = (dispose: Effect.Effect<void>): void => {
 };
 
 const disposeRuntimes: Effect.Effect<void> = Effect.suspend(() =>
-  Effect.forEach(disposers.splice(0).reverse(), (dispose) => dispose, { discard: true }),
+  Effect.forEach(disposers.splice(0).reverse(), (dispose) => dispose, {
+    concurrency: 1,
+    discard: true,
+  }),
 );
 
 const providerConfig = (faux: runtimeKitTypes.Faux) => ({

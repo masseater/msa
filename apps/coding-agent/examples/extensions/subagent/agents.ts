@@ -55,6 +55,7 @@ const loadAgentsFromDir = (dir: string, source: "user" | "project") =>
     const agents = yield* Effect.forEach(
       names.filter((name) => name.endsWith(".md")),
       (name) => readAgentFile(pathService.join(dir, name), source),
+      { concurrency: 1 },
     );
     return agents.filter((agent): agent is agentsTypes.AgentConfig => agent !== undefined);
   });

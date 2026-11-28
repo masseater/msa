@@ -25,8 +25,9 @@ const tools = (server: sshdTypes.SshServer): string =>
   localPath.join(server.home, ".msa/mobile/tools");
 
 const sameAsDaemon = (file: string): Effect.Effect<boolean> =>
-  Effect.map(Effect.all([readBytes(file), readBytes(daemon)]), ([deployed, built]) =>
-    Buffer.from(deployed).equals(built),
+  Effect.map(
+    Effect.all([readBytes(file), readBytes(daemon)], { concurrency: 1 }),
+    ([deployed, built]) => Buffer.from(deployed).equals(built),
   );
 
 const connect = (server: sshdTypes.SshServer): ReturnType<typeof connectSsh> =>

@@ -47,6 +47,7 @@ const adoptedEffectRules = [
   "effecttsgo/flat-map-to-tap",
   "effecttsgo/floating-effect",
   "effecttsgo/floating-effect-in-vitest",
+  "effecttsgo/for-loop-push-to-for-each",
   "effecttsgo/generic-effect-services",
   "effecttsgo/global-console",
   "effecttsgo/global-console-in-effect",
@@ -76,6 +77,7 @@ const adoptedEffectRules = [
   "effecttsgo/match-effect-to-match",
   "effecttsgo/match-to-result-or-option",
   "effecttsgo/missed-pipeable-opportunity",
+  "effecttsgo/missing-concurrency-option",
   "effecttsgo/missing-effect-context",
   "effecttsgo/missing-effect-error",
   "effecttsgo/missing-effect-service-dependency",
@@ -105,6 +107,7 @@ const adoptedEffectRules = [
   "effecttsgo/prefer-unsafe-constructor",
   "effecttsgo/process-env",
   "effecttsgo/process-env-in-effect",
+  "effecttsgo/promise-all-in-effect",
   "effecttsgo/promise-in-effect-success",
   "effecttsgo/promise-race-in-effect",
   "effecttsgo/provide-layer-succeed-to-provide-service",
@@ -147,9 +150,6 @@ const adoptedEffectRules = [
 ];
 
 const declinedEffectRules = [
-  "effecttsgo/for-loop-push-to-for-each",
-  "effecttsgo/missing-concurrency-option",
-  "effecttsgo/promise-all-in-effect",
   "effecttsgo/global-json",
   "effecttsgo/prefer-effect-array",
   "effecttsgo/prefer-effect-record",

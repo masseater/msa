@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import testing from "@msa/testing";
 import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
@@ -23,7 +24,11 @@ const case7ObjectsOfTypesAReload = Effect.gen(function* () {
     name: "item",
     setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
   });
-  yield* Effect.promise(() => Promise.all(["a", "b"].map((id) => host.hold(Item, { id }).ready)));
+  yield* Effect.forEach(
+    ["a", "b"].map((id) => host.hold(Item, { id }).ready),
+    testing.awaited,
+    { concurrency: "unbounded" },
+  );
   const plugins = (fail: boolean): chordTypes.Facet[] => [
     {
       name: "fresh",

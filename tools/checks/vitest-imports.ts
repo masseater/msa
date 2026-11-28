@@ -101,7 +101,9 @@ function visitFile(visit: Visit, file: string): taskBuildDepsTypes.Problems {
   return Effect.gen(function* () {
     const text = yield* visit.options.readText(file);
     const imports = yield* visit.options.importsOf(file, text);
-    const followed = yield* Effect.forEach(imports.specs, (spec) => follow(visit, spec, file));
+    const followed = yield* Effect.forEach(imports.specs, (spec) => follow(visit, spec, file), {
+      concurrency: 1,
+    });
     const children = yield* visit.options.childProblems(file, text);
     return [...uncovered(visit, file), ...imports.problems, ...followed.flat(), ...children];
   });
@@ -149,7 +151,9 @@ const walkProjects = (
     ),
     (vitest) =>
       Effect.map(
-        Effect.forEach(vitest.projects, (project) => projectProblems(options, covers, project)),
+        Effect.forEach(vitest.projects, (project) => projectProblems(options, covers, project), {
+          concurrency: 1,
+        }),
         (problems) => problems.flat(),
       ),
     (vitest) => Effect.promise(() => vitest.close()),

@@ -182,7 +182,10 @@ function syncOne(
 }
 
 function sweep(runtime: runtimeTypes.Runtime): Effect.Effect<void> {
-  return Effect.forEach(candidates(runtime), (task) => syncOne(runtime, task), { discard: true });
+  return Effect.forEach(candidates(runtime), (task) => syncOne(runtime, task), {
+    concurrency: 1,
+    discard: true,
+  });
 }
 
 function loop(runtime: runtimeTypes.Runtime, intervalMs: number = SYNC_MS): Effect.Effect<never> {

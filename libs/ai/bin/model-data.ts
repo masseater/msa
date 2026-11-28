@@ -87,11 +87,14 @@ const readModelDataStructure = Effect.fn("readModelDataStructure")(function* (pa
     expected: providerIds.map((providerId) => `${providerId}.models.ts`).sort(),
   });
   if (message !== undefined) return yield* fail(message);
-  const structures = yield* Effect.forEach(providerIds, (providerId) =>
-    Effect.map(
-      readProviderStructure(files.join(providersDir, "data", `${providerId}.json`), providerId),
-      (structure) => [providerId, structure] as const,
-    ),
+  const structures = yield* Effect.forEach(
+    providerIds,
+    (providerId) =>
+      Effect.map(
+        readProviderStructure(files.join(providersDir, "data", `${providerId}.json`), providerId),
+        (structure) => [providerId, structure] as const,
+      ),
+    { concurrency: 1 },
   );
   return sortedRecord(structures);
 });
@@ -124,8 +127,10 @@ const createModelDataManifest: {
     fileContents: Readonly<Record<string, string>>,
     generatedAt: string,
   ) {
-    const hashes = yield* Effect.forEach(Object.entries(fileContents), ([file, content]) =>
-      Effect.map(sha256(content), (hash) => [file, hash] as const),
+    const hashes = yield* Effect.forEach(
+      Object.entries(fileContents),
+      ([file, content]) => Effect.map(sha256(content), (hash) => [file, hash] as const),
+      { concurrency: 1 },
     );
     return {
       files: sortedRecord(hashes),

@@ -61,17 +61,17 @@ const refreshesOnceWhenSeveralProcessesFindThe = () =>
       server.expireAccessTokens();
       const processes = [process(), process(), process()];
 
-      yield* awaited(
-        Promise.all(
-          processes.map(({ provider }) =>
-            provider.onUnauthorized?.({
-              fetch: globalThis.fetch,
-              response: new Response(null, { status: 401 }),
-              serverUrl: new URL(server.url),
-              token: "access-1",
-            }),
-          ),
+      yield* Effect.forEach(
+        processes.map(({ provider }) =>
+          provider.onUnauthorized?.({
+            fetch: globalThis.fetch,
+            response: new Response(null, { status: 401 }),
+            serverUrl: new URL(server.url),
+            token: "access-1",
+          }),
         ),
+        awaited,
+        { concurrency: "unbounded" },
       );
 
       expect(server.log.filter((entry) => entry === "token refresh")).toHaveLength(1);

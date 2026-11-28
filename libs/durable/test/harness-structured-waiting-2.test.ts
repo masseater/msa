@@ -152,7 +152,11 @@ const rejectsLongerCycle = Effect.gen(function* () {
       context,
     ),
   );
-  const outcomes = yield* awaited(Promise.all(names.map((name) => outcomeOf(harness, ids[name]!))));
+  const outcomes = yield* Effect.forEach(
+    names.map((name) => outcomeOf(harness, ids[name]!)),
+    awaited,
+    { concurrency: "unbounded" },
+  );
   expect(outcomes.filter((outcome) => outcome === "faulted")).toHaveLength(1);
   expect(outcomes.filter((outcome) => outcome === "completed")).toHaveLength(2);
   yield* awaited(harness.close(context));

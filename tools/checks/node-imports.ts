@@ -92,8 +92,11 @@ const importsStartingNode = (repo: taskBuildDepsTypes.Scope, file: string, text:
     const local = yield* Effect.forEach(
       specs.filter((spec) => spec.startsWith(".")),
       (spec) => resolveRelative(repo, spec, file),
+      { concurrency: 1 },
     );
-    const texts = yield* Effect.forEach(local.flatMap(fileOf), (helper) => repo.read(helper));
+    const texts = yield* Effect.forEach(local.flatMap(fileOf), (helper) => repo.read(helper), {
+      concurrency: 1,
+    });
     return texts.some((helper) => STARTS_NODE.test(helper));
   });
 
@@ -114,6 +117,7 @@ const embeddedProblems = (
     Effect.forEach(
       embedded.filter((spec) => findWorkspace(repo, spec) !== undefined && !walk.resolver),
       (spec) => resolveSpec(repo, spec, file, walk.conditions),
+      { concurrency: 1 },
     ),
     (results) => results.flatMap(problemOf),
   );
@@ -134,10 +138,13 @@ function childProblems(
     const refs = pathRefs(repo, file, text);
     const walk = childWalk(repo, text, refs, seen);
     const children = yield* childScripts(repo, refs);
-    const nested = yield* Effect.forEach(children, (child) =>
-      Effect.map(visit(repo, child, walk), (problems) =>
-        problems.map(inChild(repo, file, relativeTo(repo, child))),
-      ),
+    const nested = yield* Effect.forEach(
+      children,
+      (child) =>
+        Effect.map(visit(repo, child, walk), (problems) =>
+          problems.map(inChild(repo, file, relativeTo(repo, child))),
+        ),
+      { concurrency: 1 },
     );
     const { embedded } = yield* importsOf(repo, file, text);
     const inline = yield* embeddedProblems(repo, file, walk, embedded);
@@ -160,11 +167,15 @@ function visit(
     const text = yield* repo.read(file);
     const imports = yield* importsOf(repo, file, text);
     const specs = imports.specs.filter((spec) => !(walk.resolver && spec.startsWith("@msa/")));
-    const results = yield* Effect.forEach(specs, (spec) =>
-      resolveSpec(repo, spec, file, walk.conditions),
+    const results = yield* Effect.forEach(
+      specs,
+      (spec) => resolveSpec(repo, spec, file, walk.conditions),
+      { concurrency: 1 },
     );
-    const nested = yield* Effect.forEach(results.flatMap(fileOf), (child) =>
-      visit(repo, child, walk),
+    const nested = yield* Effect.forEach(
+      results.flatMap(fileOf),
+      (child) => visit(repo, child, walk),
+      { concurrency: 1 },
     );
     const children = yield* childProblems(repo, file, text, walk.seen);
     const importer = relativeTo(repo, file);
@@ -209,8 +220,10 @@ const walkRun = (
     const conditions = new Set([...RUNTIME_CONDITIONS, ...run.conditions]);
     const preloads = run.preloads.map((preload) => path.resolve(step.cwd, preload));
     const resolver = preloads.includes(resolverOf(repo));
-    const entries = (yield* Effect.forEach(run.entries, (entry) =>
-      expandGlob(repo, step.cwd, entry),
+    const entries = (yield* Effect.forEach(
+      run.entries,
+      (entry) => expandGlob(repo, step.cwd, entry),
+      { concurrency: 1 },
     )).flat();
     const unknown = yield* entryProblems(repo, entries, [...preloads, ...entries]);
     if (unknown.length > 0)
@@ -221,6 +234,7 @@ const walkRun = (
         ...entries.map((file) => [file, resolver] as const),
       ],
       ([file, withResolver]) => walkImports(repo, file, conditions, withResolver),
+      { concurrency: 1 },
     );
     return walks.flat().map((problem) => `${label}\n    ${problem}`);
   });

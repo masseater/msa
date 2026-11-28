@@ -31,14 +31,6 @@ type Scenario = {
   progress: boolean;
   runs: number;
 };
-type Run = {
-  commits: number;
-  written: Written;
-  storedBytes: number;
-  ms: number;
-  peakHeap: number;
-  heldHeap: number;
-};
 
 requireGc();
 
@@ -73,9 +65,9 @@ function fanOut(name: string, target: string, options: { readonly progress?: fal
           const calls = Array.from({ length: args.count }, (_, n) =>
             api.executeTool(target, { count: FAN_OUT, n }, callContext, options),
           );
-          const failed = (yield* awaited(Promise.all(calls))).filter(
-            (result) => result.isError,
-          ).length;
+          const failed = (yield* Effect.forEach(calls, awaited, {
+            concurrency: "unbounded",
+          })).filter((result) => result.isError).length;
           return { isError: failed > 0, output: [{ text: `${failed} failed`, type: "text" }] };
         }),
       ),
@@ -164,11 +156,12 @@ const runScenario = Effect.fn("runScenario")(function* (scenario: Scenario) {
   const directory = yield* makeTempDir("msa-durable-nested-bench-");
   return yield* Effect.gen(function* () {
     const opened = yield* openMetered(scenario, directory);
-    const perRun: Run[] = [];
     const baseHeap = heapAfterGc();
-    for (const run of Array.from({ length: scenario.runs }, (_, i) => i)) {
-      perRun.push(yield* measureRun(scenario, directory, opened, { baseHeap, run }));
-    }
+    const perRun = yield* Effect.forEach(
+      Array.from({ length: scenario.runs }, (_, i) => i),
+      (run) => measureRun(scenario, directory, opened, { baseHeap, run }),
+      { concurrency: 1 },
+    );
     yield* awaited(opened.harness.close(context));
     return { closedBytes: yield* directorySize(directory), perRun };
   }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))));

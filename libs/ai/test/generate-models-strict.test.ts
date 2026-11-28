@@ -32,8 +32,10 @@ const isolatePackage = Effect.gen(function* () {
   const fixtureRoot = yield* fs.makeTempDirectoryScoped({ prefix: "msa-generate-models-" });
   const isolatedRoot = path.join(fixtureRoot, "package");
   yield* fs.makeDirectory(isolatedRoot);
-  yield* Effect.forEach(["package.json", "bin", "src"], (entry) =>
-    fs.copy(path.join(packageRoot, entry), path.join(isolatedRoot, entry)),
+  yield* Effect.forEach(
+    ["package.json", "bin", "src"],
+    (entry) => fs.copy(path.join(packageRoot, entry), path.join(isolatedRoot, entry)),
+    { concurrency: 1 },
   );
   yield* fs.symlink(
     path.join(packageRoot, "node_modules"),
@@ -48,8 +50,10 @@ const readGenerated = (root: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    return yield* Effect.forEach(generatedPaths, (file) =>
-      fs.readFileString(path.join(root, file)),
+    return yield* Effect.forEach(
+      generatedPaths,
+      (file) => fs.readFileString(path.join(root, file)),
+      { concurrency: 1 },
     );
   });
 

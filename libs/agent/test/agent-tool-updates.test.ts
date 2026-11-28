@@ -98,7 +98,9 @@ const ignoresSettledParallelUpdate = Effect.gen(function* () {
     if (event.type === "tool_execution_end" && event.toolCallId === "call-1") release(settledEnded);
   });
   const prompt = agent.prompt("run tools");
-  yield* Effect.all([Deferred.await(slowStarted), Deferred.await(settledEnded)]);
+  yield* Effect.all([Deferred.await(slowStarted), Deferred.await(settledEnded)], {
+    concurrency: 1,
+  });
   const eventCountBeforeLateUpdate = events.length;
   settledUpdate?.(late);
   yield* Effect.yieldNow;

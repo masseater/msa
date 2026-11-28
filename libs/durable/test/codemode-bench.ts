@@ -39,10 +39,10 @@ const plain = defineTool({
           for (const i of Array.from({ length: args.n }, (_, iInner) => iInner))
             yield* awaited(api.executeTool("echo", { i }, callContext));
         } else {
-          yield* awaited(
-            Promise.all(
-              Array.from({ length: args.n }, (_, i) => api.executeTool("echo", { i }, callContext)),
-            ),
+          yield* Effect.forEach(
+            Array.from({ length: args.n }, (_, i) => api.executeTool("echo", { i }, callContext)),
+            awaited,
+            { concurrency: "unbounded" },
           );
         }
         return { output: [{ text: "done", type: "text" }] };

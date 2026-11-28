@@ -130,8 +130,11 @@ export default class TaskGraphView {
     const storage = this.#storage;
     return Effect.gen(function* () {
       const tasks: Record<string, taskGraphTypes.TaskGraphNode> = {};
-      const scans = yield* Effect.forEach(LIVE_STATUSES, (status) =>
-        scanAll((cursor) => storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
+      const scans = yield* Effect.forEach(
+        LIVE_STATUSES,
+        (status) =>
+          scanAll((cursor) => storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
+        { concurrency: 1 },
       );
       const records: AnyTaskRecord[] = scans.flat();
       records.sort((a, b) => a.id - b.id);
@@ -154,7 +157,7 @@ export default class TaskGraphView {
               tasks[String(record.id)] = nodeOf(record, conversations);
             },
           ),
-        { discard: true },
+        { concurrency: 1, discard: true },
       );
       return { tasks };
     });

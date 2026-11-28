@@ -131,6 +131,7 @@ export default class FakeGitHub {
         const views = yield* Effect.forEach(
           this.pulls.filter((pull) => pull.branch === branch),
           (pull) => this.view(pull),
+          { concurrency: 1 },
         );
         return ok(yield* Effect.orDie(encodeJson(views)));
       }

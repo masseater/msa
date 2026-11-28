@@ -30,16 +30,16 @@ afterEach(() =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       vi.restoreAllMocks();
-      yield* awaited(
-        Promise.all(
-          [...terminations].map(([worker, resolve]) =>
-            effectRunPromise(
-              Effect.gen(function* () {
-                resolve(yield* awaited(terminate.call(worker)));
-              }),
-            ),
+      yield* Effect.forEach(
+        [...terminations].map(([worker, resolve]) =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              resolve(yield* awaited(terminate.call(worker)));
+            }),
           ),
         ),
+        awaited,
+        { concurrency: "unbounded" },
       );
       terminations.clear();
     }),
@@ -56,12 +56,10 @@ const boundsWorkersThatStartAfterTheirResults = () =>
       const loading = Promise.withResolvers<codemodeTypes.CodemodeWasmModule>();
       vi.spyOn(codemodeModule, "loadQuickJSWasm").mockReturnValue(loading.promise);
       try {
-        const results = yield* awaited(
-          Promise.all(
-            Array.from({ length: 3 }, () =>
-              run('// @options: {"timeout_ms": 20}\nwhile (true) {}'),
-            ),
-          ),
+        const results = yield* Effect.forEach(
+          Array.from({ length: 3 }, () => run('// @options: {"timeout_ms": 20}\nwhile (true) {}')),
+          awaited,
+          { concurrency: "unbounded" },
         );
         expect(results.every((result) => result.isError)).toBe(true);
         expect(terminations.size).toBe(0);
@@ -82,7 +80,11 @@ const boundsWorkersThatStartAfterTheirResults = () =>
 const admitsOnlyTwoWorkersFromAConcurrent = () =>
   runTest(
     Effect.gen(function* () {
-      const results = yield* awaited(Promise.all(Array.from({ length: 6 }, () => run("return 1"))));
+      const results = yield* Effect.forEach(
+        Array.from({ length: 6 }, () => run("return 1")),
+        awaited,
+        { concurrency: "unbounded" },
+      );
       expect(results.filter((result) => !(result.isError === true))).toHaveLength(2);
       expect(results.filter((result) => result.isError)).toHaveLength(4);
       expect(terminations.size).toBe(2);

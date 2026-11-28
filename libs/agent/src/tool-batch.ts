@@ -161,10 +161,11 @@ const executeParallel = (
       if (batch.signal?.aborted === true) break;
     }
     const ordered = yield* Effect.all(entries, { concurrency: "unbounded" });
-    const messages: aiTypes.ToolResultMessage[] = [];
-    for (const finalized of ordered) {
-      messages.push(yield* emitToolResultMessage(finalized, batch.emit));
-    }
+    const messages = yield* Effect.forEach(
+      ordered,
+      (finalized) => emitToolResultMessage(finalized, batch.emit),
+      { concurrency: 1 },
+    );
     return { messages, terminate: shouldTerminate(ordered) };
   });
 

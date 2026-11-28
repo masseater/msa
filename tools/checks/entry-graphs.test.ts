@@ -125,8 +125,10 @@ const walk = (fs: Fs, path: Paths, root: string, entryFile: string) =>
         seen.add(file);
         const source = yield* fs.readFileString(file);
         const importer = file;
-        const targets = yield* Effect.forEach(source.matchAll(SPEC), (match) =>
-          resolveSpec(fs, path, root, match[2] ?? "", importer),
+        const targets = yield* Effect.forEach(
+          source.matchAll(SPEC),
+          (match) => resolveSpec(fs, path, root, match[2] ?? "", importer),
+          { concurrency: 1 },
         );
         queue.push(...targets.filter((target) => target !== undefined));
       }
@@ -233,8 +235,10 @@ const checkEntry = (
     }
     const target = typeof declared === "string" ? declared : declared.import;
     const expanded = yield* expand(fs, path, root, pkgDir, entry, target);
-    const results = yield* Effect.forEach(expanded, (item) =>
-      checkExpanded(fs, path, root, pkgDir, item, budget),
+    const results = yield* Effect.forEach(
+      expanded,
+      (item) => checkExpanded(fs, path, root, pkgDir, item, budget),
+      { concurrency: 1 },
     );
     return results.flat();
   });
@@ -249,8 +253,10 @@ const checkPackage = (
     const manifest = yield* decodeManifest(
       yield* fs.readFileString(path.resolve(root, pkgDir, "package.json")),
     );
-    const results = yield* Effect.forEach(Object.entries(budgets), (budgetEntry) =>
-      checkEntry(fs, path, root, pkgDir, budgetEntry, manifest.exports),
+    const results = yield* Effect.forEach(
+      Object.entries(budgets),
+      (budgetEntry) => checkEntry(fs, path, root, pkgDir, budgetEntry, manifest.exports),
+      { concurrency: 1 },
     );
     return results.flat();
   });
@@ -259,8 +265,10 @@ const collectViolations = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const root = path.resolve(import.meta.dirname, "../..");
-  const results = yield* Effect.forEach(Object.entries(BUDGETS), (entry) =>
-    checkPackage(fs, path, root, entry),
+  const results = yield* Effect.forEach(
+    Object.entries(BUDGETS),
+    (entry) => checkPackage(fs, path, root, entry),
+    { concurrency: 1 },
   );
   return results.flat();
 });

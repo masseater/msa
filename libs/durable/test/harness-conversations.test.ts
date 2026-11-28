@@ -36,8 +36,6 @@ afterEach(() =>
 );
 
 const closedConversations = Effect.fn("closedConversations")(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const path = yield* sqlitePath();
   const first = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)), ["read"]);
   const root = yield* awaited(first.harness.root(context));
@@ -52,17 +50,14 @@ const closedConversations = Effect.fn("closedConversations")(function* () {
     first.harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
   const fork = yield* awaited(root.fork(entry.id, { ownership: { kind: "ownerless" } }, context));
-  const providerSessionIds = yield* awaited(
-    Promise.all(
-      [root, child, fork].map((conversation) =>
-        runPromise(
-          Effect.gen(function* () {
-            return (yield* awaited(first.harness.snapshot(ProviderDoc, conversation.id, context)))
-              ?.sessionId;
-          }),
-        ),
-      ),
-    ),
+  const providerSessionIds = yield* Effect.forEach(
+    [root, child, fork],
+    (conversation) =>
+      Effect.gen(function* () {
+        return (yield* awaited(first.harness.snapshot(ProviderDoc, conversation.id, context)))
+          ?.sessionId;
+      }),
+    { concurrency: "unbounded" },
   );
   for (const sessionId of providerSessionIds) expect(sessionId).toMatch(UUID_V7);
   expect(new Set(providerSessionIds).size).toBe(3);
@@ -135,8 +130,6 @@ describe("Harness root and conversations", () => {
 });
 
 const keepsRootConversation = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { path, root, child, fork, providerSessionIds } = yield* closedConversations();
 
   const second = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)), []);
@@ -151,19 +144,16 @@ const keepsRootConversation = Effect.gen(function* () {
   });
   expect(yield* allEntries(reopened)).toEqual(["hello"]);
   expect((yield* awaited(second.harness.conversation(child.id, context)))?.id).toBe(child.id);
-  yield* awaited(
-    expect(
-      Promise.all(
-        [root.id, child.id, fork.id].map((id) =>
-          runPromise(
-            Effect.gen(function* () {
-              return (yield* awaited(second.harness.snapshot(ProviderDoc, id, context)))?.sessionId;
-            }),
-          ),
-        ),
-      ),
-    ).resolves.toEqual(providerSessionIds),
-  );
+  expect(
+    yield* Effect.forEach(
+      [root.id, child.id, fork.id],
+      (id) =>
+        Effect.gen(function* () {
+          return (yield* awaited(second.harness.snapshot(ProviderDoc, id, context)))?.sessionId;
+        }),
+      { concurrency: "unbounded" },
+    ),
+  ).toEqual(providerSessionIds);
   const reopenedFork = yield* awaited(second.harness.conversation(fork.id, context));
   expect(yield* allEntries(reopenedFork!)).toEqual(["hello"]);
   expect((yield* awaited(reopenedFork!.agent(context))).model).toEqual({

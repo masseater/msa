@@ -108,19 +108,22 @@ const afterResults: typesModule.AfterToolCallResult[] = [
 ];
 
 const replacesStructuredContent = Effect.gen(function* () {
-  const seen = yield* Effect.forEach(afterResults, (afterResult) =>
-    Effect.map(
-      run(
-        { args: { value: "original" }, id: "x" },
-        {
-          afterToolCall: () => Promise.resolve(afterResult),
-          assistantMessage,
-          context: { messages: [] },
-          tools: [echo],
-        },
+  const seen = yield* Effect.forEach(
+    afterResults,
+    (afterResult) =>
+      Effect.map(
+        run(
+          { args: { value: "original" }, id: "x" },
+          {
+            afterToolCall: () => Promise.resolve(afterResult),
+            assistantMessage,
+            context: { messages: [] },
+            tools: [echo],
+          },
+        ),
+        (outcome) => outcome.result.structuredContent,
       ),
-      (outcome) => outcome.result.structuredContent,
-    ),
+    { concurrency: 1 },
   );
   expect(seen).toEqual([
     undefined,

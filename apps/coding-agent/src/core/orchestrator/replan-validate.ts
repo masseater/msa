@@ -108,7 +108,7 @@ function validateCwds(
         checksOf(entry.input, sources),
       );
     },
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 }
 

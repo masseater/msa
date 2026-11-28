@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
@@ -32,7 +33,9 @@ const nReferencesToOneObjectOne = Effect.gen(function* () {
   const a = browser.hold(Notes, {});
   const b = browser.hold(Notes, { list: "main" });
   const panel = browser.hold(Panel, {});
-  yield* Effect.promise(() => Promise.all([a.ready, b.ready, panel.ready]));
+  yield* Effect.forEach([a.ready, b.ready, panel.ready], testing.awaited, {
+    concurrency: "unbounded",
+  });
   const viaCtx = yield* Effect.promise(() =>
     browser.root((ctx) =>
       Effect.runPromiseWith(services)(
@@ -193,7 +196,11 @@ const normalizedEqualInputsAndEqualPrincipal = Effect.gen(function* () {
     worker.hold(Notes, {}, { principal: { grant: 2, user: "a" } }),
     worker.hold(NotesV2, {}),
   ];
-  yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));
+  yield* Effect.forEach(
+    refs.map((ref) => ref.ready),
+    testing.awaited,
+    { concurrency: "unbounded" },
+  );
   assert.equal(link.count("sent", "hold"), 4);
   yield* Effect.promise(() => worker.close());
   yield* Effect.promise(() => server.close());

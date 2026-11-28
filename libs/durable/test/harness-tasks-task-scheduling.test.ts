@@ -19,8 +19,9 @@ const { aborted, abortedWith, completed, deferred } = taskSupport;
 const pagesNewestTasks = Effect.gen(function* () {
   const Idle = oneStep("test.idle", () => Promise.resolve());
   const { harness, root } = yield* openRoot([Idle]);
-  const ids: durableTypes.TaskId[] = [];
-  for (const _ of Array.from({ length: 5 })) ids.push(yield* awaited(start(root, Idle)));
+  const ids = yield* Effect.forEach(Array.from({ length: 5 }), () => awaited(start(root, Idle)), {
+    concurrency: 1,
+  });
   const first = yield* awaited(
     harness.commit((tx) => tx.scanTasks({ order: "descending" }, 2), context),
   );

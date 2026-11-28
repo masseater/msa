@@ -55,11 +55,14 @@ const snapshotTypeScriptCatalog = Effect.fn("snapshotTypeScriptCatalog")(functio
   paths: CatalogPaths,
 ) {
   const files = yield* ScriptFiles;
-  const shards = yield* Effect.forEach(yield* shardFiles(files, paths.providersDir), (entry) =>
-    Effect.map(files.readText(files.join(paths.providersDir, entry)), (content) => ({
-      content,
-      entry,
-    })),
+  const shards = yield* Effect.forEach(
+    yield* shardFiles(files, paths.providersDir),
+    (entry) =>
+      Effect.map(files.readText(files.join(paths.providersDir, entry)), (content) => ({
+        content,
+        entry,
+      })),
+    { concurrency: 1 },
   );
   const aggregator = yield* files.readText(paths.aggregatorPath);
   const restore = Effect.gen(function* () {

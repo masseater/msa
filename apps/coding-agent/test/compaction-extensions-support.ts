@@ -102,7 +102,11 @@ const prepare = (): Promise<void> =>
 const cleanUp = (): Promise<void> =>
   runTest(
     Effect.gen(function* () {
-      yield* awaited(Promise.all(sessions.splice(0).map((session) => closeAgentSession(session))));
+      yield* Effect.forEach(
+        sessions.splice(0).map((session) => closeAgentSession(session)),
+        awaited,
+        { concurrency: "unbounded" },
+      );
       yield* removePath(tempDir);
     }),
   );

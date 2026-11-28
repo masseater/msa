@@ -156,10 +156,13 @@ const collect = (host: hostTypes.HostShape, sessionsDir: string, cutoffMillis: n
         onSome: (instant) => DateTime.toEpochMillis(instant) >= cutoffMillis,
       }),
     );
-    yield* Effect.forEach(fresh, (file) =>
-      sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
-        Stream.runForEach((entry) => Effect.sync(() => recordEntryCost(stats, entry))),
-      ),
+    yield* Effect.forEach(
+      fresh,
+      (file) =>
+        sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
+          Stream.runForEach((entry) => Effect.sync(() => recordEntryCost(stats, entry))),
+        ),
+      { concurrency: 1 },
     );
     return stats;
   });
@@ -213,8 +216,11 @@ const report = (args: Args, cutoffMillis: number, stats: Map<string, Map<string,
     yield* scriptOutput.print(`\n${"=".repeat(80)}`);
     yield* scriptOutput.print("TOTALS BY PROVIDER");
     yield* scriptOutput.print("-".repeat(40));
-    yield* Effect.forEach([...providerTotals.keys()].sort(), (provider) =>
-      scriptOutput.print(describeCost(provider, providerTotals.get(provider) ?? createDayCost())),
+    yield* Effect.forEach(
+      [...providerTotals.keys()].sort(),
+      (provider) =>
+        scriptOutput.print(describeCost(provider, providerTotals.get(provider) ?? createDayCost())),
+      { concurrency: 1 },
     );
     yield* scriptOutput.print("-".repeat(40));
     yield* scriptOutput.print(

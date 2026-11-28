@@ -37,7 +37,7 @@ const seedWorkspace: {
     Effect.forEach(
       Object.entries(fixtures ?? {}),
       ([name, content]) => seedFile(workspace, name, content),
-      { discard: true },
+      { concurrency: 1, discard: true },
     ),
 );
 

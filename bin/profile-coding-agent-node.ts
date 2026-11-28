@@ -141,16 +141,19 @@ const runAll = (base: Omit<profileStartupRunsTypes.RunParams, "measuredIndex" | 
   Effect.gen(function* () {
     const { runs, warmup } = base.options;
     const indices = Array.from({ length: warmup + runs }, (_, index) => index);
-    const results = yield* Effect.forEach(indices, (runIndex) =>
-      Effect.gen(function* () {
-        const measuredIndex = measuredIndexOf(runIndex, warmup);
-        const params = { ...base, measuredIndex, runIndex };
-        const result = yield* base.options.mode === "rpc" ? runRpc(params) : runTui(params);
-        yield* scriptOutput.print(
-          `[${runLabel(runIndex, measuredIndex)}] elapsed=${result.elapsedMs.toFixed(1)}ms`,
-        );
-        return measuredIndex === undefined ? undefined : result;
-      }),
+    const results = yield* Effect.forEach(
+      indices,
+      (runIndex) =>
+        Effect.gen(function* () {
+          const measuredIndex = measuredIndexOf(runIndex, warmup);
+          const params = { ...base, measuredIndex, runIndex };
+          const result = yield* base.options.mode === "rpc" ? runRpc(params) : runTui(params);
+          yield* scriptOutput.print(
+            `[${runLabel(runIndex, measuredIndex)}] elapsed=${result.elapsedMs.toFixed(1)}ms`,
+          );
+          return measuredIndex === undefined ? undefined : result;
+        }),
+      { concurrency: 1 },
     );
     return results.filter(
       (result): result is profileStartupReportTypes.RunResult => result !== undefined,
@@ -200,7 +203,7 @@ const main = Effect.gen(function* () {
     },
     measured,
   );
-  yield* Effect.forEach(report, (line) => scriptOutput.print(line));
+  yield* Effect.forEach(report, (line) => scriptOutput.print(line), { concurrency: 1 });
 }).pipe(
   Effect.catchTag("ProfileError", (error) =>
     Effect.gen(function* () {

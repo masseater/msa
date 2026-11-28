@@ -240,8 +240,16 @@ const serializesConcurrentCallsToSequentialTools = Effect.gen(function* () {
   });
   const { runner } = createRunner([makeTool("sequential"), makeTool("parallel")]);
 
-  yield* awaited(Promise.all([1, 2, 3].map(() => runner.execute("call", "sequential", {}))));
-  yield* awaited(Promise.all([1, 2, 3].map(() => runner.execute("call", "parallel", {}))));
+  yield* Effect.forEach(
+    [1, 2, 3].map(() => runner.execute("call", "sequential", {})),
+    awaited,
+    { concurrency: "unbounded" },
+  );
+  yield* Effect.forEach(
+    [1, 2, 3].map(() => runner.execute("call", "parallel", {})),
+    awaited,
+    { concurrency: "unbounded" },
+  );
 
   expect(maxActive).toEqual({ parallel: 3, sequential: 1 });
 });

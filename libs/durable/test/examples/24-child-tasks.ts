@@ -124,18 +124,18 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
               (tx) =>
                 runPromise(
                   Effect.gen(function* () {
-                    const payments: durableTypes.TaskId<PaymentResult>[] = [];
-                    for (const card of task.input.cards) {
-                      payments.push(
-                        yield* awaited(
+                    const payments = yield* Effect.forEach(
+                      task.input.cards,
+                      (card) =>
+                        awaited(
                           tx.createTask(
                             Payment,
                             { card },
                             { ownership: { kind: "task", taskId: task.id } },
                           ),
                         ),
-                      );
-                    }
+                      { concurrency: 1 },
+                    );
                     return {
                       checkpoint: { payments, phase: "decide" },
                       on: payments,

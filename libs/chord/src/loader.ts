@@ -56,7 +56,7 @@ const nodeLoader: hostTypesModule.FacetLoader = (modules) =>
       const version = String(generation);
       const paths = modules.map(toPath);
       for (const path of paths) roots.add(new URL(".", pathToFileURL(path)).href);
-      return yield* Effect.forEach(paths, (path) => loadFacet(path, version));
+      return yield* Effect.forEach(paths, (path) => loadFacet(path, version), { concurrency: 1 });
     }),
   );
 

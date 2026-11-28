@@ -189,24 +189,27 @@ const UNAVAILABLE = [
 
 const stopsWhenGhCannotReadPullRequests = () =>
   Effect.runPromise(
-    Effect.forEach(UNAVAILABLE, (failure) =>
-      withRemote((remote) =>
-        Effect.gen(function* () {
-          const { github } = remote;
-          const { orchestrator, reports, workers, branch, number, taskId } =
-            yield* openedTask(remote);
-          yield* read(orchestrator, taskId);
-          github.unavailable = failure;
-          yield* completing(
-            workers[0],
-            "done",
-            () => taskStatus(orchestrator, taskId) === "stopped",
-          );
-          expect(workers[0]!.prompts).toHaveLength(1);
-          expect(reports.at(-1)?.text).toContain(failure.stderr);
-          expectsOpenPullRequest(reports.at(-1), "stopped", number, branch);
-        }),
-      ),
+    Effect.forEach(
+      UNAVAILABLE,
+      (failure) =>
+        withRemote((remote) =>
+          Effect.gen(function* () {
+            const { github } = remote;
+            const { orchestrator, reports, workers, branch, number, taskId } =
+              yield* openedTask(remote);
+            yield* read(orchestrator, taskId);
+            github.unavailable = failure;
+            yield* completing(
+              workers[0],
+              "done",
+              () => taskStatus(orchestrator, taskId) === "stopped",
+            );
+            expect(workers[0]!.prompts).toHaveLength(1);
+            expect(reports.at(-1)?.text).toContain(failure.stderr);
+            expectsOpenPullRequest(reports.at(-1), "stopped", number, branch);
+          }),
+        ),
+      { concurrency: 1 },
     ),
   );
 

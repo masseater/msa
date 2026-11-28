@@ -138,8 +138,10 @@ const measureContextBreakdown = (
       source.transformContext === undefined
         ? messages
         : yield* Effect.promise(() => source.transformContext!(messages));
-    const sent = yield* Effect.forEach(transformed, (message) =>
-      Effect.promise(() => Promise.resolve(source.convertToLlm([message]))),
+    const sent = yield* Effect.forEach(
+      transformed,
+      (message) => Effect.promise(() => Promise.resolve(source.convertToLlm([message]))),
+      { concurrency: 1 },
     );
     const elements = splitContext(transformed, sent);
     const counted = yield* fromPromise(() => source.countTokens(sent.flat())).pipe(

@@ -45,8 +45,10 @@ const appendPlanned = (
   conversationId: generationTypesModule.GenerationRuntime["conversationId"],
   entries: readonly promptTypes.SystemDraft[],
 ) =>
-  Effect.forEach(entries, (entry) =>
-    Effect.promise(() => tx.appendEntry(SystemEntry, conversationId, entry)),
+  Effect.forEach(
+    entries,
+    (entry) => Effect.promise(() => tx.appendEntry(SystemEntry, conversationId, entry)),
+    { concurrency: 1 },
   );
 
 const commitRequest = Effect.fnUntraced(function* (

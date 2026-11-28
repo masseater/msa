@@ -16,7 +16,10 @@ const createReftableWorktree = Effect.fn("createReftableWorktree")(function* (te
   const gitDir = joinPath(commonGitDir, "worktrees", "src");
   const worktreeDir = joinPath(tempDir, "worktree");
   const reftableDir = joinPath(commonGitDir, "reftable");
-  yield* Effect.forEach([gitDir, reftableDir, worktreeDir], makeDirectory, { discard: true });
+  yield* Effect.forEach([gitDir, reftableDir, worktreeDir], makeDirectory, {
+    concurrency: 1,
+    discard: true,
+  });
   yield* writeTextFile(joinPath(worktreeDir, ".git"), `gitdir: ${gitDir}\n`);
   yield* writeTextFile(joinPath(gitDir, "HEAD"), "ref: refs/heads/.invalid\n");
   yield* writeTextFile(joinPath(gitDir, "commondir"), "../..\n");

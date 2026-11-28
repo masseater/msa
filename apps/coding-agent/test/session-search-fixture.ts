@@ -79,7 +79,7 @@ function toolResult(id: string, timestamp: string, toolName: string, text: strin
 }
 
 const sessionText = Effect.fn("sessionText")(function* (entries: readonly FileEntry[]) {
-  const lines = yield* Effect.forEach(entries, (entry) => toJsonText(entry));
+  const lines = yield* Effect.forEach(entries, (entry) => toJsonText(entry), { concurrency: 1 });
   return lines.map((line) => `${line}\n`).join("");
 });
 

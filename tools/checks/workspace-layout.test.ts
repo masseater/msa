@@ -41,7 +41,9 @@ const collectProblems = Effect.gen(function* () {
   const directories = yield* Effect.filter(names, (name) =>
     fs.stat(path.join(root, name)).pipe(Effect.map((info) => info.type === "Directory")),
   );
-  const nested = yield* Effect.forEach(directories, (name) => manifestsBelow(root, name));
+  const nested = yield* Effect.forEach(directories, (name) => manifestsBelow(root, name), {
+    concurrency: 1,
+  });
   const packagesDir = (yield* fs.exists(path.join(root, "packages"))) ? ["packages/"] : [];
   return [...strayWorkspaceEntries, ...packagesDir, ...nested.flat()];
 });

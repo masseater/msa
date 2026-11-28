@@ -55,7 +55,7 @@ const createSessionFile = Effect.fn("createSessionFile")(function* (
 
 const readSessionInfoNames = Effect.fn("readSessionInfoNames")(function* (sessionFile: string) {
   const lines = (yield* readTextFile(sessionFile)).trim().split("\n");
-  const entries = yield* Effect.forEach(lines, fromJsonText);
+  const entries = yield* Effect.forEach(lines, fromJsonText, { concurrency: 1 });
   return (entries as { type?: string; name?: string }[])
     .filter((entry) => entry.type === "session_info")
     .map((entry) => entry.name ?? "");

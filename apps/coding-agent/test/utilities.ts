@@ -75,7 +75,7 @@ const roleOf = (line: string) =>
 const readSessionFileRoles = (file: string): Promise<string[]> =>
   runTest(
     Effect.flatMap(readTextFile(file), (content) =>
-      Effect.forEach(content.trim().split("\n"), roleOf),
+      Effect.forEach(content.trim().split("\n"), roleOf, { concurrency: 1 }),
     ),
   );
 

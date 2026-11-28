@@ -52,7 +52,9 @@ const sessionIdOf = Effect.fn("sessionIdOf")(function* (path: string) {
 const hasSessionWithId = Effect.fn("hasSessionWithId")(function* (root: string, sessionId: string) {
   if (!(yield* pathExists(root))) return false;
   const files = (yield* readDirectoryRecursive(root)).filter((entry) => entry.endsWith(".jsonl"));
-  const ids = yield* Effect.forEach(files, (file) => sessionIdOf(joinPath(root, file)));
+  const ids = yield* Effect.forEach(files, (file) => sessionIdOf(joinPath(root, file)), {
+    concurrency: 1,
+  });
   return ids.includes(sessionId);
 });
 

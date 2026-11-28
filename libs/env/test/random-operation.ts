@@ -36,10 +36,13 @@ const readRange = (pick: Picker): Operation => {
           env.openBinaryReader(name, { noFollow }, context),
         );
         if (!reader.ok) return reader;
-        return yield* Effect.all([
-          Effect.promise(() => reader.value.read(offset, length, context)),
-          Effect.promise(() => reader.value.scanLines({ startLine: 0 }, context)),
-        ]).pipe(Effect.ensuring(Effect.promise(() => reader.value.close(context))));
+        return yield* Effect.all(
+          [
+            Effect.promise(() => reader.value.read(offset, length, context)),
+            Effect.promise(() => reader.value.scanLines({ startLine: 0 }, context)),
+          ],
+          { concurrency: 1 },
+        ).pipe(Effect.ensuring(Effect.promise(() => reader.value.close(context))));
       }),
     );
 };

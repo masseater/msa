@@ -26,7 +26,7 @@ const closeSquatters = Effect.suspend(() =>
         if (!squatter.listening) return resume(Effect.void);
         squatter.close(() => resume(Effect.void));
       }),
-    { discard: true },
+    { concurrency: 1, discard: true },
   ),
 );
 

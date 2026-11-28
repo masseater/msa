@@ -44,7 +44,7 @@ const run = Effect.fnUntraced(function* (
     for (const waiter of waiters) waiter.reject(executed.error);
     return yield* Effect.die(executed.error);
   }
-  yield* Effect.promise(() => Promise.allSettled(state.admissions));
+  yield* toolApi.settleAdmissions(state);
   reported.output.end();
   const pending = yield* Effect.promise(() => progress.stop());
   const settled = yield* Effect.onError(

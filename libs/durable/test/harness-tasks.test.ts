@@ -82,16 +82,16 @@ const faultsPhaseWithout = Effect.gen(function* () {
     yield* awaited(start(root, Throws)),
   ];
   harness.resume();
-  const outcomes = yield* awaited(
-    Promise.all(
-      ids.map((id) =>
-        runPromise(
-          Effect.gen(function* () {
-            return (yield* awaited(harness.waitForTask(id, context))).state.outcome;
-          }),
-        ),
+  const outcomes = yield* Effect.forEach(
+    ids.map((id) =>
+      runPromise(
+        Effect.gen(function* () {
+          return (yield* awaited(harness.waitForTask(id, context))).state.outcome;
+        }),
       ),
     ),
+    awaited,
+    { concurrency: "unbounded" },
   );
   expect(outcomes).toEqual([
     {

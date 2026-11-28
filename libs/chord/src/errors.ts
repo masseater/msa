@@ -56,6 +56,12 @@ const runAll: {
   }),
 );
 
+const settlePromises = (promises: Iterable<PromiseLike<unknown>>): Effect.Effect<void> =>
+  Effect.forEach(promises, (promise) => Effect.exit(Effect.promise(() => promise)), {
+    concurrency: "unbounded",
+    discard: true,
+  });
+
 const errorsModule = {
   CHORD_ERROR_CODES,
   ChordError,
@@ -64,6 +70,7 @@ const errorsModule = {
   invalid,
   isChordError,
   runAll,
+  settlePromises,
 };
 
 export default errorsModule;

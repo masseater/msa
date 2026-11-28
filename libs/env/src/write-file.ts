@@ -1,6 +1,6 @@
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
-import { Effect } from "effect";
+import { Cause, Effect, Exit } from "effect";
 
 import type connectionTypes from "./connection.types.ts";
 import Handle from "./handle.ts";
@@ -12,16 +12,21 @@ const { FileError } = env;
 const WRITE_CHUNK = 512 * 1024;
 const WRITE_DEPTH = 8;
 
+const settledWrites = (inFlight: readonly Promise<connectionTypes.Reply>[]) =>
+  Effect.forEach(inFlight, (promise) => Effect.exit(Effect.promise(() => promise)), {
+    concurrency: "unbounded",
+  });
+
 const abortedWrite = (
   write: writeFileTypes.FileWrite,
   inFlight: readonly Promise<connectionTypes.Reply>[],
 ): Effect.Effect<never, envTypes.FileError> =>
-  Effect.promise(() => Promise.allSettled(inFlight)).pipe(
+  settledWrites(inFlight).pipe(
     Effect.flatMap((settled) => {
-      const failed = settled.find((result) => result.status === "rejected");
+      const failed = settled.find(Exit.isFailure);
       return failed === undefined
         ? Effect.fail(FileError.create("aborted", "The operation was aborted", write.resolved))
-        : Effect.die(failed.reason);
+        : failed.cause.pipe(Cause.squash, Effect.die);
     }),
   );
 
@@ -65,9 +70,7 @@ const writeContent = (write: writeFileTypes.FileWrite): Effect.Effect<void, envT
     const inFlight: Promise<connectionTypes.Reply>[] = [];
     yield* writeChunks(write, handle, inFlight).pipe(
       Effect.ensuring(
-        Effect.promise(() => Promise.allSettled(inFlight)).pipe(
-          Effect.andThen(Effect.promise(() => handle.close())),
-        ),
+        settledWrites(inFlight).pipe(Effect.andThen(Effect.promise(() => handle.close()))),
       ),
     );
   });

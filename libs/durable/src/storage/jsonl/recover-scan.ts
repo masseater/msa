@@ -50,7 +50,7 @@ const removeReclaimFiles = (
   Effect.forEach(
     listed.filter((info) => info.kind === "file" && isReclaimFileName(info.name)),
     (info) => Effect.promise(() => files.fs.remove(info.path, { force: true }, context)),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
 
 const checkOrder = (
@@ -106,7 +106,7 @@ const readSidecars = Effect.fnUntraced(function* (
           index.recordByKey.set(sidecarKey(file, line.value.seq, line.value.ordinal), line);
         }
       }),
-    { discard: true },
+    { concurrency: 1, discard: true },
   );
   return index;
 });

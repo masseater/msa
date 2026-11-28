@@ -13,7 +13,7 @@ const { classifyCaseStatus, readTaskObservation } = reportRead;
 const temporaryDirectories: string[] = [];
 afterEach(() =>
   Effect.runPromise(
-    Effect.forEach(temporaryDirectories.splice(0), files.remove, { discard: true }),
+    Effect.forEach(temporaryDirectories.splice(0), files.remove, { concurrency: 1, discard: true }),
   ),
 );
 

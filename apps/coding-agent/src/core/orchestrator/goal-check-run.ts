@@ -59,8 +59,10 @@ function verifyAll(
       threadId,
       tasks.filter((task) => task.checks.length > 0),
     );
-    const gates = yield* Effect.forEach(tasks, (task) =>
-      pullRequestGate.check(runtime, task, live),
+    const gates = yield* Effect.forEach(
+      tasks,
+      (task) => pullRequestGate.check(runtime, task, live),
+      { concurrency: 1 },
     );
     return { checks, pullRequests: gates.flatMap((gate) => gate ?? []) };
   });
@@ -75,6 +77,7 @@ function runAll(
   return Effect.forEach(
     tasks.flatMap((task) => task.checks.map((check) => ({ check, cwd: cwd ?? task.cwd }))),
     (planned) => runCheck(runtime, planned.check, planned.cwd),
+    { concurrency: 1 },
   );
 }
 

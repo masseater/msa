@@ -119,7 +119,7 @@ function watchdogLoop(runtime: runtimeTypes.Runtime): Effect.Effect<never> {
           try: () => runtime.exclusive(sweepEffect(runtime)),
         }).pipe(
           Effect.flatMap((reports) =>
-            Effect.forEach(reports, (report) => report, { discard: true }),
+            Effect.forEach(reports, (report) => report, { concurrency: 1, discard: true }),
           ),
           Effect.ignore,
         ),

@@ -86,17 +86,20 @@ const setupVpJobs = Effect.gen(function* () {
   const path = yield* Path.Path;
   const directory = path.join(root, ".github/workflows");
   const files = (yield* fs.readDirectory(directory)).filter((name) => /\.ya?ml$/u.test(name));
-  const jobs = yield* Effect.forEach(files, (name) =>
-    Effect.gen(function* () {
-      const workflow = yield* Schema.decodeUnknownEffect(Workflow)(
-        parse(yield* fs.readFileString(path.join(directory, name))),
-      );
-      return Object.entries(workflow.jobs).flatMap(([job, { steps = [] }]) =>
-        steps.flatMap((step, index) =>
-          isSetupVp(step) ? [{ index, label: `${name}: ${job}`, step, steps }] : [],
-        ),
-      );
-    }),
+  const jobs = yield* Effect.forEach(
+    files,
+    (name) =>
+      Effect.gen(function* () {
+        const workflow = yield* Schema.decodeUnknownEffect(Workflow)(
+          parse(yield* fs.readFileString(path.join(directory, name))),
+        );
+        return Object.entries(workflow.jobs).flatMap(([job, { steps = [] }]) =>
+          steps.flatMap((step, index) =>
+            isSetupVp(step) ? [{ index, label: `${name}: ${job}`, step, steps }] : [],
+          ),
+        );
+      }),
+    { concurrency: 1 },
   );
   return jobs.flat();
 });

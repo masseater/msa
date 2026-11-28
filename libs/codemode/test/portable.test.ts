@@ -84,7 +84,9 @@ const runsToolsInTheCallerAnd = Effect.gen(function* () {
   expect(result).toMatchObject({ ok: true, output: [{ text: "hi", type: "text" }], value: 2 });
   expect(seen).toEqual([{ a: 1 }]);
   expect(result.calls).toMatchObject([{ name: "add", status: "ok" }]);
-  yield* Effect.promise(() => Promise.all(served));
+  yield* Effect.forEach(served, (promise) => Effect.promise(() => promise), {
+    concurrency: "unbounded",
+  });
 });
 
 const batchesOutputInsteadOfMakingOne = Effect.gen(function* () {
@@ -141,7 +143,9 @@ const tellsTheRemoteToStopWhen = Effect.gen(function* () {
     error: { kind: "aborted" },
     ok: false,
   });
-  yield* Effect.promise(() => Promise.all(served));
+  yield* Effect.forEach(served, (promise) => Effect.promise(() => promise), {
+    concurrency: "unbounded",
+  });
 });
 
 const reportsAFailingOrVanishingRemote = Effect.gen(function* () {

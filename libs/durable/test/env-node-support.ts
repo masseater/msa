@@ -28,8 +28,11 @@ const removeTempDir = removeDirRetrying;
 
 const cleanUpEnvTests: Effect.Effect<void> = Effect.gen(function* () {
   vi.restoreAllMocks();
-  yield* Effect.forEach(chmodRestorePaths.splice(0), restoreWritable, { discard: true });
-  yield* Effect.forEach(tempDirs.splice(0), removeTempDir, { discard: true });
+  yield* Effect.forEach(chmodRestorePaths.splice(0), restoreWritable, {
+    concurrency: 1,
+    discard: true,
+  });
+  yield* Effect.forEach(tempDirs.splice(0), removeTempDir, { concurrency: 1, discard: true });
 });
 
 function abortedContext() {

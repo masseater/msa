@@ -102,8 +102,10 @@ function checkSimple(
   simple: Simple,
 ): Effect.Effect<Checked> {
   return Effect.gen(function* () {
-    const substituted = yield* Effect.forEach(simple.substitutions, (script) =>
-      checkScript(graph, step, script),
+    const substituted = yield* Effect.forEach(
+      simple.substitutions,
+      (script) => checkScript(graph, step, script),
+      { concurrency: 1 },
     );
     const checked = yield* checkProgram(walkerOf(graph), graph, step, simple);
     return ok(checked.end, [

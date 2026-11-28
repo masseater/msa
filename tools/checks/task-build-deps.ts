@@ -128,8 +128,10 @@ const collectViolations = (
     const scope = { ...host, imports: new Map(), root, workspaces };
     const graph = yield* makeGraph(scope, tasks, grammar);
     const start = { built: false, cwd: root, via: [], workspace: rootWorkspace };
-    const results = yield* Effect.forEach(Object.keys(tasks), (name) =>
-      checkRun(graph, start, name),
+    const results = yield* Effect.forEach(
+      Object.keys(tasks),
+      (name) => checkRun(graph, start, name),
+      { concurrency: 1 },
     );
     const unregistered = yield* unregisteredConfigs(host, root, loaded);
     return [...new Set([...unregistered, ...results.flat()])];

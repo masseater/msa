@@ -1,4 +1,3 @@
-import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -84,31 +83,30 @@ const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
             const topInner = yield* awaited(
               tx.createTask(Hold, { name: "top" }, { ownership: { kind: "conversation" } }),
             );
-            const siblings: durableTypes.TaskId[] = [];
-            for (const n of Array.from({ length: count }, (_, i) => i)) {
-              siblings.push(
-                yield* awaited(
+            const siblings = yield* Effect.forEach(
+              Array.from({ length: count }, (_, i) => i),
+              (n) =>
+                awaited(
                   tx.createTask(
                     Hold,
                     { name: `s${n}` },
                     { ownership: { kind: "task", taskId: topInner } },
                   ),
                 ),
-              );
-            }
-            const leavesInner: durableTypes.TaskId[] = [];
-            for (const n of Array.from({ length: count }, (_, i) => count - 1 - i)) {
-              const owner = siblings[n]!;
-              leavesInner.push(
-                yield* awaited(
+              { concurrency: 1 },
+            );
+            const leavesInner = yield* Effect.forEach(
+              Array.from({ length: count }, (_, i) => count - 1 - i),
+              (n) =>
+                awaited(
                   tx.createTask(
                     Hold,
                     { name: `l${n}` },
-                    { ownership: { kind: "task", taskId: owner } },
+                    { ownership: { kind: "task", taskId: siblings[n]! } },
                   ),
                 ),
-              );
-            }
+              { concurrency: 1 },
+            );
             return { leaves: leavesInner, top: topInner };
           }),
         ),

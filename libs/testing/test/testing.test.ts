@@ -40,7 +40,9 @@ const newDir = Effect.gen(function* () {
   return directory;
 });
 
-afterEach(() => runTest(Effect.forEach(created.splice(0), removeDir, { discard: true })));
+afterEach(() =>
+  runTest(Effect.forEach(created.splice(0), removeDir, { concurrency: 1, discard: true })),
+);
 
 describe("files", () => {
   it("writes, appends and reads text", () =>

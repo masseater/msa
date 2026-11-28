@@ -62,8 +62,13 @@ export default abstract class HostFacets extends hostFacetsKit.HostRemote {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const facets = yield* this.resolve(plugins);
-        yield* Effect.promise(() =>
-          Promise.all(facets.map((facet) => this.install(facet, options))),
+        yield* Effect.forEach(
+          facets,
+          (facet) => Effect.promise(() => this.install(facet, options)),
+          {
+            concurrency: "unbounded",
+            discard: true,
+          },
         );
       }),
     );

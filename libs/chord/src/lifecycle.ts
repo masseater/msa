@@ -12,7 +12,7 @@ import type typesModule from "./types.types.ts";
 
 const { decls: declsModule, errors: errorsModule } = lifecycleKit;
 
-const { ChordError, asChordError, runAll } = errorsModule;
+const { ChordError, asChordError, runAll, settlePromises } = errorsModule;
 const { Decls } = declsModule;
 const { memberSchemas } = serviceModule;
 
@@ -131,9 +131,7 @@ export default class ObjectLifecycle {
       object.implementations.clear();
       object.decls = new Decls();
       if (registered) object.host.registriesChanged();
-      yield* Effect.promise(() =>
-        Promise.allSettled([...object.invocations, ...object.tasks.stopped]),
-      );
+      yield* settlePromises([...object.invocations, ...object.tasks.stopped]);
       yield* object.activation
         .unwind(run)
         .pipe(
@@ -160,7 +158,7 @@ export default class ObjectLifecycle {
       const decls = object.allDecls();
       object.tasks.stop();
       object.listeners.stop();
-      yield* Effect.promise(() => Promise.allSettled([...object.invocations]));
+      yield* settlePromises(object.invocations);
       yield* this.#release(decls).pipe(
         Effect.ensuring(
           Effect.sync(() => {
@@ -188,7 +186,7 @@ export default class ObjectLifecycle {
       const order = object.activation.openOrder;
       return runAll(
         [
-          Effect.promise(() => Promise.allSettled([...object.tasks.stopped])),
+          settlePromises(object.tasks.stopped),
           ...[...order].reverse().map((resource) => resource.close(order)),
           ...[...refs].map((ref) => Effect.sync(() => ref.release())),
         ],

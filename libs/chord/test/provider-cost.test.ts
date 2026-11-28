@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, vi } from "vite-plus/test";
@@ -80,7 +81,11 @@ const oneChangeToKClientsK = Effect.gen(function* () {
     });
     return { host, link, ref: host.hold(List, {}) };
   });
-  yield* Effect.promise(() => Promise.all(clients.map((client) => client.ref.ready)));
+  yield* Effect.forEach(
+    clients.map((client) => client.ref.ready),
+    testing.awaited,
+    { concurrency: "unbounded" },
+  );
   const encoders = counts.encoders;
   const encodes = counts.encodes;
   const before = clients.map((client) => stateFrames(client.link.received).length);

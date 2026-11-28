@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
@@ -31,15 +32,22 @@ const case1AFailingListenerSubscriptionFails = Effect.gen(function* () {
   });
   host.install(facet("v1", false));
   const refs = ["a", "b", "c"].map((id) => host.hold(Item, { id }));
-  yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));
+  yield* Effect.forEach(
+    refs.map((ref) => ref.ready),
+    testing.awaited,
+    { concurrency: "unbounded" },
+  );
   const codeVersion = host.codeVersion;
   yield* Effect.promise(() => assert.rejects(host.reload([facet("v2", true)]), /subscribe fails/u));
   assert.equal(host.codeVersion, codeVersion);
-  assert.deepEqual(yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.version()))), [
-    "v1",
-    "v1",
-    "v1",
-  ]);
+  assert.deepEqual(
+    yield* Effect.forEach(
+      refs.map((ref) => ref.version()),
+      testing.awaited,
+      { concurrency: "unbounded" },
+    ),
+    ["v1", "v1", "v1"],
+  );
   assert.equal(sources.a.size, 0);
   assert.equal(sources.c.size, 0);
 });
@@ -151,11 +159,13 @@ const reentrantObserversCallingAnotherObjectDuring = Effect.gen(function* () {
   host.install(facet("v1"));
   const item = host.hold(Item, { id: "a" });
   const other = host.hold(Other, {});
-  yield* Effect.promise(() => Promise.all([item.ready, other.ready]));
+  yield* Effect.forEach([item.ready, other.ready], testing.awaited, { concurrency: "unbounded" });
   const seen: Promise<string>[] = [];
   item.onShape(() => seen.push(other.version()));
   yield* Effect.promise(() => host.reload([facet("v2")]));
-  assert.deepEqual(yield* Effect.promise(() => Promise.all(seen)), ["v2"]);
+  assert.deepEqual(yield* Effect.forEach(seen, testing.awaited, { concurrency: "unbounded" }), [
+    "v2",
+  ]);
 });
 
 describe("review: reload commit", () => {

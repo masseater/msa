@@ -26,8 +26,10 @@ const loadPages = Effect.fn("loadPages")(function* () {
     .map((path) => path.replaceAll("\\", "/"))
     .filter((path) => path.endsWith(".md"))
     .sort();
-  const contents = yield* Effect.forEach(paths, (path) =>
-    readTextFile(resolvePath(docsRoot, path)),
+  const contents = yield* Effect.forEach(
+    paths,
+    (path) => readTextFile(resolvePath(docsRoot, path)),
+    { concurrency: 1 },
   );
   return new Map(paths.map((path, index) => [path, contents[index] ?? ""]));
 });

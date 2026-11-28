@@ -105,7 +105,7 @@ const removeOtherGenerations = (directory: string, kept: string) =>
       yield* Effect.forEach(
         others,
         (name) => fileSystem.remove(join(directory, name), { force: true }).pipe(Effect.ignore),
-        { discard: true },
+        { concurrency: 1, discard: true },
       );
     }),
   );
@@ -115,7 +115,7 @@ const removeGeneration = (directory: string, name: string) =>
     Effect.forEach(
       generationFiles(name),
       (file) => fileSystem.remove(join(directory, file), { force: true }).pipe(Effect.ignore),
-      { discard: true },
+      { concurrency: 1, discard: true },
     ),
   );
 

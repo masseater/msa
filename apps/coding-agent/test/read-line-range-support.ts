@@ -76,7 +76,7 @@ const writeReadSession = Effect.fn("writeReadSession")(function* (tempDir: strin
     version: CURRENT_SESSION_VERSION,
   } satisfies sessionManagerTypes.SessionHeader;
   const sessionPath = joinPath(tempDir, "session.jsonl");
-  const lines = yield* Effect.forEach([header, assistant, result], toJsonText);
+  const lines = yield* Effect.forEach([header, assistant, result], toJsonText, { concurrency: 1 });
   yield* writeTextFile(sessionPath, `${lines.join("\n")}\n`);
   return { assistant, result, sessionPath };
 });

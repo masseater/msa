@@ -58,10 +58,14 @@ const loadWorkspaces = (host: taskBuildDepsTypes.Host, root: string) =>
     const config = parse(yield* host.read(host.path.resolve(root, "pnpm-workspace.yaml"))) as {
       readonly packages: ReadonlyArray<string>;
     };
-    const dirs = yield* Effect.forEach(config.packages, (pattern) =>
-      expandGlob(host, root, pattern),
+    const dirs = yield* Effect.forEach(
+      config.packages,
+      (pattern) => expandGlob(host, root, pattern),
+      { concurrency: 1 },
     );
-    const found = yield* Effect.forEach([root, ...dirs.flat()], (dir) => readWorkspace(host, dir));
+    const found = yield* Effect.forEach([root, ...dirs.flat()], (dir) => readWorkspace(host, dir), {
+      concurrency: 1,
+    });
     return found.flat();
   });
 

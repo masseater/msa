@@ -129,6 +129,7 @@ function getFileSuggestions(
         platform
           .isDirectory(join(searchDir, name))
           .pipe(Effect.map((isDirectory) => ({ isDirectory, name }))),
+      { concurrency: 1 },
     );
     return entries
       .map(suggestionFor(rawPrefix, { isAtPrefix, isQuotedPrefix }))

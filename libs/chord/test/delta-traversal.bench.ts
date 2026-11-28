@@ -104,11 +104,14 @@ const hashedSources = [
   "./delta-traversal.bench.ts",
 ];
 const sources: Effect.Effect<Record<string, string>> = Effect.map(
-  Effect.forEach(hashedSources, (path) =>
-    Effect.map(
-      Effect.flatMap(readText(fileURLToPath(new URL(path, import.meta.url))), sha256Hex),
-      (hash) => [path, hash] as const,
-    ),
+  Effect.forEach(
+    hashedSources,
+    (path) =>
+      Effect.map(
+        Effect.flatMap(readText(fileURLToPath(new URL(path, import.meta.url))), sha256Hex),
+        (hash) => [path, hash] as const,
+      ),
+    { concurrency: 1 },
   ),
   Object.fromEntries,
 );

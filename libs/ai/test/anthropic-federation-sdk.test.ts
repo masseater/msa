@@ -92,8 +92,11 @@ const exchangesIdentityTokenOnce = () =>
         const env = yield* federationEnv;
         const requests: RecordedRequest[] = [];
         const fetch = recordingFetch(requests);
-        const messages = yield* Effect.forEach([1, 2, 3], () =>
-          Effect.promise(() => streamAnthropic(anthropicModel, context, { env, fetch }).result()),
+        const messages = yield* Effect.forEach(
+          [1, 2, 3],
+          () =>
+            Effect.promise(() => streamAnthropic(anthropicModel, context, { env, fetch }).result()),
+          { concurrency: 1 },
         );
         expect(messages.map((message) => message.stopReason)).toEqual(["stop", "stop", "stop"]);
         expect(requests.filter((request) => request.path === "/v1/oauth/token")).toHaveLength(1);

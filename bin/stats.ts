@@ -202,19 +202,22 @@ const collect = (
     const stats = new Map<string, DayStats>();
     const grandTotal = createTotals();
     const files = yield* jsonlFiles({ directory: sessionsDir, host });
-    yield* Effect.forEach(files, (file) =>
-      sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
-        Stream.runForEach((entry) =>
-          Effect.sync(() => {
-            const usage = assistantMessageOf(entry)?.usage;
-            if (usage === undefined) return;
-            const instant = instantWithin(entry, startMillis, endMillis);
-            if (Option.isNone(instant)) return;
-            const day = localTime.format(DateTime.toEpochMillis(instant.value), DAY);
-            accumulate(stats, grandTotal, entry, day, file, usage);
-          }),
+    yield* Effect.forEach(
+      files,
+      (file) =>
+        sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
+          Stream.runForEach((entry) =>
+            Effect.sync(() => {
+              const usage = assistantMessageOf(entry)?.usage;
+              if (usage === undefined) return;
+              const instant = instantWithin(entry, startMillis, endMillis);
+              if (Option.isNone(instant)) return;
+              const day = localTime.format(DateTime.toEpochMillis(instant.value), DAY);
+              accumulate(stats, grandTotal, entry, day, file, usage);
+            }),
+          ),
         ),
-      ),
+      { concurrency: 1 },
     );
     return { grandTotal, stats };
   });
@@ -241,8 +244,10 @@ const report = (
           yield* Effect.forEach(
             [...dayStats.providers.entries()].sort(([a], [b]) => a.localeCompare(b)),
             ([provider, providerStats]) => printTotals(`  ${provider}`, providerStats),
+            { concurrency: 1 },
           );
         }),
+      { concurrency: 1 },
     );
     yield* scriptOutput.print("".padEnd(160, "-"));
     yield* printTotals("TOTAL", collected.grandTotal);

@@ -69,6 +69,7 @@ const build = Effect.gen(function* () {
     toolchainRequest ?? (process.platform === "win32" && vsDevCmd !== undefined ? "msvc" : "mingw");
   if (toolchain === "mingw") {
     return yield* Effect.forEach(TARGETS, (target) => buildWithMingw(context, target), {
+      concurrency: 1,
       discard: true,
     });
   }
@@ -79,6 +80,7 @@ const build = Effect.gen(function* () {
     });
   }
   yield* Effect.forEach(TARGETS, (target) => buildWithMsvc(context, target, vsDevCmd), {
+    concurrency: 1,
     discard: true,
   });
 });

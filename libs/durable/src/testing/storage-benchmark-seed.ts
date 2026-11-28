@@ -72,12 +72,11 @@ type ReplayEntry = {
 };
 
 const seedReplays = Effect.fnUntraced(function* (storage: typesModule.Storage) {
-  const replayEntries: readonly ReplayEntry[] = yield* Effect.promise(() =>
-    Promise.all(
-      REPLAY_TAILS.map((tail) =>
-        storage.mintId<typesModule.DocumentId>().then((id) => ({ id, tail })),
-      ),
-    ),
+  const replayEntries: readonly ReplayEntry[] = yield* Effect.forEach(
+    REPLAY_TAILS,
+    (tail) =>
+      Effect.promise(() => storage.mintId<typesModule.DocumentId>().then((id) => ({ id, tail }))),
+    { concurrency: "unbounded" },
   );
   yield* commit(
     storage,
@@ -163,9 +162,10 @@ const seedStorageWriteBenchmark = (storage: typesModule.Storage): Promise<void> 
   Effect.runPromise(
     Effect.gen(function* () {
       yield* commit(storage, [{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }]);
-      const writes = yield* Effect.promise(() =>
-        Promise.all(
-          Array.from({ length: 100 }, (_, index) =>
+      const writes = yield* Effect.forEach(
+        Array.from({ length: 100 }, (_, index) => index),
+        (index) =>
+          Effect.promise(() =>
             storage.mintId<typesModule.EntryId>().then((id) => ({
               type: "entry" as const,
               value: {
@@ -176,7 +176,7 @@ const seedStorageWriteBenchmark = (storage: typesModule.Storage): Promise<void> 
               },
             })),
           ),
-        ),
+        { concurrency: "unbounded" },
       );
       yield* commit(storage, writes);
     }),

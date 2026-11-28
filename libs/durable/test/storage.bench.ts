@@ -181,10 +181,9 @@ const PERSISTENT_BACKENDS = ["sqlite", "jsonl"] as const;
 
 const reads = seedReads.pipe(Effect.cached, Effect.runSync);
 const writePools = seedWrites.pipe(Effect.cached, Effect.runSync);
-const reopenFixtures = Effect.forEach(PERSISTENT_BACKENDS, seedReopenFixture).pipe(
-  Effect.cached,
-  Effect.runSync,
-);
+const reopenFixtures = Effect.forEach(PERSISTENT_BACKENDS, seedReopenFixture, {
+  concurrency: 1,
+}).pipe(Effect.cached, Effect.runSync);
 
 const nextWriteFixture = (pool: Fixture[]): Fixture => {
   const fixture = pool.shift();

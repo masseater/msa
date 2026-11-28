@@ -29,22 +29,22 @@ const runQueued = (operations: readonly QueuedOperation[]) =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const order: string[] = [];
-    yield* awaited(
-      Promise.all(
-        operations.map(({ delayMs, label, path }) =>
-          withFileMutationQueue(path, () =>
-            effectRunPromise(
-              Effect.gen(function* () {
-                order.push(`${label}:start`);
-                if (delayMs > 0) {
-                  yield* sleep(delayMs);
-                }
-                order.push(`${label}:end`);
-              }),
-            ),
+    yield* Effect.forEach(
+      operations.map(({ delayMs, label, path }) =>
+        withFileMutationQueue(path, () =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              order.push(`${label}:start`);
+              if (delayMs > 0) {
+                yield* sleep(delayMs);
+              }
+              order.push(`${label}:end`);
+            }),
           ),
         ),
       ),
+      awaited,
+      { concurrency: "unbounded" },
     );
     return order;
   });

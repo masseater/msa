@@ -99,8 +99,10 @@ const runTargets = (
 const runProblems = (call: Call, ref: RunRef): Problems => {
   if (isBuildScript(ref.name)) return Effect.succeed([]);
   return Effect.map(
-    Effect.forEach(runTargets(call.graph, call.step, ref), (workspace) =>
-      call.walker.run({ ...call.step, cwd: workspace.dir, workspace }, ref.name),
+    Effect.forEach(
+      runTargets(call.graph, call.step, ref),
+      (workspace) => call.walker.run({ ...call.step, cwd: workspace.dir, workspace }, ref.name),
+      { concurrency: 1 },
     ),
     (nested) => nested.flat(),
   );
