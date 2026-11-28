@@ -7,21 +7,20 @@ import platform from "../src/core/platform/index.ts";
 import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
 
-const { skillOf } = packageManagerSupport;
+const { writeSkill } = packageManagerSupport;
 
 const { usePackageManagerFixture } = packageManagerFixture;
 
 const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
-const { awaited, joinPath, makeDirectory, runTest, writeTextFile } = testing;
+const { awaited, joinPath, makeDirectory, runTest } = testing;
 
 const shouldUseTheAgentDirAsBasedir = () =>
   runTest(
     Effect.gen(function* () {
       const skillPath = joinPath(fixture.agentDir, "skills", "user-msa", "SKILL.md");
-      yield* makeDirectory(joinPath(fixture.agentDir, "skills", "user-msa"));
-      yield* writeTextFile(skillPath, skillOf("user-msa", "user msa", ""));
+      yield* writeSkill(skillPath, "user-msa", "user msa", "");
 
       const result = yield* awaited(fixture.packageManager.resolution.resolve());
       const skill = result.skills.find((r) => r.path === skillPath);
@@ -37,8 +36,7 @@ const shouldUseTheProjectMsaDirAs = () =>
     Effect.gen(function* () {
       const projectBaseDir = joinPath(fixture.tempDir, ".msa");
       const skillPath = joinPath(projectBaseDir, "skills", "project-msa", "SKILL.md");
-      yield* makeDirectory(joinPath(projectBaseDir, "skills", "project-msa"));
-      yield* writeTextFile(skillPath, skillOf("project-msa", "project msa", ""));
+      yield* writeSkill(skillPath, "project-msa", "project msa", "");
 
       const result = yield* awaited(fixture.packageManager.resolution.resolve());
       const skill = result.skills.find((r) => r.path === skillPath);
@@ -58,8 +56,7 @@ const shouldUseAgentsAsBasedirForUser = () =>
       try {
         const agentsBaseDir = joinPath(fixture.tempDir, ".agents");
         const skillPath = joinPath(agentsBaseDir, "skills", "user-agents", "SKILL.md");
-        yield* makeDirectory(joinPath(agentsBaseDir, "skills", "user-agents"));
-        yield* writeTextFile(skillPath, skillOf("user-agents", "user agents", ""));
+        yield* writeSkill(skillPath, "user-agents", "user agents", "");
 
         const result = yield* awaited(fixture.packageManager.resolution.resolve());
         const skill = result.skills.find((r) => r.path === skillPath);
@@ -87,13 +84,11 @@ const shouldUseEachProjectAgentsDirAs = () =>
 
       const repoAgentsBaseDir = joinPath(repoRoot, ".agents");
       const repoSkill = joinPath(repoAgentsBaseDir, "skills", "repo", "SKILL.md");
-      yield* makeDirectory(joinPath(repoAgentsBaseDir, "skills", "repo"));
-      yield* writeTextFile(repoSkill, skillOf("repo", "repo", ""));
+      yield* writeSkill(repoSkill, "repo", "repo", "");
 
       const packageAgentsBaseDir = joinPath(repoRoot, "packages", ".agents");
       const packageSkill = joinPath(packageAgentsBaseDir, "skills", "package", "SKILL.md");
-      yield* makeDirectory(joinPath(packageAgentsBaseDir, "skills", "package"));
-      yield* writeTextFile(packageSkill, skillOf("package", "package", ""));
+      yield* writeSkill(packageSkill, "package", "package", "");
 
       const pm = new DefaultPackageManager({
         agentDir: fixture.agentDir,

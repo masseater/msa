@@ -13,7 +13,7 @@ const { usePackageManagerFixture } = packageManagerFixture;
 const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
-const { packagePaths, skillOf } = packageManagerSupport;
+const { packagePaths, skillOf, writeSkill } = packageManagerSupport;
 
 const { awaited, joinPath, makeDirectory, makeSymlink, runTest, writeTextFile } = testing;
 
@@ -76,8 +76,7 @@ const shouldKeepAgentsSkillsUserScopedWhen = () =>
         yield* makeDirectory(localAgentDir);
 
         const homeSkill = joinPath(fixture.tempDir, ".agents", "skills", "home-skill", "SKILL.md");
-        yield* makeDirectory(joinPath(fixture.tempDir, ".agents", "skills", "home-skill"));
-        yield* writeTextFile(homeSkill, skillOf("home-skill", "home", ""));
+        yield* writeSkill(homeSkill, "home-skill", "home", "");
 
         const pm = new DefaultPackageManager({
           agentDir: localAgentDir,
@@ -115,8 +114,7 @@ const shouldDedupeUserSkillEntriesWhenMsa = () =>
         yield* makeSymlink(agentsSkillsDir, agentSkillsDir);
 
         const skillPath = joinPath(agentsSkillsDir, "foo", "SKILL.md");
-        yield* makeDirectory(joinPath(agentsSkillsDir, "foo"));
-        yield* writeTextFile(skillPath, skillOf("foo", "foo", ""));
+        yield* writeSkill(skillPath, "foo", "foo", "");
 
         const result = yield* awaited(fixture.packageManager.resolution.resolve());
         const fooSkills = result.skills.filter((r) =>
