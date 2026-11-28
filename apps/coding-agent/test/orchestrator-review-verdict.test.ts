@@ -10,7 +10,7 @@ import triageSupport from "./triage-support.ts";
 
 const { joinPath, makeDirectory, makeTempDir, removePath } = testing;
 const { escalateTriage, runningTriage } = triageSupport;
-const { create } = orchestratorSupport;
+const { create, finishWorkAndReview } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { classifierDecide, reportOf } = reviewVerdictSupport;
@@ -131,9 +131,7 @@ const asksForADecisionWhenTheReviewRepeats = () =>
       const { orchestrator, reports, task, workers } = yield* startCacheTask(findingsFail(), {
         cwd,
       });
-      workers[1]?.complete(FINDING);
-      yield* waitFor(() => workers.length === 3);
-      workers[2]?.complete("tried to cover the second read");
+      yield* finishWorkAndReview(workers, 1, FINDING, "tried to cover the second read");
       yield* waitFor(() => workers.length === 4);
       workers[3]?.complete(`Still not acceptable.\n${FINDING}`);
       yield* escalateTriage(workers);
@@ -266,9 +264,7 @@ const judgesAgainstTheFindingsBeforeARestart = () =>
       });
       yield* waitFor(() => workers.length === 1);
       expect(workers[0]?.prompts[0]).toContain(FINDING);
-      workers[0]?.complete("tried again");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete(FINDING);
+      yield* finishWorkAndReview(workers, 0, "tried again", FINDING);
       yield* escalateTriage(workers);
       yield* waitFor(() => taskStatus(orchestrator, first.task.id) === "needs-decision");
       expect(reports.at(-1)?.details.status).toBe("needs-decision");

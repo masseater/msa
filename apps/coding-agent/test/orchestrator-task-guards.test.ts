@@ -11,7 +11,7 @@ import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
 const { store } = storeModule;
 const { replanStore } = replanStoreModule;
-const { create, replan } = orchestratorReplanSupport;
+const { create, finishWorkAndReview, replan } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { joinPath, makeTempDir, removeDirs, runTest } = testing;
@@ -49,9 +49,7 @@ it("refuses to create a task whose title an unfinished task already has, until t
       expect(again).toContain(`${a.id} (running) already has this title`);
       expect(workTitles(orchestrator)).toEqual(["remove the release-age exclusion"]);
 
-      workers[0]?.complete("the exclusion is gone");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("reviewed");
+      yield* finishWorkAndReview(workers, 0, "the exclusion is gone", "reviewed");
       yield* waitFor(() => taskStatus(orchestrator, a.id) === "completed");
       const later = yield* attempt(orchestrator, { title: "remove the release-age exclusion" });
       expect(later).toMatch(/^t-/u);

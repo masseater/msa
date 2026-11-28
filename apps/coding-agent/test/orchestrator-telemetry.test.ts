@@ -2,10 +2,13 @@ import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
 
 const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
+
+const { finishWorkAndReview } = orchestratorSupport;
 
 const TASK = { currentState: "a is not done", goalState: "a is done", title: "a" };
 
@@ -16,9 +19,7 @@ const tracesATaskThroughItsWorkerAndSetup = () =>
     yield* Effect.promise(() =>
       workers[0]!.telemetry.context.startSpan({ name: "msa.turn" }, () => undefined),
     );
-    workers[0]?.complete("did a");
-    yield* waitFor(() => workers.length === 2);
-    workers[1]?.complete("looks good");
+    yield* finishWorkAndReview(workers, 0, "did a", "looks good");
     yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
 
     const spans = telemetry.getSpans();

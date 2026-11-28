@@ -7,7 +7,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
 const { runTest } = testing;
-const { create } = orchestratorReplanSupport;
+const { create, finishWorkAndReview } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 
@@ -149,9 +149,7 @@ const refusesToMoveADependencyOfARunningWorker = (path: Drop) =>
       const done = yield* create(orchestrator, work("done"));
       const a = yield* create(orchestrator, { ...work("a"), dependsOn: [done.id] });
       yield* waitFor(() => workers.length === 1);
-      workers[0]?.complete("done done");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("done reviewed");
+      yield* finishWorkAndReview(workers, 0, "done done", "done reviewed");
       yield* waitFor(() => runningRole(orchestrator, a.id) === "worker");
 
       const refused = yield* Effect.promise(() =>

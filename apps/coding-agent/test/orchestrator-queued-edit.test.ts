@@ -1,13 +1,9 @@
 import testing from "@msa/testing";
-import { Effect, Result } from "effect";
+import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import errors from "../src/core/orchestrator/errors.ts";
-import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
-
-const { orchestratorError } = errors;
 
 const { joinPath, makeTempDir, removePath } = testing;
 
@@ -15,14 +11,7 @@ const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
 
-const { create, createNamed } = orchestratorSupport;
-
-const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
-  Effect.promise(() => orchestrator.read(id));
-
-function attempt<A>(run: () => Promise<A>) {
-  return Effect.result(Effect.tryPromise({ catch: orchestratorError, try: run }));
-}
+const { create, createNamed, failureMessageOf, finishWorkAndReview, read } = orchestratorSupport;
 
 const addsADependencyToAWaitingTask = () =>
   Effect.runPromise(
@@ -38,9 +27,7 @@ const addsADependencyToAWaitingTask = () =>
       expect(view.dependsOn.toSorted()).toEqual([a.id, c.id].toSorted());
       expect(view.status).toBe("waiting");
 
-      workers[1]?.complete("c done");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]?.complete("c reviewed");
+      yield* finishWorkAndReview(workers, 1, "c done", "c reviewed");
       yield* waitFor(() => taskStatus(orchestrator, c.id) === "completed");
       expect(taskStatus(orchestrator, b.id)).toBe("waiting");
 
@@ -91,15 +78,12 @@ const rejectsACycleAndATaskThat = () =>
       const c = yield* createNamed(orchestrator, "c");
       yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }));
 
-      const cycle = yield* attempt(() => orchestrator.setDepends({ add: [b.id], taskIds: [c.id] }));
-      expect(Result.isFailure(cycle)).toBe(true);
-      if (Result.isFailure(cycle)) expect(cycle.failure.message).toContain("cycle");
-
-      const itself = yield* attempt(() =>
-        orchestrator.setDepends({ add: [c.id], taskIds: [c.id] }),
-      );
-      expect(Result.isFailure(itself)).toBe(true);
-      if (Result.isFailure(itself)) expect(itself.failure.message).toContain("itself");
+      expect(
+        yield* failureMessageOf(() => orchestrator.setDepends({ add: [b.id], taskIds: [c.id] })),
+      ).toContain("cycle");
+      expect(
+        yield* failureMessageOf(() => orchestrator.setDepends({ add: [c.id], taskIds: [c.id] })),
+      ).toContain("itself");
 
       const view = yield* read(orchestrator, c.id);
       expect(view.dependsOn).toEqual([]);
@@ -119,19 +103,14 @@ const rejectsDependencyChangesOnARunningTask = () =>
       const a = yield* createNamed(orchestrator, "a");
       const c = yield* createNamed(orchestrator, "c");
 
-      const added = yield* attempt(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
-      expect(Result.isFailure(added)).toBe(true);
-      if (Result.isFailure(added)) expect(added.failure.message).toContain("stop_task");
+      expect(
+        yield* failureMessageOf(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] })),
+      ).toContain("stop_task");
+      expect(
+        yield* failureMessageOf(() => orchestrator.setDepends({ remove: [c.id], taskIds: [a.id] })),
+      ).toContain("stop_task");
 
-      const removed = yield* attempt(() =>
-        orchestrator.setDepends({ remove: [c.id], taskIds: [a.id] }),
-      );
-      expect(Result.isFailure(removed)).toBe(true);
-      if (Result.isFailure(removed)) expect(removed.failure.message).toContain("stop_task");
-
-      workers[1]?.complete("c done");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]?.complete("c reviewed");
+      yield* finishWorkAndReview(workers, 1, "c done", "c reviewed");
       yield* waitFor(() => taskStatus(orchestrator, c.id) === "completed");
 
       yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
@@ -158,16 +137,13 @@ const rewritesTheStatesOfAWaitingTask = () =>
         title: "b",
       });
 
-      const running = yield* attempt(() =>
-        orchestrator.setState({ goalState: "a works twice", taskId: a.id }),
-      );
-      expect(Result.isFailure(running)).toBe(true);
-      if (Result.isFailure(running)) expect(running.failure.message).toContain("running");
-
-      const nothing = yield* attempt(() => orchestrator.setState({ taskId: b.id }));
-      expect(Result.isFailure(nothing)).toBe(true);
-      const blank = yield* attempt(() => orchestrator.setState({ goalState: " ", taskId: b.id }));
-      expect(Result.isFailure(blank)).toBe(true);
+      expect(
+        yield* failureMessageOf(() =>
+          orchestrator.setState({ goalState: "a works twice", taskId: a.id }),
+        ),
+      ).toContain("running");
+      yield* failureMessageOf(() => orchestrator.setState({ taskId: b.id }));
+      yield* failureMessageOf(() => orchestrator.setState({ goalState: " ", taskId: b.id }));
 
       yield* Effect.promise(() =>
         orchestrator.setState({ goalState: "the client speaks v4", taskId: b.id }),
@@ -176,9 +152,7 @@ const rewritesTheStatesOfAWaitingTask = () =>
       expect(view.currentState).toBe("the client speaks v2");
       expect(view.goalState).toBe("the client speaks v4");
 
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("a reviewed");
+      yield* finishWorkAndReview(workers, 0, "a done", "a reviewed");
       yield* waitFor(() => workers.length === 3);
       expect(workers[2]?.prompts[0]).toContain("the client speaks v2");
       expect(workers[2]?.prompts[0]).toContain("the client speaks v4");
