@@ -10,8 +10,13 @@ const { discoverAndLoadExtensions } = loader;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
-const { discoverCleanly, extensionCode, extensionCodeWithTool, writeExtensionPackage } =
-  extensionsDiscoverySupport;
+const {
+  discoverCleanly,
+  extensionCode,
+  extensionCodeWithTool,
+  writeExtensionFiles,
+  writeExtensionPackage,
+} = extensionsDiscoverySupport;
 
 const { useExtensionsDir } = tempDirKit;
 
@@ -96,9 +101,7 @@ const ignoresSubdirectoryWithoutIndexOrPackageJson = () =>
   runTest(
     Effect.gen(function* () {
       const subdir = joinPath(extTemp.extensionsDir, "not-an-extension");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "helper.ts"), extensionCode);
-      yield* writeTextFile(joinPath(subdir, "utils.ts"), extensionCode);
+      yield* writeExtensionFiles(subdir, ["helper.ts", "utils.ts"]);
 
       yield* discoverCleanly(extTemp, 0);
     }),
@@ -110,8 +113,7 @@ const doesNotRecurseBeyondOneLevel = () =>
       const subdir = joinPath(extTemp.extensionsDir, "container");
       const nested = joinPath(subdir, "nested");
       yield* makeDirectory(subdir);
-      yield* makeDirectory(nested);
-      yield* writeTextFile(joinPath(nested, "index.ts"), extensionCode);
+      yield* writeExtensionFiles(nested, ["index.ts"]);
 
       yield* discoverCleanly(extTemp, 0);
     }),
@@ -120,15 +122,13 @@ const doesNotRecurseBeyondOneLevel = () =>
 const handlesMixedDirectFilesAndSubdirectories = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extTemp.extensionsDir, "direct.ts"), extensionCode);
+      yield* writeExtensionFiles(extTemp.extensionsDir, ["direct.ts"]);
 
       const subdir1 = joinPath(extTemp.extensionsDir, "with-index");
-      yield* makeDirectory(subdir1);
-      yield* writeTextFile(joinPath(subdir1, "index.ts"), extensionCode);
+      yield* writeExtensionFiles(subdir1, ["index.ts"]);
 
       const subdir2 = joinPath(extTemp.extensionsDir, "with-manifest");
-      yield* makeDirectory(subdir2);
-      yield* writeTextFile(joinPath(subdir2, "entry.ts"), extensionCode);
+      yield* writeExtensionFiles(subdir2, ["entry.ts"]);
       yield* writeTextFile(
         joinPath(subdir2, "package.json"),
         yield* toJsonText({ msa: { extensions: ["./entry.ts"] } }),
@@ -155,7 +155,7 @@ const skipsNonExistentPathsDeclaredInPackage = () =>
 const loadsExtensionsAndRegistersCommands = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-command.ts"), extensionCode);
+      yield* writeExtensionFiles(extTemp.extensionsDir, ["with-command.ts"]);
 
       const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.commands.has("test")).toBe(true);

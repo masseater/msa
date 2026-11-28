@@ -10,10 +10,9 @@ import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
 
-const { awaited, dirnameOf, joinPath, makeDirectory, resolvePath, runTest, writeTextFile } =
-  testing;
+const { awaited, dirnameOf, joinPath, resolvePath, runTest, writeTextFile } = testing;
 
-const { discoverCleanly, extensionCode, extensionCodeWithTool } = extensionsDiscoverySupport;
+const { discoverCleanly, extensionCodeWithTool, writeExtensionFiles } = extensionsDiscoverySupport;
 
 const { useExtensionsDir } = tempDirKit;
 
@@ -41,8 +40,7 @@ const handlesExplicitlyConfiguredPaths = () =>
   runTest(
     Effect.gen(function* () {
       const customPath = joinPath(extTemp.path, "custom-location", "my-ext.ts");
-      yield* makeDirectory(dirnameOf(customPath));
-      yield* writeTextFile(customPath, extensionCode);
+      yield* writeExtensionFiles(extTemp.path, ["custom-location/my-ext.ts"]);
 
       const result = yield* discoverCleanly(extTemp, 1, [customPath]);
       expect(result.extensions[0]?.path).toContain("my-ext.ts");

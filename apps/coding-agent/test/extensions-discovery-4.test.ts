@@ -7,7 +7,7 @@ import tempDirKit from "./temp-dir.ts";
 
 const { awaited, joinPath, runTest, writeTextFile } = testing;
 
-const { extensionCode, extensionCodeWithTool } = extensionsDiscoverySupport;
+const { extensionCodeWithTool, writeExtensionFiles } = extensionsDiscoverySupport;
 
 const { useExtensionsDir } = tempDirKit;
 
@@ -38,7 +38,7 @@ const loadextensionsOnlyLoadsExplicitPathsWithoutDiscovery = () =>
 const loadextensionsWithNoPathsLoadsNothing = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extTemp.extensionsDir, "discovered.ts"), extensionCode);
+      yield* writeExtensionFiles(extTemp.extensionsDir, ["discovered.ts"]);
 
       const { loadExtensions } = (yield* awaited(import("../src/core/extensions/loader.ts")))
         .default;

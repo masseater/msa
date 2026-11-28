@@ -39,6 +39,15 @@ const discoverCleanly = (
     return result;
   });
 
+const writeExtensionFiles = (root: string, relatives: readonly string[]) =>
+  Effect.gen(function* () {
+    for (const relative of relatives) {
+      const file = joinPath(root, relative);
+      yield* makeDirectory(dirnameOf(file));
+      yield* writeTextFile(file, extensionCode);
+    }
+  });
+
 const writeExtensionPackage = (
   dir: string,
   files: Readonly<Record<string, string>>,
@@ -57,6 +66,7 @@ const extensionsDiscoverySupport = {
   discoverCleanly,
   extensionCode,
   extensionCodeWithTool,
+  writeExtensionFiles,
   writeExtensionPackage,
 };
 

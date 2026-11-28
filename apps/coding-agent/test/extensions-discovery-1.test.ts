@@ -11,7 +11,8 @@ const { discoverAndLoadExtensions } = loader;
 const { awaited, basenameOf, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } =
   testing;
 
-const { discoverCleanly, extensionCode, writeExtensionPackage } = extensionsDiscoverySupport;
+const { discoverCleanly, extensionCode, writeExtensionPackage, writeExtensionFiles } =
+  extensionsDiscoverySupport;
 
 const { useExtensionsDir } = tempDirKit;
 
@@ -20,8 +21,7 @@ const extTemp = useExtensionsDir("msa-ext-test-");
 const discoversDirectTsFilesInExtensions = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extTemp.extensionsDir, "foo.ts"), extensionCode);
-      yield* writeTextFile(joinPath(extTemp.extensionsDir, "bar.ts"), extensionCode);
+      yield* writeExtensionFiles(extTemp.extensionsDir, ["foo.ts", "bar.ts"]);
 
       const result = yield* discoverCleanly(extTemp, 2);
       expect(result.extensions.map((e) => basenameOf(e.path)).sort()).toEqual(["bar.ts", "foo.ts"]);
@@ -114,7 +114,7 @@ const keepsTheTypeOnlyMsaAiOauth = () =>
 const discoversDirectJsFilesInExtensions = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extTemp.extensionsDir, "foo.js"), extensionCode);
+      yield* writeExtensionFiles(extTemp.extensionsDir, ["foo.js"]);
 
       const result = yield* discoverCleanly(extTemp, 1);
       const [extension] = result.extensions;
@@ -127,8 +127,7 @@ const discoversSubdirectoryWithIndexTs = () =>
   runTest(
     Effect.gen(function* () {
       const subdir = joinPath(extTemp.extensionsDir, "my-extension");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
+      yield* writeExtensionFiles(subdir, ["index.ts"]);
 
       const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("my-extension");
@@ -140,8 +139,7 @@ const discoversSubdirectoryWithIndexJs = () =>
   runTest(
     Effect.gen(function* () {
       const subdir = joinPath(extTemp.extensionsDir, "my-extension");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "index.js"), extensionCode);
+      yield* writeExtensionFiles(subdir, ["index.js"]);
 
       const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("index.js");
@@ -152,9 +150,7 @@ const prefersIndexTsOverIndexJs = () =>
   runTest(
     Effect.gen(function* () {
       const subdir = joinPath(extTemp.extensionsDir, "my-extension");
-      yield* makeDirectory(subdir);
-      yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
-      yield* writeTextFile(joinPath(subdir, "index.js"), extensionCode);
+      yield* writeExtensionFiles(subdir, ["index.ts", "index.js"]);
 
       const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("index.ts");
