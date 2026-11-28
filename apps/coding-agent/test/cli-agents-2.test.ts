@@ -43,16 +43,39 @@ beforeEach(() => runTest(prepareAgentDir));
 
 afterEach(() => runTest(cleanAgentDir));
 
-const claudeWithLogin = [
+const accountsNow = Effect.promise(() => loadAccounts());
+
+const authStatusLines = [
   `if [ "$1 $2" = "auth status" ]; then`,
   `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
   `  exit 0`,
   `fi`,
-  `if [ "$1 $2" = "auth logout" ]; then rm -f "$CLAUDE_CONFIG_DIR/token"; exit 0; fi`,
+];
+
+const loginLines = [
   `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
   `read code`,
   `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
+];
+
+const claudeWithLogin = [
+  ...authStatusLines,
+  `if [ "$1 $2" = "auth logout" ]; then rm -f "$CLAUDE_CONFIG_DIR/token"; exit 0; fi`,
+  ...loginLines,
 ].join("\n");
+
+const claudeWithPasteLogin = [
+  ...authStatusLines,
+  `echo "Opening browser to sign in…"`,
+  ...loginLines.slice(0, 1),
+  `printf "Paste code here if prompted > "`,
+  ...loginLines.slice(1),
+].join("\n");
+
+const slashStatus = (signedIn: boolean) =>
+  Effect.gen(function* () {
+    expect(yield* awaited(claudeCodeService.status())).toEqual({ installed: true, signedIn });
+  });
 
 function interaction(answers: { select?: string; prompts: string[] }) {
   return {
@@ -66,7 +89,7 @@ const keepsTheImplicitDefaultAccountWhenThe = () =>
   runTest(
     Effect.gen(function* () {
       yield* Effect.promise(() => addAccount("work"));
-      expect(yield* Effect.promise(() => loadAccounts())).toEqual([
+      expect(yield* accountsNow).toEqual([
         { name: "default" },
         { configDir: managed("work"), name: "work" },
       ]);
@@ -77,7 +100,7 @@ const addsATokencommandAccountAndRejectsBad = () =>
   runTest(
     Effect.gen(function* () {
       yield* Effect.promise(() => addAccount("token", "op read op://vault/claude"));
-      expect((yield* Effect.promise(() => loadAccounts())).at(-1)).toEqual({
+      expect((yield* accountsNow).at(-1)).toEqual({
         name: "token",
         tokenCommand: "op read op://vault/claude",
       });
@@ -96,11 +119,9 @@ const reordersTogglesRotationAndRemovesAccountsKeeping = () =>
         accounts: [{ name: "sub" }, { auto: false, configDir: "~/claude-main", name: "main" }],
       });
       yield* Effect.promise(() => setAutoRotation("main", true));
-      expect((yield* Effect.promise(() => loadAccounts()))[1]?.auto).toBeUndefined();
+      expect((yield* accountsNow)[1]?.auto).toBeUndefined();
       yield* Effect.promise(() => removeAccount("sub"));
-      expect((yield* Effect.promise(() => loadAccounts())).map((account) => account.name)).toEqual([
-        "main",
-      ]);
+      expect((yield* accountsNow).map((account) => account.name)).toEqual(["main"]);
       yield* awaited(expect(removeAccount("main")).rejects.toThrow(/must remain/u));
       yield* awaited(expect(preferAccount("nope")).rejects.toThrow(/No Claude account/u));
     }),
@@ -123,19 +144,7 @@ const deletesTheConfigDirMsaMadeFor = () =>
 const signsAnAccountInWithTheCode = () =>
   runTest(
     Effect.gen(function* () {
-      yield* fakeClaude(
-        [
-          `if [ "$1 $2" = "auth status" ]; then`,
-          `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
-          `  exit 0`,
-          `fi`,
-          `echo "Opening browser to sign in…"`,
-          `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
-          `printf "Paste code here if prompted > "`,
-          `read code`,
-          `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
-        ].join("\n"),
-      );
+      yield* fakeClaude(claudeWithPasteLogin);
       const account = yield* Effect.promise(() => addAccount("work"));
       expect(yield* awaited(authStatus(account))).toEqual({ loggedIn: false });
       yield* Effect.promise(() =>
@@ -195,24 +204,15 @@ const signsTheOnlyAccountInFromLogin = () =>
     Effect.gen(function* () {
       yield* fakeClaude(claudeWithLogin);
       yield* writeAccounts([{ configDir: managed("work"), name: "work" }]);
-      expect(yield* awaited(claudeCodeService.status())).toEqual({
-        installed: true,
-        signedIn: false,
-      });
+      yield* slashStatus(false);
       const ui = interaction({ prompts: ["the-code"] });
       yield* awaited(claudeCodeService.login(ui, abortController().signal));
       expect(ui.select).not.toHaveBeenCalled();
       expect(ui.showPage).toHaveBeenCalledWith({ url: "https://claude.com/oauth?x=1" });
-      expect(yield* awaited(claudeCodeService.status())).toEqual({
-        installed: true,
-        signedIn: true,
-      });
+      yield* slashStatus(true);
 
       yield* awaited(claudeCodeService.logout(interaction({ prompts: [] })));
-      expect(yield* awaited(claudeCodeService.status())).toEqual({
-        installed: true,
-        signedIn: false,
-      });
+      yield* slashStatus(false);
     }),
   );
 
@@ -232,7 +232,7 @@ const addsANewAccountFromLogin = () =>
         "sub",
         "Add a new account",
       ]);
-      expect((yield* Effect.promise(() => loadAccounts())).at(-1)).toEqual({
+      expect((yield* accountsNow).at(-1)).toEqual({
         configDir: managed("work"),
         name: "work",
       });

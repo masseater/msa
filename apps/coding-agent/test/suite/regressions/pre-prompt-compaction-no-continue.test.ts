@@ -5,11 +5,11 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
-import agentSessionCompactionSupport from "../agent-session-compaction-support.ts";
+import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
-const { createUsage } = agentSessionCompactionSupport;
+const { usageOf } = utilities;
 
 const { cleanupAll } = harnessModule;
 
@@ -67,7 +67,7 @@ const compactsLengthStopOverflowBeforeAStep1 = (
       api: model.api,
       model: model.id,
       provider: model.provider,
-      usage: createUsage(100),
+      usage: usageOf(100),
     };
     harness.sessionManager.appendMessage(lengthStopAssistant);
     harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
