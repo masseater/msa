@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -9,7 +8,7 @@ import mime from "./mime.ts";
 
 const { baseMimeType } = mime;
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { convertImageBytesToPng } = imageConvert;
 const { formatDimensionNote, resizeImage } = imageResize;
 
@@ -36,25 +35,23 @@ function normalizeSupportedImageMimeType(mimeType: string): string | null {
 }
 
 function normalizeImage(bytes: Uint8Array, mimeType: string): Promise<NormalizedImage | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const normalizedMimeType = normalizeSupportedImageMimeType(mimeType);
-      if (normalizedMimeType !== null && normalizedMimeType !== "") {
-        return { bytes, mimeType: normalizedMimeType };
-      }
+  return promised(function* () {
+    const normalizedMimeType = normalizeSupportedImageMimeType(mimeType);
+    if (normalizedMimeType !== null && normalizedMimeType !== "") {
+      return { bytes, mimeType: normalizedMimeType };
+    }
 
-      const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
-      if (pngBytes === null) {
-        return null;
-      }
+    const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
+    if (pngBytes === null) {
+      return null;
+    }
 
-      return {
-        bytes: pngBytes,
-        convertedFrom: baseMimeType(mimeType),
-        mimeType: "image/png",
-      };
-    }),
-  );
+    return {
+      bytes: pngBytes,
+      convertedFrom: baseMimeType(mimeType),
+      mimeType: "image/png",
+    };
+  });
 }
 
 function conversionHint(from: string | undefined, to: string): string | undefined {
@@ -72,39 +69,35 @@ function processImageImpl(
   mimeType: string,
   options?: imageProcessTypes.ProcessImageOptions,
 ): Promise<imageProcessTypes.ProcessImageResult> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const normalized = yield* awaited(normalizeImage(bytes, mimeType));
-      if (normalized === null) {
-        return omitted(
-          "[Image omitted: could not be converted to a supported inline image format.]",
-        );
-      }
-      if (!(options?.autoResizeImages ?? true)) {
-        return {
-          data: Buffer.from(normalized.bytes).toString("base64"),
-          hints: hintsFor(conversionHint(normalized.convertedFrom, normalized.mimeType)),
-          mimeType: normalized.mimeType,
-          ok: true,
-        };
-      }
-      const resized = yield* awaited(
-        resizeImage(normalized.bytes, normalized.mimeType, options?.resizeOptions),
-      );
-      if (resized === null) {
-        return omitted("[Image omitted: could not be resized below the inline image size limit.]");
-      }
+  return promised(function* () {
+    const normalized = yield* awaited(normalizeImage(bytes, mimeType));
+    if (normalized === null) {
+      return omitted("[Image omitted: could not be converted to a supported inline image format.]");
+    }
+    if (!(options?.autoResizeImages ?? true)) {
       return {
-        data: resized.data,
-        hints: hintsFor(
-          conversionHint(normalized.convertedFrom, resized.mimeType),
-          formatDimensionNote(resized),
-        ),
-        mimeType: resized.mimeType,
+        data: Buffer.from(normalized.bytes).toString("base64"),
+        hints: hintsFor(conversionHint(normalized.convertedFrom, normalized.mimeType)),
+        mimeType: normalized.mimeType,
         ok: true,
       };
-    }),
-  );
+    }
+    const resized = yield* awaited(
+      resizeImage(normalized.bytes, normalized.mimeType, options?.resizeOptions),
+    );
+    if (resized === null) {
+      return omitted("[Image omitted: could not be resized below the inline image size limit.]");
+    }
+    return {
+      data: resized.data,
+      hints: hintsFor(
+        conversionHint(normalized.convertedFrom, resized.mimeType),
+        formatDimensionNote(resized),
+      ),
+      mimeType: resized.mimeType,
+      ok: true,
+    };
+  });
 }
 
 const processImage: {

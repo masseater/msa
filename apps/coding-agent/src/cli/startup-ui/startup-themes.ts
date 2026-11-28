@@ -9,7 +9,7 @@ import type settingsManagerTypes from "../../core/settings-manager.types.ts";
 import themeModule from "../../modes/interactive/theme/theme.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { getAgentDir } = config;
 const { loadThemeFromPath } = themeModule;
 
@@ -38,22 +38,20 @@ function loadThemes(
 function loadStartupThemes(
   settingsManager: settingsManagerTypes.SettingsManager,
 ): Promise<themeTypes.Theme[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
-        projectTrusted: false,
-      });
-      const packageManager = new DefaultPackageManager({
-        agentDir: getAgentDir(),
-        cwd: process.cwd(),
-        settingsManager: globalSettingsManager,
-      });
-      const resolvedPaths = yield* awaited(
-        packageManager.resolution.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
-      );
-      return yield* awaited(loadThemes(resolvedPaths.themes));
-    }),
-  );
+  return promised(function* () {
+    const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
+      projectTrusted: false,
+    });
+    const packageManager = new DefaultPackageManager({
+      agentDir: getAgentDir(),
+      cwd: process.cwd(),
+      settingsManager: globalSettingsManager,
+    });
+    const resolvedPaths = yield* awaited(
+      packageManager.resolution.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
+    );
+    return yield* awaited(loadThemes(resolvedPaths.themes));
+  });
 }
 
 const startupThemes = { loadStartupThemes };

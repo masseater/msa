@@ -1,6 +1,5 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { Effect } from "effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import clipboard from "../../utils/clipboard.ts";
@@ -13,7 +12,7 @@ import type tuiRendererTypes from "./tui-renderer.types.ts";
 const { theme } = themeModule;
 const { keyDisplayText } = keybindingHints;
 const { openBrowser } = openBrowserModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { copyToClipboard } = clipboard;
 const { toErrorMessage } = errors;
 
@@ -52,16 +51,14 @@ function createInteractiveTui(
         ? {}
         : { copyOnSelect: options.fullscreenCopyOnSelect }),
       copySelection: (text) =>
-        Effect.runPromise(
-          awaiting(function* () {
-            try {
-              yield* awaited(copyToClipboard(text));
-              return true;
-            } catch (error) {
-              return toErrorMessage(error);
-            }
-          }),
-        ),
+        promised(function* () {
+          try {
+            yield* awaited(copyToClipboard(text));
+            return true;
+          } catch (error) {
+            return toErrorMessage(error);
+          }
+        }),
       wheelScrollLines: options.fullscreenWheelScrollLines ?? "auto",
     });
   }

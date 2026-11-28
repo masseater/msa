@@ -2,19 +2,18 @@ import type aiTypes from "@msa/ai/index.types";
 import localModule from "@msa/ai/providers/local";
 import { Effect } from "effect";
 
+import errors from "../../utils/errors.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
 import platform from "../platform/index.ts";
 import type ModelSettings from "../settings/model-settings.ts";
 import type decideTypes from "./decide.types.ts";
 
+const { toErrorMessage } = errors;
 const { fromPromise } = platform;
 
 const { LIQUID_D1 } = localModule;
 
 type Runtime = Pick<modelRuntimeTypes.ModelRuntime, "getModelOfType" | "getProvider">;
-
-const errorText = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 function decisionModelReference(settings: ModelSettings): string {
   return settings.getDecisionModel() ?? `${LIQUID_D1.provider}/${LIQUID_D1.id}`;
@@ -53,7 +52,7 @@ function prepareDecisionModel(
       Effect.match({
         onFailure: ({ cause }): decideTypes.DecisionModelPreparation => ({
           model: reference,
-          reason: errorText(cause),
+          reason: toErrorMessage(cause),
           status: "failed",
         }),
         onSuccess: ({ fetched }): decideTypes.DecisionModelPreparation => ({

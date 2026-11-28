@@ -1,14 +1,13 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type compatTypes from "@msa/ai/compat.types";
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import providerAttribution from "../provider-attribution.ts";
 import type SettingsManager from "../settings-manager.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { mergeProviderAttributionHeaders } = providerAttribution;
 
 type RunnerRef = { current?: extensionsTypes.ExtensionRunner };
@@ -44,10 +43,8 @@ export default class ProviderHooks {
         retry.timeoutMs ??
         (httpIdleTimeoutMs === 0 ? MAX_TIMEOUT_MS : httpIdleTimeoutMs),
       transformHeaders: (requestHeaders) =>
-        Effect.runPromise(
-          awaiting(() =>
-            this.transformHeaders(requestModel, streamOptions, requestHeaders, headerRunner),
-          ),
+        promised(() =>
+          this.transformHeaders(requestModel, streamOptions, requestHeaders, headerRunner),
         ),
       websocketConnectTimeoutMs:
         streamOptions.websocketConnectTimeoutMs ?? session.getWebSocketConnectTimeoutMs(),
@@ -57,7 +54,7 @@ export default class ProviderHooks {
   transformPayload(payload: unknown): Promise<unknown> {
     const runner = this.runnerRef.current;
     if (runner?.hasHandlers("before_provider_request") !== true) return Promise.resolve(payload);
-    return Effect.runPromise(awaiting(() => awaited(runner.emitBeforeProviderRequest(payload))));
+    return promised(() => awaited(runner.emitBeforeProviderRequest(payload)));
   }
 
   handleResponse: NonNullable<StreamOptions["onResponse"]> = (response) =>
@@ -79,7 +76,7 @@ export default class ProviderHooks {
   transformContext(messages: agentTypes.AgentMessage[]): Promise<agentTypes.AgentMessage[]> {
     const runner = this.runnerRef.current;
     if (runner === undefined) return Promise.resolve(messages);
-    return Effect.runPromise(awaiting(() => awaited(runner.emitContext(messages))));
+    return promised(() => awaited(runner.emitContext(messages)));
   }
 
   private *transformHeaders(
@@ -114,12 +111,8 @@ export default class ProviderHooks {
   ): Promise<void> {
     const runner = this.runnerRef.current;
     if (runner?.hasHandlers(event.type) !== true) return Promise.resolve();
-    return Effect.runPromise(
-      awaiting(function* () {
-        yield* awaited(
-          runner.emit(event as Parameters<extensionsTypes.ExtensionRunner["emit"]>[0]),
-        );
-      }),
-    );
+    return promised(function* () {
+      yield* awaited(runner.emit(event as Parameters<extensionsTypes.ExtensionRunner["emit"]>[0]));
+    });
   }
 }

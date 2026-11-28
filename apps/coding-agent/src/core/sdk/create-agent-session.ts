@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import type sdkTypes from "../sdk.types.ts";
@@ -10,7 +8,7 @@ import sessionStart from "./session-start.ts";
 import thinkingLevelModule from "./thinking-level.ts";
 import toolSelection from "./tool-selection.ts";
 
-const { awaiting } = awaitingModule;
+const { promised } = awaitingModule;
 const { createAgent } = createAgentModule;
 const { createRuntimeParts } = runtimeParts;
 const { assembleSession } = sessionAssembly;
@@ -65,7 +63,7 @@ function* createSessionSteps(options: sdkTypes.CreateAgentSessionOptions) {
 function createAgentSession(
   options: sdkTypes.CreateAgentSessionOptions = {},
 ): Promise<sdkTypes.CreateAgentSessionResult> {
-  return Effect.runPromise(awaiting(() => createSessionSteps(options)));
+  return promised(() => createSessionSteps(options));
 }
 
 const createAgentSessionModule = { createAgentSession };

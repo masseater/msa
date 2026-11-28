@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import config from "../config.ts";
@@ -10,7 +9,7 @@ import interop from "./interop.ts";
 import photon from "./photon.ts";
 
 const { IMAGE_RESIZE_WORKER_RESPONSE_TYPE, resizeImageInProcess } = imageResizeCore;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { callbackPromise } = interop;
 const { isBunBinary } = config;
 
@@ -75,23 +74,21 @@ function resizeImageWith(
   mimeType: string,
   options?: imageResizeCoreTypes.ImageResizeOptions,
 ): Promise<imageResizeCoreTypes.ResizedImage | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const worker = createResizeWorker(workerSpecifier);
-      try {
-        return yield* awaited(
-          awaitWorkerResult(worker, {
-            inputBytes: toTransferableBytes(inputBytes),
-            mimeType,
-            options,
-            photonWasmPath: photon.getEmbeddedWasmPath(),
-          }),
-        );
-      } finally {
-        void worker.terminate().catch(() => undefined);
-      }
-    }),
-  );
+  return promised(function* () {
+    const worker = createResizeWorker(workerSpecifier);
+    try {
+      return yield* awaited(
+        awaitWorkerResult(worker, {
+          inputBytes: toTransferableBytes(inputBytes),
+          mimeType,
+          options,
+          photonWasmPath: photon.getEmbeddedWasmPath(),
+        }),
+      );
+    } finally {
+      void worker.terminate().catch(() => undefined);
+    }
+  });
 }
 
 const BINARY_WORKER_ENTRY = "./utils/image-resize-worker.js";

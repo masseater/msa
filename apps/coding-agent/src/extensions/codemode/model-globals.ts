@@ -1,6 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
 import type codemodeTypes from "@msa/codemode/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import interop from "../../utils/interop.ts";
@@ -8,7 +7,7 @@ import modelCallChecks from "./model-call-checks.ts";
 import scriptText from "./script-text.ts";
 import type toolTypes from "./tool.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { callbackPromise } = interop;
 const { ERROR_PREVIEW_CHARS, truncateText } = scriptText;
 const {
@@ -35,19 +34,17 @@ function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> 
   let active = 0;
   const waiting: (() => void)[] = [];
   return (run) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        if (active >= limit)
-          yield* awaited(callbackPromise<void>((resolve) => waiting.push(resolve)));
-        active++;
-        try {
-          return yield* awaited(run());
-        } finally {
-          active--;
-          waiting.shift()?.();
-        }
-      }),
-    );
+    promised(function* () {
+      if (active >= limit)
+        yield* awaited(callbackPromise<void>((resolve) => waiting.push(resolve)));
+      active++;
+      try {
+        return yield* awaited(run());
+      } finally {
+        active--;
+        waiting.shift()?.();
+      }
+    });
 }
 
 interface ModelCallHost {
@@ -111,25 +108,23 @@ function createModelCallRunner(host: ModelCallHost) {
     checkContext: (context: unknown) => TContext,
     run: (resolved: aiTypes.ModelTypeMap[TType], context: TContext) => Promise<TResult>,
   ): Promise<TResult> =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const resolved = resolveTypedModel(host.models, model, name, type);
-        const checked = checkContext(context);
-        const record: toolTypes.CodemodeNestedCall = {
-          args: `${resolved.provider}/${resolved.id}`,
-          id: `${host.toolCallId}/${name}/${++callCount}`,
-          name,
-          status: "running",
-        };
-        host.calls.push(record);
-        host.publish();
-        const startedAt = performance.now();
-        const result = yield* awaited(limit(() => run(resolved, checked)));
-        finishCall(record, result, startedAt, host.addUsage);
-        host.publish();
-        return result;
-      }),
-    );
+    promised(function* () {
+      const resolved = resolveTypedModel(host.models, model, name, type);
+      const checked = checkContext(context);
+      const record: toolTypes.CodemodeNestedCall = {
+        args: `${resolved.provider}/${resolved.id}`,
+        id: `${host.toolCallId}/${name}/${++callCount}`,
+        name,
+        status: "running",
+      };
+      host.calls.push(record);
+      host.publish();
+      const startedAt = performance.now();
+      const result = yield* awaited(limit(() => run(resolved, checked)));
+      finishCall(record, result, startedAt, host.addUsage);
+      host.publish();
+      return result;
+    });
 }
 
 type Implementations = Record<string, codemodeTypes.CodemodeTool["execute"]>;

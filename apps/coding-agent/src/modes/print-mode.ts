@@ -10,7 +10,7 @@ import printModeOutput from "./print-mode-output.ts";
 import type printModeTypes from "./print-mode.types.ts";
 import PrintSessionBinding from "./print-session-binding.ts";
 
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, awaiting, performed, promised } = awaitingModule;
 
 type Runtime = agentSessionRuntimeTypes.AgentSessionRuntime;
 type Options = printModeTypes.PrintModeOptions;
@@ -55,23 +55,21 @@ const runPrintMode: {
   (options: Options): (runtimeHost: Runtime) => Promise<number>;
   (runtimeHost: Runtime, options: Options): Promise<number>;
 } = Fn.dual(2, (runtimeHost: Runtime, options: Options): Promise<number> =>
-  Effect.runPromise(
-    awaiting(function* () {
-      const binding = new PrintSessionBinding(runtimeHost, options.mode);
-      const removeSignalHandlers = registerSignalHandlers(binding);
-      runtimeHost.setRebindSession(() => binding.rebind());
-      try {
-        return yield* performed(promptAll(binding, options));
-      } catch (error: unknown) {
-        platform.writeError(errors.toErrorMessage(error));
-        return 1;
-      } finally {
-        removeSignalHandlers();
-        yield* awaited(binding.dispose());
-        yield* awaited(outputGuard.flushRawStdout());
-      }
-    }),
-  ),
+  promised(function* () {
+    const binding = new PrintSessionBinding(runtimeHost, options.mode);
+    const removeSignalHandlers = registerSignalHandlers(binding);
+    runtimeHost.setRebindSession(() => binding.rebind());
+    try {
+      return yield* performed(promptAll(binding, options));
+    } catch (error: unknown) {
+      platform.writeError(errors.toErrorMessage(error));
+      return 1;
+    } finally {
+      removeSignalHandlers();
+      yield* awaited(binding.dispose());
+      yield* awaited(outputGuard.flushRawStdout());
+    }
+  }),
 );
 
 const printMode = {

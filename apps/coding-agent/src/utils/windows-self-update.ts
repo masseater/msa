@@ -8,7 +8,7 @@ const { basename, dirname, join, nowMs, randomUuid, relative, resolve, toNamespa
   platform;
 const { getCwdRelativePath } = paths;
 const { copyFile, exists, makeDirectory, remove, rename } = platform.files;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const QUARANTINE_DIR_NAME = ".msa-native-quarantine";
 
@@ -71,17 +71,15 @@ function quarantineWindowsNativeDependencies(packageDir: string): Promise<void> 
 
   const loadedFiles = getLoadedSharedObjectsInPackageDir(resolvedPackageDir);
   const quarantineRunDir = join(quarantineRoot, `${nowMs()}-${process.pid}-${randomUuid()}`);
-  return Effect.runPromise(
-    awaiting(function* () {
-      for (const loadedFile of loadedFiles) {
-        if (!(yield* awaited(exists(loadedFile)))) continue;
-        const quarantinePath = join(quarantineRunDir, relative(resolvedPackageDir, loadedFile));
-        yield* awaited(makeDirectory({ path: dirname(quarantinePath) }));
-        yield* awaited(rename({ from: loadedFile, to: quarantinePath }));
-        yield* awaited(copyFile({ from: quarantinePath, to: loadedFile }));
-      }
-    }),
-  );
+  return promised(function* () {
+    for (const loadedFile of loadedFiles) {
+      if (!(yield* awaited(exists(loadedFile)))) continue;
+      const quarantinePath = join(quarantineRunDir, relative(resolvedPackageDir, loadedFile));
+      yield* awaited(makeDirectory({ path: dirname(quarantinePath) }));
+      yield* awaited(rename({ from: loadedFile, to: quarantinePath }));
+      yield* awaited(copyFile({ from: quarantinePath, to: loadedFile }));
+    }
+  });
 }
 
 const windowsSelfUpdate = {

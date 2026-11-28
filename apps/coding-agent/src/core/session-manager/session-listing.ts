@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
@@ -12,7 +10,7 @@ import sessionInfo from "./session-info.ts";
 const { getSessionsDir } = config;
 const { loadAllSessions, listSessionsFromDir } = sessionInfoLoading;
 const { resolvePath, normalizePath } = paths;
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, performed, promised } = awaitingModule;
 const { join } = platformModule;
 const { exists, readDirectory } = platformModule.files;
 const { sortSessionInfos } = sessionInfo;
@@ -62,27 +60,25 @@ function list(
   onProgress?: sessionManagerTypes.SessionListProgress,
   signal?: AbortSignal,
 ): Promise<sessionManagerTypes.SessionInfo[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const dir =
-        sessionDir !== undefined && sessionDir !== ""
-          ? normalizePath(sessionDir)
-          : getDefaultSessionDirPath(cwd);
-      const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-      const resolvedCwd = resolvePath(cwd);
-      const includeSession = (session: sessionManagerTypes.SessionInfo) =>
-        !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
-      const progress: sessionManagerTypes.SessionListProgress | undefined =
-        onProgress === undefined
-          ? undefined
-          : (loaded, total, partialSessions) =>
-              onProgress(loaded, total, partialSessions?.filter(includeSession));
-      const sessions = (yield* performed(listSessionsFromDir(dir, progress, signal))).filter(
-        includeSession,
-      );
-      return sortSessionInfos(sessions);
-    }),
-  );
+  return promised(function* () {
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : getDefaultSessionDirPath(cwd);
+    const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
+    const resolvedCwd = resolvePath(cwd);
+    const includeSession = (session: sessionManagerTypes.SessionInfo) =>
+      !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
+    const progress: sessionManagerTypes.SessionListProgress | undefined =
+      onProgress === undefined
+        ? undefined
+        : (loaded, total, partialSessions) =>
+            onProgress(loaded, total, partialSessions?.filter(includeSession));
+    const sessions = (yield* performed(listSessionsFromDir(dir, progress, signal))).filter(
+      includeSession,
+    );
+    return sortSessionInfos(sessions);
+  });
 }
 
 function listAll(
@@ -90,39 +86,37 @@ function listAll(
   onProgressOrSignal?: sessionManagerTypes.SessionListProgress | AbortSignal,
   signal?: AbortSignal,
 ): Promise<sessionManagerTypes.SessionInfo[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const customSessionDir =
-        typeof sessionDirOrOnProgress === "string"
-          ? normalizePath(sessionDirOrOnProgress)
+  return promised(function* () {
+    const customSessionDir =
+      typeof sessionDirOrOnProgress === "string"
+        ? normalizePath(sessionDirOrOnProgress)
+        : undefined;
+    const progress =
+      typeof sessionDirOrOnProgress === "function"
+        ? sessionDirOrOnProgress
+        : typeof onProgressOrSignal === "function"
+          ? onProgressOrSignal
           : undefined;
-      const progress =
-        typeof sessionDirOrOnProgress === "function"
-          ? sessionDirOrOnProgress
-          : typeof onProgressOrSignal === "function"
-            ? onProgressOrSignal
-            : undefined;
-      const abortSignal =
-        typeof sessionDirOrOnProgress === "string" || typeof onProgressOrSignal === "function"
-          ? signal
-          : (onProgressOrSignal ?? signal);
-      abortSignal?.throwIfAborted();
-      if (customSessionDir !== undefined && customSessionDir !== "") {
-        return sortSessionInfos(
-          yield* performed(listSessionsFromDir(customSessionDir, progress, abortSignal)),
-        );
-      }
+    const abortSignal =
+      typeof sessionDirOrOnProgress === "string" || typeof onProgressOrSignal === "function"
+        ? signal
+        : (onProgressOrSignal ?? signal);
+    abortSignal?.throwIfAborted();
+    if (customSessionDir !== undefined && customSessionDir !== "") {
+      return sortSessionInfos(
+        yield* performed(listSessionsFromDir(customSessionDir, progress, abortSignal)),
+      );
+    }
 
-      const sessionsDir = getSessionsDir();
-      try {
-        if (!(yield* awaited(exists(sessionsDir)))) return [];
-        return yield* loadAllSessions(sessionsDir, progress, abortSignal);
-      } catch {
-        abortSignal?.throwIfAborted();
-        return [];
-      }
-    }),
-  );
+    const sessionsDir = getSessionsDir();
+    try {
+      if (!(yield* awaited(exists(sessionsDir)))) return [];
+      return yield* loadAllSessions(sessionsDir, progress, abortSignal);
+    } catch {
+      abortSignal?.throwIfAborted();
+      return [];
+    }
+  });
 }
 
 const sessionListing = { findById, list, listAll };

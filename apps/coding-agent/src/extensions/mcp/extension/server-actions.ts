@@ -10,7 +10,7 @@ import runtimeLazy from "../runtime.lazy.ts";
 import type uiTypes from "../ui.types.ts";
 import type McpExtensionHost from "./host.ts";
 
-const { awaited, awaiting, promisedWith } = awaitingModule;
+const { awaited, awaiting, promised, promisedWith } = awaitingModule;
 const { loadMcpRuntime } = runtimeLazy;
 const { toErrorMessage } = errorsModule;
 
@@ -103,27 +103,25 @@ export default class McpServerActions {
     }, this);
 
   readonly reconnect = (server: extensionInternalTypes.McpServer): Promise<string | undefined> =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const connection = server.connection;
-        if (connection === undefined) return `MCP server "${server.entry.name}" is disabled.`;
-        const previous = server.ready;
-        const ready = (() =>
-          Effect.runPromise(
-            awaiting(function* () {
-              yield* awaited(previous);
-              yield* awaited(connection.reconnect());
-            }),
-          ))();
-        server.ready = ready.catch(() => undefined);
-        try {
-          yield* awaited(ready);
-          return undefined;
-        } catch (error) {
-          return toErrorMessage(error);
-        }
-      }),
-    );
+    promised(function* () {
+      const connection = server.connection;
+      if (connection === undefined) return `MCP server "${server.entry.name}" is disabled.`;
+      const previous = server.ready;
+      const ready = (() =>
+        Effect.runPromise(
+          awaiting(function* () {
+            yield* awaited(previous);
+            yield* awaited(connection.reconnect());
+          }),
+        ))();
+      server.ready = ready.catch(() => undefined);
+      try {
+        yield* awaited(ready);
+        return undefined;
+      } catch (error) {
+        return toErrorMessage(error);
+      }
+    });
 
   readonly setEnabled = (
     server: extensionInternalTypes.McpServer,
@@ -195,13 +193,11 @@ export default class McpServerActions {
       server,
       {
         promptForRedirectUrl: (signal) =>
-          Effect.runPromise(
-            awaiting(function* () {
-              const value = yield* awaited(ui.redirectUrl(title, authorizationUrl, signal));
-              status("Connecting…");
-              return value;
-            }),
-          ),
+          promised(function* () {
+            const value = yield* awaited(ui.redirectUrl(title, authorizationUrl, signal));
+            status("Connecting…");
+            return value;
+          }),
         showAuthorizationUrl: (url) => {
           authorizationUrl = url.href;
           this.host.state.openUrl(url.href);

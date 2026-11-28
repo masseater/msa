@@ -10,7 +10,7 @@ import llamaQuantization from "./llama-quantization.ts";
 import type llamaSessionTypes from "./llama-session.types.ts";
 import type uiTypes from "./ui.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { findHuggingFaceToken } = huggingface;
 const { syncCatalog } = llamaCatalogSync;
 const { downloadWithProgress } = llamaProgress;
@@ -39,28 +39,26 @@ const acceptsGatedAccess = (
 };
 
 const downloadModel = (session: llamaSessionTypes.LlamaSession): Promise<void> =>
-  Effect.runPromise(
-    awaiting(function* () {
-      const { ctx, ui } = session;
-      const huggingFace = new HuggingFaceClient(yield* awaited(findHuggingFaceToken()));
-      const selected = yield* awaited(
-        ui.searchModels((query, signal) => huggingFace.search(query, signal)),
-      );
-      if (selected === undefined || selected === "") return;
-      const parsed = parseHuggingFaceModel(selected);
-      ui.showStatus("Loading model details", parsed.repository);
-      const details = yield* awaited(huggingFace.details(parsed.repository));
-      if (!(yield* awaited(acceptsGatedAccess(ui, details)))) return;
-      const chosen = yield* awaited(chooseQuantization(ui, details, parsed.quantization));
-      if (chosen === undefined) return;
-      const { result, model } = yield* awaited(
-        downloadWithProgress(session, details, chosen.quantization),
-      );
-      if (result.cancelled) return;
-      yield* awaited(syncCatalog(session, result.value));
-      ctx.ui.notify(`Downloaded ${model}`);
-    }),
-  );
+  promised(function* () {
+    const { ctx, ui } = session;
+    const huggingFace = new HuggingFaceClient(yield* awaited(findHuggingFaceToken()));
+    const selected = yield* awaited(
+      ui.searchModels((query, signal) => huggingFace.search(query, signal)),
+    );
+    if (selected === undefined || selected === "") return;
+    const parsed = parseHuggingFaceModel(selected);
+    ui.showStatus("Loading model details", parsed.repository);
+    const details = yield* awaited(huggingFace.details(parsed.repository));
+    if (!(yield* awaited(acceptsGatedAccess(ui, details)))) return;
+    const chosen = yield* awaited(chooseQuantization(ui, details, parsed.quantization));
+    if (chosen === undefined) return;
+    const { result, model } = yield* awaited(
+      downloadWithProgress(session, details, chosen.quantization),
+    );
+    if (result.cancelled) return;
+    yield* awaited(syncCatalog(session, result.value));
+    ctx.ui.notify(`Downloaded ${model}`);
+  });
 
 const llamaDownload = { downloadModel };
 

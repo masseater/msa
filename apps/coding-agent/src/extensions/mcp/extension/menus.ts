@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
 import configModule from "../config.ts";
@@ -13,7 +11,7 @@ import serverState from "./server-state.ts";
 const { EXPOSURE_DESCRIPTIONS, attentionRank, describeState, exposureOf, firstLine } = serverState;
 const { getMcpToolExposure } = configModule;
 const { buildServerMenu, formatStatus, noServersMessage } = menuContent;
-const { awaited, awaiting, promisedWith } = awaitingModule;
+const { awaited, promised, promisedWith } = awaitingModule;
 
 export default class McpMenus {
   private readonly host: McpExtensionHost;
@@ -52,32 +50,30 @@ export default class McpMenus {
     );
 
   readonly showTools = (ui: uiTypes.McpUi, server: extensionInternalTypes.McpServer) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const exposure = exposureOf(server.entry);
-        const hasToolExposureOverrides =
-          Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
-        yield* awaited(
-          ui.menu(() => ({
-            cancelLabel: "back",
-            confirmLabel: "back",
-            details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${hasToolExposureOverrides ? "\nSome tools override it with toolExposure." : ""}`,
-            empty: "The server offers no tools.",
-            items: (server.connection?.tools ?? []).map((tool) => {
-              const toolExposure = getMcpToolExposure(server.entry.config, tool.name);
-              const description = firstLine(tool.description ?? "");
-              return {
-                description:
-                  toolExposure === exposure ? description : `[${toolExposure}] ${description}`,
-                label: tool.name,
-                value: tool.name,
-              };
-            }),
-            title: `Tools of ${server.entry.name}`,
-          })),
-        );
-      }),
-    );
+    promised(function* () {
+      const exposure = exposureOf(server.entry);
+      const hasToolExposureOverrides =
+        Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
+      yield* awaited(
+        ui.menu(() => ({
+          cancelLabel: "back",
+          confirmLabel: "back",
+          details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${hasToolExposureOverrides ? "\nSome tools override it with toolExposure." : ""}`,
+          empty: "The server offers no tools.",
+          items: (server.connection?.tools ?? []).map((tool) => {
+            const toolExposure = getMcpToolExposure(server.entry.config, tool.name);
+            const description = firstLine(tool.description ?? "");
+            return {
+              description:
+                toolExposure === exposure ? description : `[${toolExposure}] ${description}`,
+              label: tool.name,
+              value: tool.name,
+            };
+          }),
+          title: `Tools of ${server.entry.name}`,
+        })),
+      );
+    });
 
   readonly chooseExposure = (
     ui: uiTypes.McpUi,

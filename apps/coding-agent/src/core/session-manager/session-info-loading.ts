@@ -11,7 +11,7 @@ const { basename, join } = platformModule;
 const { stat, readdir } = nodeFsPromises;
 const { sortSessionInfos, buildSessionInfo } = sessionInfo;
 const { exists } = platformModule.files;
-const { performed, awaited, awaiting } = awaitingModule;
+const { awaited, awaiting, performed, promised } = awaitingModule;
 
 const MAX_CONCURRENT_SESSION_INFO_LOADS = 10;
 
@@ -31,15 +31,13 @@ function mapWithConcurrency<T, R>(
     const results = new Array<R>(items.length);
     let nextIndex = 0;
     const worker = (): Promise<void> =>
-      Effect.runPromise(
-        awaiting(function* () {
-          while (nextIndex < items.length) {
-            signal?.throwIfAborted();
-            const index = nextIndex++;
-            results[index] = yield* awaited(map(items[index]!, index));
-          }
-        }),
-      );
+      promised(function* () {
+        while (nextIndex < items.length) {
+          signal?.throwIfAborted();
+          const index = nextIndex++;
+          results[index] = yield* awaited(map(items[index]!, index));
+        }
+      });
     yield* awaited(
       Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker())),
     );
@@ -57,13 +55,11 @@ function buildSessionInfosWithConcurrency(
       files,
       MAX_CONCURRENT_SESSION_INFO_LOADS,
       (file, index) =>
-        Effect.runPromise(
-          awaiting(function* () {
-            const info = yield* performed(buildSessionInfo(file.path, signal, file.stats));
-            onLoaded(info, index);
-            return info;
-          }),
-        ),
+        promised(function* () {
+          const info = yield* performed(buildSessionInfo(file.path, signal, file.stats));
+          onLoaded(info, index);
+          return info;
+        }),
       signal,
     ),
   );
@@ -125,17 +121,15 @@ function* collectSessionCandidates(sessionsDir: string, abortSignal: AbortSignal
       dirs,
       MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
       (dir) =>
-        Effect.runPromise(
-          awaiting(function* () {
-            try {
-              return (yield* awaited(readdir(dir)))
-                .filter((file) => file.endsWith(".jsonl"))
-                .map((file) => join(dir, file));
-            } catch {
-              return [];
-            }
-          }),
-        ),
+        promised(function* () {
+          try {
+            return (yield* awaited(readdir(dir)))
+              .filter((file) => file.endsWith(".jsonl"))
+              .map((file) => join(dir, file));
+          } catch {
+            return [];
+          }
+        }),
       abortSignal,
     ),
   );
@@ -145,15 +139,13 @@ function* collectSessionCandidates(sessionsDir: string, abortSignal: AbortSignal
       allFiles,
       MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
       (path): Promise<sessionManagerInternalTypes.SessionFileCandidate> =>
-        Effect.runPromise(
-          awaiting(function* () {
-            try {
-              return { path, stats: yield* awaited(stat(path)) };
-            } catch {
-              return { path };
-            }
-          }),
-        ),
+        promised(function* () {
+          try {
+            return { path, stats: yield* awaited(stat(path)) };
+          } catch {
+            return { path };
+          }
+        }),
       abortSignal,
     ),
   );

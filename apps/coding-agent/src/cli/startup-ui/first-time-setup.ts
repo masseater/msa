@@ -15,54 +15,52 @@ const { clearStartupTui, createStartupTui } = startupTui;
 const { queryStartupTerminalColors } = terminalTheme;
 const { SYSTEM_THEME_NAME } = systemTheme;
 const { callbackPromise } = interop;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, awaiting, promised } = awaitingModule;
 
 function showFirstTimeSetup(settingsManager: settingsManagerTypes.SettingsManager): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const ui = yield* awaited(createStartupTui(settingsManager));
-      return yield* awaited(
-        callbackPromise((resolve) => {
-          let settled = false;
-          const finish = (result: firstTimeSetupTypes.FirstTimeSetupResult | undefined) =>
-            Effect.runPromise(
-              awaiting(function* () {
-                if (settled) {
-                  return;
-                }
-                settled = true;
-                if (result !== undefined) {
-                  settingsManager.display.setTheme(result.theme);
-                  settingsManager.telemetry.setEnableAnalytics(result.shareAnalytics);
-                  yield* awaited(settingsManager.persistence.flush());
-                }
-                yield* awaited(clearStartupTui(ui));
-                ui.stop();
-                resolve();
-              }),
-            );
+  return promised(function* () {
+    const ui = yield* awaited(createStartupTui(settingsManager));
+    return yield* awaited(
+      callbackPromise((resolve) => {
+        let settled = false;
+        const finish = (result: firstTimeSetupTypes.FirstTimeSetupResult | undefined) =>
+          Effect.runPromise(
+            awaiting(function* () {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              if (result !== undefined) {
+                settingsManager.display.setTheme(result.theme);
+                settingsManager.telemetry.setEnableAnalytics(result.shareAnalytics);
+                yield* awaited(settingsManager.persistence.flush());
+              }
+              yield* awaited(clearStartupTui(ui));
+              ui.stop();
+              resolve();
+            }),
+          );
 
-          ui.start();
-          let previewTheme = SYSTEM_THEME_NAME;
-          setTheme(previewTheme);
-          const component = new FirstTimeSetupComponent({
-            onCancel: () => void finish(undefined),
-            onSubmit: (result) => void finish(result),
-            onThemePreview: (themeName) => {
-              previewTheme = themeName;
-              setTheme(themeName);
-              ui.requestRender();
-            },
-          });
-          ui.addChild(component);
-          ui.setFocus(component);
-          ui.requestRender();
+        ui.start();
+        let previewTheme = SYSTEM_THEME_NAME;
+        setTheme(previewTheme);
+        const component = new FirstTimeSetupComponent({
+          onCancel: () => void finish(undefined),
+          onSubmit: (result) => void finish(result),
+          onThemePreview: (themeName) => {
+            previewTheme = themeName;
+            setTheme(themeName);
+            ui.requestRender();
+          },
+        });
+        ui.addChild(component);
+        ui.setFocus(component);
+        ui.requestRender();
 
-          queryStartupTerminalColors(ui, () => setTheme(previewTheme));
-        }),
-      );
-    }),
-  );
+        queryStartupTerminalColors(ui, () => setTheme(previewTheme));
+      }),
+    );
+  });
 }
 
 const firstTimeSetup = { showFirstTimeSetup };

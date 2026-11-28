@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -8,7 +7,7 @@ import awaitingModule from "./awaiting.ts";
 import platform from "./platform/index.ts";
 import type tregTypes from "./treg.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { spawnProcess, spawnProcessSync, waitForChildProcess } = childProcess;
 const { findExecutableOnPath } = shell;
 const { envSnapshot } = platform;
@@ -35,22 +34,20 @@ const RoutedResult = Schema.Struct({
 
 function spawnRunner(command: string): tregTypes.TregRunner {
   return (args, signal) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const child = spawnProcess(command, args, {
-          stdio: ["ignore", "pipe", "pipe"],
-          windowsHide: true,
-          ...(signal === undefined ? {} : { signal }),
-        });
-        let stdout = "";
-        let stderr = "";
-        child.stdout?.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
-        child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
-        const exitCode = yield* awaited(waitForChildProcess(child));
-        signal?.throwIfAborted();
-        return { exitCode, stderr, stdout };
-      }),
-    );
+    promised(function* () {
+      const child = spawnProcess(command, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+        ...(signal === undefined ? {} : { signal }),
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout?.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+      child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+      const exitCode = yield* awaited(waitForChildProcess(child));
+      signal?.throwIfAborted();
+      return { exitCode, stderr, stdout };
+    });
 }
 
 const CliConfig = Schema.fromJsonString(Schema.Struct({ logged_in: Schema.Boolean }));
@@ -93,60 +90,56 @@ function loginTreg(
   onPage: (page: tregTypes.TregSignInPage) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const child = spawnProcess(command, ["login"], {
-        env: { ...envSnapshot(), PYTHONUNBUFFERED: "1" },
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true,
-        ...(signal === undefined ? {} : { signal }),
-      });
-      let output = "";
-      let shown = false;
-      const onOutput = (chunk: string) => {
-        output = (output + chunk).slice(-4_000);
-        const url = /https:\/\/\S+/u.exec(output)?.[0];
-        if (shown || url === undefined || url === "") return;
-        const code = /matches:\s*(\S+)/u.exec(output)?.[1];
-        if ((code === undefined || code === "") && !/Waiting/u.test(output)) return;
-        shown = true;
-        onPage(code !== undefined && code !== "" ? { code, url } : { url });
-      };
-      child.stdout?.setEncoding("utf8").on("data", onOutput);
-      child.stderr?.setEncoding("utf8").on("data", onOutput);
-      const exitCode = yield* awaited(
-        waitForChildProcess(child).catch((error: unknown) => {
-          signal?.throwIfAborted();
-          throw error;
-        }),
-      );
-      signal?.throwIfAborted();
-      if (exitCode !== 0) {
-        const lines = output
-          .trim()
-          .split("\n")
-          .filter((line) => line.trim() && !line.includes("https://"));
-        throw new Error(`treg login failed: ${lines.at(-1)?.trim() || `exit ${exitCode}`}`);
-      }
-    }),
-  );
+  return promised(function* () {
+    const child = spawnProcess(command, ["login"], {
+      env: { ...envSnapshot(), PYTHONUNBUFFERED: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    let output = "";
+    let shown = false;
+    const onOutput = (chunk: string) => {
+      output = (output + chunk).slice(-4_000);
+      const url = /https:\/\/\S+/u.exec(output)?.[0];
+      if (shown || url === undefined || url === "") return;
+      const code = /matches:\s*(\S+)/u.exec(output)?.[1];
+      if ((code === undefined || code === "") && !/Waiting/u.test(output)) return;
+      shown = true;
+      onPage(code !== undefined && code !== "" ? { code, url } : { url });
+    };
+    child.stdout?.setEncoding("utf8").on("data", onOutput);
+    child.stderr?.setEncoding("utf8").on("data", onOutput);
+    const exitCode = yield* awaited(
+      waitForChildProcess(child).catch((error: unknown) => {
+        signal?.throwIfAborted();
+        throw error;
+      }),
+    );
+    signal?.throwIfAborted();
+    if (exitCode !== 0) {
+      const lines = output
+        .trim()
+        .split("\n")
+        .filter((line) => line.trim() && !line.includes("https://"));
+      throw new Error(`treg login failed: ${lines.at(-1)?.trim() || `exit ${exitCode}`}`);
+    }
+  });
 }
 
 function logoutTreg(command: string): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const child = spawnProcess(command, ["logout"], {
-        stdio: ["ignore", "ignore", "pipe"],
-        windowsHide: true,
-      });
-      let stderr = "";
-      child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
-      const exitCode = yield* awaited(waitForChildProcess(child));
-      if (exitCode !== 0) {
-        throw new Error(`treg logout failed: ${stderr.trim() || `exit ${exitCode}`}`);
-      }
-    }),
-  );
+  return promised(function* () {
+    const child = spawnProcess(command, ["logout"], {
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+    });
+    let stderr = "";
+    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+    const exitCode = yield* awaited(waitForChildProcess(child));
+    if (exitCode !== 0) {
+      throw new Error(`treg logout failed: ${stderr.trim() || `exit ${exitCode}`}`);
+    }
+  });
 }
 
 function describeFailure(status: number, body: unknown): string {
@@ -199,14 +192,12 @@ function callTreg(
   body: Readonly<Record<string, unknown>>,
   signal?: AbortSignal,
 ): Promise<tregTypes.TregResult> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { stdout, stderr, exitCode } = yield* awaited(
-        options.run(tregCallArgs(job, body), signal),
-      );
-      return parseTregOutput(stdout, stderr, exitCode);
-    }),
-  );
+  return promised(function* () {
+    const { stdout, stderr, exitCode } = yield* awaited(
+      options.run(tregCallArgs(job, body), signal),
+    );
+    return parseTregOutput(stdout, stderr, exitCode);
+  });
 }
 
 type TregRowField =

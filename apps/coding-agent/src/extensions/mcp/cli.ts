@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../../core/awaiting.ts";
@@ -9,7 +8,7 @@ import commandContext from "./cli/command-context.ts";
 import serverCommands from "./cli/server-commands.ts";
 import serverConfig from "./cli/server-config.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { writeError, writeLog } = platform;
 const { HELP, HELP_HINT } = cliOptions;
 const { add, projectConfigPath, remove } = serverConfig;
@@ -17,33 +16,31 @@ const { loadCommandContext } = commandContext;
 const { listCommand, loginOrLogout } = serverCommands;
 
 function runMcpCommandImpl(args: string[], options: cliTypes.McpCommandOptions): Promise<number> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const log = options.log ?? ((line: string) => writeLog(line));
-      const error = options.error ?? ((line: string) => writeError(line));
-      const [command, ...rest] = args;
-      if (
-        command === undefined ||
-        command === "help" ||
-        args.includes("--help") ||
-        args.includes("-h")
-      ) {
-        log(HELP);
-        return 0;
-      }
-      const projectConfig = projectConfigPath(options);
-      if (command === "add") return yield* awaited(add(rest, projectConfig, options, log, error));
-      if (command === "remove")
-        return yield* awaited(remove(rest, projectConfig, options, log, error));
-      const context = yield* awaited(loadCommandContext(options, projectConfig, log, error));
-      if (command === "list") return yield* awaited(listCommand(rest, context));
-      if (command === "login" || command === "logout") {
-        return yield* awaited(loginOrLogout(command, rest, context));
-      }
-      error(`Unknown mcp command "${command}".\n${HELP_HINT}`);
-      return 1;
-    }),
-  );
+  return promised(function* () {
+    const log = options.log ?? ((line: string) => writeLog(line));
+    const error = options.error ?? ((line: string) => writeError(line));
+    const [command, ...rest] = args;
+    if (
+      command === undefined ||
+      command === "help" ||
+      args.includes("--help") ||
+      args.includes("-h")
+    ) {
+      log(HELP);
+      return 0;
+    }
+    const projectConfig = projectConfigPath(options);
+    if (command === "add") return yield* awaited(add(rest, projectConfig, options, log, error));
+    if (command === "remove")
+      return yield* awaited(remove(rest, projectConfig, options, log, error));
+    const context = yield* awaited(loadCommandContext(options, projectConfig, log, error));
+    if (command === "list") return yield* awaited(listCommand(rest, context));
+    if (command === "login" || command === "logout") {
+      return yield* awaited(loginOrLogout(command, rest, context));
+    }
+    error(`Unknown mcp command "${command}".\n${HELP_HINT}`);
+    return 1;
+  });
 }
 
 const runMcpCommand: {

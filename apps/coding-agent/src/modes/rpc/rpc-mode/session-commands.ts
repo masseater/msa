@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import type AgentSession from "../../../core/agent-session.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import slashCommands from "../../../core/slash-commands.ts";
@@ -7,45 +5,43 @@ import type rpcTypesTypes from "../rpc-types.ts";
 import type commandHandlersTypes from "./command-handlers.types.ts";
 import rpcOutput from "./rpc-output.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { withSkillCommands } = slashCommands;
 const { error, success } = rpcOutput;
 
 function sessionState(session: AgentSession): Promise<rpcTypesTypes.RpcSessionState> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const usage = session.context.stats.getContextUsage();
-      const breakdown =
-        usage === undefined
-          ? undefined
-          : yield* awaited(session.context.breakdown.getContextBreakdown());
-      const state: rpcTypesTypes.RpcSessionState = {
-        autoCompactionEnabled: session.compaction.auto.autoCompactionEnabled,
-        followUpMode: session.run.queue.followUpMode,
-        isCompacting: session.compaction.manual.isCompacting,
-        isStreaming: session.isStreaming,
-        messageCount: session.messages.length,
-        model: session.model,
-        pendingMessageCount: session.run.queue.pendingMessageCount,
-        sessionFile: session.sessionFile,
-        sessionId: session.sessionId,
-        sessionName: session.sessionName,
-        steeringMode: session.run.queue.steeringMode,
-        thinkingLevel: session.thinkingLevel,
-        ...(usage !== undefined && breakdown !== undefined
-          ? {
-              contextUsage: {
-                breakdown,
-                contextWindow: usage.contextWindow,
-                percent: (breakdown.tokens / usage.contextWindow) * 100,
-                tokens: breakdown.tokens,
-              },
-            }
-          : {}),
-      };
-      return state;
-    }),
-  );
+  return promised(function* () {
+    const usage = session.context.stats.getContextUsage();
+    const breakdown =
+      usage === undefined
+        ? undefined
+        : yield* awaited(session.context.breakdown.getContextBreakdown());
+    const state: rpcTypesTypes.RpcSessionState = {
+      autoCompactionEnabled: session.compaction.auto.autoCompactionEnabled,
+      followUpMode: session.run.queue.followUpMode,
+      isCompacting: session.compaction.manual.isCompacting,
+      isStreaming: session.isStreaming,
+      messageCount: session.messages.length,
+      model: session.model,
+      pendingMessageCount: session.run.queue.pendingMessageCount,
+      sessionFile: session.sessionFile,
+      sessionId: session.sessionId,
+      sessionName: session.sessionName,
+      steeringMode: session.run.queue.steeringMode,
+      thinkingLevel: session.thinkingLevel,
+      ...(usage !== undefined && breakdown !== undefined
+        ? {
+            contextUsage: {
+              breakdown,
+              contextWindow: usage.contextWindow,
+              percent: (breakdown.tokens / usage.contextWindow) * 100,
+              tokens: breakdown.tokens,
+            },
+          }
+        : {}),
+    };
+    return state;
+  });
 }
 
 const sessionCommands: commandHandlersTypes.Handlers<
@@ -65,44 +61,36 @@ const sessionCommands: commandHandlersTypes.Handlers<
   | "get_commands"
 > = {
   clone: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const leafId = server.session.sessionManager.getLeafId();
-        if (leafId === null || leafId === "") {
-          return error(id, "clone", "Cannot clone session: no current entry selected");
-        }
-        const result = yield* awaited(server.runtimeHost.fork(leafId, { position: "at" }));
-        if (!result.cancelled) {
-          yield* awaited(server.rebindSession());
-        }
-        return success(id, "clone", { cancelled: result.cancelled });
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const leafId = server.session.sessionManager.getLeafId();
+      if (leafId === null || leafId === "") {
+        return error(id, "clone", "Cannot clone session: no current entry selected");
+      }
+      const result = yield* awaited(server.runtimeHost.fork(leafId, { position: "at" }));
+      if (!result.cancelled) {
+        yield* awaited(server.rebindSession());
+      }
+      return success(id, "clone", { cancelled: result.cancelled });
+    }),
   export_html: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const path = yield* awaited(
-          server.session.context.exports.exportToHtml(command.outputPath),
-        );
-        return success(id, "export_html", { path });
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const path = yield* awaited(server.session.context.exports.exportToHtml(command.outputPath));
+      return success(id, "export_html", { path });
+    }),
   fork: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const result = yield* awaited(server.runtimeHost.fork(command.entryId));
-        if (!result.cancelled) {
-          yield* awaited(server.rebindSession());
-        }
-        return success(id, "fork", {
-          cancelled: result.cancelled,
-          text: result.selectedText,
-        });
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const result = yield* awaited(server.runtimeHost.fork(command.entryId));
+      if (!result.cancelled) {
+        yield* awaited(server.rebindSession());
+      }
+      return success(id, "fork", {
+        cancelled: result.cancelled,
+        text: result.selectedText,
+      });
+    }),
   get_commands: (server, command) => {
     const { id } = command;
     const commands: rpcTypesTypes.RpcSlashCommand[] = [];
@@ -171,12 +159,10 @@ const sessionCommands: commandHandlersTypes.Handlers<
     return success(id, "get_session_stats", stats);
   },
   get_state: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        return success(id, "get_state", yield* awaited(sessionState(server.session)));
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      return success(id, "get_state", yield* awaited(sessionState(server.session)));
+    }),
   get_tree: (server, command) => {
     const { id } = command;
     const sessionManager = server.session.sessionManager;
@@ -186,20 +172,18 @@ const sessionCommands: commandHandlersTypes.Handlers<
     });
   },
   new_session: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const options =
-          command.parentSession !== undefined && command.parentSession !== ""
-            ? { parentSession: command.parentSession }
-            : undefined;
-        const result = yield* awaited(server.runtimeHost.newSession(options));
-        if (!result.cancelled) {
-          yield* awaited(server.rebindSession());
-        }
-        return success(id, "new_session", result);
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const options =
+        command.parentSession !== undefined && command.parentSession !== ""
+          ? { parentSession: command.parentSession }
+          : undefined;
+      const result = yield* awaited(server.runtimeHost.newSession(options));
+      if (!result.cancelled) {
+        yield* awaited(server.rebindSession());
+      }
+      return success(id, "new_session", result);
+    }),
   set_session_name: (server, command) => {
     const { id } = command;
     const name = command.name.trim();
@@ -210,16 +194,14 @@ const sessionCommands: commandHandlersTypes.Handlers<
     return success(id, "set_session_name");
   },
   switch_session: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const result = yield* awaited(server.runtimeHost.switchSession(command.sessionPath));
-        if (!result.cancelled) {
-          yield* awaited(server.rebindSession());
-        }
-        return success(id, "switch_session", result);
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const result = yield* awaited(server.runtimeHost.switchSession(command.sessionPath));
+      if (!result.cancelled) {
+        yield* awaited(server.rebindSession());
+      }
+      return success(id, "switch_session", result);
+    }),
 };
 
 export default sessionCommands;

@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
 
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, awaiting, performed, promised } = awaitingModule;
 interface StdoutTakeoverState {
   rawStdoutWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
   rawStderrWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
@@ -106,26 +106,22 @@ function writeRawStdout(text: string): void {
 }
 
 function waitForRawStdoutBackpressure(): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      while (true) {
-        const tail = rawStdoutWriteTail;
-        yield* awaited(tail);
-        if (tail === rawStdoutWriteTail) {
-          return;
-        }
+  return promised(function* () {
+    while (true) {
+      const tail = rawStdoutWriteTail;
+      yield* awaited(tail);
+      if (tail === rawStdoutWriteTail) {
+        return;
       }
-    }),
-  );
+    }
+  });
 }
 
 function flushRawStdout(): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(waitForRawStdoutBackpressure());
-      yield* performed(writeRawStdoutChunk(""));
-    }),
-  );
+  return promised(function* () {
+    yield* awaited(waitForRawStdoutBackpressure());
+    yield* performed(writeRawStdoutChunk(""));
+  });
 }
 
 const outputGuard = {

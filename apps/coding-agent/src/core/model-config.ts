@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
 
@@ -11,7 +10,7 @@ import type modelConfigTypes from "./model-config.types.ts";
 import nodeFsPromises from "./platform/node/fs-promises.ts";
 
 const { readFile } = nodeFsPromises;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { normalizePath } = paths;
 const { stripJsonComments } = json;
 const { stripBom } = text;
@@ -49,51 +48,48 @@ export default class ModelConfig {
   }
 
   static load(modelsJsonPath: string | undefined): Promise<ModelConfig> {
-    return Effect.runPromise(
-      awaiting(function* () {
-        if (modelsJsonPath === undefined || modelsJsonPath === "")
-          return new ModelConfig(new Map());
-        const path = normalizePath(modelsJsonPath);
-        let content: string;
-        try {
-          content = yield* awaited(readFile(path, "utf-8"));
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "ENOENT") return new ModelConfig(new Map());
-          return new ModelConfig(
-            new Map(),
-            `Failed to load models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
-          );
-        }
+    return promised(function* () {
+      if (modelsJsonPath === undefined || modelsJsonPath === "") return new ModelConfig(new Map());
+      const path = normalizePath(modelsJsonPath);
+      let content: string;
+      try {
+        content = yield* awaited(readFile(path, "utf-8"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return new ModelConfig(new Map());
+        return new ModelConfig(
+          new Map(),
+          `Failed to load models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
+        );
+      }
 
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(stripJsonComments(stripBom(content)));
-        } catch (error) {
-          return new ModelConfig(
-            new Map(),
-            `Failed to parse models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
-          );
-        }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stripJsonComments(stripBom(content)));
+      } catch (error) {
+        return new ModelConfig(
+          new Map(),
+          `Failed to parse models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
+        );
+      }
 
-        if (!validateModelsConfig.Check(parsed)) {
-          const errors =
-            validateModelsConfig
-              .Errors(parsed)
-              .map((error) => `  - ${formatValidationPath(error)}: ${error.message}`)
-              .join("\n") || "Unknown schema error";
-          return new ModelConfig(
-            new Map(),
-            `Invalid models.json schema:\n${errors}\n\nFile: ${path}`,
-          );
-        }
+      if (!validateModelsConfig.Check(parsed)) {
+        const errors =
+          validateModelsConfig
+            .Errors(parsed)
+            .map((error) => `  - ${formatValidationPath(error)}: ${error.message}`)
+            .join("\n") || "Unknown schema error";
+        return new ModelConfig(
+          new Map(),
+          `Invalid models.json schema:\n${errors}\n\nFile: ${path}`,
+        );
+      }
 
-        const providers = new Map<string, modelConfigTypes.ModelsJsonProvider>();
-        for (const [providerId, provider] of Object.entries(parsed.providers)) {
-          providers.set(providerId, deepFreeze(structuredClone(provider)));
-        }
-        return new ModelConfig(providers);
-      }),
-    );
+      const providers = new Map<string, modelConfigTypes.ModelsJsonProvider>();
+      for (const [providerId, provider] of Object.entries(parsed.providers)) {
+        providers.set(providerId, deepFreeze(structuredClone(provider)));
+      }
+      return new ModelConfig(providers);
+    });
   }
 
   getProvider(providerId: string): modelConfigTypes.ModelsJsonProvider | undefined {

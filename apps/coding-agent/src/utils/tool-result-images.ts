@@ -5,7 +5,7 @@ import awaitingModule from "../core/awaiting.ts";
 import imageProcess from "./image-process.ts";
 import type toolResultImagesTypes from "./tool-result-images.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { processImage } = imageProcess;
 
 function* normalizeImageBlock(
@@ -40,28 +40,26 @@ function normalizeToolResultImagesImpl(
   content: toolResultImagesTypes.ToolResultContent[],
   options?: toolResultImagesTypes.NormalizeToolResultImagesOptions,
 ): Promise<toolResultImagesTypes.ToolResultContent[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (!content.some((block) => block.type === "image")) return content;
+  return promised(function* () {
+    if (!content.some((block) => block.type === "image")) return content;
 
-      const normalized: toolResultImagesTypes.ToolResultContent[] = [];
-      let changed = false;
-      for (const block of content) {
-        if (block.type !== "image") {
-          normalized.push(block);
-          continue;
-        }
-        const replaced = yield* normalizeImageBlock(block, options);
-        if (replaced === undefined) {
-          normalized.push(block);
-          continue;
-        }
-        normalized.push(...replaced);
-        changed = true;
+    const normalized: toolResultImagesTypes.ToolResultContent[] = [];
+    let changed = false;
+    for (const block of content) {
+      if (block.type !== "image") {
+        normalized.push(block);
+        continue;
       }
-      return changed ? normalized : content;
-    }),
-  );
+      const replaced = yield* normalizeImageBlock(block, options);
+      if (replaced === undefined) {
+        normalized.push(block);
+        continue;
+      }
+      normalized.push(...replaced);
+      changed = true;
+    }
+    return changed ? normalized : content;
+  });
 }
 
 const normalizeToolResultImages: {

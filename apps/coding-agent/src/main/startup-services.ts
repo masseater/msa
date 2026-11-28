@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import type argsTypes from "../cli/args.types.ts";
 import startupUi from "../cli/startup-ui.ts";
 import config from "../config.ts";
@@ -11,7 +9,7 @@ import timings from "../core/timings.ts";
 
 const { showFirstTimeSetup, shouldRunFirstTimeSetup } = startupUi;
 const { VERSION } = config;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { startTelemetry } = telemetrySupport;
 const { readEnv } = platform;
 const { time } = timings;
@@ -21,17 +19,15 @@ function setUpInteractiveStart(
   parsed: argsTypes.Args,
   settingsManager: SettingsManager,
 ): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (appMode !== "interactive") return;
-      const wantsSetup = parsed.help !== true && parsed.listModels === undefined;
-      if (wantsSetup && (yield* awaited(shouldRunFirstTimeSetup()))) {
-        yield* awaited(showFirstTimeSetup(settingsManager));
-        time("firstTimeSetup");
-      }
-      if (parsed.useTheme !== undefined) settingsManager.applyOverrides({ theme: parsed.useTheme });
-    }),
-  );
+  return promised(function* () {
+    if (appMode !== "interactive") return;
+    const wantsSetup = parsed.help !== true && parsed.listModels === undefined;
+    if (wantsSetup && (yield* awaited(shouldRunFirstTimeSetup()))) {
+      yield* awaited(showFirstTimeSetup(settingsManager));
+      time("firstTimeSetup");
+    }
+    if (parsed.useTheme !== undefined) settingsManager.applyOverrides({ theme: parsed.useTheme });
+  });
 }
 
 function startTelemetryFor(

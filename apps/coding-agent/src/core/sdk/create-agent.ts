@@ -11,7 +11,7 @@ import ProviderHooks from "./provider-hooks.ts";
 import type sdkInternalTypes from "./sdk-internal.types.ts";
 
 const { Agent } = agentModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { convertToLlmFor } = llmConversion;
 
 type AgentSetup = Pick<
@@ -31,13 +31,11 @@ const createCacheWarmer = (setup: AgentSetup): CacheWarmer => {
     sessionManager,
     () => settingsManager.session.getCacheWarmingMode(),
     (event) =>
-      Effect.runPromise(
-        awaiting(function* () {
-          return yield* awaited(
-            extensionRunnerRef.current?.emitCacheWarmingDecision(event) ?? event.action,
-          );
-        }),
-      ),
+      promised(function* () {
+        return yield* awaited(
+          extensionRunnerRef.current?.emitCacheWarmingDecision(event) ?? event.action,
+        );
+      }),
   );
 };
 

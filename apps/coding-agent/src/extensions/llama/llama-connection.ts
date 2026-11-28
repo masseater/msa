@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
 import errorsModule from "../../utils/errors.ts";
@@ -10,7 +8,7 @@ import providerModule from "./provider.ts";
 
 const { normalizeLlamaServerUrl } = clientModule;
 const { toErrorMessage } = errorsModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { LLAMA_PROVIDER_ID } = providerModule;
 
 function modelIsLoaded(model: clientTypes.LlamaModelInfo): boolean {
@@ -33,22 +31,20 @@ function connectionErrorMessage(error: unknown): string {
 function configuredClient(
   ctx: extensionsTypesTypes.ExtensionCommandContext,
 ): Promise<clientTypes.LlamaClient | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const result = yield* awaited(ctx.modelRegistry.getProviderAuth(LLAMA_PROVIDER_ID));
-      if (result === undefined) {
-        ctx.ui.notify(`Configure llama.cpp with /login ${LLAMA_PROVIDER_ID}`, "warning");
-        return undefined;
-      }
-      const configuredUrl = result.env?.["LLAMA_BASE_URL"];
-      const serverUrl = normalizeLlamaServerUrl(
-        typeof configuredUrl === "string" && configuredUrl !== ""
-          ? configuredUrl
-          : (result.auth.baseUrl ?? ""),
-      );
-      return new LlamaClient(serverUrl, result.auth.apiKey);
-    }),
-  );
+  return promised(function* () {
+    const result = yield* awaited(ctx.modelRegistry.getProviderAuth(LLAMA_PROVIDER_ID));
+    if (result === undefined) {
+      ctx.ui.notify(`Configure llama.cpp with /login ${LLAMA_PROVIDER_ID}`, "warning");
+      return undefined;
+    }
+    const configuredUrl = result.env?.["LLAMA_BASE_URL"];
+    const serverUrl = normalizeLlamaServerUrl(
+      typeof configuredUrl === "string" && configuredUrl !== ""
+        ? configuredUrl
+        : (result.auth.baseUrl ?? ""),
+    );
+    return new LlamaClient(serverUrl, result.auth.apiKey);
+  });
 }
 
 const llamaConnection = {

@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import AgentSessionRuntime from "./agent-session-runtime.ts";
 import type agentSessionRuntimeTypes from "./agent-session-runtime.types.ts";
 import awaitingModule from "./awaiting.ts";
@@ -7,7 +5,7 @@ import type extensionsTypes from "./extensions/index.types.ts";
 import type telemetryTypesNs from "./observability/telemetry.types.ts";
 import sessionCwd from "./session-cwd.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { assertSessionCwdExists } = sessionCwd;
 
 function createAgentSessionRuntime(
@@ -20,20 +18,18 @@ function createAgentSessionRuntime(
     telemetry?: telemetryTypesNs.TelemetryHandle;
   },
 ): Promise<AgentSessionRuntime> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(assertSessionCwdExists(options.sessionManager, options.cwd));
-      const result = yield* awaited(createRuntime(options));
-      return new AgentSessionRuntime(
-        result.session,
-        result.services,
-        createRuntime,
-        result.diagnostics,
-        result.modelFallbackMessage,
-        options.telemetry,
-      );
-    }),
-  );
+  return promised(function* () {
+    yield* awaited(assertSessionCwdExists(options.sessionManager, options.cwd));
+    const result = yield* awaited(createRuntime(options));
+    return new AgentSessionRuntime(
+      result.session,
+      result.services,
+      createRuntime,
+      result.diagnostics,
+      result.modelFallbackMessage,
+      options.telemetry,
+    );
+  });
 }
 
 const agentSessionRuntimeSupport = {

@@ -1,6 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
 import type mcpTypes from "@msa/mcp/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import errorsModule from "../../../utils/errors.ts";
@@ -8,7 +7,7 @@ import type resourcesTypes from "../resources.types.ts";
 import tools from "../tools.ts";
 import type toolsTypes from "../tools.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { limitMcpContent } = tools;
 const { toErrorMessage } = errorsModule;
 
@@ -67,16 +66,14 @@ function listPage<T extends Item>(
   key: string,
   page: Page<T>,
 ): Promise<Record<string, unknown>> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const result = yield* awaited(page(server, cursor, requestOptions(server, signal)));
-      return {
-        [key]: result.items.filter(visible).map((item) => listed(server.name, item)),
-        server: server.name,
-        ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
-      };
-    }),
-  );
+  return promised(function* () {
+    const result = yield* awaited(page(server, cursor, requestOptions(server, signal)));
+    return {
+      [key]: result.items.filter(visible).map((item) => listed(server.name, item)),
+      server: server.name,
+      ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
+    };
+  });
 }
 
 function listEveryServer<T extends Item>(
@@ -85,24 +82,22 @@ function listEveryServer<T extends Item>(
   key: string,
   all: All<T>,
 ): Promise<Record<string, unknown>> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const sorted = [...servers()].sort((a, b) => a.name.localeCompare(b.name));
-      const results = yield* awaited(
-        Promise.allSettled(sorted.map((server) => all(server, requestOptions(server, signal)))),
-      );
-      const items: Record<string, unknown>[] = [];
-      const errors: { server: string; error: string }[] = [];
-      results.forEach((result, index) => {
-        const server = sorted[index]?.name;
-        if (server === undefined) return;
-        if (result.status === "fulfilled")
-          items.push(...result.value.filter(visible).map((item) => listed(server, item)));
-        else errors.push({ error: toErrorMessage(result.reason), server });
-      });
-      return { [key]: items, ...(errors.length > 0 ? { errors } : {}) };
-    }),
-  );
+  return promised(function* () {
+    const sorted = [...servers()].sort((a, b) => a.name.localeCompare(b.name));
+    const results = yield* awaited(
+      Promise.allSettled(sorted.map((server) => all(server, requestOptions(server, signal)))),
+    );
+    const items: Record<string, unknown>[] = [];
+    const errors: { server: string; error: string }[] = [];
+    results.forEach((result, index) => {
+      const server = sorted[index]?.name;
+      if (server === undefined) return;
+      if (result.status === "fulfilled")
+        items.push(...result.value.filter(visible).map((item) => listed(server, item)));
+      else errors.push({ error: toErrorMessage(result.reason), server });
+    });
+    return { [key]: items, ...(errors.length > 0 ? { errors } : {}) };
+  });
 }
 
 function list<T extends Item>(
@@ -111,19 +106,17 @@ function list<T extends Item>(
   signal: AbortSignal | undefined,
   source: { key: "resources" | "resourceTemplates"; page: Page<T>; all: All<T> },
 ): Promise<Record<string, unknown>> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const serverName = stringArgument(params, "server");
-      const cursor = stringArgument(params, "cursor");
-      if (serverName !== undefined && serverName !== "") {
-        const server = findServer(servers, serverName);
-        return yield* awaited(listPage(server, cursor, signal, source.key, source.page));
-      }
-      if (cursor !== undefined && cursor !== "")
-        throw new Error("cursor can only be used when a server is specified");
-      return yield* awaited(listEveryServer(servers, signal, source.key, source.all));
-    }),
-  );
+  return promised(function* () {
+    const serverName = stringArgument(params, "server");
+    const cursor = stringArgument(params, "cursor");
+    if (serverName !== undefined && serverName !== "") {
+      const server = findServer(servers, serverName);
+      return yield* awaited(listPage(server, cursor, signal, source.key, source.page));
+    }
+    if (cursor !== undefined && cursor !== "")
+      throw new Error("cursor can only be used when a server is specified");
+    return yield* awaited(listEveryServer(servers, signal, source.key, source.all));
+  });
 }
 
 function jsonResult(
@@ -135,22 +128,20 @@ function jsonResult(
   details: toolsTypes.McpToolDetails;
   structuredContent: aiTypes.JsonValue;
 }> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { content, fullOutputPath } = yield* awaited(
-        limitMcpContent([{ text: JSON.stringify(payload), type: "text" }]),
-      );
-      return {
-        content,
-        details: {
-          server: server ?? "",
-          tool,
-          ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
-        },
-        structuredContent: payload as unknown as aiTypes.JsonValue,
-      };
-    }),
-  );
+  return promised(function* () {
+    const { content, fullOutputPath } = yield* awaited(
+      limitMcpContent([{ text: JSON.stringify(payload), type: "text" }]),
+    );
+    return {
+      content,
+      details: {
+        server: server ?? "",
+        tool,
+        ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+      },
+      structuredContent: payload as unknown as aiTypes.JsonValue,
+    };
+  });
 }
 
 function listTool(
@@ -159,12 +150,10 @@ function listTool(
   source: Parameters<typeof list>[3],
 ): toolsTypes.McpToolDefinition["execute"] {
   return (_toolCallId, params, signal) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const payload = yield* awaited(list(servers, params, signal, source));
-        return yield* awaited(jsonResult(name, stringArgument(params, "server"), payload));
-      }),
-    );
+    promised(function* () {
+      const payload = yield* awaited(list(servers, params, signal, source));
+      return yield* awaited(jsonResult(name, stringArgument(params, "server"), payload));
+    });
 }
 
 const resourceListing = { findServer, listTool, requestOptions, stringArgument };

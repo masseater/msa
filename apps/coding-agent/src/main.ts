@@ -1,4 +1,3 @@
-import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "./core/awaiting.ts";
@@ -10,7 +9,7 @@ import sessionInput from "./main/session-input.ts";
 import startupChecks from "./main/startup-checks.ts";
 import startupModule from "./main/startup.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { bootstrap } = bootstrapModule;
 const { runMode } = runModes;
 const { startRuntime } = runtimeStart;
@@ -19,19 +18,17 @@ const { checkStartup } = startupChecks;
 const { prepareStartup } = startupModule;
 
 function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const boot = yield* awaited(bootstrap(args, options));
-      if (boot === undefined) return undefined;
-      const startup = yield* awaited(prepareStartup(args, boot));
-      const runtime = yield* awaited(startRuntime(startup));
-      yield* awaited(exitForMetadataCommands(startup, runtime));
-      const input = yield* awaited(prepareInput(startup, runtime));
-      const checks = checkStartup(startup, runtime);
-      yield* awaited(runMode(startup, runtime, input, checks));
-      return undefined;
-    }),
-  );
+  return promised(function* () {
+    const boot = yield* awaited(bootstrap(args, options));
+    if (boot === undefined) return undefined;
+    const startup = yield* awaited(prepareStartup(args, boot));
+    const runtime = yield* awaited(startRuntime(startup));
+    yield* awaited(exitForMetadataCommands(startup, runtime));
+    const input = yield* awaited(prepareInput(startup, runtime));
+    const checks = checkStartup(startup, runtime);
+    yield* awaited(runMode(startup, runtime, input, checks));
+    return undefined;
+  });
 }
 
 const main: {

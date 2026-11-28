@@ -9,7 +9,7 @@ import oauthModuleModule from "../oauth.ts";
 import type oauthTypesNs from "../oauth.types.ts";
 
 const { resolveConfigValueOrThrow } = resolveConfigValueModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { usesOAuth } = mcpServerConnectionHelpers;
 const { createMcpAuthProvider } = oauthModuleModule;
 
@@ -78,11 +78,9 @@ export default class McpConnectionAuth {
           ? {
               settled: () => Effect.runPromise(Effect.sync(() => {})),
               token: () =>
-                Effect.runPromise(
-                  awaiting(function* () {
-                    return yield* awaited(providerToken?.(provider));
-                  }),
-                ),
+                promised(function* () {
+                  return yield* awaited(providerToken?.(provider));
+                }),
             }
           : undefined;
   }

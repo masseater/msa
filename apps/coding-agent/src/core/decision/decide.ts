@@ -1,6 +1,7 @@
 import type aiTypes from "@msa/ai/index.types";
 import { Cache, Context, Duration, Effect, Exit, Schema } from "effect";
 
+import errors from "../../utils/errors.ts";
 import Decide from "./decide-service.ts";
 import type decideTypes from "./decide.types.ts";
 import Undecided from "./undecided.ts";
@@ -23,16 +24,15 @@ type AnswerCache = Cache.Cache<
   PendingClassification
 >;
 
-const encodeKey = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const { toErrorMessage } = errors;
 
-const errorText = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const encodeKey = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const classifyPending = (host: decideTypes.DecisionHost) =>
   Effect.gen(function* () {
     const { model, context } = yield* PendingClassification;
     const result = yield* Effect.tryPromise({
-      catch: (error) => Undecided.make({ reason: errorText(error) }),
+      catch: (error) => Undecided.make({ reason: toErrorMessage(error) }),
       try: (signal) => host.classify(model, context, signal),
     });
     if (result.stopReason !== "stop")
@@ -143,7 +143,7 @@ const makeDecide = (host: decideTypes.DecisionHost) =>
       decide: (request) =>
         decideWith(host, cache, request).pipe(
           Effect.catchDefect((defect) =>
-            Effect.fail(Undecided.make({ reason: errorText(defect) })),
+            Effect.fail(Undecided.make({ reason: toErrorMessage(defect) })),
           ),
           Effect.catchTag("Undecided", ({ reason }) =>
             Effect.sync((): decideTypes.Decision => {

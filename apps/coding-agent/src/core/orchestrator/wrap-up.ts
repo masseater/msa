@@ -108,7 +108,7 @@ function takeOver(
   runtime.launch(
     Effect.promise(() =>
       worker.run.prompting.prompt(PROMPT).then(resume.turn, (error: unknown) => {
-        fail(runtime, threadId, `wrap-up failed: ${outcomes.errorText(error)}`);
+        fail(runtime, threadId, `wrap-up failed: ${outcomes.toErrorMessage(error)}`);
         return resume.settle(error);
       }),
     ),

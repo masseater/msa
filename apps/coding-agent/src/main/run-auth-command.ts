@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { Effect, Schema } from "effect";
+import { Schema } from "effect";
 
 import argsModule from "../cli/args.ts";
 import AuthCommandError from "../cli/auth-command-error.ts";
@@ -20,7 +20,7 @@ const {
 const { APP_NAME } = config;
 const { parseArgs } = argsModule;
 const { writeError } = platform;
-const { awaiting } = awaitingModule;
+const { promised } = awaitingModule;
 const { runParsedAuthCommand } = authCommandRun;
 
 function parseCommandOrReport(args: string[]): authCommandTypes.AuthCommand | undefined | null {
@@ -37,32 +37,28 @@ function parseCommandOrReport(args: string[]): authCommandTypes.AuthCommand | un
 }
 
 function runAuthCommand(args: string[]): Promise<boolean> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (isAuthCommandHelp(args)) {
-        printAuthCommandHelp();
-        return true;
-      }
-      const command = parseCommandOrReport(args);
-      if (command === null) return true;
-      if (command === undefined) return false;
-
-      const parsed = parseArgs(command.args);
-      if (parsed.unknownFlags.size > 0) {
-        const option = parsed.unknownFlags.keys().next().value;
-        writeError(
-          chalk.red(`Unknown option --${option} for "${getAuthCommandName(command.kind)}".`),
-        );
-        writeError(
-          chalk.dim(`Use "${APP_NAME} --help" or "${getAuthCommandUsage(command.kind)}".`),
-        );
-        process.exitCode = 1;
-        return true;
-      }
-      yield* runParsedAuthCommand(parsed, command);
+  return promised(function* () {
+    if (isAuthCommandHelp(args)) {
+      printAuthCommandHelp();
       return true;
-    }),
-  );
+    }
+    const command = parseCommandOrReport(args);
+    if (command === null) return true;
+    if (command === undefined) return false;
+
+    const parsed = parseArgs(command.args);
+    if (parsed.unknownFlags.size > 0) {
+      const option = parsed.unknownFlags.keys().next().value;
+      writeError(
+        chalk.red(`Unknown option --${option} for "${getAuthCommandName(command.kind)}".`),
+      );
+      writeError(chalk.dim(`Use "${APP_NAME} --help" or "${getAuthCommandUsage(command.kind)}".`));
+      process.exitCode = 1;
+      return true;
+    }
+    yield* runParsedAuthCommand(parsed, command);
+    return true;
+  });
 }
 
 const runAuthCommandModule = { runAuthCommand };

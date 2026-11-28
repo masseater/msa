@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import * as Effect from "effect/Effect";
 
 import configModule from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
@@ -8,7 +7,7 @@ import interop from "../utils/interop.ts";
 import legacyLayout from "./legacy-layout.ts";
 
 const { callbackPromise } = interop;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { join, writeLog } = platform;
 const { CONFIG_DIR_NAME, getAgentDir } = configModule;
 const { exists, readDirectory } = platform.files;
@@ -64,32 +63,30 @@ function migrateExtensionSystem(cwd: string, agentDir: string = getAgentDir()): 
 }
 
 function showDeprecationWarnings(warnings: string[]): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (warnings.length === 0) return;
+  return promised(function* () {
+    if (warnings.length === 0) return;
 
-      for (const warning of warnings) {
-        writeLog(chalk.yellow(`Warning: ${warning}`));
-      }
-      writeLog(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
-      writeLog(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
-      writeLog(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
-      writeLog(chalk.dim(`\nPress any key to continue...`));
+    for (const warning of warnings) {
+      writeLog(chalk.yellow(`Warning: ${warning}`));
+    }
+    writeLog(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
+    writeLog(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
+    writeLog(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
+    writeLog(chalk.dim(`\nPress any key to continue...`));
 
-      yield* awaited(
-        callbackPromise<void>((resolve) => {
-          process.stdin.setRawMode?.(true);
-          process.stdin.resume();
-          process.stdin.once("data", () => {
-            process.stdin.setRawMode?.(false);
-            process.stdin.pause();
-            resolve();
-          });
-        }),
-      );
-      writeLog();
-    }),
-  );
+    yield* awaited(
+      callbackPromise<void>((resolve) => {
+        process.stdin.setRawMode?.(true);
+        process.stdin.resume();
+        process.stdin.once("data", () => {
+          process.stdin.setRawMode?.(false);
+          process.stdin.pause();
+          resolve();
+        });
+      }),
+    );
+    writeLog();
+  });
 }
 
 const extensionSystem = { migrateExtensionSystem, showDeprecationWarnings };

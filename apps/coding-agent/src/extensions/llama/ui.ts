@@ -10,31 +10,29 @@ import LlamaView from "./llama-view.ts";
 import type uiTypes from "./ui.types.ts";
 
 const { fromPromise } = platform;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { toErrorMessage } = errors;
 
 function showLlamaUiImpl(
   ctx: extensionsTypesTypes.ExtensionCommandContext,
   run: (ui: uiTypes.LlamaUi) => Promise<void>,
 ): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      yield* awaited(
-        ctx.ui.custom<void>((tui, theme, keybindings, done) => {
-          const view = new LlamaView(tui, theme, keybindings);
-          Effect.runFork(
-            fromPromise(() => run(view)).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
-              ),
-              Effect.ensuring(Effect.sync(() => done())),
+  return promised(function* () {
+    yield* awaited(
+      ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+        const view = new LlamaView(tui, theme, keybindings);
+        Effect.runFork(
+          fromPromise(() => run(view)).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
             ),
-          );
-          return view;
-        }),
-      );
-    }),
-  );
+            Effect.ensuring(Effect.sync(() => done())),
+          ),
+        );
+        return view;
+      }),
+    );
+  });
 }
 const showLlamaUi: {
   (
@@ -92,29 +90,27 @@ function runWithProgressImpl<T>(
     cancel(): Promise<void>;
   },
 ): Promise<{ cancelled: true } | { cancelled: false; value: T }> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { controller, progress, settled, state } = startProgressRun(ui, options);
+  return promised(function* () {
+    const { controller, progress, settled, state } = startProgressRun(ui, options);
 
-      while (!progress.completed) {
-        const outcome = yield* awaited(
-          Promise.race([
-            settled.then(() => "settled" as const),
-            ui.progress(state).then(() => "stop" as const),
-          ]),
-        );
-        if (outcome === "settled") break;
-        const stop = yield* awaited(ui.confirm(options.cancelTitle, options.cancelMessage));
-        if (!stop || progress.completed) continue;
-        yield* awaited(cancelRun<T>(options, controller, settled));
-        return { cancelled: true };
-      }
+    while (!progress.completed) {
+      const outcome = yield* awaited(
+        Promise.race([
+          settled.then(() => "settled" as const),
+          ui.progress(state).then(() => "stop" as const),
+        ]),
+      );
+      if (outcome === "settled") break;
+      const stop = yield* awaited(ui.confirm(options.cancelTitle, options.cancelMessage));
+      if (!stop || progress.completed) continue;
+      yield* awaited(cancelRun<T>(options, controller, settled));
+      return { cancelled: true };
+    }
 
-      const result = yield* awaited(settled);
-      if (!result.ok) throw result.error;
-      return { cancelled: false, value: result.value };
-    }),
-  );
+    const result = yield* awaited(settled);
+    if (!result.ok) throw result.error;
+    return { cancelled: false, value: result.value };
+  });
 }
 const runWithProgress: {
   <T>(

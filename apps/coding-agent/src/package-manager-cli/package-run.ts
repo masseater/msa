@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import * as Effect from "effect/Effect";
 
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
@@ -11,7 +10,7 @@ import packageOperations from "./package-operations.ts";
 
 const { writeError } = platform;
 const { getAgentDir } = config;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { runOperation } = packageOperations;
 
 import trustedSettings from "./trusted-settings.ts";
@@ -24,44 +23,42 @@ function runWithPackageManager(
   options: Options,
   runtimeOptions: packageManagerCliTypes.PackageCommandRuntimeOptions,
 ) {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const cwd = process.cwd();
-      const agentDir = getAgentDir();
-      const settingsManager = yield* awaited(
-        trustedSettingsManager(
-          {
-            agentDir,
-            cwd,
-            extensionFactories: runtimeOptions.extensionFactories,
-            projectTrustOverride: options.projectTrustOverride,
-            useSavedProjectTrustOnly: options.command === "update",
-          },
-          {
-            requested:
-              (options.command === "install" || options.command === "remove") && options.local,
-            target: "package config",
-          },
-        ),
+  return promised(function* () {
+    const cwd = process.cwd();
+    const agentDir = getAgentDir();
+    const settingsManager = yield* awaited(
+      trustedSettingsManager(
+        {
+          agentDir,
+          cwd,
+          extensionFactories: runtimeOptions.extensionFactories,
+          projectTrustOverride: options.projectTrustOverride,
+          useSavedProjectTrustOnly: options.command === "update",
+        },
+        {
+          requested:
+            (options.command === "install" || options.command === "remove") && options.local,
+          target: "package config",
+        },
+      ),
+    );
+    if (settingsManager === undefined) return;
+    reportSettingsErrors(settingsManager, "package command");
+    const packageManager = new DefaultPackageManager({ agentDir, cwd, settingsManager });
+    packageManager.progress.setProgressCallback((event) => {
+      if (event.type === "start") process.stdout.write(chalk.dim(`${event.message}\n`));
+    });
+    try {
+      yield* awaited(
+        runOperation(packageManager, options, settingsManager.getGlobalSettings().npmCommand),
       );
-      if (settingsManager === undefined) return;
-      reportSettingsErrors(settingsManager, "package command");
-      const packageManager = new DefaultPackageManager({ agentDir, cwd, settingsManager });
-      packageManager.progress.setProgressCallback((event) => {
-        if (event.type === "start") process.stdout.write(chalk.dim(`${event.message}\n`));
-      });
-      try {
-        yield* awaited(
-          runOperation(packageManager, options, settingsManager.getGlobalSettings().npmCommand),
-        );
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Unknown package command error";
-        writeError(chalk.red(`Error: ${message}`));
-        process.exitCode = 1;
-      }
-      yield* awaited(settingsManager.persistence.flush());
-    }),
-  );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown package command error";
+      writeError(chalk.red(`Error: ${message}`));
+      process.exitCode = 1;
+    }
+    yield* awaited(settingsManager.persistence.flush());
+  });
 }
 
 const packageRun = { runWithPackageManager };

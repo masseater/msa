@@ -10,7 +10,7 @@ import loginFlowHelpers from "../login-flow-helpers.ts";
 import type LoginFlow from "../login-flow.ts";
 import type loginFlowTypes from "../login-flow.types.ts";
 
-const { awaited, awaiting, promisedWith } = awaitingModule;
+const { awaited, awaiting, promised, promisedWith } = awaitingModule;
 const { getAuthPath } = config;
 const {
   CREDENTIAL_TIMEOUT_MS,
@@ -79,27 +79,25 @@ export default class ProviderAuthentication {
     actionLabel: string,
   ) {
     return () =>
-      Effect.runPromise(
-        awaiting(function* () {
-          const { selectedModel, selectionError } = yield* selectDefaultModel(
-            previousModel,
-            host,
-            providerId,
-            actionLabel,
-          );
-          host.refreshAuthState();
-          if (selectedModel === undefined) {
-            host.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
-            if (selectionError !== undefined && selectionError !== "") {
-              host.showError(selectionError);
-            }
-          } else {
-            host.showStatus(
-              `${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`,
-            );
+      promised(function* () {
+        const { selectedModel, selectionError } = yield* selectDefaultModel(
+          previousModel,
+          host,
+          providerId,
+          actionLabel,
+        );
+        host.refreshAuthState();
+        if (selectedModel === undefined) {
+          host.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
+          if (selectionError !== undefined && selectionError !== "") {
+            host.showError(selectionError);
           }
-        }),
-      );
+        } else {
+          host.showStatus(
+            `${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`,
+          );
+        }
+      });
   }
 
   completeProviderAuthentication(

@@ -1,6 +1,5 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
@@ -8,7 +7,7 @@ import virtualModelsModule from "../virtual-models.ts";
 
 const { createVirtualModel, findLatestResponse } = virtualModelsModule;
 const { clampThinkingLevel } = ai;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 type Model = aiTypes.Model<aiTypes.Api>;
 
@@ -58,41 +57,39 @@ export default class VirtualModelRegistry {
   ): Promise<modelRuntimeTypes.ModelRoute> {
     const name = `Virtual model ${model.provider}/${model.id}`;
     const virtual = this.entries.get(model.provider)?.get(model.id);
-    return Effect.runPromise(
-      awaiting(function* () {
-        if (virtual === undefined) throw new Error(`${name} is not registered.`);
-        const { failed, ...request } = options;
-        const latest = findLatestResponse(messages);
-        const previousModel = latest && physical.getPhysicalModel(latest.provider, latest.model);
-        const failedModel = failed && physical.getPhysicalModel(failed.provider, failed.model);
-        const route = yield* awaited(
-          virtual.route({
-            ...request,
-            failed: failedModel &&
-              failed && {
-                message: failed,
-                model: failedModel,
-                thinkingLevel: failed.thinkingLevel,
-              },
-            messages,
-            model,
-            previous: previousModel && {
-              model: previousModel,
-              thinkingLevel: latest?.thinkingLevel,
+    return promised(function* () {
+      if (virtual === undefined) throw new Error(`${name} is not registered.`);
+      const { failed, ...request } = options;
+      const latest = findLatestResponse(messages);
+      const previousModel = latest && physical.getPhysicalModel(latest.provider, latest.model);
+      const failedModel = failed && physical.getPhysicalModel(failed.provider, failed.model);
+      const route = yield* awaited(
+        virtual.route({
+          ...request,
+          failed: failedModel &&
+            failed && {
+              message: failed,
+              model: failedModel,
+              thinkingLevel: failed.thinkingLevel,
             },
-          }),
-        );
-        const target = physical.getPhysicalModel(route.model.provider, route.model.id);
-        const routed = `${name} routed to ${route.model.provider}/${route.model.id}`;
-        if (target === undefined) throw new Error(`${routed}, which is not a physical model.`);
-        if (!physical.hasConfiguredAuth(target.provider))
-          throw new Error(`${routed}, which has no credentials.`);
-        return {
-          model: target,
-          state: route.state,
-          thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
-        };
-      }),
-    );
+          messages,
+          model,
+          previous: previousModel && {
+            model: previousModel,
+            thinkingLevel: latest?.thinkingLevel,
+          },
+        }),
+      );
+      const target = physical.getPhysicalModel(route.model.provider, route.model.id);
+      const routed = `${name} routed to ${route.model.provider}/${route.model.id}`;
+      if (target === undefined) throw new Error(`${routed}, which is not a physical model.`);
+      if (!physical.hasConfiguredAuth(target.provider))
+        throw new Error(`${routed}, which has no credentials.`);
+      return {
+        model: target,
+        state: route.state,
+        thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
+      };
+    });
   }
 }

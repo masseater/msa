@@ -8,7 +8,7 @@ import errors from "../../utils/errors.ts";
 import outputFiles from "../../utils/output-files.ts";
 import type toolTypes from "./tool.types.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, awaiting, promised } = awaitingModule;
 const { writeOutputFile } = outputFiles;
 const { toErrorMessage } = errors;
 const { formatSize } = truncate;
@@ -101,15 +101,13 @@ function formatError(
 }
 
 function spillOutput(text: string): Promise<{ path: string } | { error: string }> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      try {
-        return { path: yield* awaited(writeOutputFile("msa-codemode", ".txt", text)) };
-      } catch (error) {
-        return { error: toErrorMessage(error) };
-      }
-    }),
-  );
+  return promised(function* () {
+    try {
+      return { path: yield* awaited(writeOutputFile("msa-codemode", ".txt", text)) };
+    } catch (error) {
+      return { error: toErrorMessage(error) };
+    }
+  });
 }
 
 const IMAGE_EXTENSIONS: ReadonlyMap<string, string> = new Map([
@@ -122,77 +120,73 @@ const IMAGE_EXTENSIONS: ReadonlyMap<string, string> = new Map([
 function saveImages(
   items: (aiTypes.TextContent | aiTypes.ImageContent)[],
 ): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const labels = new Map<string, Promise<string>>();
-      const label = ({ data, mimeType }: aiTypes.ImageContent): Promise<string> =>
-        Effect.runPromise(
-          awaiting(function* () {
-            const bytes = Buffer.from(data, "base64");
-            const kind = `${mimeType}, ${formatSize(bytes.length)}`;
-            const extension = IMAGE_EXTENSIONS.get(mimeType);
-            if (extension === undefined || extension === "")
-              throw new Error(`No file extension for image type ${mimeType}`);
+  return promised(function* () {
+    const labels = new Map<string, Promise<string>>();
+    const label = ({ data, mimeType }: aiTypes.ImageContent): Promise<string> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const bytes = Buffer.from(data, "base64");
+          const kind = `${mimeType}, ${formatSize(bytes.length)}`;
+          const extension = IMAGE_EXTENSIONS.get(mimeType);
+          if (extension === undefined || extension === "")
+            throw new Error(`No file extension for image type ${mimeType}`);
 
-            try {
-              const path = yield* awaited(writeOutputFile("msa-codemode", extension, bytes));
-              return `[Image saved to ${path} (${kind})]`;
-            } catch (error) {
-              return `[Image (${kind}) could not be saved: ${toErrorMessage(error)}]`;
-            }
-          }),
-        );
-      const result = yield* awaited(
-        Promise.all(
-          items.map((item): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> =>
-            Effect.runPromise(
-              awaiting(function* () {
-                if (item.type !== "image") return [item];
-                let pending = labels.get(item.data);
-                if (pending === undefined) {
-                  pending = label(item);
-                  labels.set(item.data, pending);
-                }
-                return [{ text: yield* awaited(pending), type: "text" }, item];
-              }),
-            ),
+          try {
+            const path = yield* awaited(writeOutputFile("msa-codemode", extension, bytes));
+            return `[Image saved to ${path} (${kind})]`;
+          } catch (error) {
+            return `[Image (${kind}) could not be saved: ${toErrorMessage(error)}]`;
+          }
+        }),
+      );
+    const result = yield* awaited(
+      Promise.all(
+        items.map((item): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> =>
+          Effect.runPromise(
+            awaiting(function* () {
+              if (item.type !== "image") return [item];
+              let pending = labels.get(item.data);
+              if (pending === undefined) {
+                pending = label(item);
+                labels.set(item.data, pending);
+              }
+              return [{ text: yield* awaited(pending), type: "text" }, item];
+            }),
           ),
         ),
-      );
-      return result.flat();
-    }),
-  );
+      ),
+    );
+    return result.flat();
+  });
 }
 
 function truncateOutput(
   items: (aiTypes.TextContent | aiTypes.ImageContent)[],
   maxTokens: number,
 ): Promise<{ items: (aiTypes.TextContent | aiTypes.ImageContent)[]; fullOutputPath?: string }> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const texts = items
-        .filter((item): item is aiTypes.TextContent => item.type === "text")
-        .map((item) => item.text);
-      const combined = texts.join("\n");
-      const budget = maxTokens * CHARS_PER_TOKEN;
-      if (texts.length === 0 || combined.length <= budget) return { items };
-      const headChars = Math.floor(budget / 2);
-      const tailChars = budget - headChars;
-      const removed = combined.length - headChars - tailChars;
-      const head = combined.slice(0, headChars);
-      const tail = tailChars > 0 ? combined.slice(-tailChars) : "";
-      let text = `Warning: truncated output (original token count: ${Math.ceil(combined.length / CHARS_PER_TOKEN)})\nTotal output lines: ${combined.split("\n").length}\n\n${head}…${Math.ceil(removed / CHARS_PER_TOKEN)} tokens truncated…${tail}`;
-      const spilled = yield* awaited(spillOutput(combined));
-      text +=
-        "path" in spilled
-          ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
-          : `\n\n[Could not save the full output: ${spilled.error}]`;
-      return {
-        items: [{ text, type: "text" }, ...items.filter((item) => item.type === "image")],
-        ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
-      };
-    }),
-  );
+  return promised(function* () {
+    const texts = items
+      .filter((item): item is aiTypes.TextContent => item.type === "text")
+      .map((item) => item.text);
+    const combined = texts.join("\n");
+    const budget = maxTokens * CHARS_PER_TOKEN;
+    if (texts.length === 0 || combined.length <= budget) return { items };
+    const headChars = Math.floor(budget / 2);
+    const tailChars = budget - headChars;
+    const removed = combined.length - headChars - tailChars;
+    const head = combined.slice(0, headChars);
+    const tail = tailChars > 0 ? combined.slice(-tailChars) : "";
+    let text = `Warning: truncated output (original token count: ${Math.ceil(combined.length / CHARS_PER_TOKEN)})\nTotal output lines: ${combined.split("\n").length}\n\n${head}…${Math.ceil(removed / CHARS_PER_TOKEN)} tokens truncated…${tail}`;
+    const spilled = yield* awaited(spillOutput(combined));
+    text +=
+      "path" in spilled
+        ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
+        : `\n\n[Could not save the full output: ${spilled.error}]`;
+    return {
+      items: [{ text, type: "text" }, ...items.filter((item) => item.type === "image")],
+      ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
+    };
+  });
 }
 
 interface ScriptResultInput {
@@ -222,31 +216,29 @@ function scriptItems({ result, calls, generatedImages }: ScriptResultInput) {
 }
 
 function renderScriptResult(input: ScriptResultInput): Promise<toolTypes.CodemodeRunResult> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { result } = input;
-      const truncated = yield* awaited(
-        truncateOutput(
-          joinAdjacentText(scriptItems(input)),
-          input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-        ),
-      );
-      const output = joinAdjacentText(yield* awaited(saveImages(truncated.items)));
-      const wallTime = ((performance.now() - input.startedAt) / 1000).toFixed(1);
-      const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${wallTime} seconds\nOutput:\n`;
-      const details: toolTypes.CodemodeToolDetails = {
-        calls: input.calls.map((call) => structuredClone(call)),
-      };
-      if (truncated.fullOutputPath !== undefined && truncated.fullOutputPath !== "")
-        details.fullOutputPath = truncated.fullOutputPath;
-      return {
-        content: [{ text: header, type: "text" as const }, ...output],
-        details,
-        ...(input.usage === undefined ? {} : { usage: input.usage }),
-        ...(result.ok ? {} : { isError: true }),
-      };
-    }),
-  );
+  return promised(function* () {
+    const { result } = input;
+    const truncated = yield* awaited(
+      truncateOutput(
+        joinAdjacentText(scriptItems(input)),
+        input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      ),
+    );
+    const output = joinAdjacentText(yield* awaited(saveImages(truncated.items)));
+    const wallTime = ((performance.now() - input.startedAt) / 1000).toFixed(1);
+    const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${wallTime} seconds\nOutput:\n`;
+    const details: toolTypes.CodemodeToolDetails = {
+      calls: input.calls.map((call) => structuredClone(call)),
+    };
+    if (truncated.fullOutputPath !== undefined && truncated.fullOutputPath !== "")
+      details.fullOutputPath = truncated.fullOutputPath;
+    return {
+      content: [{ text: header, type: "text" as const }, ...output],
+      details,
+      ...(input.usage === undefined ? {} : { usage: input.usage }),
+      ...(result.ok ? {} : { isError: true }),
+    };
+  });
 }
 
 const scriptOutput = { renderScriptResult };

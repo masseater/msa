@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../../core/awaiting.ts";
 import mime from "../mime.ts";
 import photonModule from "../photon.ts";
@@ -7,7 +5,7 @@ import photonModule from "../photon.ts";
 const { baseMimeType } = mime;
 
 const { loadPhoton } = photonModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 
@@ -49,25 +47,23 @@ function isSupportedImageMimeType(mimeType: string): boolean {
 }
 
 function convertToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const photon = yield* awaited(loadPhoton());
-      if (photon === null) {
-        return null;
-      }
+  return promised(function* () {
+    const photon = yield* awaited(loadPhoton());
+    if (photon === null) {
+      return null;
+    }
 
+    try {
+      const image = photon.PhotonImage.new_from_byteslice(bytes);
       try {
-        const image = photon.PhotonImage.new_from_byteslice(bytes);
-        try {
-          return image.get_bytes();
-        } finally {
-          image.free();
-        }
-      } catch {
-        return null;
+        return image.get_bytes();
+      } finally {
+        image.free();
       }
-    }),
-  );
+    } catch {
+      return null;
+    }
+  });
 }
 
 const imageMime = {

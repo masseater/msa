@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import configModule from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import memoryModule from "../../../core/memory/memory.ts";
@@ -11,7 +9,7 @@ import loginModule from "./login.ts";
 import serverConnection from "./server-connection.ts";
 
 const { APP_NAME } = configModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { HELP_HINT, parseOptions } = cliOptions;
 const { list } = listServers;
 const { login } = loginModule;
@@ -54,49 +52,47 @@ function loginOrLogout(
   rest: string[],
   context: CommandContext,
 ): Promise<number> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const { options, credentials, log, error } = context;
-      const parsed = parseOptions(rest, command === "login" ? { timeout: "value" } : {}, error);
-      if (parsed === undefined) return 1;
-      const [name, ...extra] = parsed.positional;
-      if (name === undefined || name === "" || extra.length > 0) {
-        error(`Usage: ${APP_NAME} mcp ${command} <server>\n${HELP_HINT}`);
-        return 1;
-      }
-      const entry = findEntry(name, context);
-      if (entry === undefined) return 1;
-      const connection = createConnection(entry, options, credentials);
-      const url = connection.auth.oauthUrl;
-      if (url === undefined || url === "") {
-        error(
-          `MCP server "${name}" does not use OAuth. Only HTTP servers without an Authorization header do.`,
-        );
-        return 1;
-      }
-      if (command === "logout") {
-        const removed = yield* awaited(credentials.remove(name, url));
-        log(
-          removed
-            ? `Signed out of MCP server "${name}".`
-            : `No stored credentials for MCP server "${name}".`,
-        );
-        return 0;
-      }
-      const timeout = Number(parsed.values.get("timeout") ?? DEFAULT_LOGIN_TIMEOUT_SECONDS);
-      if (!Number.isFinite(timeout) || timeout <= 0) {
-        error("--timeout must be a positive number of seconds.");
-        return 1;
-      }
-      try {
-        return yield* awaited(
-          login(entry, connection, url, timeout * 1000, options, credentials, log, error),
-        );
-      } finally {
-        yield* awaited(connection.close());
-      }
-    }),
-  );
+  return promised(function* () {
+    const { options, credentials, log, error } = context;
+    const parsed = parseOptions(rest, command === "login" ? { timeout: "value" } : {}, error);
+    if (parsed === undefined) return 1;
+    const [name, ...extra] = parsed.positional;
+    if (name === undefined || name === "" || extra.length > 0) {
+      error(`Usage: ${APP_NAME} mcp ${command} <server>\n${HELP_HINT}`);
+      return 1;
+    }
+    const entry = findEntry(name, context);
+    if (entry === undefined) return 1;
+    const connection = createConnection(entry, options, credentials);
+    const url = connection.auth.oauthUrl;
+    if (url === undefined || url === "") {
+      error(
+        `MCP server "${name}" does not use OAuth. Only HTTP servers without an Authorization header do.`,
+      );
+      return 1;
+    }
+    if (command === "logout") {
+      const removed = yield* awaited(credentials.remove(name, url));
+      log(
+        removed
+          ? `Signed out of MCP server "${name}".`
+          : `No stored credentials for MCP server "${name}".`,
+      );
+      return 0;
+    }
+    const timeout = Number(parsed.values.get("timeout") ?? DEFAULT_LOGIN_TIMEOUT_SECONDS);
+    if (!Number.isFinite(timeout) || timeout <= 0) {
+      error("--timeout must be a positive number of seconds.");
+      return 1;
+    }
+    try {
+      return yield* awaited(
+        login(entry, connection, url, timeout * 1000, options, credentials, log, error),
+      );
+    } finally {
+      yield* awaited(connection.close());
+    }
+  });
 }
 
 const serverCommands = { listCommand, loginOrLogout };

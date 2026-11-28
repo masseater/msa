@@ -1,10 +1,8 @@
-import { Effect } from "effect";
-
 import awaitingModule from "../../../core/awaiting.ts";
 import type commandHandlersTypes from "./command-handlers.types.ts";
 import rpcOutput from "./rpc-output.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { error, success } = rpcOutput;
 
 const modelCommands: commandHandlersTypes.Handlers<
@@ -27,26 +25,22 @@ const modelCommands: commandHandlersTypes.Handlers<
     return success(id, "abort_retry");
   },
   compact: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const result = yield* awaited(
-          server.session.compaction.manual.compact(command.customInstructions),
-        );
-        return success(id, "compact", result);
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const result = yield* awaited(
+        server.session.compaction.manual.compact(command.customInstructions),
+      );
+      return success(id, "compact", result);
+    }),
   cycle_model: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const result = yield* awaited(server.session.models.selection.cycleModel());
-        if (result === undefined) {
-          return success(id, "cycle_model", null);
-        }
-        return success(id, "cycle_model", result);
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const result = yield* awaited(server.session.models.selection.cycleModel());
+      if (result === undefined) {
+        return success(id, "cycle_model", null);
+      }
+      return success(id, "cycle_model", result);
+    }),
   cycle_thinking_level: (server, command) => {
     const { id } = command;
     const level = server.session.models.thinking.cycleThinkingLevel();
@@ -81,20 +75,16 @@ const modelCommands: commandHandlersTypes.Handlers<
     return success(id, "set_follow_up_mode");
   },
   set_model: (server, command) =>
-    Effect.runPromise(
-      awaiting(function* () {
-        const { id } = command;
-        const models = server.session.models.selection.modelRuntime.getAvailableSnapshot();
-        const model = models.find(
-          (m) => m.provider === command.provider && m.id === command.modelId,
-        );
-        if (model === undefined) {
-          return error(id, "set_model", `Model not found: ${command.provider}/${command.modelId}`);
-        }
-        yield* awaited(server.session.models.selection.setModel(model));
-        return success(id, "set_model", model);
-      }),
-    ),
+    promised(function* () {
+      const { id } = command;
+      const models = server.session.models.selection.modelRuntime.getAvailableSnapshot();
+      const model = models.find((m) => m.provider === command.provider && m.id === command.modelId);
+      if (model === undefined) {
+        return error(id, "set_model", `Model not found: ${command.provider}/${command.modelId}`);
+      }
+      yield* awaited(server.session.models.selection.setModel(model));
+      return success(id, "set_model", model);
+    }),
   set_steering_mode: (server, command) => {
     const { id } = command;
     server.session.run.queue.setSteeringMode(command.mode);

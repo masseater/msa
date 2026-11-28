@@ -1,6 +1,5 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
@@ -9,7 +8,7 @@ import photonModule from "./photon.ts";
 
 const { loadPhoton } = photonModule;
 const { applyExifOrientation } = exifOrientation;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const { getCapabilities, setImageTranscoder } = tui;
 
@@ -31,39 +30,35 @@ function encodePng(photon: Photon, bytes: Uint8Array): Uint8Array | null {
 }
 
 function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const photon = yield* awaited(loadPhoton());
-      if (photon === null) {
-        return null;
-      }
-      return encodePng(photon, bytes);
-    }),
-  );
+  return promised(function* () {
+    const photon = yield* awaited(loadPhoton());
+    if (photon === null) {
+      return null;
+    }
+    return encodePng(photon, bytes);
+  });
 }
 
 function convertToPngImpl(
   base64Data: string,
   mimeType: string,
 ): Promise<{ data: string; mimeType: string } | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (mimeType === "image/png") {
-        return { data: base64Data, mimeType };
-      }
+  return promised(function* () {
+    if (mimeType === "image/png") {
+      return { data: base64Data, mimeType };
+    }
 
-      const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
-      const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
-      if (pngBytes === null) {
-        return null;
-      }
+    const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
+    const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
+    if (pngBytes === null) {
+      return null;
+    }
 
-      return {
-        data: Buffer.from(pngBytes).toString("base64"),
-        mimeType: "image/png",
-      };
-    }),
-  );
+    return {
+      data: Buffer.from(pngBytes).toString("base64"),
+      mimeType: "image/png",
+    };
+  });
 }
 
 const convertToPng: {
@@ -72,16 +67,14 @@ const convertToPng: {
 } = dual((args: IArguments) => args.length >= 2, convertToPngImpl);
 
 function loadPngTranscoder(): Promise<tuiTypes.ImageTranscoder | undefined> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const photon = yield* awaited(loadPhoton());
-      if (photon === null) return undefined;
-      return (base64Data) => {
-        const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
-        return pngBytes === null ? null : Buffer.from(pngBytes).toString("base64");
-      };
-    }),
-  );
+  return promised(function* () {
+    const photon = yield* awaited(loadPhoton());
+    if (photon === null) return undefined;
+    return (base64Data) => {
+      const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
+      return pngBytes === null ? null : Buffer.from(pngBytes).toString("base64");
+    };
+  });
 }
 
 let pngTranscoderLoad: Promise<boolean> | undefined;

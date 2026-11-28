@@ -1,13 +1,12 @@
 import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
-import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import awaitingModule from "../../core/awaiting.ts";
 import type configTypes from "./config.types.ts";
 
 const { JSON_RPC_ERROR_CODES, McpError, McpHttpError } = mcp;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const DEFAULT_TIMEOUT_SECONDS = 60;
 
@@ -38,17 +37,15 @@ function usesOAuth(entry: configTypes.McpServerEntry): boolean {
 }
 
 function withoutTemplates<T>(list: () => Promise<T>, empty: T): Promise<T> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      try {
-        return yield* awaited(list());
-      } catch (error) {
-        if (Schema.is(McpError)(error) && error.code === JSON_RPC_ERROR_CODES.methodNotFound)
-          return empty;
-        throw error;
-      }
-    }),
-  );
+  return promised(function* () {
+    try {
+      return yield* awaited(list());
+    } catch (error) {
+      if (Schema.is(McpError)(error) && error.code === JSON_RPC_ERROR_CODES.methodNotFound)
+        return empty;
+      throw error;
+    }
+  });
 }
 
 function listTemplates(

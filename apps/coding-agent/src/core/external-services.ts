@@ -8,7 +8,7 @@ import webFetch from "./tools/web-fetch.ts";
 import webSearch from "./tools/web-search.ts";
 import tregModule from "./treg.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { TREG_INSTALL_COMMAND, findTreg, findTregCli, loginTreg, logoutTreg } = tregModule;
 const { createWebSearchToolDefinition } = webSearch;
 const { createWebFetchToolDefinition } = webFetch;
@@ -17,22 +17,18 @@ const { claudeCodeService } = claudeService;
 const treg: externalServicesTypes.ExternalService = {
   id: "treg",
   login(interaction, signal) {
-    return Effect.runPromise(
-      awaiting(function* () {
-        const cli = findTregCli();
-        if (cli === undefined)
-          throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
-        yield* awaited(loginTreg(cli.command, (page) => interaction.showPage(page), signal));
-      }),
-    );
+    return promised(function* () {
+      const cli = findTregCli();
+      if (cli === undefined)
+        throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
+      yield* awaited(loginTreg(cli.command, (page) => interaction.showPage(page), signal));
+    });
   },
   logout() {
-    return Effect.runPromise(
-      awaiting(function* () {
-        const cli = findTregCli();
-        if (cli !== undefined) yield* awaited(logoutTreg(cli.command));
-      }),
-    );
+    return promised(function* () {
+      const cli = findTregCli();
+      if (cli !== undefined) yield* awaited(logoutTreg(cli.command));
+    });
   },
   name: "treg",
   purpose: "web search and page reading",

@@ -5,7 +5,7 @@ import type accountsTypes from "./accounts.types.ts";
 import awaitingModule from "./awaiting.ts";
 import claudeAccountKind from "./cli-agents/claude-account-kind.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, awaiting, promised } = awaitingModule;
 
 const { claudeAccounts } = claudeAccountKind;
 
@@ -32,37 +32,35 @@ function completeAccountsArgument(prefix: string): tuiTypes.AutocompleteItem[] |
 }
 
 function runAccountsCommand(args: string, ctx: accountsTypes.AccountsContext): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const [name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
-      try {
-        if (name === undefined || name === "") {
-          const sections = yield* awaited(
-            Promise.all(
-              KINDS.map((kind) =>
-                Effect.runPromise(
-                  awaiting(function* () {
-                    return yield* awaited(`${kind.name}:\n${yield* awaited(kind.describe())}`);
-                  }),
-                ),
+  return promised(function* () {
+    const [name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
+    try {
+      if (name === undefined || name === "") {
+        const sections = yield* awaited(
+          Promise.all(
+            KINDS.map((kind) =>
+              Effect.runPromise(
+                awaiting(function* () {
+                  return yield* awaited(`${kind.name}:\n${yield* awaited(kind.describe())}`);
+                }),
               ),
             ),
-          );
-          ctx.ui.notify(sections.join("\n\n"), "info");
-          return;
-        }
-        const kind = KINDS.find((candidate) => candidate.name === name);
-        if (kind === undefined) {
-          throw new Error(
-            `Unknown account kind "${name}". Kinds: ${KINDS.map((k) => k.name).join(", ")}`,
-          );
-        }
-        yield* awaited(kind.run(rest.join(" "), ctx));
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          ),
+        );
+        ctx.ui.notify(sections.join("\n\n"), "info");
+        return;
       }
-    }),
-  );
+      const kind = KINDS.find((candidate) => candidate.name === name);
+      if (kind === undefined) {
+        throw new Error(
+          `Unknown account kind "${name}". Kinds: ${KINDS.map((k) => k.name).join(", ")}`,
+        );
+      }
+      yield* awaited(kind.run(rest.join(" "), ctx));
+    } catch (error) {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+    }
+  });
 }
 
 const accounts = {

@@ -5,7 +5,7 @@ import wasmReadFallback from "../core/platform/node/wasm-read-fallback.ts";
 
 const { redirectMissingWasmRead } = wasmReadFallback;
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, awaiting, promised } = awaitingModule;
 
 const WASM_FILENAME = "photon_rs_bg.wasm";
 
@@ -23,38 +23,36 @@ function getEmbeddedWasmPath(): string | undefined {
 }
 
 function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (photonModule !== null) {
-        return photonModule;
-      }
+  return promised(function* () {
+    if (photonModule !== null) {
+      return photonModule;
+    }
 
-      if (loadPromise !== null) {
-        return yield* awaited(loadPromise);
-      }
-
-      loadPromise = (() =>
-        Effect.runPromise(
-          awaiting(function* () {
-            const restoreReadFileSync = redirectMissingWasmRead({
-              fallbackPaths: embeddedWasmPath === undefined ? [] : [embeddedWasmPath],
-              fileName: WASM_FILENAME,
-            });
-            try {
-              photonModule = yield* awaited(import("@silvia-odwyer/photon-node"));
-              return photonModule;
-            } catch {
-              photonModule = null;
-              return photonModule;
-            } finally {
-              restoreReadFileSync();
-            }
-          }),
-        ))();
-
+    if (loadPromise !== null) {
       return yield* awaited(loadPromise);
-    }),
-  );
+    }
+
+    loadPromise = (() =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const restoreReadFileSync = redirectMissingWasmRead({
+            fallbackPaths: embeddedWasmPath === undefined ? [] : [embeddedWasmPath],
+            fileName: WASM_FILENAME,
+          });
+          try {
+            photonModule = yield* awaited(import("@silvia-odwyer/photon-node"));
+            return photonModule;
+          } catch {
+            photonModule = null;
+            return photonModule;
+          } finally {
+            restoreReadFileSync();
+          }
+        }),
+      ))();
+
+    return yield* awaited(loadPromise);
+  });
 }
 
 const photon = {

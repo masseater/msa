@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import projectTrustModule from "../cli/project-trust.ts";
 import awaitingModule from "../core/awaiting.ts";
 import DefaultResourceLoader from "../core/default-resource-loader.ts";
@@ -12,7 +10,7 @@ import type packageManagerCliInternalTypes from "../package-manager-cli-internal
 
 const { createProjectTrustContext } = projectTrustModule;
 const { resolveProjectTrusted } = projectTrust;
-const { awaiting, awaited } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 
 const { hasTrustRequiringProjectResources } = trustManager;
 
@@ -46,52 +44,50 @@ function* loadProjectTrustExtensions(
 function createCommandSettingsManager(
   options: packageManagerCliInternalTypes.CommandSettingsOptions,
 ): Promise<packageManagerCliInternalTypes.CommandSettingsResult> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const settingsManager = yield* awaited(
-        SettingsManager.create(options.cwd, options.agentDir, {
-          projectTrusted: false,
-        }),
+  return promised(function* () {
+    const settingsManager = yield* awaited(
+      SettingsManager.create(options.cwd, options.agentDir, {
+        projectTrusted: false,
+      }),
+    );
+    const projectTrustWarnings: string[] = [];
+    const trustStore = new ProjectTrustStore(options.agentDir);
+    if (options.useSavedProjectTrustOnly === true) {
+      const savedProjectTrusted = (yield* awaited(trustStore.get(options.cwd))) === true;
+      yield* awaited(
+        settingsManager.persistence.setProjectTrusted(
+          options.projectTrustOverride ?? savedProjectTrusted,
+        ),
       );
-      const projectTrustWarnings: string[] = [];
-      const trustStore = new ProjectTrustStore(options.agentDir);
-      if (options.useSavedProjectTrustOnly === true) {
-        const savedProjectTrusted = (yield* awaited(trustStore.get(options.cwd))) === true;
-        yield* awaited(
-          settingsManager.persistence.setProjectTrusted(
-            options.projectTrustOverride ?? savedProjectTrusted,
-          ),
-        );
-        return { projectTrustWarnings, settingsManager };
-      }
-
-      const appMode = getCommandAppMode();
-      const extensionsResult = yield* loadProjectTrustExtensions(
-        options,
-        settingsManager,
-        projectTrustWarnings,
-      );
-
-      const projectTrusted = yield* awaited(
-        resolveProjectTrusted({
-          cwd: options.cwd,
-          defaultProjectTrust: settingsManager.session.getDefaultProjectTrust(),
-          extensionsResult,
-          onExtensionError: (message) => projectTrustWarnings.push(message),
-          projectTrustContext: createProjectTrustContext({
-            cwd: options.cwd,
-            hasUI: appMode === "interactive",
-            mode: appMode,
-            settingsManager,
-          }),
-          trustOverride: options.projectTrustOverride,
-          trustStore,
-        }),
-      );
-      yield* awaited(settingsManager.persistence.setProjectTrusted(projectTrusted));
       return { projectTrustWarnings, settingsManager };
-    }),
-  );
+    }
+
+    const appMode = getCommandAppMode();
+    const extensionsResult = yield* loadProjectTrustExtensions(
+      options,
+      settingsManager,
+      projectTrustWarnings,
+    );
+
+    const projectTrusted = yield* awaited(
+      resolveProjectTrusted({
+        cwd: options.cwd,
+        defaultProjectTrust: settingsManager.session.getDefaultProjectTrust(),
+        extensionsResult,
+        onExtensionError: (message) => projectTrustWarnings.push(message),
+        projectTrustContext: createProjectTrustContext({
+          cwd: options.cwd,
+          hasUI: appMode === "interactive",
+          mode: appMode,
+          settingsManager,
+        }),
+        trustOverride: options.projectTrustOverride,
+        trustStore,
+      }),
+    );
+    yield* awaited(settingsManager.persistence.setProjectTrusted(projectTrusted));
+    return { projectTrustWarnings, settingsManager };
+  });
 }
 
 const commandSettings = { createCommandSettingsManager };

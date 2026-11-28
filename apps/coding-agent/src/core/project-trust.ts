@@ -11,7 +11,7 @@ import type trustManagerTypes from "./trust-manager.types.ts";
 
 const { APP_NAME, CONFIG_DIR_NAME } = config;
 const { getProjectTrustOptions, hasTrustRequiringProjectResources } = trustManager;
-const { awaited, awaiting, performed } = awaitingModule;
+const { awaited, awaiting, performed, promised } = awaitingModule;
 const { emitProjectTrustEvent } = runnerEvents;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 
@@ -84,23 +84,21 @@ function defaultTrust(options: projectTrustTypes.ResolveProjectTrustedOptions): 
 function resolveProjectTrusted(
   options: projectTrustTypes.ResolveProjectTrustedOptions,
 ): Promise<boolean> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      if (options.trustOverride !== undefined) return options.trustOverride;
-      if (!(yield* awaited(hasTrustRequiringProjectResources(options.cwd)))) return true;
-      const fromExtensions = yield* trustFromExtensions(options);
-      if (fromExtensions !== undefined) return fromExtensions;
-      const stored = yield* awaited(storedOrDefaultTrust(options));
-      if (stored !== "ask") return stored;
-      if (!options.projectTrustContext.hasUI) return false;
-      const selected = yield* performed(
-        selectProjectTrustOption(options.cwd, options.projectTrustContext),
-      );
-      if (selected === undefined) return false;
-      yield* awaited(saveProjectTrustPromptResult(options.trustStore, selected));
-      return selected.trusted;
-    }),
-  );
+  return promised(function* () {
+    if (options.trustOverride !== undefined) return options.trustOverride;
+    if (!(yield* awaited(hasTrustRequiringProjectResources(options.cwd)))) return true;
+    const fromExtensions = yield* trustFromExtensions(options);
+    if (fromExtensions !== undefined) return fromExtensions;
+    const stored = yield* awaited(storedOrDefaultTrust(options));
+    if (stored !== "ask") return stored;
+    if (!options.projectTrustContext.hasUI) return false;
+    const selected = yield* performed(
+      selectProjectTrustOption(options.cwd, options.projectTrustContext),
+    );
+    if (selected === undefined) return false;
+    yield* awaited(saveProjectTrustPromptResult(options.trustStore, selected));
+    return selected.trusted;
+  });
 }
 
 const projectTrust = {

@@ -10,7 +10,7 @@ import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
 
 const { spawn } = nodeChildProcess;
 
-const { awaiting, performed } = awaitingModule;
+const { performed, promised } = awaitingModule;
 const { schedule, scheduleUnref } = platform;
 
 const KILL_GRACE_MS = 5000;
@@ -67,33 +67,31 @@ function execCommand(
   cwd: string,
   options?: execTypes.ExecOptions,
 ): Promise<execTypes.ExecResult> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      return yield* performed(
-        Effect.callback<execTypes.ExecResult>((resume) => {
-          const proc = spawn(command, args, {
-            cwd,
-            ...(options?.env === undefined
-              ? {}
-              : { env: { ...platform.envSnapshot(), ...options.env } }),
-            shell: false,
-            stdio: ["ignore", "pipe", "pipe"],
-          });
-          const stop = stopOnAbortOrTimeout(proc, options);
-          const output = collectOutput(proc);
-          const finish = (code: number) => {
-            stop.dispose();
-            resume(Effect.succeed({ code, killed: stop.killed(), ...output }));
-            return undefined;
-          };
-          waitForChildProcess(proc).then(
-            (code) => finish(code ?? 0),
-            () => finish(1),
-          );
-        }),
-      );
-    }),
-  );
+  return promised(function* () {
+    return yield* performed(
+      Effect.callback<execTypes.ExecResult>((resume) => {
+        const proc = spawn(command, args, {
+          cwd,
+          ...(options?.env === undefined
+            ? {}
+            : { env: { ...platform.envSnapshot(), ...options.env } }),
+          shell: false,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        const stop = stopOnAbortOrTimeout(proc, options);
+        const output = collectOutput(proc);
+        const finish = (code: number) => {
+          stop.dispose();
+          resume(Effect.succeed({ code, killed: stop.killed(), ...output }));
+          return undefined;
+        };
+        waitForChildProcess(proc).then(
+          (code) => finish(code ?? 0),
+          () => finish(1),
+        );
+      }),
+    );
+  });
 }
 
 const exec = {

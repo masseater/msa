@@ -1,5 +1,4 @@
 import type tuiTypes from "@msa/tui/index.types";
-import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../../core/awaiting.ts";
@@ -10,7 +9,7 @@ import themeController from "../../modes/interactive/theme/theme-controller.ts";
 import themeModule from "../../modes/interactive/theme/theme.ts";
 import startupThemes from "./startup-themes.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { setTerminalColors, getTerminalTheme, markTerminalColorsPending } = terminalColors;
 const { requestTerminalColors } = themeController;
 const { setTheme, resolveThemeSetting, initTheme, refreshCustomThemes, setRegisteredThemes } =
@@ -19,17 +18,15 @@ const { SYSTEM_THEME_NAME } = systemTheme;
 const { loadStartupThemes } = startupThemes;
 
 function initStartupTheme(settingsManager: settingsManagerTypes.SettingsManager): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      setRegisteredThemes(yield* awaited(loadStartupThemes(settingsManager)));
-      yield* awaited(refreshCustomThemes());
-      markTerminalColorsPending();
-      initTheme(
-        resolveThemeSetting(settingsManager.display.getThemeSetting(), getTerminalTheme()) ??
-          SYSTEM_THEME_NAME,
-      );
-    }),
-  );
+  return promised(function* () {
+    setRegisteredThemes(yield* awaited(loadStartupThemes(settingsManager)));
+    yield* awaited(refreshCustomThemes());
+    markTerminalColorsPending();
+    initTheme(
+      resolveThemeSetting(settingsManager.display.getThemeSetting(), getTerminalTheme()) ??
+        SYSTEM_THEME_NAME,
+    );
+  });
 }
 
 function startStartupTuiImpl(

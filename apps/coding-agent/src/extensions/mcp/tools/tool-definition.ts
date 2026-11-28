@@ -9,7 +9,7 @@ import resultSchema from "./result-schema.ts";
 import toolRenderers from "./tool-renderers.ts";
 import toolShape from "./tool-shape.ts";
 
-const { awaiting, awaited } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { convertMcpResult } = resultContent;
 const { createMcpToolRenderers } = toolRenderers;
 const { toParameters, toToolExposure, toToolAnnotations } = toolShape;
@@ -58,25 +58,23 @@ function createMcpToolDefinition(
     ...(annotations === undefined ? {} : { annotations }),
     ...createMcpToolRenderers(label),
     execute(_toolCallId, params, signal, onUpdate) {
-      return Effect.runPromise(
-        awaiting(function* () {
-          const client = yield* awaited(options.getClient());
-          const result = yield* callWithProgress(
-            client,
-            tool,
-            params,
-            signal,
-            onUpdate,
-            server,
-            options.timeoutMs,
-          );
-          return yield* awaited(
-            convertMcpResult(server, tool.name, result, {
-              readableResources: options.readableResources?.(),
-            }),
-          );
-        }),
-      );
+      return promised(function* () {
+        const client = yield* awaited(options.getClient());
+        const result = yield* callWithProgress(
+          client,
+          tool,
+          params,
+          signal,
+          onUpdate,
+          server,
+          options.timeoutMs,
+        );
+        return yield* awaited(
+          convertMcpResult(server, tool.name, result, {
+            readableResources: options.readableResources?.(),
+          }),
+        );
+      });
     },
   };
 }

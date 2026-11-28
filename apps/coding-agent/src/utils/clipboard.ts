@@ -1,5 +1,4 @@
 import tui from "@msa/tui";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
 import platformModule from "../core/platform/index.ts";
@@ -9,7 +8,7 @@ import wsl from "./wsl.ts";
 
 const { platform, tmpdir } = nodeOs;
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { join, randomUuid, readEnv } = platformModule;
 const { remove, writeFile } = platformModule.files;
 const { runClipboardCommand } = clipboardCommand;
@@ -38,123 +37,113 @@ function emitOsc52(text: string): boolean {
 }
 
 function copyViaWindowsClipboard(text: string): Promise<boolean> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUuid()}.txt`);
+  return promised(function* () {
+    const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUuid()}.txt`);
+    try {
+      yield* awaited(writeFile({ data: text, mode: 0o600, path: tmpFile }));
+      const winPath = (yield* awaited(
+        runClipboardCommand("wslpath", ["-w", tmpFile], { timeoutMs: 1000 }),
+      ))
+        ?.toString("utf8")
+        .trim();
+      if (winPath === undefined || winPath === "") return false;
+      const script = `Set-Clipboard -Value ([System.IO.File]::ReadAllText('${winPath.replaceAll("'", "''")}', [System.Text.Encoding]::UTF8))`;
+      const result = yield* awaited(
+        runClipboardCommand("powershell.exe", ["-NoProfile", "-Command", script], {
+          timeoutMs: 5000,
+        }),
+      );
+      return result !== undefined;
+    } catch {
+      return false;
+    } finally {
       try {
-        yield* awaited(writeFile({ data: text, mode: 0o600, path: tmpFile }));
-        const winPath = (yield* awaited(
-          runClipboardCommand("wslpath", ["-w", tmpFile], { timeoutMs: 1000 }),
-        ))
-          ?.toString("utf8")
-          .trim();
-        if (winPath === undefined || winPath === "") return false;
-        const script = `Set-Clipboard -Value ([System.IO.File]::ReadAllText('${winPath.replaceAll("'", "''")}', [System.Text.Encoding]::UTF8))`;
-        const result = yield* awaited(
-          runClipboardCommand("powershell.exe", ["-NoProfile", "-Command", script], {
-            timeoutMs: 5000,
-          }),
-        );
-        return result !== undefined;
-      } catch {
-        return false;
-      } finally {
-        try {
-          yield* awaited(remove({ force: true, path: tmpFile }));
-        } catch {}
-      }
-    }),
-  );
+        yield* awaited(remove({ force: true, path: tmpFile }));
+      } catch {}
+    }
+  });
 }
 
 function readClipboardText(): Promise<string | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const commands: [string, string[]][] = [];
+  return promised(function* () {
+    const commands: [string, string[]][] = [];
 
-      if (readEnv("TERMUX_VERSION") !== undefined && readEnv("TERMUX_VERSION") !== "")
-        commands.push(["termux-clipboard-get", []]);
-      if (platform() === "linux") {
-        if (readEnv("WAYLAND_DISPLAY") !== undefined && readEnv("WAYLAND_DISPLAY") !== "")
-          commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
-        if (readEnv("DISPLAY") !== undefined && readEnv("DISPLAY") !== "") {
-          commands.push(
-            ["xclip", ["-selection", "clipboard", "-out"]],
-            ["xsel", ["--clipboard", "--output"]],
-          );
-        }
+    if (readEnv("TERMUX_VERSION") !== undefined && readEnv("TERMUX_VERSION") !== "")
+      commands.push(["termux-clipboard-get", []]);
+    if (platform() === "linux") {
+      if (readEnv("WAYLAND_DISPLAY") !== undefined && readEnv("WAYLAND_DISPLAY") !== "")
+        commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
+      if (readEnv("DISPLAY") !== undefined && readEnv("DISPLAY") !== "") {
+        commands.push(
+          ["xclip", ["-selection", "clipboard", "-out"]],
+          ["xsel", ["--clipboard", "--output"]],
+        );
       }
-      for (const [command, args] of commands) {
-        const bytes = yield* awaited(runClipboardCommand(command, args, { timeoutMs: 5000 }));
-        if (bytes !== undefined) return bytes.toString("utf8") || null;
-      }
-      try {
-        return (yield* awaited(getNativeClipboard()?.getText())) || null;
-      } catch {
-        return null;
-      }
-    }),
-  );
+    }
+    for (const [command, args] of commands) {
+      const bytes = yield* awaited(runClipboardCommand(command, args, { timeoutMs: 5000 }));
+      if (bytes !== undefined) return bytes.toString("utf8") || null;
+    }
+    try {
+      return (yield* awaited(getNativeClipboard()?.getText())) || null;
+    } catch {
+      return null;
+    }
+  });
 }
 
 function readClipboardFilePaths(): Promise<string[] | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const paths = yield* awaited(getNativeClipboard()?.getFilePaths?.());
-      return paths?.length !== undefined && paths?.length !== 0 ? paths : null;
-    }),
-  );
+  return promised(function* () {
+    const paths = yield* awaited(getNativeClipboard()?.getFilePaths?.());
+    return paths?.length !== undefined && paths?.length !== 0 ? paths : null;
+  });
 }
 
 function copyToClipboard(text: string): Promise<void> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const p = platform();
-      const env = process.env;
-      let copied = false;
+  return promised(function* () {
+    const p = platform();
+    const env = process.env;
+    let copied = false;
 
-      if (p !== "linux") {
-        try {
-          const clipboard = getNativeClipboard();
-          if (clipboard?.setText !== undefined) {
-            yield* awaited(clipboard.setText(text));
-            copied = true;
-          }
-        } catch {}
-      }
-      let osc52Emitted;
-      ({ osc52Emitted, copied } = yield* copyWithFallbacks(copied, p, env, text));
+    if (p !== "linux") {
+      try {
+        const clipboard = getNativeClipboard();
+        if (clipboard?.setText !== undefined) {
+          yield* awaited(clipboard.setText(text));
+          copied = true;
+        }
+      } catch {}
+    }
+    let osc52Emitted;
+    ({ osc52Emitted, copied } = yield* copyWithFallbacks(copied, p, env, text));
 
-      const headless =
-        p === "linux" &&
-        (env["DISPLAY"] === undefined || env["DISPLAY"] === "") &&
-        (env["WAYLAND_DISPLAY"] === undefined || env["WAYLAND_DISPLAY"] === "") &&
-        (env["TERMUX_VERSION"] === undefined || env["TERMUX_VERSION"] === "");
-      let oversized = false;
-      if (!osc52Emitted && (isRemoteSession(env) || (!copied && headless))) {
-        if (emitOsc52(text)) copied = true;
-        else oversized = true;
-      }
-      if (copied) return;
-      if (oversized) throw new Error("Clipboard unavailable: text exceeds the OSC 52 size limit");
-      if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "") {
+    const headless =
+      p === "linux" &&
+      (env["DISPLAY"] === undefined || env["DISPLAY"] === "") &&
+      (env["WAYLAND_DISPLAY"] === undefined || env["WAYLAND_DISPLAY"] === "") &&
+      (env["TERMUX_VERSION"] === undefined || env["TERMUX_VERSION"] === "");
+    let oversized = false;
+    if (!osc52Emitted && (isRemoteSession(env) || (!copied && headless))) {
+      if (emitOsc52(text)) copied = true;
+      else oversized = true;
+    }
+    if (copied) return;
+    if (oversized) throw new Error("Clipboard unavailable: text exceeds the OSC 52 size limit");
+    if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "") {
+      throw new Error("Clipboard unavailable: install the Termux:API app and `termux-api` package");
+    }
+    if (p === "linux") {
+      if (env["WAYLAND_DISPLAY"] !== undefined && env["WAYLAND_DISPLAY"] !== "") {
         throw new Error(
-          "Clipboard unavailable: install the Termux:API app and `termux-api` package",
+          "Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access",
         );
       }
-      if (p === "linux") {
-        if (env["WAYLAND_DISPLAY"] !== undefined && env["WAYLAND_DISPLAY"] !== "") {
-          throw new Error(
-            "Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access",
-          );
-        }
-        if (env["DISPLAY"] !== undefined && env["DISPLAY"] !== "") {
-          throw new Error("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access");
-        }
+      if (env["DISPLAY"] !== undefined && env["DISPLAY"] !== "") {
+        throw new Error("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access");
       }
-      throw new Error("Clipboard unavailable");
-    }),
-  );
+    }
+    throw new Error("Clipboard unavailable");
+  });
 }
 
 const clipboard = {

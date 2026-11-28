@@ -10,7 +10,7 @@ import platform from "../platform/index.ts";
 import type ModelAvailability from "./model-availability.ts";
 import type ProviderCatalog from "./provider-catalog.ts";
 
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { operationSignal } = abortModule;
 const { schedule } = platform;
 
@@ -47,31 +47,28 @@ const refreshRuntime = (
   target: RefreshTarget,
   options: aiTypes.ModelsRefreshOptions,
 ): Promise<aiTypes.ModelsRefreshResult> =>
-  Effect.runPromise(
-    awaiting(function* () {
-      target.catalog.config = yield* awaited(ModelConfig.load(target.modelsPath));
-      yield* awaited(refreshCliAgentAccounts());
-      if (options.providers === undefined) target.catalog.rebuild();
-      else
-        for (const providerId of new Set(options.providers)) target.catalog.recompose(providerId);
-      target.availability.updateModels();
-      const refreshOptions = {
-        ...options,
-        allowNetwork: options.allowNetwork ?? target.modelNetworkEnabled,
-      };
-      const result = ((yield* awaited(target.models.refresh(refreshOptions))) as
-        | aiTypes.ModelsRefreshResult
-        | undefined) ?? { aborted: options.signal?.aborted ?? false, errors: new Map() };
-      const errors = new Map(result.errors);
-      target.availability.updateModels();
-      if (options.providers === undefined) {
-        yield* awaited(target.availability.refreshAll(options.signal).catch(() => {}));
-      } else {
-        yield* refreshProvidersAvailability(target, options.providers, options, errors);
-      }
-      return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
-    }),
-  );
+  promised(function* () {
+    target.catalog.config = yield* awaited(ModelConfig.load(target.modelsPath));
+    yield* awaited(refreshCliAgentAccounts());
+    if (options.providers === undefined) target.catalog.rebuild();
+    else for (const providerId of new Set(options.providers)) target.catalog.recompose(providerId);
+    target.availability.updateModels();
+    const refreshOptions = {
+      ...options,
+      allowNetwork: options.allowNetwork ?? target.modelNetworkEnabled,
+    };
+    const result = ((yield* awaited(target.models.refresh(refreshOptions))) as
+      | aiTypes.ModelsRefreshResult
+      | undefined) ?? { aborted: options.signal?.aborted ?? false, errors: new Map() };
+    const errors = new Map(result.errors);
+    target.availability.updateModels();
+    if (options.providers === undefined) {
+      yield* awaited(target.availability.refreshAll(options.signal).catch(() => {}));
+    } else {
+      yield* refreshProvidersAvailability(target, options.providers, options, errors);
+    }
+    return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
+  });
 
 function refreshSignal(
   options: modelRuntimeTypes.CreateModelRuntimeOptions,

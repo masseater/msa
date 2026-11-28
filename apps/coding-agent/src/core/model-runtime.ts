@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
@@ -9,7 +8,7 @@ import runtimeRefresh from "./model-runtime/runtime-refresh.ts";
 import virtualModelsModule from "./virtual-models.ts";
 
 const { isVirtualModel } = virtualModelsModule;
-const { awaited, awaiting } = awaitingModule;
+const { awaited, promised } = awaitingModule;
 const { createRuntimeComponents } = runtimeComponents;
 const { loadRuntimeParts } = runtimeParts;
 const { refreshCliAgentAccounts, refreshRuntime, refreshSignal } = runtimeRefresh;
@@ -35,24 +34,21 @@ export default class ModelRuntime implements aiTypes.Models {
   }
 
   static create(options: modelRuntimeTypes.CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
-    return Effect.runPromise(
-      awaiting(function* () {
-        yield* awaited(refreshCliAgentAccounts());
-        const runtime = new ModelRuntime(yield* awaited(loadRuntimeParts(options)));
-        if (options.refreshOnCreate === false) return runtime;
-        const allowNetwork =
-          runtime.parts.modelNetworkEnabled && options.allowModelNetwork === true;
-        const { cancel, signal } = refreshSignal(options, allowNetwork);
-        try {
-          yield* awaited(
-            runtime.refresh({ allowNetwork, ...(signal === undefined ? {} : { signal }) }),
-          );
-        } finally {
-          cancel?.();
-        }
-        return runtime;
-      }),
-    );
+    return promised(function* () {
+      yield* awaited(refreshCliAgentAccounts());
+      const runtime = new ModelRuntime(yield* awaited(loadRuntimeParts(options)));
+      if (options.refreshOnCreate === false) return runtime;
+      const allowNetwork = runtime.parts.modelNetworkEnabled && options.allowModelNetwork === true;
+      const { cancel, signal } = refreshSignal(options, allowNetwork);
+      try {
+        yield* awaited(
+          runtime.refresh({ allowNetwork, ...(signal === undefined ? {} : { signal }) }),
+        );
+      } finally {
+        cancel?.();
+      }
+      return runtime;
+    });
   }
 
   getModelPolicy(): modelRuntimeTypes.ModelPolicy {
