@@ -7,6 +7,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { type MockInstance, afterEach, beforeEach, expect, vi } from "vite-plus/test";
 
+import utilities from "../utilities.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
@@ -16,17 +17,10 @@ const { awaited, readBytesFile, removePath, runTest } = testing;
 
 const { getToolResult } = harnessModule;
 
+const { usageOf } = utilities;
+
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
-
-const usage = (input: number, cost: number): compatTypes.Usage => ({
-  cacheRead: 0,
-  cacheWrite: 0,
-  cost: { cacheRead: 0, cacheWrite: 0, input: cost, output: 0, total: cost },
-  input,
-  output: 0,
-  totalTokens: input,
-});
 
 const codemodeResult = (harness: harnessTypes.Harness) => getToolResult(harness, "codemode");
 
@@ -101,7 +95,7 @@ const agentSessionCodemodeSupport = {
   resultText,
   runCodemode,
   trackCodemodeWorkers,
-  usage,
+  usageOf,
   workersExited,
 };
 

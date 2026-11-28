@@ -1,3 +1,4 @@
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect, Function } from "effect";
 import { inject } from "vite-plus/test";
@@ -38,6 +39,15 @@ function assistantMsg(text: string) {
     },
   };
 }
+
+const usageOf = (input: number, cost = 0): compatTypes.Usage => ({
+  cacheRead: 0,
+  cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: cost, output: 0, total: cost },
+  input,
+  output: 0,
+  totalTokens: input,
+});
 
 const roleOf = (line: string) =>
   Effect.map(fromJsonText(line), (value) => {
@@ -131,6 +141,7 @@ const utilities = {
   createTestResourceLoader,
   hasLiveAuth,
   readSessionFileRoles,
+  usageOf,
   userMsg,
 };
 

@@ -5,6 +5,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import utilities from "../utilities.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 
@@ -15,7 +16,9 @@ const {
   getCurrentTools,
 } = ai;
 
-const { afterEachHook, createUsage, harnesses, seedCompactableSession, useSummaryStreamFn } =
+const { usageOf } = utilities;
+
+const { afterEachHook, harnesses, seedCompactableSession, useSummaryStreamFn } =
   agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;
@@ -120,11 +123,11 @@ const persistsUsageFromMsaGeneratedManual = Effect.gen(function* () {
   const compactionEntries = harness.sessionManager
     .getEntries()
     .filter((entry) => entry.type === "compaction");
-  expect(result.usage).toEqual(createUsage(10));
+  expect(result.usage).toEqual(usageOf(10));
   expect(compactionEntries).toHaveLength(1);
   expect(
     compactionEntries[0]?.type === "compaction" ? compactionEntries[0].usage : undefined,
-  ).toEqual(createUsage(10));
+  ).toEqual(usageOf(10));
 });
 
 const manuallyCompactsWithACustomStreamfnWhen = () =>

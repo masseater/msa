@@ -18,28 +18,11 @@ const { Agent } = agentModule;
 
 const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
-const { assistantMsg, createTestResourceLoader } = utilities;
+const { assistantMsg, createTestResourceLoader, usageOf } = utilities;
 
 const { awaited, runTest } = testing;
 
 const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
-
-function createUsage(totalTokens: number): compatTypes.Usage {
-  return {
-    cacheRead: 0,
-    cacheWrite: 0,
-    cost: {
-      cacheRead: 0,
-      cacheWrite: 0,
-      input: 0,
-      output: 0,
-      total: 0,
-    },
-    input: totalTokens,
-    output: 0,
-    totalTokens,
-  };
-}
 
 function createAssistantMessage(
   text: string,
@@ -52,7 +35,7 @@ function createAssistantMessage(
     model: model.id,
     provider: model.provider,
     timestamp,
-    usage: createUsage(totalTokens),
+    usage: usageOf(totalTokens),
   };
 }
 
@@ -111,7 +94,6 @@ function syncAgentMessages(
 const agentSessionStatsSupport = {
   createAssistantMessage,
   createSession,
-  createUsage,
   createUserMessage,
   model,
   syncAgentMessages,

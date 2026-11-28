@@ -13,7 +13,7 @@ const { createCodemodeExtension } = extension;
 
 const { awaited, runTest } = testing;
 
-const { TINY_PNG_BASE64, usage } = agentSessionCodemodeSupport;
+const { TINY_PNG_BASE64, usageOf } = agentSessionCodemodeSupport;
 
 const { createHarness } = harnessModule;
 
@@ -114,7 +114,7 @@ const classify =
             approved: { probability: text === "good" ? 0.9 : 0.1, type: "bool" as const },
           },
           stopReason: "stop" as const,
-          usage: usage(300, 0.001),
+          usage: usageOf(300, 0.001),
         };
       }),
     );
@@ -148,7 +148,7 @@ const generateImages =
         { data: TINY_PNG_BASE64, mimeType: "image/png", type: "image" },
       ],
       stopReason: "stop",
-      usage: usage(100, 0.04),
+      usage: usageOf(100, 0.04),
     });
   };
 

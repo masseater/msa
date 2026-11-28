@@ -6,16 +6,12 @@ import { describe, expect, it } from "vite-plus/test";
 import SessionManager from "../src/core/session-manager.ts";
 import usageTotals from "../src/core/usage-totals.ts";
 import agentSessionStatsSupport from "./agent-session-stats-support.ts";
+import utilities from "./utilities.ts";
 
 const { getUsageCostBreakdown } = usageTotals;
-const {
-  createAssistantMessage,
-  createSession,
-  createUsage,
-  createUserMessage,
-  model,
-  syncAgentMessages,
-} = agentSessionStatsSupport;
+const { usageOf } = utilities;
+const { createAssistantMessage, createSession, createUserMessage, model, syncAgentMessages } =
+  agentSessionStatsSupport;
 
 const { awaited, runTest } = testing;
 
@@ -147,21 +143,21 @@ const groupsToolAndSummaryUsageSeparatelyFrom = () => {
   const rootId = sessionManager.appendMessage(createUserMessage("hello", 1));
   sessionManager.appendMessage({
     ...createAssistantMessage("response", 100, 2),
-    usage: { ...createUsage(100), cost: { ...createUsage(100).cost, total: 0.5 } },
+    usage: { ...usageOf(100), cost: { ...usageOf(100).cost, total: 0.5 } },
   });
   sessionManager.appendMessage(
     createToolResultMessage({
-      ...createUsage(100),
-      cost: { ...createUsage(100).cost, total: 1 },
+      ...usageOf(100),
+      cost: { ...usageOf(100).cost, total: 1 },
     }),
   );
   sessionManager.appendCompaction("summary", rootId, 100, undefined, false, {
-    ...createUsage(100),
-    cost: { ...createUsage(100).cost, total: 2 },
+    ...usageOf(100),
+    cost: { ...usageOf(100).cost, total: 2 },
   });
   sessionManager.branchWithSummary(null, "branch summary", undefined, false, {
-    ...createUsage(100),
-    cost: { ...createUsage(100).cost, total: 3 },
+    ...usageOf(100),
+    cost: { ...usageOf(100).cost, total: 3 },
   });
 
   expect(getUsageCostBreakdown(sessionManager.getEntries())).toEqual([
