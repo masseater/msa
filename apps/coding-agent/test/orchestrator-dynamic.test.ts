@@ -2,8 +2,8 @@ import { Effect, Result } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import errors from "../src/core/orchestrator/errors.ts";
-import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
 
 const { orchestratorError } = errors;
 
@@ -11,25 +11,14 @@ const { harness } = orchestratorHarness;
 
 const { reviews, setup, taskStatus, waitFor } = harness;
 
-const create = (
-  orchestrator: orchestratorTypes.Orchestrator,
-  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
-) => Effect.promise(() => orchestrator.createTask(input));
+const { create, createNamed } = orchestratorSupport;
 
 const waitsAgainForADependencyAddedAfter = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const c = yield* create(orchestrator, {
-        currentState: "c is not written",
-        goalState: "c works",
-        title: "c",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const c = yield* createNamed(orchestrator, "c");
       const rejected = yield* Effect.result(
         Effect.tryPromise({
           catch: orchestratorError,
@@ -72,21 +61,9 @@ const startsReadyTasksInCreationOrderWithin = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 1 });
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        goalState: "b works",
-        title: "b",
-      });
-      const c = yield* create(orchestrator, {
-        currentState: "c is not written",
-        goalState: "c works",
-        title: "c",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b");
+      const c = yield* createNamed(orchestrator, "c");
       expect(workers).toHaveLength(1);
       expect(workers[0]?.prompts[0]).toContain("a works");
 
@@ -113,21 +90,9 @@ const changesTheConcurrencyLimitWhileTasksWait = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 1 });
-      yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      yield* create(orchestrator, {
-        currentState: "b is not written",
-        goalState: "b works",
-        title: "b",
-      });
-      yield* create(orchestrator, {
-        currentState: "c is not written",
-        goalState: "c works",
-        title: "c",
-      });
+      yield* createNamed(orchestrator, "a");
+      yield* createNamed(orchestrator, "b");
+      yield* createNamed(orchestrator, "c");
       expect(workers).toHaveLength(1);
 
       yield* Effect.promise(() => orchestrator.setMaxConcurrentThreads(3));
@@ -177,18 +142,8 @@ const closesEachRoundSReviewWithoutWaiting = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        round: "one",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        goalState: "b works",
-        round: "two",
-        title: "b",
-      });
+      yield* createNamed(orchestrator, "a", { round: "one" });
+      const b = yield* createNamed(orchestrator, "b", { round: "two" });
       workers.find((worker) => worker.prompts[0]?.includes("a works"))?.complete("a done");
       yield* waitFor(() =>
         workers.some(
@@ -220,11 +175,7 @@ const changesARunningTaskSModel = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
+      const a = yield* createNamed(orchestrator, "a");
       yield* Effect.promise(() => orchestrator.setModel(a.id, "sub/fable", "high"));
       expect(workers[0]?.model.id).toBe("fable");
       expect(workers[0]?.thinkingLevel).toBe("high");
@@ -237,17 +188,8 @@ const stopsATaskAndLeavesItsDependents = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
       const stopped = yield* Effect.promise(() => orchestrator.stop(a.id));
       expect(stopped.status).toBe("stopped");
       expect(taskStatus(orchestrator, b.id)).toBe("waiting");

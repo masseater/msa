@@ -1,18 +1,17 @@
 import type compatTypes from "@msa/ai/compat.types";
 import textModule from "@msa/ai/utils/text";
 
+import errors from "../../utils/errors.ts";
 import type outcomeTypes from "./outcome.types.ts";
 import providerWaitModule from "./provider-wait.ts";
 import TaskStopped from "./task-stopped.ts";
 import type workerTypes from "./worker.ts";
 
+const { errorText } = errors;
+
 const { providerWaits } = providerWaitModule;
 
 const { contentText } = textModule;
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTypes.Outcome {
   const last = worker.messages.findLast(

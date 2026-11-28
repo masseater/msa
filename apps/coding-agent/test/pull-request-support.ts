@@ -10,7 +10,7 @@ import worktreeSupport from "./worktree-support.ts";
 const { joinPath, pathExists, pollUntil, writeTextFile } = testing;
 const { GIT, runCommand, sh, shortId } = worktreeSupport;
 const { create } = orchestratorSupport;
-const { setup, waitFor, withTempDir } = orchestratorHarness.harness;
+const { setup, taskStatus, waitFor, withTempDir } = orchestratorHarness.harness;
 
 interface Remote {
   repository: string;
@@ -136,6 +136,46 @@ function reviewed(remote: Remote, options: orchestratorHarnessTypes.HarnessOptio
   });
 }
 
+type Reviewed = Effect.Success<ReturnType<typeof reviewed>> & {
+  remote: Remote;
+  github: FakeGitHub;
+};
+
+const nothing = (): void => undefined;
+
+function reviewedScenario<E>(
+  body: (run: Reviewed) => Effect.Effect<void, E>,
+  options: orchestratorHarnessTypes.HarnessOptions = {},
+) {
+  return () =>
+    Effect.runPromise(
+      withRemote((remote) =>
+        Effect.gen(function* () {
+          yield* body({ ...(yield* reviewed(remote, options)), github: remote.github, remote });
+        }),
+      ),
+    );
+}
+
+function acceptedMerge<E>({
+  check,
+  prepare = nothing,
+  until = (run) => taskStatus(run.orchestrator, run.taskId) !== "running",
+}: {
+  check: (run: Reviewed) => Effect.Effect<void, E>;
+  prepare?: (run: Reviewed) => void;
+  until?: (run: Reviewed) => boolean;
+}) {
+  return reviewedScenario((run) =>
+    Effect.gen(function* () {
+      prepare(run);
+      run.workers[1]!.complete("acceptable");
+      yield* waitFor(() => until(run));
+      yield* check(run);
+    }),
+  );
+}
+
 function cleanedUp(remote: Remote, worktree: string, branch: string) {
   return Effect.gen(function* () {
     const { repository } = remote;
@@ -148,6 +188,7 @@ function cleanedUp(remote: Remote, worktree: string, branch: string) {
 }
 
 const pullRequestSupport = {
+  acceptedMerge,
   advanceMain,
   cleanedUp,
   commitAndPush,
@@ -156,6 +197,7 @@ const pullRequestSupport = {
   openedTask,
   rebaseAndPush,
   reviewed,
+  reviewedScenario,
   withRemote,
 };
 

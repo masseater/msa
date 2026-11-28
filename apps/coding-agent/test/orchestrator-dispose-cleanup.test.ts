@@ -12,38 +12,36 @@ const { joinPath } = testing;
 const { store } = storeModule;
 const { create } = orchestratorSupport;
 const { setup, taskStatus, withTempDir } = orchestratorHarness.harness;
-const { cleanedUp, holdBranchDeletion, reviewed, withRemote } = pullRequestSupport;
+const { cleanedUp, holdBranchDeletion, reviewedScenario } = pullRequestSupport;
 const { sh } = worktreeSupport;
 
-const disposesOnlyAfterTheCleanupTheMergeStarted = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { repository } = remote;
-        const { orchestrator, workers, branch, taskId, worktree } = yield* reviewed(remote);
-        const deletion = yield* holdBranchDeletion(repository, branch);
-        workers[1]!.complete("acceptable");
-        yield* deletion.entered;
-        expect(taskStatus(orchestrator, taskId)).toBe("running");
+const disposesOnlyAfterTheCleanupTheMergeStarted = reviewedScenario((run) =>
+  Effect.gen(function* () {
+    const { remote } = run;
+    const { repository } = remote;
+    const { orchestrator, workers, branch, taskId, worktree } = run;
+    const deletion = yield* holdBranchDeletion(repository, branch);
+    workers[1]!.complete("acceptable");
+    yield* deletion.entered;
+    expect(taskStatus(orchestrator, taskId)).toBe("running");
 
-        let disposed = false;
-        const disposing = orchestrator.dispose().then(() => {
-          disposed = true;
-          return undefined;
-        });
-        yield* Effect.sleep(100);
-        expect(disposed).toBe(false);
+    let disposed = false;
+    const disposing = orchestrator.dispose().then(() => {
+      disposed = true;
+      return undefined;
+    });
+    yield* Effect.sleep(100);
+    expect(disposed).toBe(false);
 
-        yield* deletion.release;
-        yield* Effect.promise(() => disposing);
-        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
-          local: false,
-          remote: false,
-          worktree: false,
-        });
-      }),
-    ),
-  );
+    yield* deletion.release;
+    yield* Effect.promise(() => disposing);
+    expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
+      local: false,
+      remote: false,
+      worktree: false,
+    });
+  }),
+);
 
 it(
   "returns from dispose only after the worktree, branch, and origin branch a harness merge started removing are gone",

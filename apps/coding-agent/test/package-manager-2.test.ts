@@ -1,49 +1,29 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-const { readEnv } = platform;
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 
 const { packagePaths } = packageManagerSupport;
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
 const shouldAutoDiscoverProjectPromptsWithOverrides = () =>
   runTest(
     Effect.gen(function* () {
-      const promptsDir = joinPath(tempDir, ".msa", "prompts");
+      const promptsDir = joinPath(fixture.tempDir, ".msa", "prompts");
       yield* makeDirectory(promptsDir);
       const promptPath = joinPath(promptsDir, "is.md");
       yield* writeTextFile(promptPath, "Is prompt");
 
-      settingsManager.resources.setProjectPromptTemplatePaths(["!prompts/is.md"]);
+      fixture.settingsManager.resources.setProjectPromptTemplatePaths(["!prompts/is.md"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
     }),
   );
@@ -51,7 +31,7 @@ const shouldAutoDiscoverProjectPromptsWithOverrides = () =>
 const shouldResolveDirectoryWithPackageJsonMsa = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "my-extensions-pkg");
+      const pkgDir = joinPath(fixture.tempDir, "my-extensions-pkg");
       yield* makeDirectory(joinPath(pkgDir, "extensions"));
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
@@ -72,9 +52,9 @@ const shouldResolveDirectoryWithPackageJsonMsa = () =>
       );
       yield* writeTextFile(joinPath(pkgDir, "extensions", "helper.ts"), "export const x = 1;");
 
-      settingsManager.resources.setExtensionPaths([pkgDir]);
+      fixture.settingsManager.resources.setExtensionPaths([pkgDir]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
 
       expect(
         result.extensions.some(
@@ -93,36 +73,7 @@ const shouldResolveDirectoryWithPackageJsonMsa = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("resolve", () => {
     it(
       "should auto-discover project prompts with overrides",

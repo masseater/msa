@@ -5,8 +5,11 @@ import type argsTypes from "../cli/args.types.ts";
 import fileProcessor from "../cli/file-processor.ts";
 import initialMessageModule from "../cli/initial-message.ts";
 import awaitingModule from "../core/awaiting.ts";
+import platformEnv from "../core/platform/env.ts";
 import interop from "../utils/interop.ts";
 import pathsModule from "../utils/paths.ts";
+
+const { isTruthyEnvFlag } = platformEnv;
 
 const { processFileArguments } = fileProcessor;
 const { buildInitialMessage } = initialMessageModule;
@@ -36,11 +39,6 @@ function readPipedStdin(): Promise<string | undefined> {
       );
     }),
   );
-}
-
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (value === undefined || value === "") return false;
-  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
 function resolveCliPaths(cwd: string, paths: string[] | undefined): string[] | undefined {

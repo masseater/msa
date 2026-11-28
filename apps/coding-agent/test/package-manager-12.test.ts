@@ -1,44 +1,24 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-const { readEnv } = platform;
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 
 const { packagePaths } = packageManagerSupport;
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  relativePath,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, relativePath, runTest, toJsonText, writeTextFile } =
+  testing;
 
 const shouldWorkWithDirectPathsNoPatterns = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "direct-pkg");
+      const pkgDir = joinPath(fixture.tempDir, "direct-pkg");
       yield* makeDirectory(joinPath(pkgDir, "extensions"));
       yield* writeTextFile(
         joinPath(pkgDir, "extensions", "one.ts"),
@@ -49,7 +29,7 @@ const shouldWorkWithDirectPathsNoPatterns = () =>
         "export default function() {}",
       );
 
-      settingsManager.resources.setPackages([
+      fixture.settingsManager.resources.setPackages([
         {
           extensions: ["extensions/one.ts"],
           prompts: [],
@@ -59,7 +39,7 @@ const shouldWorkWithDirectPathsNoPatterns = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "one.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "two.ts"))).toBe(true);
     }),
@@ -68,7 +48,7 @@ const shouldWorkWithDirectPathsNoPatterns = () =>
 const shouldResolveAutoloadDisabledProjectPackageEntries = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(agentDir, "npm", "node_modules", "msa-tools");
+      const pkgDir = joinPath(fixture.agentDir, "npm", "node_modules", "msa-tools");
       yield* makeDirectory(joinPath(pkgDir, "extensions"));
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
@@ -82,15 +62,15 @@ const shouldResolveAutoloadDisabledProjectPackageEntries = () =>
         joinPath(pkgDir, "extensions", "bar.ts"),
         "export default function() {}",
       );
-      settingsManager.resources.setPackages(["npm:msa-tools"]);
-      settingsManager.resources.setProjectPackages([
+      fixture.settingsManager.resources.setPackages(["npm:msa-tools"]);
+      fixture.settingsManager.resources.setProjectPackages([
         { autoload: false, extensions: ["-extensions/foo.ts"], source: "npm:msa-tools" },
       ]);
       const runCommandSpy = vi
         .spyOn(commandRunner, "runCommand")
         .mockRejectedValue(new Error("unexpected install"));
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       const states = Object.fromEntries(
         result.extensions.map((resource) => [
           resource.path,
@@ -112,8 +92,8 @@ const shouldResolveAutoloadDisabledProjectPackageEntries = () =>
 const shouldResolveAutoloadDisabledPackageEntriesAs = () =>
   runTest(
     Effect.gen(function* () {
-      vi.stubEnv("HOME", tempDir);
-      const pkgDir = joinPath(tempDir, "positive-only-pkg");
+      vi.stubEnv("HOME", fixture.tempDir);
+      const pkgDir = joinPath(fixture.tempDir, "positive-only-pkg");
       yield* makeDirectory(joinPath(pkgDir, "extensions"));
       yield* makeDirectory(joinPath(pkgDir, "skills", "foo"));
       yield* writeTextFile(
@@ -125,15 +105,15 @@ const shouldResolveAutoloadDisabledPackageEntriesAs = () =>
         "export default function() {}",
       );
       yield* writeTextFile(joinPath(pkgDir, "skills", "foo", "SKILL.md"), "# Foo\n");
-      settingsManager.resources.setProjectPackages([
+      fixture.settingsManager.resources.setProjectPackages([
         {
           autoload: false,
           extensions: ["+extensions/foo.ts"],
-          source: relativePath(joinPath(tempDir, ".msa"), pkgDir),
+          source: relativePath(joinPath(fixture.tempDir, ".msa"), pkgDir),
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
 
       expect(result.extensions.map((resource) => resource.path)).toEqual([
         joinPath(pkgDir, "extensions", "foo.ts"),
@@ -142,36 +122,7 @@ const shouldResolveAutoloadDisabledPackageEntriesAs = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("pattern filtering in package filters", () => {
     it("should work with direct paths (no patterns)", shouldWorkWithDirectPathsNoPatterns);
 

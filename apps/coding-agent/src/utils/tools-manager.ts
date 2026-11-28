@@ -9,12 +9,13 @@ import archiveExtract from "./tools-manager/archive-extract.ts";
 import latestVersion from "./tools-manager/latest-version.ts";
 import releaseDownload from "./tools-manager/release-download.ts";
 import toolCatalog from "./tools-manager/tool-catalog.ts";
+const { isOfflineModeEnabled } = platformModule;
 
 const { platform } = nodeOs;
 
 const { awaited, awaiting } = awaitingModule;
 const { makeDirectory, remove } = platformModule.files;
-const { TERMUX_PACKAGES, isOfflineModeEnabled, getToolPath, TOOLS } = toolCatalog;
+const { TERMUX_PACKAGES, getToolPath, TOOLS } = toolCatalog;
 const { extractBinary } = archiveExtract;
 const { downloadReleaseArchive } = releaseDownload;
 const { getLatestVersion } = latestVersion;

@@ -2,29 +2,22 @@ import { constants as bufferConstants } from "buffer";
 
 import testing from "@msa/testing";
 import { Effect, FileSystem } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import SessionManager from "../../src/core/session-manager.ts";
 import sessionFiles from "../../src/core/session-manager/session-files.ts";
+import tempDirKit from "../temp-dir.ts";
 import fileOperationsSupport from "./file-operations-support.ts";
 
 const { loadEntriesFromFile } = sessionFiles;
 
 const { HEADER_SCAN_LIMIT_BYTES } = fileOperationsSupport;
 
-const {
-  appendTextFile,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  provideNode,
-  readTextFile,
-  removePath,
-  runTest,
-  writeTextFile,
-} = testing;
+const { appendTextFile, joinPath, provideNode, readTextFile, runTest, writeTextFile } = testing;
 
-let tempDir: string;
+const { useTempDir } = tempDirKit;
+
+const temp = useTempDir(`session-test-`);
 
 function writeSessionHeader(file: string, cwd: string, id: string, prefix = "") {
   return runTest(
@@ -44,7 +37,7 @@ function writeSessionHeader(file: string, cwd: string, id: string, prefix = "") 
 const loadsValidSessionFile = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "valid.jsonl");
+      const file = joinPath(temp.path, "valid.jsonl");
       yield* writeTextFile(
         file,
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n' +
@@ -60,7 +53,7 @@ const loadsValidSessionFile = () =>
 const skipsMalformedLinesButKeepsValid = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "mixed.jsonl");
+      const file = joinPath(temp.path, "mixed.jsonl");
       yield* writeTextFile(
         file,
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n' +
@@ -75,7 +68,7 @@ const skipsMalformedLinesButKeepsValid = () =>
 const addsANewlineAfterAnUnterminated = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "unterminated.jsonl");
+      const file = joinPath(temp.path, "unterminated.jsonl");
       const content =
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n' +
         '{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}';
@@ -89,7 +82,7 @@ const addsANewlineAfterAnUnterminated = () =>
 const addsANewlineAfterAnUnterminated2 = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "malformed-tail.jsonl");
+      const file = joinPath(temp.path, "malformed-tail.jsonl");
       const content =
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n' +
         '{"type":"message"';
@@ -103,7 +96,7 @@ const addsANewlineAfterAnUnterminated2 = () =>
 const doesNotModifyAnUnterminatedNon = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "invalid.jsonl");
+      const file = joinPath(temp.path, "invalid.jsonl");
       const content = '{"type":"message","id":"1"}';
       yield* writeTextFile(file, content);
 
@@ -115,8 +108,8 @@ const doesNotModifyAnUnterminatedNon = () =>
 const opensCompatibleSessionsBeyondTheDiscovery = () =>
   runTest(
     Effect.gen(function* () {
-      const storedCwd = joinPath(tempDir, "stored-project");
-      const overrideCwd = joinPath(tempDir, "override-project");
+      const storedCwd = joinPath(temp.path, "stored-project");
+      const overrideCwd = joinPath(temp.path, "override-project");
       const cases = [
         { id: "a".repeat(HEADER_SCAN_LIMIT_BYTES + 1), name: "large-header", prefix: "" },
         {
@@ -127,10 +120,10 @@ const opensCompatibleSessionsBeyondTheDiscovery = () =>
       ];
 
       for (const { name, id, prefix } of cases) {
-        const file = joinPath(tempDir, `${name}.jsonl`);
+        const file = joinPath(temp.path, `${name}.jsonl`);
         yield* Effect.promise(() => writeSessionHeader(file, storedCwd, id, prefix));
         for (const cwdOverride of [undefined, overrideCwd]) {
-          const opening = SessionManager.open(file, tempDir, cwdOverride);
+          const opening = SessionManager.open(file, temp.path, cwdOverride);
           const sessionManager = yield* Effect.promise(() => opening);
           expect(sessionManager.getSessionId()).toBe(id);
           expect(sessionManager.getCwd()).toBe(cwdOverride ?? storedCwd);
@@ -142,7 +135,7 @@ const opensCompatibleSessionsBeyondTheDiscovery = () =>
 const opensSessionFilesLargerThanNode = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "large.jsonl");
+      const file = joinPath(temp.path, "large.jsonl");
       yield* writeTextFile(
         file,
         '{"type":"session","version":3,"id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n',
@@ -171,7 +164,7 @@ const opensSessionFilesLargerThanNode = () =>
         '{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}\n',
       );
 
-      const sessionManager = yield* Effect.promise(() => SessionManager.open(file, tempDir));
+      const sessionManager = yield* Effect.promise(() => SessionManager.open(file, temp.path));
       expect(sessionManager.getSessionId()).toBe("abc");
       expect(sessionManager.getEntries()).toHaveLength(1);
       expect(sessionManager.buildSessionContext().messages).toEqual([
@@ -181,12 +174,12 @@ const opensSessionFilesLargerThanNode = () =>
   );
 
 const returnsEmptyArrayForNonExistentFile = () =>
-  expect(loadEntriesFromFile(joinPath(tempDir, "nonexistent.jsonl"))).resolves.toEqual([]);
+  expect(loadEntriesFromFile(joinPath(temp.path, "nonexistent.jsonl"))).resolves.toEqual([]);
 
 const returnsEmptyArrayForEmptyFile = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "empty.jsonl");
+      const file = joinPath(temp.path, "empty.jsonl");
       yield* writeTextFile(file, "");
       expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
     }),
@@ -195,7 +188,7 @@ const returnsEmptyArrayForEmptyFile = () =>
 const returnsEmptyArrayForFileWithoutValid = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "no-header.jsonl");
+      const file = joinPath(temp.path, "no-header.jsonl");
       yield* writeTextFile(file, '{"type":"message","id":"1"}\n');
       expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
     }),
@@ -204,23 +197,13 @@ const returnsEmptyArrayForFileWithoutValid = () =>
 const returnsEmptyArrayForMalformedJson = () =>
   runTest(
     Effect.gen(function* () {
-      const file = joinPath(tempDir, "malformed.jsonl");
+      const file = joinPath(temp.path, "malformed.jsonl");
       yield* writeTextFile(file, "not json\n");
       expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir(`session-test-`);
-      yield* makeDirectory(tempDir);
-    }),
-  );
-
 describe("loadEntriesFromFile", () => {
-  beforeEach(beforeEachHook);
-  afterEach(() => runTest(removePath(tempDir)));
   it("returns empty array for non-existent file", returnsEmptyArrayForNonExistentFile);
   it("returns empty array for empty file", returnsEmptyArrayForEmptyFile);
   it(
@@ -243,11 +226,11 @@ describe("loadEntriesFromFile", () => {
   ])("reads cwd from a session with %s", (_description, prefix, sessionId) =>
     runTest(
       Effect.gen(function* () {
-        const file = joinPath(tempDir, "header.jsonl");
-        const storedCwd = joinPath(tempDir, "stored-project");
+        const file = joinPath(temp.path, "header.jsonl");
+        const storedCwd = joinPath(temp.path, "stored-project");
         yield* Effect.promise(() => writeSessionHeader(file, storedCwd, sessionId, prefix));
 
-        const sessionManager = yield* Effect.promise(() => SessionManager.open(file, tempDir));
+        const sessionManager = yield* Effect.promise(() => SessionManager.open(file, temp.path));
         expect(sessionManager.getSessionId()).toBe(sessionId);
         expect(sessionManager.getCwd()).toBe(storedCwd);
       }),

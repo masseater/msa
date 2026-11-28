@@ -3,16 +3,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import agentSessionCompaction4Support from "./agent-session-compaction-4-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
 const { fauxAssistantMessage } = ai;
 
-const { afterEachHook4 } = agentSessionCompaction4Support;
-
-const { createAssistant, harnesses, seedCompactableSession } = agentSessionCompactionSupport;
+const { afterEachHook, createAssistant, harnesses, seedCompactableSession } =
+  agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;
 
@@ -190,7 +188,7 @@ const abortsAnInProgressManualCompactionAnd = () =>
   Effect.runPromise(abortsAnInProgressManualCompaction);
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook4);
+  afterEach(afterEachHook);
 
   it(
     "stops after one compact-and-retry when a second response is also truncated",
@@ -209,7 +207,7 @@ describe("AgentSession compaction characterization", () => {
 });
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook4);
+  afterEach(afterEachHook);
 
   it(
     "aborts an in-progress manual compaction and waits until the session is idle",

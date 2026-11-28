@@ -26,8 +26,13 @@ function formatAge(timestamp: number, now = nowMs()): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
 const text = {
   formatAge,
+  prettyJson,
   shortId,
   splitBom,
   stripBom,

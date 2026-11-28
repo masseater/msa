@@ -1,12 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import testing from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { Effect } from "effect";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import config from "../../../src/config.ts";
 import AuthStorage from "../../../src/core/auth-storage.ts";
 import migrations from "../../../src/migrations.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
+import tempDirKit from "../../temp-dir.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
@@ -15,12 +15,10 @@ const { runMigrations } = migrations;
 const { createHarness } = harnessModule;
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { awaited, fromJsonText, joinPath, runTest, toJsonText } = testing;
+const { awaited, fromJsonText, joinPath, readTextFile, toJsonText, writeTextFile } = testing;
+const { useCleanups } = tempDirKit;
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
-const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
-
-const cleanups: { cleanup: () => Promise<void> | void }[] = [];
+const cleanups = useCleanups();
 
 function withAgentDir<T>(agentDir: string, fn: () => T): T {
   vi.stubEnv(ENV_AGENT_DIR, agentDir);
@@ -42,7 +40,7 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
     },
   });
   const modelsPath = joinPath(harness.tempDir, "models.json");
-  yield* fs.writeFileString(
+  yield* writeTextFile(
     modelsPath,
     `${yield* toJsonText({
       providers: {
@@ -57,7 +55,7 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
     })}\n`,
   );
   yield* awaited(withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir)));
-  const migrated = (yield* fromJsonText(yield* fs.readFileString(modelsPath))) as {
+  const migrated = (yield* fromJsonText(yield* readTextFile(modelsPath))) as {
     providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
   };
   expect(migrated.providers["my-provider"]?.apiKey).toBe("CUSTOM_API_KEY");
@@ -85,15 +83,7 @@ const keepsUppercaseHeaderStringsAsLiteralsStep1 = (
 const keepsUppercaseHeaderStringsAsLiteralsDuring = () =>
   Effect.runPromise(keepsUppercaseHeaderStringsAsLiterals);
 
-const afterEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.cleanup());
-    }),
-  );
-
 describe("regression #5661: uppercase models.json header values", () => {
-  afterEach(afterEachHook);
   it(
     "keeps uppercase header strings as literals during startup migrations",
     keepsUppercaseHeaderStringsAsLiteralsDuring,

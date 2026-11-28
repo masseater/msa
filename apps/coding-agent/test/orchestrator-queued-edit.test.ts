@@ -5,6 +5,7 @@ import { expect, it } from "vite-plus/test";
 import errors from "../src/core/orchestrator/errors.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
 
 const { orchestratorError } = errors;
 
@@ -14,10 +15,7 @@ const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
 
-const create = (
-  orchestrator: orchestratorTypes.Orchestrator,
-  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
-) => Effect.promise(() => orchestrator.createTask(input));
+const { create, createNamed } = orchestratorSupport;
 
 const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
   Effect.promise(() => orchestrator.read(id));
@@ -30,22 +28,9 @@ const addsADependencyToAWaitingTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 2 });
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
-      const c = yield* create(orchestrator, {
-        currentState: "c is not written",
-        goalState: "c works",
-        title: "c",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
+      const c = yield* createNamed(orchestrator, "c");
       expect(workers).toHaveLength(2);
 
       yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }));
@@ -79,17 +64,8 @@ const dropsADependencyAndStartsTheTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
       expect(taskStatus(orchestrator, b.id)).toBe("waiting");
 
       yield* Effect.promise(() => orchestrator.setDepends({ remove: [a.id], taskIds: [b.id] }));
@@ -110,21 +86,9 @@ const rejectsACycleAndATaskThat = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator } = setup({ maxConcurrent: 1 });
-      yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        goalState: "b works",
-        title: "b",
-      });
-      const c = yield* create(orchestrator, {
-        currentState: "c is not written",
-        goalState: "c works",
-        title: "c",
-      });
+      yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b");
+      const c = yield* createNamed(orchestrator, "c");
       yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }));
 
       const cycle = yield* attempt(() => orchestrator.setDepends({ add: [b.id], taskIds: [c.id] }));
@@ -152,16 +116,8 @@ const rejectsDependencyChangesOnARunningTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const c = yield* create(orchestrator, {
-        currentState: "c is not written",
-        goalState: "c works",
-        title: "c",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const c = yield* createNamed(orchestrator, "c");
 
       const added = yield* attempt(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
       expect(Result.isFailure(added)).toBe(true);
@@ -194,11 +150,7 @@ const rewritesTheStatesOfAWaitingTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
+      const a = yield* createNamed(orchestrator, "a");
       const b = yield* create(orchestrator, {
         currentState: "the client speaks v2",
         dependsOn: [a.id],
@@ -246,22 +198,9 @@ const keepsTheRewrittenDependenciesAndStatesAfter = () =>
       const databasePath = joinPath(directory, "orchestrator.db");
       try {
         const first = setup({ databasePath });
-        const a = yield* create(first.orchestrator, {
-          currentState: "a is not written",
-          goalState: "a works",
-          title: "a",
-        });
-        const b = yield* create(first.orchestrator, {
-          currentState: "b is not written",
-          dependsOn: [a.id],
-          goalState: "b works",
-          title: "b",
-        });
-        const c = yield* create(first.orchestrator, {
-          currentState: "c is not written",
-          goalState: "c works",
-          title: "c",
-        });
+        const a = yield* createNamed(first.orchestrator, "a");
+        const b = yield* createNamed(first.orchestrator, "b", { dependsOn: [a.id] });
+        const c = yield* createNamed(first.orchestrator, "c");
         yield* Effect.promise(() =>
           first.orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }),
         );

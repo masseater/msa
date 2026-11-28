@@ -8,7 +8,8 @@ import type extensionsTypesTypes from "../../extensions/types.types.ts";
 import renderUtils from "../render-utils.ts";
 
 const { getLanguageFromPath, highlightCode } = themeModule;
-const { normalizeDisplayText, renderToolPath, replaceTabs, str } = renderUtils;
+const { normalizeDisplayText, renderToolPath, replaceTabs, str, trimTrailingEmptyLines } =
+  renderUtils;
 const { expandHint } = keybindingHints;
 
 const { Container, Text } = tui;
@@ -92,13 +93,6 @@ function updateWriteHighlightCacheIncremental(
   }
   refreshWriteHighlightPrefix(cache);
   return cache;
-}
-function trimTrailingEmptyLines(lines: string[]): string[] {
-  let end = lines.length;
-  while (end > 0 && lines[end - 1] === "") {
-    end--;
-  }
-  return lines.slice(0, end);
 }
 function formatWriteCall(
   args: { path?: string; file_path?: string; content?: string } | undefined,

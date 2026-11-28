@@ -1,61 +1,36 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-const { readEnv } = platform;
+import packageManagerFixture from "./package-manager-fixture.ts";
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeJsonFile,
-  writeTextFile,
-} = testing;
+const { usePackageManagerFixture } = packageManagerFixture;
 
-let tempDir: string;
+const fixture = usePackageManagerFixture();
 
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeJsonFile, writeTextFile } =
+  testing;
 
 const installedUserPath = (source: string) =>
-  Effect.promise(() => packageManager.configured.getInstalledPath(source, "user"));
-
-let previousOfflineEnv: string | undefined;
+  Effect.promise(() => fixture.packageManager.configured.getInstalledPath(source, "user"));
 
 const shouldDisablePeerInstallationThroughWrappedPnpmStep1 = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    settingsManager = SettingsManager.inMemory({
+    fixture.useSettings({
       npmCommand: ["mise", "exec", "node@20", "--", "pnpm"],
-    });
-    packageManager = new DefaultPackageManager({
-      agentDir,
-      cwd: tempDir,
-      settingsManager,
     });
 
     const source = "git:github.com/user/repo";
-    const targetDir = joinPath(tempDir, ".msa", "git", "github.com", "user", "repo");
+    const targetDir = joinPath(fixture.tempDir, ".msa", "git", "github.com", "user", "repo");
     yield* makeDirectory(targetDir);
     yield* writeTextFile(
       joinPath(targetDir, "package.json"),
       yield* toJsonText({ name: "repo", version: "1.0.0" }),
     );
-    settingsManager.resources.setProjectPackages([source]);
+    fixture.settingsManager.resources.setProjectPackages([source]);
     return { effectRunPromise, source, targetDir };
   });
 
@@ -93,7 +68,7 @@ const shouldDisablePeerInstallationThroughWrappedPnpm = () =>
       const { source, targetDir } = yield* shouldDisablePeerInstallationThroughWrappedPnpmStep2();
       const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.operations.updates.update(source));
+      yield* awaited(fixture.packageManager.operations.updates.update(source));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "mise",
@@ -114,21 +89,16 @@ const shouldDisablePeerInstallationThroughWrappedPnpm = () =>
   );
 
 const useMiseNpmCommand = () => {
-  settingsManager = SettingsManager.inMemory({
+  fixture.useSettings({
     npmCommand: ["mise", "exec", "node@20", "--", "npm"],
-  });
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
   });
 };
 
 const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
   useMiseNpmCommand();
 
-  const root20 = joinPath(tempDir, "node20", "lib", "node_modules");
-  const root22 = joinPath(tempDir, "node22", "lib", "node_modules");
+  const root20 = joinPath(fixture.tempDir, "node20", "lib", "node_modules");
+  const root22 = joinPath(fixture.tempDir, "node22", "lib", "node_modules");
   yield* makeDirectory(joinPath(root20, "@scope", "pkg"));
 
   const runCommandSyncSpy = vi
@@ -157,7 +127,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
     "-g",
   ]);
 
-  settingsManager.resources.setNpmCommand(["mise", "exec", "node@22", "--", "npm"]);
+  fixture.settingsManager.resources.setNpmCommand(["mise", "exec", "node@22", "--", "npm"]);
 
   expect(yield* installedUserPath("npm:@scope/pkg")).toBeUndefined();
   expect(runCommandSyncSpy).toHaveBeenNthCalledWith(2, "mise", [
@@ -174,17 +144,12 @@ const shouldInstallUserNpmPackagesIntoTheSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    settingsManager = SettingsManager.inMemory({
+    fixture.useSettings({
       npmCommand: ["pnpm"],
       packages: ["npm:pnpm-pkg"],
     });
-    packageManager = new DefaultPackageManager({
-      agentDir,
-      cwd: tempDir,
-      settingsManager,
-    });
 
-    const packagePath = joinPath(agentDir, "npm", "node_modules", "pnpm-pkg");
+    const packagePath = joinPath(fixture.agentDir, "npm", "node_modules", "pnpm-pkg");
     vi.spyOn(commandRunner, "runCommandSync").mockImplementation(() => {
       throw new Error("legacy lookup unavailable");
     });
@@ -206,7 +171,7 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
                 "install",
                 "pnpm-pkg",
                 "--prefix",
-                joinPath(agentDir, "npm"),
+                joinPath(fixture.agentDir, "npm"),
                 "--config.auto-install-peers=false",
                 "--config.strict-peer-dependencies=false",
                 "--config.strict-dep-builds=false",
@@ -224,8 +189,8 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
           ),
         );
 
-      const first = yield* awaited(packageManager.resolution.resolve());
-      const second = yield* awaited(packageManager.resolution.resolve());
+      const first = yield* awaited(fixture.packageManager.resolution.resolve());
+      const second = yield* awaited(fixture.packageManager.resolution.resolve());
 
       expect(
         first.extensions.some(
@@ -242,36 +207,7 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("npmCommand", () => {
     it(
       "should disable peer installation through wrapped pnpm when updating git dependencies",

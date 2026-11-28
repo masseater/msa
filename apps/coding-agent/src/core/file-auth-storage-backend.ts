@@ -21,7 +21,7 @@ function getRetryableLockErrorCode(error: unknown): "ELOCKED" | "EPERM" | undefi
 }
 const AUTH_FILE_MODE = 0o600;
 export default class FileAuthStorageBackend implements authStorageTypes.AuthStorageBackend {
-  private authPath: string;
+  readonly authPath: string;
 
   constructor(authPath: string = getAuthPath()) {
     this.authPath = normalizePath(authPath);

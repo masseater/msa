@@ -1,38 +1,24 @@
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import type modelConfigTypes from "../src/core/model-config.types.ts";
-import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
+const { getModelsForProvider } = modelRegistry4Support;
 
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
-  return registry.getAll().filter((m) => m.provider === provider);
-}
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { runTest } = testing;
 
 const modelOverrideWithCompatOpenrouterrouting = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -44,7 +30,7 @@ const modelOverrideWithCompatOpenrouterrouting = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -64,9 +50,9 @@ const supportsfinishreasonCanBeConfiguredAtProviderAnd = () =>
           },
         },
       };
-      yield* writeRawModelsJson({ openrouter: provider });
+      yield* fixture.writeRawModelsJson({ openrouter: provider });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((model) => model.id === "anthropic/claude-sonnet-4.5");
       const opus = models.find((model) => model.id === "anthropic/claude-opus-4.1");
@@ -83,7 +69,7 @@ const supportsfinishreasonCanBeConfiguredAtProviderAnd = () =>
 const modelOverrideDeepMergesCompatSettings = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -95,7 +81,7 @@ const modelOverrideDeepMergesCompatSettings = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -107,7 +93,7 @@ const modelOverrideDeepMergesCompatSettings = () =>
 const multipleModelOverridesOnSameProvider = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-opus-4.1": {
@@ -120,7 +106,7 @@ const multipleModelOverridesOnSameProvider = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -136,7 +122,7 @@ const multipleModelOverridesOnSameProvider = () =>
 const modelOverrideCombinedWithBaseurlOverride = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           baseUrl: "https://my-proxy.example.com/v1",
           modelOverrides: {
@@ -147,7 +133,7 @@ const modelOverrideCombinedWithBaseurlOverride = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -163,7 +149,7 @@ const modelOverrideCombinedWithBaseurlOverride = () =>
 const modelOverrideForNonExistentModelId = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "nonexistent/model-id": {
@@ -173,7 +159,7 @@ const modelOverrideForNonExistentModelId = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.find((m) => m.id === "nonexistent/model-id")).toBeUndefined();
@@ -185,7 +171,7 @@ const modelOverrideForNonExistentModelId = () =>
 const modelOverrideCanChangeCostFieldsPartially = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -195,7 +181,7 @@ const modelOverrideCanChangeCostFieldsPartially = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -205,25 +191,7 @@ const modelOverrideCanChangeCostFieldsPartially = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("modelOverrides (per-model customization)", () => {
     test("model override with compat.openRouterRouting", modelOverrideWithCompatOpenrouterrouting);
 

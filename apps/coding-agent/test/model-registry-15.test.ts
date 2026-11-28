@@ -1,31 +1,19 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+import modelRegistrySupport from "./model-registry-support.ts";
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { runTest } = testing;
 
 const builtInProviderCustomModelsInheritApi = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           models: [
             {
@@ -38,7 +26,7 @@ const builtInProviderCustomModelsInheritApi = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       expect(registry.getError()).toBeUndefined();
 
       const model = registry.find("openrouter", "fake-provider/fake-model");
@@ -48,25 +36,7 @@ const builtInProviderCustomModelsInheritApi = () =>
     }),
   );
 
-const beforeEachHook2 = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook2 = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook2);
-
-  afterEach(afterEachHook2);
-
   describe("custom models merge behavior", () => {
     test(
       "built-in provider custom models inherit api and baseUrl without explicit fields",

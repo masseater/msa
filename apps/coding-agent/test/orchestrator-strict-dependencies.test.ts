@@ -3,15 +3,15 @@ import { expect, it } from "vite-plus/test";
 
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
 
 const { harness } = orchestratorHarness;
+
+const { create } = orchestratorSupport;
 
 const { setup, taskStatus, waitFor } = harness;
 
 type CreateInput = Parameters<orchestratorTypes.Orchestrator["createTask"]>[0];
-
-const create = (orchestrator: orchestratorTypes.Orchestrator, input: CreateInput) =>
-  Effect.promise(() => orchestrator.createTask(input));
 
 const attempt = (orchestrator: orchestratorTypes.Orchestrator, input: CreateInput) =>
   Effect.promise(() =>

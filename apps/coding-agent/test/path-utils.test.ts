@@ -1,23 +1,17 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import pathUtils from "../src/core/tools/path-utils.ts";
+import tempDirKit from "./temp-dir.ts";
 
 const { expandPath, resolveReadPath, resolveToCwd } = pathUtils;
 
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  removePath,
-  resolvePath,
-  runTest,
-  tempRoot,
-  writeTextFile,
-} = testing;
+const { awaited, joinPath, resolvePath, runTest, tempRoot, writeTextFile } = testing;
 
-let tempDir: string;
+const { useTempDir } = tempDirKit;
+
+const temp = useTempDir("path-utils-test-");
 
 const shouldExpandToHomeDirectory = () => {
   const result = expandPath("~");
@@ -61,10 +55,10 @@ const shouldResolveExistingFilePath = () =>
   runTest(
     Effect.gen(function* () {
       const fileName = "test-file.txt";
-      yield* writeTextFile(joinPath(tempDir, fileName), "content");
+      yield* writeTextFile(joinPath(temp.path, fileName), "content");
 
-      const result = yield* awaited(resolveReadPath(fileName, tempDir));
-      expect(result).toBe(joinPath(tempDir, fileName));
+      const result = yield* awaited(resolveReadPath(fileName, temp.path));
+      expect(result).toBe(joinPath(temp.path, fileName));
     }),
   );
 
@@ -78,11 +72,11 @@ const shouldHandleNfcVsNfdUnicodeNormalization = () =>
       expect(nfdFileName).not.toBe(nfcFileName);
       expect(Buffer.from(nfdFileName)).not.toEqual(Buffer.from(nfcFileName));
 
-      yield* writeTextFile(joinPath(tempDir, nfdFileName), "content");
+      yield* writeTextFile(joinPath(temp.path, nfdFileName), "content");
 
-      const result = yield* awaited(resolveReadPath(nfcFileName, tempDir));
+      const result = yield* awaited(resolveReadPath(nfcFileName, temp.path));
 
-      expect(result).toContain(tempDir);
+      expect(result).toContain(temp.path);
       expect(result).toMatch(/file.+\.txt$/u);
     }),
   );
@@ -95,10 +89,10 @@ const shouldHandleCurlyQuotesVsStraightQuotes = () =>
 
       expect(curlyQuoteName).not.toBe(straightQuoteName);
 
-      yield* writeTextFile(joinPath(tempDir, curlyQuoteName), "content");
+      yield* writeTextFile(joinPath(temp.path, curlyQuoteName), "content");
 
-      const result = yield* awaited(resolveReadPath(straightQuoteName, tempDir));
-      expect(result).toBe(joinPath(tempDir, curlyQuoteName));
+      const result = yield* awaited(resolveReadPath(straightQuoteName, temp.path));
+      expect(result).toBe(joinPath(temp.path, curlyQuoteName));
     }),
   );
 
@@ -110,10 +104,10 @@ const shouldHandleCombinedNfcCurlyQuoteFrench = () =>
 
       expect(nfcCurlyName).not.toBe(nfcStraightName);
 
-      yield* writeTextFile(joinPath(tempDir, nfcCurlyName), "content");
+      yield* writeTextFile(joinPath(temp.path, nfcCurlyName), "content");
 
-      const result = yield* awaited(resolveReadPath(nfcStraightName, tempDir));
-      expect(result).toBe(joinPath(tempDir, nfcCurlyName));
+      const result = yield* awaited(resolveReadPath(nfcStraightName, temp.path));
+      expect(result).toBe(joinPath(temp.path, nfcCurlyName));
     }),
   );
 
@@ -123,11 +117,11 @@ const shouldHandleMacosScreenshotAmPmVariant = () =>
       const macosName = "Screenshot 2024-01-01 at 10.00.00\u202FAM.png";
       const userName = "Screenshot 2024-01-01 at 10.00.00 AM.png";
 
-      yield* writeTextFile(joinPath(tempDir, macosName), "content");
+      yield* writeTextFile(joinPath(temp.path, macosName), "content");
 
-      const result = yield* awaited(resolveReadPath(userName, tempDir));
+      const result = yield* awaited(resolveReadPath(userName, temp.path));
 
-      expect(result).toBe(joinPath(tempDir, macosName));
+      expect(result).toBe(joinPath(temp.path, macosName));
     }),
   );
 
@@ -137,11 +131,11 @@ const shouldHandleMacosScreenshotLowercaseAmPm = () =>
       const macosName = "Screenshot 2024-01-01 at 10.00.00\u202Fam.png";
       const userName = "Screenshot 2024-01-01 at 10.00.00 am.png";
 
-      yield* writeTextFile(joinPath(tempDir, macosName), "content");
+      yield* writeTextFile(joinPath(temp.path, macosName), "content");
 
-      const result = yield* awaited(resolveReadPath(userName, tempDir));
+      const result = yield* awaited(resolveReadPath(userName, temp.path));
 
-      expect(result).toBe(joinPath(tempDir, macosName));
+      expect(result).toBe(joinPath(temp.path, macosName));
     }),
   );
 
@@ -168,19 +162,8 @@ describe("path-utils", () => {
   });
 });
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir("path-utils-test-");
-    }),
-  );
-
 describe("path-utils", () => {
   describe("resolveReadPath", () => {
-    beforeEach(beforeEachHook);
-
-    afterEach(() => runTest(removePath(tempDir)));
-
     it("should resolve existing file path", shouldResolveExistingFilePath);
 
     it(

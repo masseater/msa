@@ -1,8 +1,11 @@
 import * as Diff from "diff";
 import { dual } from "effect/Function";
 
+import renderUtils from "../../../core/tools/render-utils.ts";
 import themeModule from "../theme/theme.ts";
 import type diffTypes from "./diff.types.ts";
+
+const { replaceTabs } = renderUtils;
 
 const { theme } = themeModule;
 
@@ -12,10 +15,6 @@ function parseDiffLine(line: string): { prefix: string; lineNum: string; content
   const [, prefix, lineNum, content] = match;
   if (prefix === undefined || lineNum === undefined || content === undefined) return null;
   return { content, lineNum, prefix };
-}
-
-function replaceTabs(text: string): string {
-  return text.replace(/\t/gu, "   ");
 }
 
 function renderIntraLineDiff(

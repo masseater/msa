@@ -1,39 +1,19 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-const { readEnv } = platform;
+import packageManagerFixture from "./package-manager-fixture.ts";
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
+const { usePackageManagerFixture } = packageManagerFixture;
 
-let tempDir: string;
+const fixture = usePackageManagerFixture();
 
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
 const shouldRespectGitignoreInSkillDirectories = () =>
   runTest(
     Effect.gen(function* () {
-      const skillsDir = joinPath(agentDir, "skills");
+      const skillsDir = joinPath(fixture.agentDir, "skills");
       yield* makeDirectory(skillsDir);
       yield* writeTextFile(joinPath(skillsDir, ".gitignore"), "venv\n__pycache__\n");
 
@@ -51,9 +31,9 @@ const shouldRespectGitignoreInSkillDirectories = () =>
         "---\nname: bad-skill\ndescription: Bad\n---\nContent",
       );
 
-      settingsManager.resources.setSkillPaths(["skills"]);
+      fixture.settingsManager.resources.setSkillPaths(["skills"]);
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.skills.some((r) => r.path.includes("good-skill") && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path.includes("venv") && r.enabled)).toBe(false);
     }),
@@ -62,14 +42,14 @@ const shouldRespectGitignoreInSkillDirectories = () =>
 const shouldNotApplyParentGitignoreToMsa = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(tempDir, ".gitignore"), ".msa\n");
+      yield* writeTextFile(joinPath(fixture.tempDir, ".gitignore"), ".msa\n");
 
-      const skillDir = joinPath(tempDir, ".msa", "skills", "auto-skill");
+      const skillDir = joinPath(fixture.tempDir, ".msa", "skills", "auto-skill");
       yield* makeDirectory(skillDir);
       const skillPath = joinPath(skillDir, "SKILL.md");
       yield* writeTextFile(skillPath, "---\nname: auto-skill\ndescription: Auto\n---\nContent");
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       expect(result.skills.some((r) => r.path === skillPath && r.enabled)).toBe(true);
     }),
   );
@@ -77,10 +57,12 @@ const shouldNotApplyParentGitignoreToMsa = () =>
 const shouldResolveLocalPaths = () =>
   runTest(
     Effect.gen(function* () {
-      const extPath = joinPath(tempDir, "ext.ts");
+      const extPath = joinPath(fixture.tempDir, "ext.ts");
       yield* writeTextFile(extPath, "export default function() {}");
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([extPath]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([extPath]),
+      );
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
     }),
   );
@@ -88,7 +70,7 @@ const shouldResolveLocalPaths = () =>
 const shouldHandleDirectoriesWithMsaManifest = () =>
   runTest(
     Effect.gen(function* () {
-      const pkgDir = joinPath(tempDir, "my-package");
+      const pkgDir = joinPath(fixture.tempDir, "my-package");
       yield* makeDirectory(pkgDir);
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
@@ -108,7 +90,9 @@ const shouldHandleDirectoriesWithMsaManifest = () =>
         "---\nname: my-skill\ndescription: Test\n---\nContent",
       );
 
-      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(
+        fixture.packageManager.resolution.resolveExtensionSources([pkgDir]),
+      );
       expect(
         result.extensions.some((r) => r.path === joinPath(pkgDir, "src", "index.ts") && r.enabled),
       ).toBe(true);
@@ -121,36 +105,7 @@ const shouldHandleDirectoriesWithMsaManifest = () =>
     }),
   );
 
-const beforeEachHook2 = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook2 = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook2);
-
-  afterEach(afterEachHook2);
-
   describe("ignore files", () => {
     it("should respect .gitignore in skill directories", shouldRespectGitignoreInSkillDirectories);
 

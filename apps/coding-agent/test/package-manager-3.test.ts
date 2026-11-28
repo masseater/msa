@@ -1,42 +1,26 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import platform from "../src/core/platform/index.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import packageManagerSupport from "./package-manager-support.ts";
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
 const { packagePaths } = packageManagerSupport;
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeSymlink,
-  makeTempDir,
-  removePath,
-  runTest,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, makeSymlink, runTest, writeTextFile } = testing;
 
 const shouldIgnoreRootMarkdownFilesInAgents = () =>
   runTest(
     Effect.gen(function* () {
-      const agentsSkillsDir = joinPath(tempDir, ".agents", "skills");
+      const agentsSkillsDir = joinPath(fixture.tempDir, ".agents", "skills");
       yield* makeDirectory(joinPath(agentsSkillsDir, "nested-skill"));
       yield* makeDirectory(joinPath(agentsSkillsDir, "third-party"));
       yield* makeDirectory(joinPath(agentsSkillsDir, "third-party", "vendor", "pack"));
@@ -68,11 +52,11 @@ const shouldIgnoreRootMarkdownFilesInAgents = () =>
       );
 
       const pm = new DefaultPackageManager({
-        agentDir,
-        cwd: joinPath(tempDir, "work"),
-        settingsManager,
+        agentDir: fixture.agentDir,
+        cwd: joinPath(fixture.tempDir, "work"),
+        settingsManager: fixture.settingsManager,
       });
-      yield* makeDirectory(joinPath(tempDir, "work"));
+      yield* makeDirectory(joinPath(fixture.tempDir, "work"));
 
       const result = yield* awaited(pm.resolution.resolve());
       expect(result.skills.some((r) => r.path === rootSkill)).toBe(false);
@@ -88,17 +72,17 @@ const shouldKeepAgentsSkillsUserScopedWhen = () =>
   runTest(
     Effect.gen(function* () {
       const previousHome = readEnv("HOME");
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", fixture.tempDir);
 
       try {
-        const cwd = joinPath(tempDir, "scratch", "nested");
-        const localAgentDir = joinPath(tempDir, ".msa", "agent");
+        const cwd = joinPath(fixture.tempDir, "scratch", "nested");
+        const localAgentDir = joinPath(fixture.tempDir, ".msa", "agent");
         const localSettingsManager = SettingsManager.inMemory();
         yield* makeDirectory(cwd);
         yield* makeDirectory(localAgentDir);
 
-        const homeSkill = joinPath(tempDir, ".agents", "skills", "home-skill", "SKILL.md");
-        yield* makeDirectory(joinPath(tempDir, ".agents", "skills", "home-skill"));
+        const homeSkill = joinPath(fixture.tempDir, ".agents", "skills", "home-skill", "SKILL.md");
+        yield* makeDirectory(joinPath(fixture.tempDir, ".agents", "skills", "home-skill"));
         yield* writeTextFile(homeSkill, "---\nname: home-skill\ndescription: home\n---\n");
 
         const pm = new DefaultPackageManager({
@@ -127,11 +111,11 @@ const shouldDedupeUserSkillEntriesWhenMsa = () =>
   runTest(
     Effect.gen(function* () {
       const previousHome = readEnv("HOME");
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", fixture.tempDir);
 
       try {
-        const agentSkillsDir = joinPath(agentDir, "skills");
-        const agentsSkillsDir = joinPath(tempDir, ".agents", "skills");
+        const agentSkillsDir = joinPath(fixture.agentDir, "skills");
+        const agentsSkillsDir = joinPath(fixture.tempDir, ".agents", "skills");
         yield* makeDirectory(agentsSkillsDir);
 
         yield* makeSymlink(agentsSkillsDir, agentSkillsDir);
@@ -140,7 +124,7 @@ const shouldDedupeUserSkillEntriesWhenMsa = () =>
         yield* makeDirectory(joinPath(agentsSkillsDir, "foo"));
         yield* writeTextFile(skillPath, "---\nname: foo\ndescription: foo\n---\n");
 
-        const result = yield* awaited(packageManager.resolution.resolve());
+        const result = yield* awaited(fixture.packageManager.resolution.resolve());
         const fooSkills = result.skills.filter((r) =>
           packagePaths.pathEndsWith(r.path, "foo/SKILL.md"),
         );
@@ -156,36 +140,7 @@ const shouldDedupeUserSkillEntriesWhenMsa = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe(".agents/skills auto-discovery", () => {
     it(
       "should ignore root markdown files in .agents/skills but discover nested markdown skills",

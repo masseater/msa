@@ -140,6 +140,12 @@ const copyFile = (options: { from: string; to: string; exclusive?: boolean }): P
       : fileSystem.copyFile(options.from, options.to),
   );
 
+function firstExisting(candidates: readonly string[]): Promise<string | undefined> {
+  const [candidate, ...rest] = candidates;
+  if (candidate === undefined) return Promise.resolve(undefined);
+  return exists(candidate).then((found) => (found ? candidate : firstExisting(rest)));
+}
+
 const platformFiles = {
   access,
   appendText,
@@ -147,6 +153,7 @@ const platformFiles = {
   copyFile,
   exists,
   fileSize,
+  firstExisting,
   foldLines,
   glob,
   makeDirectory,

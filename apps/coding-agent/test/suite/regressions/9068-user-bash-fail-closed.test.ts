@@ -2,12 +2,21 @@ import testing from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
 import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
 import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
+import rpcRuntimeSupport from "./rpc-runtime-support.ts";
+
+const {
+  createRuntimeHost,
+  parseOutputLines,
+  resetRpcIo,
+  restoreListeners,
+  rpcIo,
+  takeListenerSnapshot,
+} = rpcRuntimeSupport;
 
 const { awaited, runTest } = testing;
 
@@ -17,21 +26,9 @@ const { localResult } = UserBashFailClosedSupport;
 
 const { createHarness } = harnessModule;
 
-const rpcIo = vi.hoisted(() => ({
-  lineHandler: undefined as ((line: string) => void) | undefined,
-  outputLines: [] as string[],
-}));
-
-vi.mock("../../../src/core/output-guard.js", () => ({
-  default: {
-    flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-    takeOverStdout: vi.fn(),
-    waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-    writeRawStdout: (line: string) => {
-      rpcIo.outputLines.push(line);
-    },
-  },
-}));
+vi.mock("../../../src/core/output-guard.js", () =>
+  import("./rpc-runtime-support.ts").then((module) => module.default.outputGuardModule),
+);
 
 vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
@@ -44,68 +41,9 @@ vi.mock("../../../src/modes/interactive/components/bash-execution.js", () => ({
   },
 }));
 
-vi.mock("../../../src/modes/rpc/jsonl.js", () => ({
-  default: {
-    attachJsonlLineReader: vi.fn(
-      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-        rpcIo.lineHandler = onLine;
-        return () => {
-          rpcIo.lineHandler = undefined;
-        };
-      },
-    ),
-    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
-  },
-}));
-
-type NodeListener = Parameters<typeof process.on>[1];
-
-type ListenerSnapshot = {
-  stdinEnd: NodeListener[];
-  signals: Map<NodeJS.Signals, NodeListener[]>;
-};
-
-function takeListenerSnapshot(): ListenerSnapshot {
-  const signals: NodeJS.Signals[] =
-    process.platform === "win32" ? ["SIGTERM"] : ["SIGTERM", "SIGHUP"];
-  return {
-    signals: new Map(
-      signals.map((signal) => [signal, process.listeners(signal) as NodeListener[]]),
-    ),
-    stdinEnd: process.stdin.listeners("end") as NodeListener[],
-  };
-}
-
-function restoreListeners(snapshot: ListenerSnapshot): void {
-  for (const listener of process.stdin.listeners("end") as NodeListener[]) {
-    if (!snapshot.stdinEnd.includes(listener)) process.stdin.off("end", listener);
-  }
-  for (const [signal, previousListeners] of snapshot.signals) {
-    for (const listener of process.listeners(signal) as NodeListener[]) {
-      if (!previousListeners.includes(listener)) process.off(signal, listener);
-    }
-  }
-}
-
-function parseOutputLines(): Array<Record<string, unknown>> {
-  return rpcIo.outputLines
-    .flatMap((line) => line.split("\n"))
-    .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-}
-
-function createRuntimeHost(
-  harness: harnessTypes.Harness,
-): agentSessionRuntimeTypes.AgentSessionRuntime {
-  return {
-    dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-    fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
-    newSession: vi.fn(() => Promise.resolve({ cancelled: true })),
-    session: harness.session,
-    setRebindSession: vi.fn(),
-    switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
-  } as unknown as agentSessionRuntimeTypes.AgentSessionRuntime;
-}
+vi.mock("../../../src/modes/rpc/jsonl.js", () =>
+  import("./rpc-runtime-support.ts").then((module) => module.default.jsonlModule),
+);
 
 function startRpcHarness(extension: (msa: extensionsTypesTypes.ExtensionAPI) => void): Promise<{
   harness: harnessTypes.Harness;
@@ -193,8 +131,7 @@ const rpcCases: Array<{
 ];
 
 afterEach(() => {
-  rpcIo.outputLines = [];
-  rpcIo.lineHandler = undefined;
+  resetRpcIo();
 });
 
 describe("RPC user_bash failure handling (#9068)", () => {

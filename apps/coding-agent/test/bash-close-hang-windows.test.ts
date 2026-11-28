@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import bashExecutor from "../src/core/bash-executor.ts";
 import bash from "../src/core/tools/bash.ts";
+import bashOutputSupport from "./bash-output-support.ts";
+
+const { getTextOutput } = bashOutputSupport;
 
 const { executeBashWithOperations } = bashExecutor;
 const { createBashTool, createLocalBashOperations } = bash;
@@ -67,15 +70,6 @@ const withTimeout = <T>(promise: Promise<T>, onTimeout: () => void) =>
         ),
     }),
   );
-
-function getTextOutput(result: { content?: Array<{ type: string; text?: string }> }): string {
-  return (
-    result.content
-      ?.filter((block) => block.type === "text")
-      .map((block) => block.text ?? "")
-      .join("\n") ?? ""
-  );
-}
 
 let testDir: string;
 

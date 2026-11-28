@@ -14,7 +14,7 @@ const { bindModeFake } = interactiveModeFake;
 
 const { Container, Text } = tui;
 
-const { initTheme, stripAnsi } = tuiKit;
+const { initTheme, renderChat } = tuiKit;
 
 const { currentTimeMillis, nowIso } = testing;
 
@@ -135,10 +135,6 @@ function createSessionEntries(messages: AgentMessage[]): codingAgentTypes.Sessio
     parentId = entry.id;
     return entry;
   });
-}
-
-function renderChat(container: tuiTypes.Container): string {
-  return stripAnsi(container.render(120).join("\n"));
 }
 
 const keepsUnresolvedRenderedToolCallsRegistered = Effect.gen(function* () {

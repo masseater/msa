@@ -1,44 +1,22 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistrySupport;
 
-const {
-  awaited,
-  currentTimeMillis,
-  joinPath,
-  makeTempDir,
-  randomSuffixSync,
-  removePath,
-  runTest,
-  writeJsonFile,
-} = testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
+const { getModelsForProvider } = modelRegistry4Support;
 
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
-  return registry.getAll().filter((m) => m.provider === provider);
-}
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { awaited, currentTimeMillis, runTest } = testing;
 
 const modelOverrideCanAddHeadersAtRequest = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -48,7 +26,7 @@ const modelOverrideCanAddHeadersAtRequest = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
       expect(sonnet).toBeDefined();
@@ -64,7 +42,7 @@ const modelOverrideCanAddHeadersAtRequest = () =>
 const refreshPicksUpModelOverrideChanges = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -74,14 +52,14 @@ const refreshPicksUpModelOverrideChanges = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       expect(
         getModelsForProvider(registry, "openrouter").find(
           (m) => m.id === "anthropic/claude-sonnet-4.5",
         )?.name,
       ).toBe("First Name");
 
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -103,7 +81,7 @@ const refreshPicksUpModelOverrideChanges = () =>
 const removingModelOverrideRestoresBuiltInValues = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           modelOverrides: {
             "anthropic/claude-sonnet-4.5": {
@@ -113,13 +91,13 @@ const removingModelOverrideRestoresBuiltInValues = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const customName = getModelsForProvider(registry, "openrouter").find(
         (m) => m.id === "anthropic/claude-sonnet-4.5",
       )?.name;
       expect(customName).toBe("Custom Name");
 
-      yield* writeRawModelsJson({});
+      yield* fixture.writeRawModelsJson({});
       yield* awaited(registry.refresh());
 
       const restoredName = getModelsForProvider(registry, "openrouter").find(
@@ -133,7 +111,7 @@ const expectBuiltInNamesAndRegisterProvider = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+    const registry = yield* fixture.registry();
 
     expect(registry.getProviderDisplayName("openai")).toBe("OpenAI");
     expect(registry.getProviderDisplayName("openai-codex")).toBe("OpenAI Codex (legacy)");
@@ -197,25 +175,7 @@ const getproviderdisplaynameResolvesRegisteredOauthBuiltInAnd = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("modelOverrides (per-model customization)", () => {
     test("model override can add headers at request time", modelOverrideCanAddHeadersAtRequest);
 

@@ -1,30 +1,22 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import sessionKit from "./session-kit.ts";
+import sessionWorkspace from "./session-workspace.ts";
+
+const workspace = sessionWorkspace.useWorkspace("msa-concurrent-test-");
 
 const { awaited, runTest } = testing;
-const {
-  createAgentSession,
-  disposeWorkspace,
-  prepareWorkspace,
-  replyWhenAborted,
-  streamWith,
-  waitForStreaming,
-} = sessionKit;
-
-let tempDir = "";
-
-let session: agentSessionTypes.AgentSession | undefined;
+const { createAgentSession, replyWhenAborted, streamWith, waitForStreaming } = sessionKit;
 
 const startAbortableSession = Effect.gen(function* () {
   const created = yield* createAgentSession({
-    cwd: tempDir,
+    cwd: workspace.tempDir,
     streamFn: streamWith(({ signal, stream }) => replyWhenAborted(stream, signal)),
   });
-  ({ session } = created);
+  workspace.session = created.session;
   const firstPrompt = created.session.run.prompting.prompt("First message");
   yield* waitForStreaming(created.session);
   return { firstPrompt, session: created.session };
@@ -77,26 +69,7 @@ const shouldAllowFollowupWhileStreaming = () =>
     }),
   );
 
-const prepare = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* prepareWorkspace("msa-concurrent-test-");
-    }),
-  );
-
-const cleanUp = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* disposeWorkspace(session, tempDir);
-      session = undefined;
-    }),
-  );
-
 describe("AgentSession concurrent prompt guard", () => {
-  beforeEach(prepare);
-
-  afterEach(cleanUp);
-
   it(
     "should throw when prompt() called while streaming",
     shouldThrowWhenPromptCalledWhileStreaming,

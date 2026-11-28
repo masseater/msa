@@ -1,15 +1,13 @@
 import type modelSearchTypes from "./model-search.types.ts";
 
-function getModelSearchText(item: modelSearchTypes.ModelSearchItem): string {
-  const { id, provider } = item;
-  const name = item.name !== undefined && item.name !== "" ? ` ${item.name}` : "";
-  return `${id} ${provider} ${provider}/${id} ${provider} ${id}${name}`;
-}
-
 function getModelSelectorSearchText(item: modelSearchTypes.ModelSearchItem): string {
   const { id, provider } = item;
   const name = item.name !== undefined && item.name !== "" ? ` ${item.name}` : "";
   return `${provider} ${provider}/${id} ${provider} ${id}${name}`;
+}
+
+function getModelSearchText(item: modelSearchTypes.ModelSearchItem): string {
+  return `${item.id} ${getModelSelectorSearchText(item)}`;
 }
 
 const modelSearch = {

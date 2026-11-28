@@ -9,9 +9,10 @@ import type settingsManagerTypes from "../settings-manager.types.ts";
 import concurrency from "./concurrency.ts";
 import gitRemote from "./git-remote.ts";
 import packageEnv from "./package-env.ts";
+const { isOfflineModeEnabled } = platform;
 
 const { exists } = platform.files;
-const { isOfflineModeEnabled, UPDATE_CHECK_CONCURRENCY } = packageEnv;
+const { UPDATE_CHECK_CONCURRENCY } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { runWithConcurrency } = concurrency;
 

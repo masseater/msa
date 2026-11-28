@@ -87,16 +87,8 @@ interface WatcherHandle {
   listenerCount(event: string): number;
 }
 
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  pathExists,
-  pollUntil,
-  removePath,
-  runTest,
-  writeTextFile,
-} = testing;
+const { awaited, joinPath, makeTempDir, pollUntil, removeDirIfSet, runTest, writeTextFile } =
+  testing;
 
 function emitReftableChange(provider: footerDataProviderTypes.FooterDataProvider): void {
   const { reftableWatcher } = provider.gitWatch as unknown as {
@@ -230,9 +222,7 @@ const afterEachHook2 = () =>
   runTest(
     Effect.gen(function* () {
       process.chdir(originalCwd);
-      if (tempDir2.length > 0 && (yield* pathExists(tempDir2))) {
-        yield* removePath(tempDir2);
-      }
+      yield* removeDirIfSet(tempDir2);
     }),
   );
 

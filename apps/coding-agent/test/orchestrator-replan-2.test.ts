@@ -5,7 +5,7 @@ import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
-const { create, read, replan, stopAndWrapUp } = orchestratorReplanSupport;
+const { createNamed, read, replan, stopAndWrapUp } = orchestratorReplanSupport;
 
 const { harness } = orchestratorHarness;
 
@@ -15,11 +15,7 @@ const keepsATaskResumesItInA = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
+      const a = yield* createNamed(orchestrator, "a");
 
       const pending = replan(orchestrator, { keep: [a.id], reason: "same plan" });
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "two checks still failing");
@@ -46,17 +42,8 @@ const closesADroppedTaskWithItsReason = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
 
       const pending = replan(orchestrator, {
         drop: [{ reason: "a already does it", taskId: b.id }],
@@ -86,17 +73,8 @@ const mergesSeveralTasksIntoOneAndCarries = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
 
       const pending = replan(orchestrator, {
         reason: "a and b are one change",
@@ -131,17 +109,8 @@ const rewiresWaitingWorkWithoutStoppingAnythingWhen = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
 
       const result = yield* Effect.promise(() =>
         orchestrator.replan({

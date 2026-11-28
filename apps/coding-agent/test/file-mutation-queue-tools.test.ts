@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import edit from "../src/core/tools/edit.ts";
 import write from "../src/core/tools/write.ts";
@@ -9,37 +9,13 @@ import fileMutationQueueToolsSupport from "./file-mutation-queue-tools-support.t
 const { createEditTool } = edit;
 const { createWriteTool } = write;
 
-const { accessFile, createDeferred, delay } = fileMutationQueueToolsSupport;
+const { accessFile, createDeferred, delay, resolvesWithin, useTempDirs } =
+  fileMutationQueueToolsSupport;
 
-const {
-  abortController,
-  awaited,
-  joinPath,
-  makeTempDir,
-  readBytesFile,
-  readTextFile,
-  removeDirs,
-  runTest,
-  writeTextFile,
-} = testing;
+const { abortController, awaited, joinPath, readBytesFile, readTextFile, runTest, writeTextFile } =
+  testing;
 
-function resolvesWithin(promise: Promise<unknown>, ms: number): Promise<boolean> {
-  return runTest(awaited(Promise.race([promise.then(() => true), delay(ms).then(() => false)])));
-}
-
-const tempDirs: string[] = [];
-
-function createTempDir(): Promise<string> {
-  return runTest(
-    Effect.gen(function* () {
-      const dir = yield* makeTempDir("msa-file-mutation-queue-");
-      tempDirs.push(dir);
-      return yield* awaited(dir);
-    }),
-  );
-}
-
-afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
+const createTempDir = useTempDirs();
 
 const preservesBothParallelEditsOnTheSame = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());

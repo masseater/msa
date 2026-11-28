@@ -2,82 +2,63 @@ import { describe, expect, test } from "vite-plus/test";
 
 import promptTemplateArgs from "../src/core/prompt-template-args.ts";
 import promptTemplates from "../src/core/prompt-templates.ts";
+import promptTemplateArgsSupport from "./prompt-template-args-support.ts";
 
 const { expandPromptTemplate } = promptTemplates;
 const { parseCommandArgs, substituteArgs } = promptTemplateArgs;
+const { parses } = promptTemplateArgsSupport;
 
-const shouldParseSimpleSpaceSeparatedArguments = () => {
-  expect(parseCommandArgs("a b c")).toEqual(["a", "b", "c"]);
-};
+const shouldParseSimpleSpaceSeparatedArguments = parses(["a b c", ["a", "b", "c"]]);
 
-const shouldParseQuotedArgumentsWithSpaces = () => {
-  expect(parseCommandArgs('"first arg" second')).toEqual(["first arg", "second"]);
-};
+const shouldParseQuotedArgumentsWithSpaces = parses([
+  '"first arg" second',
+  ["first arg", "second"],
+]);
 
-const shouldParseSingleQuotedArguments = () => {
-  expect(parseCommandArgs("'first arg' second")).toEqual(["first arg", "second"]);
-};
+const shouldParseSingleQuotedArguments = parses(["'first arg' second", ["first arg", "second"]]);
 
-const shouldParseMixedQuoteStyles = () => {
-  expect(parseCommandArgs('"double" \'single\' "double again"')).toEqual([
-    "double",
-    "single",
-    "double again",
-  ]);
-};
+const shouldParseMixedQuoteStyles = parses([
+  '"double" \'single\' "double again"',
+  ["double", "single", "double again"],
+]);
 
-const shouldHandleEmptyString = () => {
-  expect(parseCommandArgs("")).toEqual([]);
-};
+const shouldHandleEmptyString = parses(["", []]);
 
-const shouldHandleTabsAsSeparators = () => {
-  expect(parseCommandArgs("a\tb\tc")).toEqual(["a", "b", "c"]);
-};
+const shouldHandleTabsAsSeparators = parses(["a\tb\tc", ["a", "b", "c"]]);
 
-const shouldHandleQuotedEmptyString = () => {
-  expect(parseCommandArgs('"" " "')).toEqual(["", " "]);
-  expect(parseCommandArgs("a '' c")).toEqual(["a", "", "c"]);
-  expect(parseCommandArgs('a ""')).toEqual(["a", ""]);
-};
+const shouldHandleQuotedEmptyString = parses(
+  ['"" " "', ["", " "]],
+  ["a '' c", ["a", "", "c"]],
+  ['a ""', ["a", ""]],
+);
 
-const shouldHandleArgumentsWithSpecialCharacters = () => {
-  expect(parseCommandArgs("$100 @user #tag")).toEqual(["$100", "@user", "#tag"]);
-};
+const shouldHandleArgumentsWithSpecialCharacters = parses([
+  "$100 @user #tag",
+  ["$100", "@user", "#tag"],
+]);
 
-const shouldHandleUnicodeCharacters2 = () => {
-  expect(parseCommandArgs("日本語 🎉 café")).toEqual(["日本語", "🎉", "café"]);
-};
+const shouldHandleUnicodeCharacters2 = parses(["日本語 🎉 café", ["日本語", "🎉", "café"]]);
 
-const shouldHandleNewlinesInQuotedArguments = () => {
-  expect(parseCommandArgs('"line1\nline2" second')).toEqual(["line1\nline2", "second"]);
-};
+const shouldHandleNewlinesInQuotedArguments = parses([
+  '"line1\nline2" second',
+  ["line1\nline2", "second"],
+]);
 
-const shouldTreatUnquotedNewlinesAsSeparators = () => {
-  expect(parseCommandArgs("label-2\n\nHere is some description #2.")).toEqual([
-    "label-2",
-    "Here",
-    "is",
-    "some",
-    "description",
-    "#2.",
-  ]);
-};
+const shouldTreatUnquotedNewlinesAsSeparators = parses([
+  "label-2\n\nHere is some description #2.",
+  ["label-2", "Here", "is", "some", "description", "#2."],
+]);
 
-const shouldCollapseMixedUnquotedWhitespace = () => {
-  expect(parseCommandArgs("a\n\n\tb  c")).toEqual(["a", "b", "c"]);
-};
+const shouldCollapseMixedUnquotedWhitespace = parses(["a\n\n\tb  c", ["a", "b", "c"]]);
 
-const shouldHandleEscapedQuotesInsideQuotedStrings = () => {
-  expect(parseCommandArgs('"quoted \\"text\\""')).toEqual(["quoted \\text\\"]);
-};
+const shouldHandleEscapedQuotesInsideQuotedStrings = parses([
+  '"quoted \\"text\\""',
+  ["quoted \\text\\"],
+]);
 
-const shouldHandleTrailingSpaces = () => {
-  expect(parseCommandArgs("a b c   ")).toEqual(["a", "b", "c"]);
-};
+const shouldHandleTrailingSpaces = parses(["a b c   ", ["a", "b", "c"]]);
 
-const shouldHandleLeadingSpaces = () => {
-  expect(parseCommandArgs("   a b c")).toEqual(["a", "b", "c"]);
-};
+const shouldHandleLeadingSpaces = parses(["   a b c", ["a", "b", "c"]]);
 
 describe("parseCommandArgs", () => {
   test("should parse simple space-separated arguments", shouldParseSimpleSpaceSeparatedArguments);

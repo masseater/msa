@@ -1,18 +1,15 @@
-import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
-
 import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
 import type extensionsTypesTypes from "../../extensions/types.types.ts";
 import type grepTypesModule from "../grep.types.ts";
 import renderUtils from "../render-utils.ts";
 import truncate from "../truncate.ts";
 import listOutput from "./list-output.ts";
+import textRenderersModule from "./text-renderers.ts";
 
 const { getTextOutput, invalidArgText, shortenPath, str } = renderUtils;
 const { DEFAULT_MAX_BYTES, formatSize } = truncate;
 const { formatListResult } = listOutput;
-
-const { Text } = tui;
+const { textRenderers } = textRenderersModule;
 
 function formatGrepCall(
   args: { pattern: string; path?: string; glob?: string; limit?: number } | undefined,
@@ -53,21 +50,11 @@ function formatGrepResult(
   return formatListResult({ expanded: options.expanded, noun: "lines", output, theme, warnings });
 }
 
-const grepRenderers: Pick<
-  extensionsTypesTypes.ToolDefinition<any, any>,
-  "renderCall" | "renderResult"
-> = {
-  renderCall(args, theme, context) {
-    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-    text.setText(formatGrepCall(args as any, theme));
-    return text;
-  },
-  renderResult(result, options, theme, context) {
-    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
-    text.setText(formatGrepResult(result as any, options, theme, context.showImages));
-    return text;
-  },
-};
+const grepRenderers = textRenderers(
+  (args, theme) => formatGrepCall(args, theme),
+  (result, options, theme, context) =>
+    formatGrepResult(result as any, options, theme, context.showImages),
+);
 
 const grep = {
   grepRenderers,

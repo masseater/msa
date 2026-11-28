@@ -4,6 +4,9 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import platform from "../src/core/platform/index.ts";
+import config2Support from "./config-2-support.ts";
+
+const { setExecPath } = config2Support;
 
 const { readEnv } = platform;
 const { detectInstallMethod, getSelfUpdateCommand } = config;
@@ -24,13 +27,6 @@ const originalPath = readEnv("PATH");
 const originalMsaPackageDir = readEnv("MSA_PACKAGE_DIR");
 const originalArgv1 = process.argv[1];
 let tempDir: string | undefined;
-
-function setExecPath(value: string): void {
-  Object.defineProperty(process, "execPath", {
-    configurable: true,
-    value,
-  });
-}
 
 afterEach(() =>
   runTest(

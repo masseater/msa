@@ -20,9 +20,8 @@ const {
   currentTimeMillis,
   joinPath,
   makeDirectory,
-  pathExists,
   randomSuffixSync,
-  removePath,
+  removeDirIfSet,
   runTest,
 } = testing;
 
@@ -89,14 +88,7 @@ const beforeEachHook3 = () =>
     }),
   );
 
-const afterEachHook3 = () =>
-  runTest(
-    Effect.gen(function* () {
-      if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
-        yield* removePath(tempDir);
-      }
-    }),
-  );
+const afterEachHook3 = () => runTest(removeDirIfSet(tempDir));
 
 describe("DefaultPackageManager git update", () => {
   beforeEach(beforeEachHook3);

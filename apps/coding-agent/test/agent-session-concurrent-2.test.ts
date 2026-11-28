@@ -1,18 +1,18 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import agentSessionConcurrentSupport from "./agent-session-concurrent-support.ts";
 import sessionKit from "./session-kit.ts";
+import sessionWorkspace from "./session-workspace.ts";
+
+const workspace = sessionWorkspace.useWorkspace("msa-concurrent-test-");
 
 const { awaited, runTest } = testing;
 const {
   assistantMessage,
   createAgentSession,
-  disposeWorkspace,
-  prepareWorkspace,
   reply,
   replyWhenAborted,
   streamWith,
@@ -22,17 +22,13 @@ const {
 const { dummyCall, dummyTool, installExtensionRunner, toolCallResponder } =
   agentSessionConcurrentSupport;
 
-let tempDir = "";
-
-let session: agentSessionTypes.AgentSession | undefined;
-
 const steeringSession = (seen: {
   steered: boolean;
   source: string | undefined;
   api?: extensionsTypesTypes.ExtensionAPI;
 }) =>
   createAgentSession({
-    cwd: tempDir,
+    cwd: workspace.tempDir,
     extensionFactories: [
       (msa) => {
         seen.api = msa;
@@ -67,7 +63,7 @@ const shouldQueueExtensionOriginSteeringMessagesWhile = () =>
         steered: false,
       };
       const created = yield* steeringSession(seen);
-      ({ session } = created);
+      workspace.session = created.session;
       const queueEvents: Array<{ steering: readonly string[] }> = [];
       created.session.subscribe((event) => {
         if (event.type === "queue_update") queueEvents.push({ steering: event.steering });
@@ -95,10 +91,10 @@ const shouldAllowPromptAfterPreviousCompletes = () =>
   runTest(
     Effect.gen(function* () {
       const created = yield* createAgentSession({
-        cwd: tempDir,
+        cwd: workspace.tempDir,
         streamFn: streamWith(({ stream }) => reply(stream, assistantMessage("Done"))),
       });
-      ({ session } = created);
+      workspace.session = created.session;
       yield* awaited(created.session.run.prompting.prompt("First message"));
       expect(created.session.isStreaming).toBe(false);
       yield* awaited(
@@ -111,13 +107,13 @@ const shouldWaitForQueuedAgentEventsBefore = () =>
   runTest(
     Effect.gen(function* () {
       const created = yield* createAgentSession({
-        cwd: tempDir,
+        cwd: workspace.tempDir,
         streamFn: streamWith(
           toolCallResponder([dummyCall("toolu_1", "x"), dummyCall("toolu_2", "y")]),
         ),
         tools: [dummyTool],
       });
-      ({ session } = created);
+      workspace.session = created.session;
       const snapshots: string[][] = [];
       installExtensionRunner(created.session, {
         emitToolCall: () =>
@@ -142,26 +138,7 @@ const shouldWaitForQueuedAgentEventsBefore = () =>
     }),
   );
 
-const prepare = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* prepareWorkspace("msa-concurrent-test-");
-    }),
-  );
-
-const cleanUp = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* disposeWorkspace(session, tempDir);
-      session = undefined;
-    }),
-  );
-
 describe("AgentSession concurrent prompt guard", () => {
-  beforeEach(prepare);
-
-  afterEach(cleanUp);
-
   it(
     "should queue extension-origin steering messages while streaming",
     shouldQueueExtensionOriginSteeringMessagesWhile,

@@ -58,6 +58,7 @@ const testing = {
   realPath: files.realPath,
   relativePath: paths.relativePath,
   removeDir: temp.removeDir,
+  removeDirIfSet: temp.removeDirIfSet,
   removeDirRetrying: temp.removeDirRetrying,
   removeDirs: temp.removeDirs,
   removePath: files.removePath,

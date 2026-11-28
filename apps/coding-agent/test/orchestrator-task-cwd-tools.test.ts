@@ -11,7 +11,7 @@ import triageSupport from "./triage-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { dirnameOf, joinPath, makeTempDir, removePath } = testing;
-const { LINT_CHECK } = goalChecksSupport;
+const { LINT_CHECK, lintTaskOf } = goalChecksSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
@@ -55,6 +55,25 @@ function expectRefused(
   );
 }
 
+const lintAwaitingDecision = (session: Session) =>
+  Effect.gen(function* () {
+    const lint = yield* create(
+      session.orchestrator,
+      lintTaskOf([LINT_CHECK], { goalState: "lint reports 0 errors and no rule is disabled" }),
+    );
+    yield* Effect.promise(() =>
+      session.workers[0]!.requestDecision({
+        options: [{ choice: "Disable the rule", tradeoffs: "Breaks the goal" }],
+        unmet: "The last error comes from a rule the goal forbids disabling.",
+      }),
+    );
+    yield* escalateTriage(session.workers);
+    yield* waitFor(() => taskStatus(session.orchestrator, lint.id) === "needs-decision");
+    return lint;
+  });
+
+const PASSING = () => Promise.resolve({ exitCode: 0, output: "0 errors\n" });
+
 const rerunAndSendMessageFailWithTheRemedy = () =>
   Effect.runPromise(
     withOutside((outside) =>
@@ -63,13 +82,7 @@ const rerunAndSendMessageFailWithTheRemedy = () =>
           const session = setup({ cwd: outside });
           const { orchestrator } = session;
           const cwd = joinPath(repository, "app");
-          const lint = yield* create(orchestrator, {
-            checks: [LINT_CHECK],
-            currentState: "lint reports 3 errors",
-            cwd,
-            goalState: "lint reports 0 errors",
-            title: "lint",
-          });
+          const lint = yield* create(orchestrator, lintTaskOf([LINT_CHECK], { cwd }));
           yield* waitFor(() => session.workers.length === 1);
           yield* Effect.promise(() => orchestrator.stop(lint.id));
           yield* sh("rm -rf .git", repository);
@@ -97,26 +110,9 @@ const consultAdvisorFailsWithTheRemedy = () =>
   Effect.runPromise(
     withRepository((repository) =>
       Effect.gen(function* () {
-        const session = setup({
-          cwd: repository,
-          runCommand: () => Promise.resolve({ exitCode: 0, output: "0 errors\n" }),
-        });
+        const session = setup({ cwd: repository, runCommand: PASSING });
         const { orchestrator } = session;
-        const lint = yield* create(orchestrator, {
-          checks: [LINT_CHECK],
-          currentState: "lint reports 3 errors",
-          goalState: "lint reports 0 errors and no rule is disabled",
-          title: "lint",
-        });
-        const worker = session.workers[0]!;
-        yield* Effect.promise(() =>
-          worker.requestDecision({
-            options: [{ choice: "Disable the rule", tradeoffs: "Breaks the goal" }],
-            unmet: "The last error comes from a rule the goal forbids disabling.",
-          }),
-        );
-        yield* escalateTriage(session.workers);
-        yield* waitFor(() => taskStatus(orchestrator, lint.id) === "needs-decision");
+        const lint = yield* lintAwaitingDecision(session);
         const threads = threadsOf(orchestrator, lint.id);
         yield* sh("rm -rf .git", repository);
 
@@ -141,25 +137,11 @@ const sendMessageToADecisionFailsWithTheRemedy = () =>
     withRepository((repository) =>
       Effect.gen(function* () {
         const databasePath = joinPath(dirnameOf(repository), "orchestrator.db");
-        const runCommand = () => Promise.resolve({ exitCode: 0, output: "0 errors\n" });
-        const first = setup({ cwd: repository, databasePath, runCommand });
-        const lint = yield* create(first.orchestrator, {
-          checks: [LINT_CHECK],
-          currentState: "lint reports 3 errors",
-          goalState: "lint reports 0 errors and no rule is disabled",
-          title: "lint",
-        });
-        yield* Effect.promise(() =>
-          first.workers[0]!.requestDecision({
-            options: [{ choice: "Disable the rule", tradeoffs: "Breaks the goal" }],
-            unmet: "The last error comes from a rule the goal forbids disabling.",
-          }),
-        );
-        yield* escalateTriage(first.workers);
-        yield* waitFor(() => taskStatus(first.orchestrator, lint.id) === "needs-decision");
+        const first = setup({ cwd: repository, databasePath, runCommand: PASSING });
+        const lint = yield* lintAwaitingDecision(first);
         yield* Effect.promise(() => first.orchestrator.dispose());
 
-        const second = setup({ cwd: repository, databasePath, runCommand });
+        const second = setup({ cwd: repository, databasePath, runCommand: PASSING });
         const { orchestrator } = second;
         expect(taskStatus(orchestrator, lint.id)).toBe("needs-decision");
         const threads = threadsOf(orchestrator, lint.id);
@@ -187,25 +169,9 @@ const sendMessageToADecisionWithoutAnAskerFailsWithTheRemedy = () =>
   Effect.runPromise(
     withRepository((repository) =>
       Effect.gen(function* () {
-        const session = setup({
-          cwd: repository,
-          runCommand: () => Promise.resolve({ exitCode: 0, output: "0 errors\n" }),
-        });
+        const session = setup({ cwd: repository, runCommand: PASSING });
         const { orchestrator } = session;
-        const lint = yield* create(orchestrator, {
-          checks: [LINT_CHECK],
-          currentState: "lint reports 3 errors",
-          goalState: "lint reports 0 errors and no rule is disabled",
-          title: "lint",
-        });
-        yield* Effect.promise(() =>
-          session.workers[0]!.requestDecision({
-            options: [{ choice: "Disable the rule", tradeoffs: "Breaks the goal" }],
-            unmet: "The last error comes from a rule the goal forbids disabling.",
-          }),
-        );
-        yield* escalateTriage(session.workers);
-        yield* waitFor(() => taskStatus(orchestrator, lint.id) === "needs-decision");
+        const lint = yield* lintAwaitingDecision(session);
         orchestrator.database.prepare("DELETE FROM reports WHERE task_id = ?").run(lint.id);
         const threads = threadsOf(orchestrator, lint.id);
         const started = session.workers.length;

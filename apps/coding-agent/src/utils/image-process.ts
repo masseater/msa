@@ -5,6 +5,9 @@ import awaitingModule from "../core/awaiting.ts";
 import imageConvert from "./image-convert.ts";
 import type imageProcessTypes from "./image-process.types.ts";
 import imageResize from "./image-resize.ts";
+import mime from "./mime.ts";
+
+const { baseMimeType } = mime;
 
 const { awaited, awaiting } = awaitingModule;
 const { convertImageBytesToPng } = imageConvert;
@@ -14,10 +17,6 @@ interface NormalizedImage {
   bytes: Uint8Array;
   mimeType: string;
   convertedFrom?: string;
-}
-
-function baseMimeType(mimeType: string): string {
-  return mimeType.split(";")[0]?.trim().toLowerCase() ?? mimeType.toLowerCase();
 }
 
 function normalizeSupportedImageMimeType(mimeType: string): string | null {

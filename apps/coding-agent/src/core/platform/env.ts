@@ -93,11 +93,22 @@ const withEnv =
         }),
     );
 
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  if (value === undefined || value === "") return false;
+  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
+}
+
+function isOfflineModeEnabled(): boolean {
+  return isTruthyEnvFlag(readEnv("MSA_OFFLINE"));
+}
+
 const platformEnv = {
   assignProcessEnv,
   deleteEnv,
   envNames,
   envSnapshot,
+  isOfflineModeEnabled,
+  isTruthyEnvFlag,
   readEnv,
   withEnv,
   writeEnv,

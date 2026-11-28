@@ -1,11 +1,13 @@
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import dbModule from "./db.ts";
+import dependencyReach from "./dependency-reach.ts";
 import taskRows from "./task-rows.ts";
 import type taskStoreInternalTypes from "./task-store-internal.types.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { db } = dbModule;
 const { toTask, getTask } = taskRows;
+const { reaches } = dependencyReach;
 
 function dependenciesOf(database: DatabaseSync, taskId: string): string[] {
   const rows = database
@@ -32,20 +34,6 @@ function listDependencyPairs(
     )
     .all(project) as unknown as { task_id: string; depends_on: string }[];
   return rows.map((row) => ({ dependsOn: row.depends_on, taskId: row.task_id }));
-}
-
-function reaches(database: DatabaseSync, from: string, target: string): boolean {
-  const row = database
-    .prepare(
-      `WITH RECURSIVE reach(id) AS (
-         SELECT ?
-         UNION
-         SELECT d.depends_on FROM task_dependencies d JOIN reach r ON d.task_id = r.id
-       )
-       SELECT 1 AS found FROM reach WHERE id = ? LIMIT 1`,
-    )
-    .get(from, target);
-  return row !== undefined;
 }
 
 function addDependency(

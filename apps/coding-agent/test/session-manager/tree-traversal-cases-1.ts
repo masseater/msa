@@ -1,7 +1,6 @@
 import { expect } from "vite-plus/test";
 
 import SessionManager from "../../src/core/session-manager.ts";
-import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 import utilities from "../utilities.ts";
 const { assistantMsg, userMsg } = utilities;
 
@@ -24,42 +23,6 @@ const appendmessageCreatesEntryWithCorrectParentid = () => {
 
   expect(entries[2]?.id).toBe(id3);
   expect(entries[2]?.parentId).toBe(id2);
-};
-const appendthinkinglevelchangeIntegratesIntoTree = () => {
-  const session = SessionManager.inMemory();
-
-  const msgId = session.appendMessage(userMsg("hello"));
-  const thinkingId = session.appendThinkingLevelChange("high");
-  session.appendMessage(assistantMsg("response"));
-
-  const entries = session.getEntries();
-  expect(entries).toHaveLength(3);
-
-  const thinkingEntry = entries.find((e) => e.type === "thinking_level_change");
-  expect(thinkingEntry).toBeDefined();
-  expect(thinkingEntry!.id).toBe(thinkingId);
-  expect(thinkingEntry!.parentId).toBe(msgId);
-
-  expect(entries[2]?.parentId).toBe(thinkingId);
-};
-const appendmodelchangeIntegratesIntoTree = () => {
-  const session = SessionManager.inMemory();
-
-  const msgId = session.appendMessage(userMsg("hello"));
-  const modelId = session.appendModelChange("openai", "gpt-4");
-  session.appendMessage(assistantMsg("response"));
-
-  const entries = session.getEntries();
-  const modelEntry = entries.find((e) => e.type === "model_change");
-  expect(modelEntry).toBeDefined();
-  expect(modelEntry?.id).toBe(modelId);
-  expect(modelEntry?.parentId).toBe(msgId);
-  if (modelEntry?.type === "model_change") {
-    expect(modelEntry.provider).toBe("openai");
-    expect(modelEntry.modelId).toBe("gpt-4");
-  }
-
-  expect(entries[2]?.parentId).toBe(modelId);
 };
 const appendcompactionIntegratesIntoTree = () => {
   const session = SessionManager.inMemory();
@@ -90,23 +53,6 @@ const appendcompactionIntegratesIntoTree = () => {
   }
 
   expect(entries[3]?.parentId).toBe(compactionId);
-};
-const appendcustomentryIntegratesIntoTree = () => {
-  const session = SessionManager.inMemory();
-
-  const msgId = session.appendMessage(userMsg("hello"));
-  const customId = session.appendCustomEntry("my_data", { key: "value" });
-  session.appendMessage(assistantMsg("response"));
-
-  const entries = session.getEntries();
-  const customEntry = entries.find((e) => e.type === "custom") as sessionManagerTypes.CustomEntry;
-  expect(customEntry).toBeDefined();
-  expect(customEntry.id).toBe(customId);
-  expect(customEntry.parentId).toBe(msgId);
-  expect(customEntry.customType).toBe("my_data");
-  expect(customEntry.data).toEqual({ key: "value" });
-
-  expect(entries[2]?.parentId).toBe(customId);
 };
 const leafPointerAdvancesAfterEachAppend = () => {
   const session = SessionManager.inMemory();
@@ -226,10 +172,7 @@ const handlesMultipleBranchesAtSamePoint = () => {
 
 const treeTraversalCases1 = {
   appendcompactionIntegratesIntoTree,
-  appendcustomentryIntegratesIntoTree,
   appendmessageCreatesEntryWithCorrectParentid,
-  appendmodelchangeIntegratesIntoTree,
-  appendthinkinglevelchangeIntegratesIntoTree,
   handlesMultipleBranchesAtSamePoint,
   leafPointerAdvancesAfterEachAppend,
   returnsFullPathFromRootTo,

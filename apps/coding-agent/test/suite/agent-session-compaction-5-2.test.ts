@@ -3,14 +3,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import agentSessionCompaction5Support from "./agent-session-compaction-5-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
-const { afterEachHook5 } = agentSessionCompaction5Support;
-
-const { createAssistant, harnesses } = agentSessionCompactionSupport;
+const { afterEachHook, createAssistant, harnesses } = agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;
 
@@ -201,7 +198,7 @@ const doesNotTriggerThresholdCompactionWhenOnly = () =>
   Effect.runPromise(doesNotTriggerThresholdCompactionWhen);
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook5);
+  afterEach(afterEachHook);
 
   it(
     "ignores stale pre-compaction assistant usage on pre-prompt checks",
@@ -220,7 +217,7 @@ describe("AgentSession compaction characterization", () => {
 });
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook5);
+  afterEach(afterEachHook);
 
   it(
     "does not trigger threshold compaction when only kept pre-compaction usage exists",

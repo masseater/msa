@@ -3,6 +3,12 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import src from "../src/index.ts";
+import imageFixtureSupport from "./image-fixture-support.ts";
+import tools2Support from "./tools-2-support.ts";
+
+const { createTinyBmp1x1Red24bpp } = imageFixtureSupport;
+
+const { getTextOutput } = tools2Support;
 
 const { createReadTool } = src;
 
@@ -10,31 +16,6 @@ const { awaited, joinPath, makeTempDir, removePath, runTest, writeBytesFile, wri
   testing;
 
 const readTool = createReadTool(process.cwd());
-
-function getTextOutput(result: any): string {
-  return (
-    result.content
-      ?.filter((c: any) => c.type === "text")
-      .map((c: any) => c.text)
-      .join("\n") || ""
-  );
-}
-
-function createTinyBmp1x1Red24bpp(): Buffer {
-  const buffer = Buffer.alloc(58);
-  buffer.write("BM", 0, "ascii");
-  buffer.writeUInt32LE(buffer.length, 2);
-  buffer.writeUInt32LE(54, 10);
-  buffer.writeUInt32LE(40, 14);
-  buffer.writeInt32LE(1, 18);
-  buffer.writeInt32LE(1, 22);
-  buffer.writeUInt16LE(1, 26);
-  buffer.writeUInt16LE(24, 28);
-  buffer.writeUInt32LE(0, 30);
-  buffer.writeUInt32LE(4, 34);
-  buffer[56] = 0xff;
-  return buffer;
-}
 
 let testDir = "";
 

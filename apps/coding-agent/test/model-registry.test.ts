@@ -1,66 +1,30 @@
-import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
+const { providerConfig, getModelsForProvider } = modelRegistry4Support;
 
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-function providerConfig(
-  baseUrl: string,
-  models: Array<{ id: string; name?: string }>,
-  api: string = "anthropic-messages",
-): modelRegistryTypes.ProviderConfigInput {
-  return {
-    api: api as compatTypes.Api,
-    apiKey: "test-key",
-    baseUrl,
-    models: models.map((m) => ({
-      contextWindow: 100000,
-      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-      id: m.id,
-      input: ["text"],
-      maxTokens: 8000,
-      name: m.name ?? m.id,
-      reasoning: false,
-    })),
-  };
-}
-
-function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
-  return registry.getAll().filter((m) => m.provider === provider);
-}
+const { awaited, runTest } = testing;
 
 function overrideConfig(baseUrl: string, headers?: Record<string, string>) {
   return { baseUrl, ...(headers && { headers }) };
 }
 
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
-
 const overridingBaseurlKeepsAllBuiltInModels = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       expect(anthropicModels.length).toBeGreaterThan(1);
@@ -71,11 +35,11 @@ const overridingBaseurlKeepsAllBuiltInModels = () =>
 const overridingBaseurlChangesUrlOnAllBuilt = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       for (const model of anthropicModels) {
@@ -87,13 +51,13 @@ const overridingBaseurlChangesUrlOnAllBuilt = () =>
 const overridingHeadersResolvesAtRequestTime = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1", {
           "X-Custom-Header": "custom-value",
         }),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
       for (const model of anthropicModels) {
@@ -109,7 +73,7 @@ const overridingHeadersResolvesAtRequestTime = () =>
 const headersOnlyOverrideResolvesAtRequestTime = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": {
           headers: {
             "X-Custom-Header": "custom-value",
@@ -117,7 +81,7 @@ const headersOnlyOverrideResolvesAtRequestTime = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       expect(registry.getError()).toBeUndefined();
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
@@ -134,7 +98,7 @@ const headersOnlyOverrideResolvesAtRequestTime = () =>
 const unconfiguredCompatibilityAuthIncludesStaticModelHeaders = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const base = registry.getAll()[0];
       if (base === undefined) throw new Error("expected a registered model");
       const model = {
@@ -152,11 +116,11 @@ const unconfiguredCompatibilityAuthIncludesStaticModelHeaders = () =>
 const baseurlOnlyOverrideDoesNotAffectOther = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const opencodeModels = getModelsForProvider(registry, "opencode");
 
       expect(opencodeModels.length).toBeGreaterThan(0);
@@ -167,7 +131,7 @@ const baseurlOnlyOverrideDoesNotAffectOther = () =>
 const canMixBaseurlOverrideAndModelsMerge = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://anthropic-proxy.example.com/v1"),
 
         opencode: providerConfig(
@@ -177,7 +141,7 @@ const canMixBaseurlOverrideAndModelsMerge = () =>
         ),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
 
       const anthropicModels = getModelsForProvider(registry, "anthropic-api");
       expect(anthropicModels.length).toBeGreaterThan(1);
@@ -192,16 +156,16 @@ const canMixBaseurlOverrideAndModelsMerge = () =>
 const refreshPicksUpBaseurlOverrideChanges = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://first-proxy.example.com/v1"),
       });
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
 
       expect(getModelsForProvider(registry, "anthropic-api")[0]?.baseUrl).toBe(
         "https://first-proxy.example.com/v1",
       );
 
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "anthropic-api": overrideConfig("https://second-proxy.example.com/v1"),
       });
       yield* awaited(registry.refresh());
@@ -212,25 +176,7 @@ const refreshPicksUpBaseurlOverrideChanges = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("baseUrl override (no custom models)", () => {
     test("overriding baseUrl keeps all built-in models", overridingBaseurlKeepsAllBuiltInModels);
 

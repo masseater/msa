@@ -1,38 +1,15 @@
-import type aiTypes from "@msa/ai/index.types";
-import testing from "@msa/testing";
 import { describe, expect, test } from "vite-plus/test";
 
 import AssistantMessageComponent from "../src/modes/interactive/components/assistant-message.ts";
 import UserMessageComponent from "../src/modes/interactive/components/user-message.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
+import assistantMessageSupport from "./assistant-message-support.ts";
+
+const { createAssistantMessage } = assistantMessageSupport;
 
 const { initTheme } = themeModule;
 const { stripAnsi } = ansi;
-const { currentTimeMillis } = testing;
-
-function createAssistantMessage(
-  content: aiTypes.AssistantMessage["content"],
-  overrides: Partial<Pick<aiTypes.AssistantMessage, "stopReason">> = {},
-): aiTypes.AssistantMessage {
-  return {
-    api: "openai-responses" as const,
-    content,
-    model: "gpt-4o-mini",
-    provider: "openai",
-    role: "assistant",
-    stopReason: overrides.stopReason ?? "stop",
-    timestamp: currentTimeMillis(),
-    usage: {
-      cacheRead: 0,
-      cacheWrite: 0,
-      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-      input: 0,
-      output: 0,
-      totalTokens: 0,
-    },
-  };
-}
 
 const reappliesMarkdownTransformersWhenAvailableWidthChanges = () => {
   initTheme("dark");

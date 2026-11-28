@@ -1,16 +1,16 @@
 import { Console, Effect } from "effect";
 
-const writeLog = (...args: readonly unknown[]): void => {
-  Effect.runSync(Console.log(...args));
-};
+const writeVia =
+  (log: (...args: ReadonlyArray<any>) => Effect.Effect<void>) =>
+  (...args: readonly unknown[]): void => {
+    Effect.runSync(log(...args));
+  };
 
-const writeWarn = (...args: readonly unknown[]): void => {
-  Effect.runSync(Console.warn(...args));
-};
+const writeLog = writeVia(Console.log);
 
-const writeError = (...args: readonly unknown[]): void => {
-  Effect.runSync(Console.error(...args));
-};
+const writeWarn = writeVia(Console.warn);
+
+const writeError = writeVia(Console.error);
 
 const platformConsole = {
   writeError,

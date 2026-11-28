@@ -5,7 +5,7 @@ import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
-const { create, replan, stopAndWrapUp } = orchestratorReplanSupport;
+const { create, createNamed, replan, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 
@@ -136,16 +136,8 @@ it("rejects a replan that makes a task wait on a task it closes", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b");
       const rejected = yield* Effect.promise(() =>
         replan(orchestrator, {
           drop: [{ reason: "a is not needed", taskId: a.id }],

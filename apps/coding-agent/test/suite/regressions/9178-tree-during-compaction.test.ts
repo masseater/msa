@@ -1,28 +1,23 @@
-import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import utilities from "../../utilities.ts";
+import agentSessionBoundariesSupport from "../agent-session-boundaries-support.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
 const { createHarness, getMessageText } = harnessModule;
 const { assistantMsg, userMsg } = utilities;
 
-const { gate } = testing;
-
-function createDeferred(): { promise: Promise<void>; resolve: () => void } {
-  const promise = gate();
-  return { promise, resolve: () => promise.release() };
-}
+const { deferred } = agentSessionBoundariesSupport;
 
 let harness!: harnessTypes.Harness;
 
 const rejectsNavigationBeforeTheActiveLeafSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    const compactionStarted = createDeferred();
-    const compactionReleased = createDeferred();
+    const compactionStarted = deferred();
+    const compactionReleased = deferred();
 
     harness = yield* Effect.promise(() =>
       createHarness({
@@ -89,8 +84,8 @@ const rejectsNavigationBeforeTheActiveLeaf = Effect.gen(function* () {
 
 const rejectsASecondNavigationWhileThe = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const navigationStarted = createDeferred();
-  const navigationReleased = createDeferred();
+  const navigationStarted = deferred();
+  const navigationReleased = deferred();
   harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [

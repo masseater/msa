@@ -13,7 +13,7 @@ import platform from "./platform/index.ts";
 const { join } = platform;
 const { getAgentDir } = config;
 const { getFileRevision, normalizePath } = paths;
-const { stripBom } = text;
+const { prettyJson, stripBom } = text;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { raceWithAbortSignal } = abortModule;
 
@@ -182,7 +182,4 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
       }, this),
     );
   }
-}
-function prettyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
 }

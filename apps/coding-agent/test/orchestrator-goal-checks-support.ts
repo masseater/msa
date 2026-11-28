@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 
+import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { withTempDir } = orchestratorHarness.harness;
+const { setup, withTempDir } = orchestratorHarness.harness;
 const { withRepository } = worktreeSupport;
 
 const LINT_CHECK = { command: "cat lint.txt", output: "^0 errors$" };
@@ -25,6 +28,51 @@ function heldCommand() {
   return { calls, runCommand };
 }
 
-const goalChecksSupport = { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepo, withRepository };
+type TaskInput = Parameters<orchestratorTypes.Orchestrator["createTask"]>[0];
+
+const lintTaskOf = (
+  checks: NonNullable<TaskInput["checks"]>,
+  overrides: Partial<TaskInput> = {},
+): TaskInput => ({
+  checks,
+  currentState: "lint reports 3 errors",
+  goalState: "lint reports 0 errors",
+  title: "lint",
+  ...overrides,
+});
+
+const inCheckedRepository = <A, E>(
+  body: (context: ReturnType<typeof setup>) => Effect.Effect<A, E>,
+  options: orchestratorHarnessTypes.HarnessOptions = {},
+) =>
+  Effect.runPromise(
+    withRepository((directory) =>
+      Effect.suspend(() =>
+        body(setup({ runCommand: orchestratorCallbacks.runCommand, ...options, cwd: directory })),
+      ),
+    ),
+  );
+
+const inHeldRepository = <A, E>(
+  body: (
+    context: ReturnType<typeof setup> & { held: ReturnType<typeof heldCommand> },
+  ) => Effect.Effect<A, E>,
+) => {
+  const held = heldCommand();
+  return inCheckedRepository((context) => body({ ...context, held }), {
+    runCommand: held.runCommand,
+  });
+};
+
+const goalChecksSupport = {
+  LINT_CHECK,
+  SHORTCUT_CHECK,
+  heldCommand,
+  inCheckedRepository,
+  inHeldRepository,
+  lintTaskOf,
+  withRepo,
+  withRepository,
+};
 
 export default goalChecksSupport;

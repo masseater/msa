@@ -1,9 +1,12 @@
+import platformFiles from "../../core/platform/files.ts";
 import platformModule from "../../core/platform/index.ts";
 import nodeChildProcess from "../../core/platform/node/child-process.ts";
 import type nodeChildProcessTypes from "../../core/platform/node/child-process.types.ts";
 import nodeFsPromises from "../../core/platform/node/fs-promises.ts";
 import nodeOs from "../../core/platform/node/os.ts";
 import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
+
+const { firstExisting } = platformFiles;
 
 const { platform } = nodeOs;
 
@@ -23,12 +26,6 @@ function findBinaryRecursively(dirs: string[], binaryFileName: string): Promise<
       .map((entry) => join(currentDir, entry.name));
     return findBinaryRecursively([...subdirectories, ...rest], binaryFileName);
   });
-}
-
-function firstExisting(candidates: readonly string[]): Promise<string | undefined> {
-  const [candidate, ...rest] = candidates;
-  if (candidate === undefined) return Promise.resolve(undefined);
-  return exists(candidate).then((found) => (found ? candidate : firstExisting(rest)));
 }
 
 function formatSpawnFailure(result: nodeChildProcessTypes.SpawnSyncReturns<Buffer>): string {

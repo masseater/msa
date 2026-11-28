@@ -5,7 +5,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
 const { taskStatus, waitFor } = orchestratorHarness.harness;
-const { exists, reviewed, withRemote } = pullRequestSupport;
+const { acceptedMerge, exists, reviewed, withRemote } = pullRequestSupport;
 
 const REFUSED = { code: 1, stderr: "gh: Base branch was modified. (HTTP 405)", stdout: "" };
 const RUN_POLL_MS = 2_000;
@@ -17,26 +17,24 @@ function rerunWorktreeExists(workers: readonly { cwd: string; prompts: string[] 
   return exists(`test -d ${rerun!.cwd}`, cwd);
 }
 
-const mergeToolThenRerun = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github, repository } = remote;
-        const { orchestrator, workers, head, number, taskId } = yield* reviewed(remote);
-        github.mergeRefusal = REFUSED;
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
-        github.mergeRefusal = undefined;
-        const [line] = yield* Effect.promise(() =>
-          Promise.all([orchestrator.mergePullRequest(number, head), orchestrator.rerun(taskId)]),
-        );
-        expect(line).toContain(`Task ${taskId} is completed.`);
-        expect(github.merged).toMatchObject([{ number, sha: head }]);
-        expect(taskStatus(orchestrator, taskId)).toBe("running");
-        expect(yield* rerunWorktreeExists(workers, repository)).toBe(true);
-      }),
-    ),
-  );
+const mergeToolThenRerun = acceptedMerge({
+  check: ({ orchestrator, workers, head, number, taskId, remote }) =>
+    Effect.gen(function* () {
+      const { github, repository } = remote;
+      github.mergeRefusal = undefined;
+      const [line] = yield* Effect.promise(() =>
+        Promise.all([orchestrator.mergePullRequest(number, head), orchestrator.rerun(taskId)]),
+      );
+      expect(line).toContain(`Task ${taskId} is completed.`);
+      expect(github.merged).toMatchObject([{ number, sha: head }]);
+      expect(taskStatus(orchestrator, taskId)).toBe("running");
+      expect(yield* rerunWorktreeExists(workers, repository)).toBe(true);
+    }),
+  prepare: ({ github }) => {
+    github.mergeRefusal = REFUSED;
+  },
+  until: ({ orchestrator, taskId }) => taskStatus(orchestrator, taskId) === "stopped",
+});
 
 it(
   "merge_pull_request and rerun_task issued together run one after the other, so the rerun gets a worktree the merge does not remove",

@@ -2,22 +2,18 @@ import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import orchestratorHarness from "./orchestrator-harness.ts";
-import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
-import orchestratorSupport from "./orchestrator-support.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 import triageSupport from "./triage-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { create } = orchestratorSupport;
 const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
-const { read, runCommand, shortId } = worktreeSupport;
-const { commitAndPush, withRemote } = pullRequestSupport;
+const { read } = worktreeSupport;
+const { commitAndPush, withRemote, openedTask } = pullRequestSupport;
 
 const MANY_TURNS = 5;
 
-type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
 type Report = ReturnType<typeof setup>["reports"][number];
 
 function expectsOpenPullRequest(
@@ -29,22 +25,6 @@ function expectsOpenPullRequest(
   expect(report?.details.status).toBe(status);
   expect(report?.text).toContain(`open pull request #${number}`);
   expect(report?.text).toContain(branch);
-}
-
-function openedTask(remote: Remote, options: orchestratorHarnessTypes.HarnessOptions = {}) {
-  return Effect.gen(function* () {
-    const { github, repository } = remote;
-    const run = setup({ cwd: repository, runCommand, runGh: github.runGh, ...options });
-    const task = yield* create(run.orchestrator, {
-      currentState: "feature.txt is missing",
-      goalState: "feature.txt exists on main",
-      title: "feature",
-    });
-    const branch = `task/${shortId(task.id)}`;
-    yield* commitAndPush(run.workers[0]!.cwd, "feature.txt", branch);
-    const number = yield* github.open(branch);
-    return { ...run, branch, number, taskId: task.id };
-  });
 }
 
 const waitsOnPendingCiWithoutCountingIt = () =>

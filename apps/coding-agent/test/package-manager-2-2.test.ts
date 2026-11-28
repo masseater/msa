@@ -1,52 +1,43 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
-const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
-  testing;
-
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, writeTextFile } = testing;
 
 const shouldUseTheAgentDirAsBasedir = () =>
   runTest(
     Effect.gen(function* () {
-      const skillPath = joinPath(agentDir, "skills", "user-msa", "SKILL.md");
-      yield* makeDirectory(joinPath(agentDir, "skills", "user-msa"));
+      const skillPath = joinPath(fixture.agentDir, "skills", "user-msa", "SKILL.md");
+      yield* makeDirectory(joinPath(fixture.agentDir, "skills", "user-msa"));
       yield* writeTextFile(skillPath, "---\nname: user-msa\ndescription: user msa\n---\n");
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       const skill = result.skills.find((r) => r.path === skillPath);
 
       expect(skill?.metadata.source).toBe("auto");
       expect(skill?.metadata.scope).toBe("user");
-      expect(skill?.metadata.baseDir).toBe(agentDir);
+      expect(skill?.metadata.baseDir).toBe(fixture.agentDir);
     }),
   );
 
 const shouldUseTheProjectMsaDirAs = () =>
   runTest(
     Effect.gen(function* () {
-      const projectBaseDir = joinPath(tempDir, ".msa");
+      const projectBaseDir = joinPath(fixture.tempDir, ".msa");
       const skillPath = joinPath(projectBaseDir, "skills", "project-msa", "SKILL.md");
       yield* makeDirectory(joinPath(projectBaseDir, "skills", "project-msa"));
       yield* writeTextFile(skillPath, "---\nname: project-msa\ndescription: project msa\n---\n");
 
-      const result = yield* awaited(packageManager.resolution.resolve());
+      const result = yield* awaited(fixture.packageManager.resolution.resolve());
       const skill = result.skills.find((r) => r.path === skillPath);
 
       expect(skill?.metadata.source).toBe("auto");
@@ -59,15 +50,15 @@ const shouldUseAgentsAsBasedirForUser = () =>
   runTest(
     Effect.gen(function* () {
       const previousHome = readEnv("HOME");
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", fixture.tempDir);
 
       try {
-        const agentsBaseDir = joinPath(tempDir, ".agents");
+        const agentsBaseDir = joinPath(fixture.tempDir, ".agents");
         const skillPath = joinPath(agentsBaseDir, "skills", "user-agents", "SKILL.md");
         yield* makeDirectory(joinPath(agentsBaseDir, "skills", "user-agents"));
         yield* writeTextFile(skillPath, "---\nname: user-agents\ndescription: user agents\n---\n");
 
-        const result = yield* awaited(packageManager.resolution.resolve());
+        const result = yield* awaited(fixture.packageManager.resolution.resolve());
         const skill = result.skills.find((r) => r.path === skillPath);
 
         expect(skill?.metadata.source).toBe("auto");
@@ -86,7 +77,7 @@ const shouldUseAgentsAsBasedirForUser = () =>
 const shouldUseEachProjectAgentsDirAs = () =>
   runTest(
     Effect.gen(function* () {
-      const repoRoot = joinPath(tempDir, "repo");
+      const repoRoot = joinPath(fixture.tempDir, "repo");
       const nestedCwd = joinPath(repoRoot, "packages", "feature");
       yield* makeDirectory(nestedCwd);
       yield* makeDirectory(joinPath(repoRoot, ".git"));
@@ -102,9 +93,9 @@ const shouldUseEachProjectAgentsDirAs = () =>
       yield* writeTextFile(packageSkill, "---\nname: package\ndescription: package\n---\n");
 
       const pm = new DefaultPackageManager({
-        agentDir,
+        agentDir: fixture.agentDir,
         cwd: nestedCwd,
-        settingsManager,
+        settingsManager: fixture.settingsManager,
       });
 
       const result = yield* awaited(pm.resolution.resolve());
@@ -120,36 +111,7 @@ const shouldUseEachProjectAgentsDirAs = () =>
     }),
   );
 
-const beforeEachHook2 = () =>
-  runTest(
-    Effect.gen(function* () {
-      previousOfflineEnv = readEnv("MSA_OFFLINE");
-      vi.stubEnv("MSA_OFFLINE", undefined);
-      tempDir = yield* makeTempDir("pm-test-");
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook2 = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(beforeEachHook2);
-
-  afterEach(afterEachHook2);
-
   describe("auto-discovered skill metadata", () => {
     it(
       "should use the agent dir as baseDir for user .msa/agent skills",

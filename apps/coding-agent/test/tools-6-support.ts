@@ -1,13 +1,14 @@
-function getTextOutput(result: any): string {
-  return (
-    result.content
-      ?.filter((c: any) => c.type === "text")
-      .map((c: any) => c.text)
-      .join("\n") || ""
-  );
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import tools2Support from "./tools-2-support.ts";
+
+const { getTextOutput } = tools2Support;
+
+function fakeCtx(cwd: string): extensionsTypesTypes.ExtensionToolContext {
+  return { cwd } as extensionsTypesTypes.ExtensionToolContext;
 }
 
 const tools6Support = {
+  fakeCtx,
   getTextOutput,
 };
 

@@ -1,37 +1,23 @@
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest, writeJsonFile } =
-  testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
+const { getModelsForProvider } = modelRegistry4Support;
 
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
-  return registry.getAll().filter((m) => m.provider === provider);
-}
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+const { runTest } = testing;
 
 const providerLevelCompatAppliesToBuiltIn = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         openrouter: {
           compat: {
             supportsStrictMode: false,
@@ -40,7 +26,7 @@ const providerLevelCompatAppliesToBuiltIn = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.length).toBeGreaterThan(0);
@@ -55,7 +41,7 @@ const providerLevelCompatAppliesToBuiltIn = () =>
 const modelSchemaAcceptsThinkinglevelmapAndCompatSchema = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         demo: {
           api: "openai-completions",
           apiKey: "DEMO_KEY",
@@ -81,7 +67,7 @@ const modelSchemaAcceptsThinkinglevelmapAndCompatSchema = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const model = registry.find("demo", "demo-model");
       const compat = model?.compat as compatTypes.OpenAICompletionsCompat | undefined;
 
@@ -95,7 +81,7 @@ const modelSchemaAcceptsThinkinglevelmapAndCompatSchema = () =>
 const compatSchemaAcceptsChatTemplateThinkingConfiguration = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         demo: {
           api: "openai-completions",
           apiKey: "DEMO_KEY",
@@ -120,7 +106,7 @@ const compatSchemaAcceptsChatTemplateThinkingConfiguration = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const kwargsCompat = registry.find("demo", "kwargs-model")?.compat as
         | compatTypes.OpenAICompletionsCompat
         | undefined;
@@ -137,7 +123,7 @@ const compatSchemaAcceptsChatTemplateThinkingConfiguration = () =>
 const compatSchemaAcceptsAnthropicEagerToolInput = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         demo: {
           api: "anthropic-messages",
           apiKey: "DEMO_KEY",
@@ -158,7 +144,7 @@ const compatSchemaAcceptsAnthropicEagerToolInput = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.AnthropicMessagesCompat
         | undefined;
@@ -171,7 +157,7 @@ const compatSchemaAcceptsAnthropicEagerToolInput = () =>
 const compatSchemaAcceptsLongCacheRetentionFlag = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         demo: {
           api: "anthropic-messages",
           apiKey: "DEMO_KEY",
@@ -192,7 +178,7 @@ const compatSchemaAcceptsLongCacheRetentionFlag = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const compat = registry.find("demo", "demo-model")?.compat as
         | compatTypes.AnthropicMessagesCompat
         | undefined;
@@ -202,25 +188,7 @@ const compatSchemaAcceptsLongCacheRetentionFlag = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("custom models merge behavior", () => {
     test("provider-level compat applies to built-in models", providerLevelCompatAppliesToBuiltIn);
 

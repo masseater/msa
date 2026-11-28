@@ -1,54 +1,22 @@
-import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
-import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
+import modelRegistry4Support from "./model-registry-4-support.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistrySupport;
 
-const { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest } = testing;
+const fixture = useModelRegistryFixture();
 
-let tempDir: string;
+const { providerConfig, getModelsForProvider } = modelRegistry4Support;
 
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-function providerConfig(
-  baseUrl: string,
-  models: Array<{ id: string; name?: string }>,
-  api: string = "anthropic-messages",
-): modelRegistryTypes.ProviderConfigInput {
-  return {
-    api: api as compatTypes.Api,
-    apiKey: "test-key",
-    baseUrl,
-    models: models.map((m) => ({
-      contextWindow: 100000,
-      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-      id: m.id,
-      input: ["text"],
-      maxTokens: 8000,
-      name: m.name ?? m.id,
-      reasoning: false,
-    })),
-  };
-}
-
-function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
-  return registry.getAll().filter((m) => m.provider === provider);
-}
+const { awaited, runTest } = testing;
 
 const modelsOnlyCustomProviderRegistrationSurvivesRefresh = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
 
       registry.registerProvider(
         "custom-provider",
@@ -70,7 +38,7 @@ const modelsOnlyCustomProviderRegistrationSurvivesRefresh = () =>
 const baseurlOnlyOverrideKeepsCustomProviderModels = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
 
       registry.registerProvider(
         "custom-provider",
@@ -98,7 +66,7 @@ const baseurlOnlyOverrideKeepsCustomProviderModels = () =>
 const headersOnlyOverrideKeepsCustomProviderModels = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
 
       registry.registerProvider(
         "custom-provider",
@@ -123,25 +91,7 @@ const headersOnlyOverrideKeepsCustomProviderModels = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("dynamic provider lifecycle", () => {
     describe("dynamic provider override persistence", () => {
       test(

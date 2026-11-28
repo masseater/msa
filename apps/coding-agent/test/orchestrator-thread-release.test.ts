@@ -8,7 +8,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
 const { runTest } = testing;
-const { create } = orchestratorSupport;
+const { create, createNamed } = orchestratorSupport;
 const { replan, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
@@ -16,16 +16,8 @@ const { advance, fakeClock } = watchdogSupport;
 
 const twoTasks = Effect.gen(function* () {
   const { orchestrator, workers } = setup();
-  const a = yield* create(orchestrator, {
-    currentState: "a is not written",
-    goalState: "a works",
-    title: "a",
-  });
-  const b = yield* create(orchestrator, {
-    currentState: "b is not written",
-    goalState: "b works",
-    title: "b",
-  });
+  const a = yield* createNamed(orchestrator, "a");
+  const b = yield* createNamed(orchestrator, "b");
   yield* waitFor(() => workers.length === 2);
   return { a, b, orchestrator, workers };
 });
@@ -66,11 +58,7 @@ it("stops the pr watches of a thread the watchdog stops", () =>
       yield* fakeClock();
       const { orchestrator, workers } = setup();
       try {
-        const a = yield* create(orchestrator, {
-          currentState: "a is not written",
-          goalState: "a works",
-          title: "a",
-        });
+        const a = yield* createNamed(orchestrator, "a");
         yield* advance(31 * 60_000);
         expect(taskStatus(orchestrator, a.id)).toBe("stopped");
         expect(workers[0]?.prWatchClosed).toBe(1);

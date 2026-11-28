@@ -114,7 +114,12 @@ function startsWithAscii(buffer: Uint8Array, offset: number, text: string): bool
   return true;
 }
 
+function baseMimeType(mimeType: string): string {
+  return mimeType.split(";")[0]?.trim().toLowerCase() ?? mimeType.toLowerCase();
+}
+
 const mime = {
+  baseMimeType,
   detectSupportedImageMimeType,
   detectSupportedImageMimeTypeFromFile,
 };

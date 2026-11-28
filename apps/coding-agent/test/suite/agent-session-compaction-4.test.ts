@@ -5,16 +5,13 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import agentSessionCompaction4Support from "./agent-session-compaction-4-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
-const { afterEachHook4 } = agentSessionCompaction4Support;
-
-const { harnesses } = agentSessionCompactionSupport;
+const { afterEachHook, harnesses } = agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;
 
@@ -178,7 +175,7 @@ const doesNotCompactAfterATerminatingTool = () =>
 const doesNotCompactWhenALengthStop = () => Effect.runPromise(doesNotCompactWhenALength);
 
 describe("AgentSession compaction characterization", () => {
-  afterEach(afterEachHook4);
+  afterEach(afterEachHook);
 
   it(
     "includes steering queued during compaction in the resumed assistant request",

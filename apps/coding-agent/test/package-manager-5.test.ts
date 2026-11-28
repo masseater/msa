@@ -1,44 +1,31 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
 import gitRemote from "../src/core/package-manager/git-remote.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-const { readEnv } = platform;
+import packageManagerFixture from "./package-manager-fixture.ts";
+
+const { usePackageManagerFixture } = packageManagerFixture;
+
+const fixture = usePackageManagerFixture();
 
 const {
   awaited,
   joinPath,
   makeDirectory,
-  makeTempDir,
   pathExists,
-  removePath,
   runTest,
   toJsonText,
   writeJsonFile,
   writeTextFile,
 } = testing;
 
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
-
 const shouldRemoveANewlyCreatedCheckoutWhen = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const source = "git:github.com/user/repo";
-  const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
+  const targetDir = joinPath(fixture.agentDir, "git", "github.com", "user", "repo");
   vi.spyOn(commandRunner, "runCommand").mockImplementation((...callArgs: unknown[]) =>
     effectRunPromise(
       Effect.gen(function* () {
@@ -52,7 +39,7 @@ const shouldRemoveANewlyCreatedCheckoutWhen = Effect.gen(function* () {
   );
 
   yield* awaited(
-    expect(packageManager.operations.install.install(source)).rejects.toThrow(
+    expect(fixture.packageManager.operations.install.install(source)).rejects.toThrow(
       "simulated git clone failure",
     ),
   );
@@ -64,7 +51,7 @@ const shouldRemoveANewlyClonedCheckoutWhen = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const source = "git:github.com/user/repo";
-  const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
+  const targetDir = joinPath(fixture.agentDir, "git", "github.com", "user", "repo");
   vi.spyOn(commandRunner, "runCommand").mockImplementation((...callArgs: unknown[]) =>
     effectRunPromise(
       Effect.gen(function* () {
@@ -85,7 +72,7 @@ const shouldRemoveANewlyClonedCheckoutWhen = Effect.gen(function* () {
   );
 
   yield* awaited(
-    expect(packageManager.operations.install.install(source)).rejects.toThrow(
+    expect(fixture.packageManager.operations.install.install(source)).rejects.toThrow(
       "simulated dependency install failure",
     ),
   );
@@ -98,7 +85,7 @@ const shouldReconcileAnExistingGitCheckoutToSetup = () =>
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
     const source = "git:github.com/user/repo@v2";
-    const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
+    const targetDir = joinPath(fixture.agentDir, "git", "github.com", "user", "repo");
     return { effectRunPromise, source, targetDir };
   });
 
@@ -125,7 +112,7 @@ const shouldReconcileAnExistingGitCheckoutTo = Effect.gen(function* () {
   );
   const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.operations.install.install(source));
+  yield* awaited(fixture.packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith("git", ["fetch", "origin", "v2"], {
     cwd: targetDir,
@@ -147,7 +134,7 @@ const shouldReconcileAnExistingGitCheckoutTo2 = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const source = "git:github.com/user/repo";
-  const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
+  const targetDir = joinPath(fixture.agentDir, "git", "github.com", "user", "repo");
   const fetchArgs = [
     "fetch",
     "--prune",
@@ -176,7 +163,7 @@ const shouldReconcileAnExistingGitCheckoutTo2 = Effect.gen(function* () {
   );
   const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.operations.install.install(source));
+  yield* awaited(fixture.packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith("git", fetchArgs, { cwd: targetDir });
   expect(runCommandSpy).toHaveBeenCalledWith("git", ["reset", "--hard", "origin/HEAD^{commit}"], {
@@ -186,16 +173,11 @@ const shouldReconcileAnExistingGitCheckoutTo2 = Effect.gen(function* () {
 });
 
 const shouldPreferThePackageManagerAfterA = () => {
-  settingsManager = SettingsManager.inMemory({
+  fixture.useSettings({
     npmCommand: ["npm", "exec", "--", "pnpm"],
   });
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
-  });
-  expect(packageManager.npm.tool.getPackageManagerName()).toBe("pnpm");
-  expect(packageManager.npm.tool.getGitDependencyInstallArgs()).toEqual([
+  expect(fixture.packageManager.npm.tool.getPackageManagerName()).toBe("pnpm");
+  expect(fixture.packageManager.npm.tool.getGitDependencyInstallArgs()).toEqual([
     "install",
     "--prod",
     "--config.auto-install-peers=false",
@@ -204,33 +186,7 @@ const shouldPreferThePackageManagerAfterA = () => {
   ]);
 };
 
-const beforeEachHook = Effect.gen(function* () {
-  previousOfflineEnv = readEnv("MSA_OFFLINE");
-  vi.stubEnv("MSA_OFFLINE", undefined);
-  tempDir = yield* makeTempDir("pm-test-");
-  agentDir = joinPath(tempDir, "agent");
-  yield* makeDirectory(agentDir);
-
-  settingsManager = SettingsManager.inMemory();
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
-  });
-});
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(() => runTest(beforeEachHook));
-
-  afterEach(afterEachHook);
-
   describe("npmCommand", () => {
     it("should remove a newly created checkout when git clone fails", () =>
       runTest(shouldRemoveANewlyCreatedCheckoutWhen));

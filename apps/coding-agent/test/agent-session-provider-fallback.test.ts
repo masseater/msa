@@ -1,10 +1,11 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import type codingAgentTypes from "../src/index.types.ts";
 import agentSessionProviderFallbackSupport from "./agent-session-provider-fallback-support.ts";
-import sessionKit from "./session-kit.ts";
+import sessionWorkspace from "./session-workspace.ts";
+
+const workspace = sessionWorkspace.useWorkspace("msa-provider-fallback-");
 
 const {
   awaited,
@@ -16,19 +17,15 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
-const { disposeWorkspace, prepareWorkspace } = sessionKit;
 const { CREDITS_ERROR, providerStream, startFallbackSession } = agentSessionProviderFallbackSupport;
-
-let tempDir = "";
-let session: codingAgentTypes.AgentSession | undefined;
 
 const start = (
   stream: ReturnType<typeof providerStream>,
   scoped: Parameters<typeof startFallbackSession>[2],
 ) =>
-  Effect.tap(startFallbackSession(tempDir, stream, scoped), (created) =>
+  Effect.tap(startFallbackSession(workspace.tempDir, stream, scoped), (created) =>
     Effect.sync(() => {
-      session = created.session;
+      workspace.session = created.session;
     }),
   );
 
@@ -210,7 +207,7 @@ const notifiesASecondStopAfterTheModelIsSwitched = () =>
 const withNotifyCommand = (notifyCommand: string) =>
   Effect.gen(function* () {
     yield* writeTextFile(
-      joinPath(tempDir, "settings.json"),
+      joinPath(workspace.tempDir, "settings.json"),
       yield* toJsonText({ memory: { enabled: false }, notifyCommand }),
     );
   });
@@ -218,7 +215,7 @@ const withNotifyCommand = (notifyCommand: string) =>
 const runsTheNotifyCommandWithTheMessage = () =>
   runTest(
     Effect.gen(function* () {
-      const notified = joinPath(tempDir, "notified.txt");
+      const notified = joinPath(workspace.tempDir, "notified.txt");
       yield* withNotifyCommand(`printf '%s' "$MSA_NOTIFY_MESSAGE" > '${notified}'`);
       const stream = providerStream(new Set(["openrouter"]));
       const { openrouter, session: created } = yield* start(stream, (models) => [
@@ -259,24 +256,6 @@ const recordsAFailedNotifyCommand = () =>
   );
 
 describe("provider fallback", () => {
-  beforeEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        tempDir = yield* prepareWorkspace("msa-provider-fallback-");
-      }),
-    ),
-  );
-
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* disposeWorkspace(session, tempDir);
-        session = undefined;
-        tempDir = "";
-      }),
-    ),
-  );
-
   it("switches to the next enabled model on a 402 and resends the request without the failure", () =>
     switchesToTheNextEnabledModel());
   it("stops once and records the time and the error when no enabled model can take over", () =>

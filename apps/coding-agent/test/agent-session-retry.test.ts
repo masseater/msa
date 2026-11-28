@@ -1,19 +1,17 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import agentSessionRetrySupport from "./agent-session-retry-support.ts";
 import sessionKit from "./session-kit.ts";
+import sessionWorkspace from "./session-workspace.ts";
+
+const workspace = sessionWorkspace.useWorkspace("msa-retry-test-");
 
 const { awaited, runTest } = testing;
-const { assistantMessage, disposeWorkspace, prepareWorkspace } = sessionKit;
+const { assistantMessage } = sessionKit;
 const { createRetrySession, delayAssistantMessageEnd, errorMessage, retryEvents, scriptedStream } =
   agentSessionRetrySupport;
-
-let tempDir = "";
-
-let session: agentSessionTypes.AgentSession | undefined;
 
 const overloadedThenSuccess = (failCount: number) =>
   scriptedStream((call) =>
@@ -24,10 +22,12 @@ const startSession = (
   stream: ReturnType<typeof scriptedStream>,
   retry: { maxRetries: number; maxAgentDelayMs?: number },
 ) =>
-  Effect.tap(createRetrySession({ cwd: tempDir, retry, streamFn: stream.streamFn }), (created) =>
-    Effect.sync(() => {
-      session = created;
-    }),
+  Effect.tap(
+    createRetrySession({ cwd: workspace.tempDir, retry, streamFn: stream.streamFn }),
+    (created) =>
+      Effect.sync(() => {
+        workspace.session = created;
+      }),
   );
 
 const retriesAfterATransientErrorAndSucceeds = () =>
@@ -102,26 +102,7 @@ const retriesProviderNetworkErrorFailures = () =>
     }),
   );
 
-const prepare = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* prepareWorkspace("msa-retry-test-");
-    }),
-  );
-
-const cleanUp = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* disposeWorkspace(session, tempDir);
-      session = undefined;
-    }),
-  );
-
 describe("AgentSession retry", () => {
-  beforeEach(prepare);
-
-  afterEach(cleanUp);
-
   it("retries after a transient error and succeeds", retriesAfterATransientErrorAndSucceeds);
 
   it("exhausts max retries and emits failure", exhaustsMaxRetriesAndEmitsFailure);

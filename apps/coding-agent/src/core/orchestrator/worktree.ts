@@ -243,7 +243,7 @@ function prepare(
   });
 }
 
-const worktrees = { branchOf, cleanUp, git, hasOrigin, headOf, isWorkTree, prepare };
+const worktrees = { branchOf, cleanUp, git, hasOrigin, headOf, isWorkTree, prepare, shortId };
 
 const worktreeModule = {
   worktrees,

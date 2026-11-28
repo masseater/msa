@@ -6,6 +6,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import toolResultImages from "../src/utils/tool-result-images.ts";
 import type toolResultImagesTypes from "../src/utils/tool-result-images.types.ts";
+import imageFixtureSupport from "./image-fixture-support.ts";
+
+const { createTinyBmp1x1Red24bpp } = imageFixtureSupport;
 
 const { normalizeToolResultImages } = toolResultImages;
 
@@ -44,22 +47,6 @@ function createPng(width: number, height: number): Buffer {
 function readPngDimensions(base64Data: string): { width: number; height: number } {
   const buffer = Buffer.from(base64Data, "base64");
   return { height: buffer.readUInt32BE(20), width: buffer.readUInt32BE(16) };
-}
-
-function createTinyBmp1x1Red24bpp(): Buffer {
-  const buffer = Buffer.alloc(58);
-  buffer.write("BM", 0, "ascii");
-  buffer.writeUInt32LE(buffer.length, 2);
-  buffer.writeUInt32LE(54, 10);
-  buffer.writeUInt32LE(40, 14);
-  buffer.writeInt32LE(1, 18);
-  buffer.writeInt32LE(1, 22);
-  buffer.writeUInt16LE(1, 26);
-  buffer.writeUInt16LE(24, 28);
-  buffer.writeUInt32LE(0, 30);
-  buffer.writeUInt32LE(4, 34);
-  buffer[56] = 0xff;
-  return buffer;
 }
 
 function imageBlock(bytes: Buffer, mimeType: string): toolResultImagesTypes.ToolResultContent {

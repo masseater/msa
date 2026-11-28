@@ -1,4 +1,3 @@
-import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -7,13 +6,12 @@ import InMemoryCodingAgentModelsStore from "../src/core/in-memory-coding-agent-m
 import modelPolicy from "../src/core/model-policy.ts";
 import type modelPolicyTypes from "../src/core/model-policy.types.ts";
 import ModelRuntime from "../src/core/model-runtime.ts";
+import modelLifecycleSupport from "./model-lifecycle-support.ts";
+
+const { model } = modelLifecycleSupport;
 
 const { EMPTY_MODEL_POLICY, mergeModelPolicies } = modelPolicy;
 const { awaited, joinPath, makeTempDir, removeDirs, runTest, toJsonText, writeTextFile } = testing;
-
-function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
-  return { id, name: id, provider } as unknown as aiTypes.Model<aiTypes.Api>;
-}
 
 function policy(allow: string[], deny: string[]): modelPolicyTypes.ModelPolicy {
   return { allow, deny };
@@ -61,11 +59,16 @@ function createRuntime(settings: Partial<Record<string, unknown>> = {}) {
   );
 }
 
+function text(result: { content: Array<{ type: string; text?: string }> }): string {
+  return result.content.map((part) => part.text ?? "").join("\n");
+}
+
 const modelPolicySupport = {
   cleanupRuntimeDirs,
   createRuntime,
   model,
   policy,
+  text,
 };
 
 export default modelPolicySupport;

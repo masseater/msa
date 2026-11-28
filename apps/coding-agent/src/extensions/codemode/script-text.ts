@@ -1,5 +1,8 @@
 import type agentTypes from "@msa/agent-core/index.types";
-import type aiTypes from "@msa/ai/index.types";
+
+import toolResultText from "../../core/tool-result-text.ts";
+
+const { textOf } = toolResultText;
 
 const ARGS_PREVIEW_CHARS = 200;
 const ERROR_PREVIEW_CHARS = 500;
@@ -15,13 +18,6 @@ function previewArgs(args: unknown): string {
   } catch {
     return "";
   }
-}
-
-function textOf(result: agentTypes.AgentToolResult<unknown>): string {
-  return (result.content ?? [])
-    .filter((block): block is aiTypes.TextContent => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
 }
 
 function toScriptValue(

@@ -14,7 +14,7 @@ const { orchestratorError } = errors;
 
 const { makeTempDir, removePath } = testing;
 
-const { create } = orchestratorSupport;
+const { create, createNamed } = orchestratorSupport;
 
 const { harness } = orchestratorHarness;
 
@@ -161,11 +161,7 @@ const runsAWorkerThenASeparateReviewer = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const task = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
+      const task = yield* createNamed(orchestrator, "a");
       expect(task.status).toBe("running");
       expect(workers).toHaveLength(1);
       expect(workers[0]?.model.id).toBe("flash");
@@ -196,17 +192,8 @@ const waitsForDependenciesAndPassesTheReports = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
       expect(b.status).toBe("waiting");
       expect(workers).toHaveLength(1);
 
@@ -226,17 +213,8 @@ const keepsAMessageToAWaitingTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      const b = yield* create(orchestrator, {
-        currentState: "b is not written",
-        dependsOn: [a.id],
-        goalState: "b works",
-        title: "b",
-      });
+      const a = yield* createNamed(orchestrator, "a");
+      const b = yield* createNamed(orchestrator, "b", { dependsOn: [a.id] });
       const queued = yield* Effect.promise(() =>
         orchestrator.sendMessage(b.id, "also update the docs"),
       );

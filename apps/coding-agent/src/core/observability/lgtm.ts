@@ -1,11 +1,13 @@
 import { Effect } from "effect";
 
 import exec from "../exec.ts";
+import platformFiles from "../platform/files.ts";
 import platform from "../platform/index.ts";
 import type lgtmTypes from "./lgtm.types.ts";
 import PodmanError from "./podman-error.ts";
 
-const { exists } = platform.files;
+const { firstExisting } = platformFiles;
+
 const { delimiter, join } = platform;
 const { execCommand } = exec;
 
@@ -17,11 +19,6 @@ const PUBLISHED_PORTS = [3000, 4318, 3200, 3100, 9090] as const;
 function lgtmAction(state: lgtmTypes.ContainerState): lgtmTypes.LgtmAction {
   if (state === "running") return "reuse";
   return state === "stopped" ? "start" : "run";
-}
-function firstExisting(candidates: readonly string[]): Promise<string | undefined> {
-  const [candidate, ...rest] = candidates;
-  if (candidate === undefined) return Promise.resolve(undefined);
-  return exists(candidate).then((found) => (found ? candidate : firstExisting(rest)));
 }
 function findPodman(path: string | undefined): Promise<string | undefined> {
   const name = process.platform === "win32" ? "podman.exe" : "podman";

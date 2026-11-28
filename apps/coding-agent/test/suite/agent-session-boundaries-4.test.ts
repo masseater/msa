@@ -1,5 +1,4 @@
 import ai from "@msa/ai";
-import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -10,16 +9,9 @@ const { cleanupAll } = harnessModule;
 
 const { fauxAssistantMessage } = ai;
 
-const { harnesses } = agentSessionBoundariesSupport;
+const { harnesses, deferred } = agentSessionBoundariesSupport;
 
 const { createHarness } = harnessModule;
-
-const { gate } = testing;
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  const promise = gate();
-  return { promise, resolve: () => promise.release() };
-}
 
 const doesNotConsumeQueuedInputWhen = Effect.gen(function* () {
   let handled = false;

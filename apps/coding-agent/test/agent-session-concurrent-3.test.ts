@@ -1,26 +1,23 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import agentSessionConcurrentSupport from "./agent-session-concurrent-support.ts";
 import sessionKit from "./session-kit.ts";
+import sessionWorkspace from "./session-workspace.ts";
+
+const workspace = sessionWorkspace.useWorkspace("msa-concurrent-test-");
 
 const { awaited, runTest } = testing;
-const { assistantMessage, createAgentSession, disposeWorkspace, prepareWorkspace, streamWith } =
-  sessionKit;
+const { assistantMessage, createAgentSession, streamWith } = sessionKit;
 const { dummyCall, dummyTool, installExtensionRunner, toolCallResponder } =
   agentSessionConcurrentSupport;
-
-let tempDir = "";
-
-let session: agentSessionTypes.AgentSession | undefined;
 
 const shouldPersistMessageEndEventsInOrder = () =>
   runTest(
     Effect.gen(function* () {
       const created = yield* createAgentSession({
-        cwd: tempDir,
+        cwd: workspace.tempDir,
         streamFn: streamWith(
           toolCallResponder([
             ...assistantMessage("calling tool").content,
@@ -29,7 +26,7 @@ const shouldPersistMessageEndEventsInOrder = () =>
         ),
         tools: [dummyTool],
       });
-      ({ session } = created);
+      workspace.session = created.session;
       installExtensionRunner(created.session, {
         emitMessageEnd: (event) =>
           runTest(
@@ -53,26 +50,7 @@ const shouldPersistMessageEndEventsInOrder = () =>
     }),
   );
 
-const prepare = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* prepareWorkspace("msa-concurrent-test-");
-    }),
-  );
-
-const cleanUp = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* disposeWorkspace(session, tempDir);
-      session = undefined;
-    }),
-  );
-
 describe("AgentSession concurrent prompt guard", () => {
-  beforeEach(prepare);
-
-  afterEach(cleanUp);
-
   it(
     "should persist message_end events in order with slow extension handlers",
     shouldPersistMessageEndEventsInOrder,

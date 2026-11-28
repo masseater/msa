@@ -3,11 +3,14 @@ import { Effect } from "effect";
 
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import worktreeModule from "../src/core/orchestrator/worktree.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 
 const { joinPath } = testing;
 const { withTempDir } = orchestratorHarness.harness;
 const { runCommand } = orchestratorCallbacks;
+
+const { shortId } = worktreeModule.worktrees;
 
 const GIT = "git -c user.name=t -c user.email=t@example.invalid";
 
@@ -40,10 +43,6 @@ function withRepository<A, E>(body: (repository: string) => Effect.Effect<A, E>)
       return yield* body(repository);
     }),
   );
-}
-
-function shortId(taskId: string): string {
-  return taskId.replace(/^t-/u, "");
 }
 
 function read(orchestrator: orchestratorTypes.Orchestrator, id: string) {

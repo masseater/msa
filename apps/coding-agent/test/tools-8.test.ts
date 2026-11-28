@@ -4,6 +4,9 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import src from "../src/index.ts";
+import tools2Support from "./tools-2-support.ts";
+
+const { getTextOutput } = tools2Support;
 
 const { createEditTool } = src;
 
@@ -19,15 +22,6 @@ const {
 } = testing;
 
 const editTool = createEditTool(process.cwd());
-
-function getTextOutput(result: any): string {
-  return (
-    result.content
-      ?.filter((c: any) => c.type === "text")
-      .map((c: any) => c.text)
-      .join("\n") || ""
-  );
-}
 
 const readKeepingBom = (bytes: Uint8Array): string =>
   new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);

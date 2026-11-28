@@ -1,43 +1,19 @@
-import type aiTypes from "@msa/ai/index.types";
-import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
 import AssistantMessageComponent from "../src/modes/interactive/components/assistant-message.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
+import assistantMessageSupport from "./assistant-message-support.ts";
+
+const { createAssistantMessage } = assistantMessageSupport;
 
 const { initTheme } = themeModule;
 const { stripAnsi } = ansi;
 
-const { currentTimeMillis } = testing;
-
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
-
-function createAssistantMessage(
-  content: aiTypes.AssistantMessage["content"],
-  overrides: Partial<Pick<aiTypes.AssistantMessage, "stopReason">> = {},
-): aiTypes.AssistantMessage {
-  return {
-    api: "openai-responses" as const,
-    content,
-    model: "gpt-4o-mini",
-    provider: "openai",
-    role: "assistant",
-    stopReason: overrides.stopReason ?? "stop",
-    timestamp: currentTimeMillis(),
-    usage: {
-      cacheRead: 0,
-      cacheWrite: 0,
-      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-      input: 0,
-      output: 0,
-      totalTokens: 0,
-    },
-  };
-}
 
 const handsItsThinkingToAnotherComponentWhich = () => {
   initTheme("dark");

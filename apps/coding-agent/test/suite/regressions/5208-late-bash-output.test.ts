@@ -3,17 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import bashModule from "../../../src/core/tools/bash.ts";
 import type bashTypes from "../../../src/core/tools/bash.types.ts";
+import bashOutputSupport from "../../bash-output-support.ts";
+
+const { getTextOutput } = bashOutputSupport;
 
 const { createBashTool } = bashModule;
-
-function getTextOutput(result: { content?: Array<{ type: string; text?: string }> }): string {
-  return (
-    result.content
-      ?.filter((block) => block.type === "text")
-      .map((block) => block.text ?? "")
-      .join("\n") ?? ""
-  );
-}
 
 const ignoresOutputCallbacksAfterBashOperations = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

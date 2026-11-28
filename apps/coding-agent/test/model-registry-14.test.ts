@@ -1,76 +1,33 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import platform from "../src/core/platform/index.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
+
+const { toShPath, providerWithApiKey, useModelRegistryFixture } = modelRegistrySupport;
+
+const fixture = useModelRegistryFixture();
+
 const { deleteEnv, readEnv, writeEnv } = platform;
-const { clearApiKeyCache } = providerAuth;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
-
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  randomSuffixSync,
-  readTextFile,
-  removePath,
-  runTest,
-  writeJsonFile,
-  writeTextFile,
-} = testing;
-
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
-
-function toShPath(value: string): string {
-  return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
-}
-
-const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
-
-function providerWithApiKey(apiKey: string) {
-  return {
-    api: "anthropic-messages",
-    apiKey,
-    baseUrl: "https://example.com/v1",
-    models: [
-      {
-        contextWindow: 100000,
-        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-        id: "test-model",
-        input: ["text"],
-        maxTokens: 8000,
-        name: "Test Model",
-        reasoning: false,
-      },
-    ],
-  };
-}
+const { awaited, joinPath, readTextFile, runTest, writeTextFile } = testing;
 
 const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
   runTest(
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const counterFile = joinPath(tempDir, "fallback-counter");
+      const counterFile = joinPath(fixture.tempDir, "fallback-counter");
       yield* writeTextFile(counterFile, "0");
       const counterPath = toShPath(counterFile);
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "custom-provider": providerWithApiKey(
           `!sh -c 'echo 1 > "${counterPath}"; echo fallback-key'`,
         ),
       });
       yield* awaited(
-        authStorage.modify("custom-provider", () =>
+        fixture.authStorage.modify("custom-provider", () =>
           effectRunPromise(
             awaited({
               key: "stored-key",
@@ -80,7 +37,7 @@ const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
         ),
       );
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const auth = yield* awaited(
         registry.getApiKeyAndHeaders(registry.find("custom-provider", "test-model")!),
       );
@@ -93,7 +50,7 @@ const storedCredentialsBypassLowerPriorityConfiguredAuth = () =>
 const getapikeyandheadersPreservesTheLegacyMissingKeyAuthheader = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "custom-provider": {
           api: "openai-completions",
           authHeader: true,
@@ -102,7 +59,7 @@ const getapikeyandheadersPreservesTheLegacyMissingKeyAuthheader = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const auth = yield* awaited(
         registry.getApiKeyAndHeaders(registry.find("custom-provider", "test-model")!),
       );
@@ -114,14 +71,14 @@ const getapikeyandheadersPreservesTheLegacyMissingKeyAuthheader = () =>
 const getapikeyandheadersReturnsAnErrorForFailedAuthheader = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "custom-provider": {
           ...providerWithApiKey("!exit 1"),
           authHeader: true,
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const model = registry.find("custom-provider", "test-model");
       expect(model).toBeDefined();
 
@@ -136,18 +93,18 @@ const getapikeyandheadersReturnsAnErrorForFailedAuthheader = () =>
 const getapikeyandheadersResolvesAuthheaderOnEveryRequest = () =>
   runTest(
     Effect.gen(function* () {
-      const tokenFile = joinPath(tempDir, "token");
+      const tokenFile = joinPath(fixture.tempDir, "token");
       yield* writeTextFile(tokenFile, "token-1");
       const tokenPath = toShPath(tokenFile);
 
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "custom-provider": {
           ...providerWithApiKey(`!sh -c 'cat "${tokenPath}"'`),
           authHeader: true,
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const model = registry.find("custom-provider", "test-model");
       expect(model).toBeDefined();
 
@@ -172,10 +129,10 @@ const getapikeyandheadersResolvesAuthheaderOnEveryRequest = () =>
 const getapikeyandheadersResolvesConfiguredAuthExactlyOnce = () =>
   runTest(
     Effect.gen(function* () {
-      const counterFile = joinPath(tempDir, "auth-counter");
+      const counterFile = joinPath(fixture.tempDir, "auth-counter");
       yield* writeTextFile(counterFile, "0");
       const counterPath = toShPath(counterFile);
-      yield* writeRawModelsJson({
+      yield* fixture.writeRawModelsJson({
         "custom-provider": {
           ...providerWithApiKey(
             `!sh -c 'count=$(cat "${counterPath}"); count=$((count + 1)); echo "$count" > "${counterPath}"; echo "token-$count"'`,
@@ -184,7 +141,7 @@ const getapikeyandheadersResolvesConfiguredAuthExactlyOnce = () =>
         },
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* fixture.registry();
       const auth = yield* awaited(
         registry.getApiKeyAndHeaders(registry.find("custom-provider", "test-model")!),
       );
@@ -207,11 +164,11 @@ const environmentVariablesAreNotCachedChangesAre = () =>
       try {
         writeEnv(envVarName, "first-value");
 
-        yield* writeRawModelsJson({
+        yield* fixture.writeRawModelsJson({
           "custom-provider": providerWithApiKey(`$${envVarName}`),
         });
 
-        const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+        const registry = yield* fixture.registry();
 
         const key1 = yield* awaited(registry.getApiKeyForProvider("custom-provider"));
         expect(key1).toBe("first-value");
@@ -230,25 +187,7 @@ const environmentVariablesAreNotCachedChangesAre = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("API key resolution", () => {
     describe("request-time resolution", () => {
       test(

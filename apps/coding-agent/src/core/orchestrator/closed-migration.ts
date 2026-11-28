@@ -1,4 +1,7 @@
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import dependencyReach from "./dependency-reach.ts";
+
+const { reaches } = dependencyReach;
 
 interface ReplanRecord {
   created?: { taskId: string; from?: string[] }[];
@@ -55,20 +58,6 @@ function successors(
   return next.flatMap((candidate) =>
     isClosed(database, candidate) ? successors(database, heirs, candidate, seen) : [candidate],
   );
-}
-
-function reaches(database: DatabaseSync, from: string, target: string): boolean {
-  const row = database
-    .prepare(
-      `WITH RECURSIVE reach(id) AS (
-         SELECT ?
-         UNION
-         SELECT d.depends_on FROM task_dependencies d JOIN reach r ON d.task_id = r.id
-       )
-       SELECT 1 AS found FROM reach WHERE id = ? LIMIT 1`,
-    )
-    .get(from, target);
-  return row !== undefined;
 }
 
 function settleClosed(database: DatabaseSync): void {

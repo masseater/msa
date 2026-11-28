@@ -1,51 +1,26 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import platform from "../src/core/platform/index.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-const { readEnv } = platform;
+import packageManagerFixture from "./package-manager-fixture.ts";
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeJsonFile,
-  writeTextFile,
-} = testing;
+const { usePackageManagerFixture } = packageManagerFixture;
 
-let tempDir: string;
+const fixture = usePackageManagerFixture();
 
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
-
-let previousOfflineEnv: string | undefined;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeJsonFile, writeTextFile } =
+  testing;
 
 const shouldDetectPnpmThroughACorepackWrapper = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  settingsManager = SettingsManager.inMemory({
+  fixture.useSettings({
     npmCommand: ["corepack", "pnpm"],
-  });
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
   });
 
   const source = "git:github.com/user/repo";
-  const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
+  const targetDir = joinPath(fixture.agentDir, "git", "github.com", "user", "repo");
   const runCommandSpy = vi
     .spyOn(commandRunner, "runCommand")
     .mockImplementation((...callArgs: unknown[]) =>
@@ -63,7 +38,7 @@ const shouldDetectPnpmThroughACorepackWrapper = Effect.gen(function* () {
       ),
     );
 
-  yield* awaited(packageManager.operations.install.install(source));
+  yield* awaited(fixture.packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith(
     "corepack",
@@ -82,17 +57,12 @@ const shouldDetectPnpmThroughACorepackWrapper = Effect.gen(function* () {
 const shouldDisablePeerInstallationForGitPackage = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  settingsManager = SettingsManager.inMemory({
+  fixture.useSettings({
     npmCommand: ["bun"],
-  });
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
   });
 
   const source = "git:github.com/user/repo";
-  const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
+  const targetDir = joinPath(fixture.agentDir, "git", "github.com", "user", "repo");
   const runCommandSpy = vi
     .spyOn(commandRunner, "runCommand")
     .mockImplementation((...callArgs: unknown[]) =>
@@ -110,7 +80,7 @@ const shouldDisablePeerInstallationForGitPackage = Effect.gen(function* () {
       ),
     );
 
-  yield* awaited(packageManager.operations.install.install(source));
+  yield* awaited(fixture.packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith("bun", ["install", "--omit=dev", "--omit=peer"], {
     cwd: targetDir,
@@ -122,7 +92,7 @@ const shouldUpdateGitPackageDependenciesWithoutAutoSetup = () =>
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
     const source = "git:github.com/user/repo";
-    const targetDir = joinPath(tempDir, ".msa", "git", "github.com", "user", "repo");
+    const targetDir = joinPath(fixture.tempDir, ".msa", "git", "github.com", "user", "repo");
     return { effectRunPromise, source, targetDir };
   });
 
@@ -134,7 +104,7 @@ const shouldUpdateGitPackageDependenciesWithoutAuto = Effect.gen(function* () {
     joinPath(targetDir, "package.json"),
     yield* toJsonText({ name: "repo", version: "1.0.0" }),
   );
-  settingsManager.resources.setProjectPackages([source]);
+  fixture.settingsManager.resources.setProjectPackages([source]);
 
   vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((...callArgs: unknown[]) =>
     effectRunPromise(
@@ -158,7 +128,7 @@ const shouldUpdateGitPackageDependenciesWithoutAuto = Effect.gen(function* () {
   );
   const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.operations.updates.update(source));
+  yield* awaited(fixture.packageManager.operations.updates.update(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith(
     "npm",
@@ -169,33 +139,7 @@ const shouldUpdateGitPackageDependenciesWithoutAuto = Effect.gen(function* () {
   );
 });
 
-const beforeEachHook = Effect.gen(function* () {
-  previousOfflineEnv = readEnv("MSA_OFFLINE");
-  vi.stubEnv("MSA_OFFLINE", undefined);
-  tempDir = yield* makeTempDir("pm-test-");
-  agentDir = joinPath(tempDir, "agent");
-  yield* makeDirectory(agentDir);
-
-  settingsManager = SettingsManager.inMemory();
-  packageManager = new DefaultPackageManager({
-    agentDir,
-    cwd: tempDir,
-    settingsManager,
-  });
-});
-
-const afterEachHook = () => {
-  vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  return runTest(removePath(tempDir));
-};
-
 describe("DefaultPackageManager", () => {
-  beforeEach(() => runTest(beforeEachHook));
-
-  afterEach(afterEachHook);
-
   describe("npmCommand", () => {
     it("should detect pnpm through a corepack wrapper without a separator", () =>
       runTest(shouldDetectPnpmThroughACorepackWrapper));
