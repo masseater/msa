@@ -19,72 +19,69 @@ const symlink = (from: string, to: string): Effect.Effect<void> =>
 
 const createTempDir = useTempDir("msa-paths-");
 
-const returnsTheRealPathForARegular = () =>
-  runTest(
-    Effect.gen(function* () {
-      const dir = yield* createTempDir;
-      const file = joinPath(dir, "file.txt");
-      yield* writeTextFile(file, "hello");
-      expect(yield* Effect.promise(() => canonicalizePath(file))).toBe(yield* realPath(file));
-    }),
-  );
+interface Arranged {
+  readonly input: string;
+  readonly target?: string;
+}
 
-const resolvesSymlinksToTheirTargets = () =>
-  runTest(
-    Effect.gen(function* () {
-      const dir = yield* createTempDir;
-      const target = joinPath(dir, "target.txt");
-      const link = joinPath(dir, "link.txt");
-      yield* writeTextFile(target, "hello");
-      yield* symlink(target, link);
-      expect(yield* Effect.promise(() => canonicalizePath(link))).toBe(yield* realPath(target));
-    }),
-  );
-
-const resolvesDirectorySymlinks = () =>
-  runTest(
-    Effect.gen(function* () {
-      const dir = yield* createTempDir;
-      const targetDir = joinPath(dir, "target-dir");
-      const linkDir = joinPath(dir, "link-dir");
-      yield* makeDirectory(targetDir);
-      yield* symlink(targetDir, linkDir);
-      expect(yield* Effect.promise(() => canonicalizePath(linkDir))).toBe(
-        yield* realPath(targetDir),
-      );
-    }),
-  );
-
-const fallsBackToTheRawPathWhen = () =>
-  runTest(
-    Effect.gen(function* () {
-      const dir = yield* createTempDir;
-      const nonexistent = joinPath(dir, "no-such-file");
-      expect(yield* Effect.promise(() => canonicalizePath(nonexistent))).toBe(nonexistent);
-    }),
-  );
-
-const fallsBackToTheRawPathFor = () =>
-  runTest(
-    Effect.gen(function* () {
-      const dir = yield* createTempDir;
-      const target = joinPath(dir, "target.txt");
-      const link = joinPath(dir, "link.txt");
-
-      yield* symlink(target, link);
-
-      expect(yield* Effect.promise(() => canonicalizePath(link))).toBe(link);
-    }),
-  );
+const canonicalizeCases: {
+  readonly arrange: (dir: string) => Effect.Effect<Arranged>;
+  readonly name: string;
+}[] = [
+  {
+    arrange: (dir) =>
+      Effect.gen(function* () {
+        const file = joinPath(dir, "file.txt");
+        yield* writeTextFile(file, "hello");
+        return { input: file, target: file };
+      }),
+    name: "returns the real path for a regular file",
+  },
+  {
+    arrange: (dir) =>
+      Effect.gen(function* () {
+        const target = joinPath(dir, "target.txt");
+        const link = joinPath(dir, "link.txt");
+        yield* writeTextFile(target, "hello");
+        yield* symlink(target, link);
+        return { input: link, target };
+      }),
+    name: "resolves symlinks to their targets",
+  },
+  {
+    arrange: (dir) =>
+      Effect.gen(function* () {
+        const targetDir = joinPath(dir, "target-dir");
+        const linkDir = joinPath(dir, "link-dir");
+        yield* makeDirectory(targetDir);
+        yield* symlink(targetDir, linkDir);
+        return { input: linkDir, target: targetDir };
+      }),
+    name: "resolves directory symlinks",
+  },
+  {
+    arrange: (dir) => Effect.succeed({ input: joinPath(dir, "no-such-file") }),
+    name: "falls back to the raw path when the target does not exist",
+  },
+  {
+    arrange: (dir) =>
+      Effect.gen(function* () {
+        const link = joinPath(dir, "link.txt");
+        yield* symlink(joinPath(dir, "target.txt"), link);
+        return { input: link };
+      }),
+    name: "falls back to the raw path for a dangling symlink",
+  },
+];
 
 describe("canonicalizePath", () => {
-  it("returns the real path for a regular file", returnsTheRealPathForARegular);
-
-  it("resolves symlinks to their targets", resolvesSymlinksToTheirTargets);
-
-  it("resolves directory symlinks", resolvesDirectorySymlinks);
-
-  it("falls back to the raw path when the target does not exist", fallsBackToTheRawPathWhen);
-
-  it("falls back to the raw path for a dangling symlink", fallsBackToTheRawPathFor);
+  it.each(canonicalizeCases)("$name", ({ arrange }) =>
+    runTest(
+      Effect.gen(function* () {
+        const { input, target } = yield* Effect.flatMap(createTempDir, arrange);
+        const expected = target === undefined ? input : yield* realPath(target);
+        expect(yield* Effect.promise(() => canonicalizePath(input))).toBe(expected);
+      }),
+    ),
+  );
 });

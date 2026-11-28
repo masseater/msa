@@ -19,33 +19,44 @@ const createTempDir = Effect.fn("createTempDir")(function* () {
 
 afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
 
+interface QueuedOperation {
+  readonly delayMs: number;
+  readonly label: string;
+  readonly path: string;
+}
+
+const runQueued = (operations: readonly QueuedOperation[]) =>
+  Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const order: string[] = [];
+    yield* awaited(
+      Promise.all(
+        operations.map(({ delayMs, label, path }) =>
+          withFileMutationQueue(path, () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                order.push(`${label}:start`);
+                if (delayMs > 0) {
+                  yield* sleep(delayMs);
+                }
+                order.push(`${label}:end`);
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+    return order;
+  });
+
 const serializesOperationsForTheSameFile = () =>
   runTest(
     Effect.gen(function* () {
-      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-      const order: string[] = [];
       const path = "/tmp/file-mutation-queue-same";
-
-      const first = withFileMutationQueue(path, () =>
-        effectRunPromise(
-          Effect.gen(function* () {
-            order.push("first:start");
-            yield* sleep(30);
-            order.push("first:end");
-          }),
-        ),
-      );
-      const second = withFileMutationQueue(path, () =>
-        effectRunPromise(
-          Effect.sync(() => {
-            order.push("second:start");
-            order.push("second:end");
-          }),
-        ),
-      );
-
-      yield* awaited(Promise.all([first, second]));
+      const order = yield* runQueued([
+        { delayMs: 30, label: "first", path },
+        { delayMs: 0, label: "second", path },
+      ]);
       expect(order).toEqual(["first:start", "first:end", "second:start", "second:end"]);
     }),
   );
@@ -53,32 +64,10 @@ const serializesOperationsForTheSameFile = () =>
 const allowsDifferentFilesToProceedInParallel = () =>
   runTest(
     Effect.gen(function* () {
-      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-      const order: string[] = [];
-
-      yield* awaited(
-        Promise.all([
-          withFileMutationQueue("/tmp/file-mutation-queue-a", () =>
-            effectRunPromise(
-              Effect.gen(function* () {
-                order.push("a:start");
-                yield* sleep(30);
-                order.push("a:end");
-              }),
-            ),
-          ),
-          withFileMutationQueue("/tmp/file-mutation-queue-b", () =>
-            effectRunPromise(
-              Effect.gen(function* () {
-                order.push("b:start");
-                yield* sleep(30);
-                order.push("b:end");
-              }),
-            ),
-          ),
-        ]),
-      );
+      const order = yield* runQueued([
+        { delayMs: 30, label: "a", path: "/tmp/file-mutation-queue-a" },
+        { delayMs: 30, label: "b", path: "/tmp/file-mutation-queue-b" },
+      ]);
 
       expect(order.indexOf("a:start")).toBeLessThan(order.indexOf("a:end"));
       expect(order.indexOf("b:start")).toBeLessThan(order.indexOf("b:end"));
@@ -89,36 +78,16 @@ const allowsDifferentFilesToProceedInParallel = () =>
 const usesTheSameQueueForSymlinkAliases = () =>
   runTest(
     Effect.gen(function* () {
-      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
       const dir = yield* createTempDir();
       const targetPath = joinPath(dir, "target.txt");
       const symlinkPath = joinPath(dir, "alias.txt");
       yield* writeTextFile(targetPath, "hello\n");
       yield* makeSymlink(targetPath, symlinkPath);
 
-      const order: string[] = [];
-      yield* awaited(
-        Promise.all([
-          withFileMutationQueue(targetPath, () =>
-            effectRunPromise(
-              Effect.gen(function* () {
-                order.push("target:start");
-                yield* sleep(30);
-                order.push("target:end");
-              }),
-            ),
-          ),
-          withFileMutationQueue(symlinkPath, () =>
-            effectRunPromise(
-              Effect.sync(() => {
-                order.push("alias:start");
-                order.push("alias:end");
-              }),
-            ),
-          ),
-        ]),
-      );
+      const order = yield* runQueued([
+        { delayMs: 30, label: "target", path: targetPath },
+        { delayMs: 0, label: "alias", path: symlinkPath },
+      ]);
 
       expect(order).toEqual(["target:start", "target:end", "alias:start", "alias:end"]);
     }),
