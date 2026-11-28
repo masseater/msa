@@ -1,27 +1,21 @@
 import { DatabaseSync } from "node:sqlite";
 
 import testing from "@msa/testing";
-import { Effect, Result } from "effect";
+import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import errors from "../src/core/orchestrator/errors.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import promptsModule from "../src/core/orchestrator/prompts.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 
-const { orchestratorError } = errors;
-
 const { makeTempDir, removePath } = testing;
 
-const { create, createNamed } = orchestratorSupport;
+const { create, createNamed, failureMessageOf, finishWorkAndReview, read } = orchestratorSupport;
 
 const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
-
-const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
-  Effect.promise(() => orchestrator.read(id));
 
 const buildsTheWorkerPromptFromTheTwo = () =>
   Effect.runPromise(
@@ -126,30 +120,13 @@ const rejectsATaskWithoutACurrentState = () =>
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
       type CreateInput = Parameters<orchestratorTypes.Orchestrator["createTask"]>[0];
-      const reject = (input: CreateInput) =>
-        Effect.result(
-          Effect.tryPromise({
-            catch: orchestratorError,
-            try: () => orchestrator.createTask(input),
-          }),
-        );
-      const withoutGoal = yield* reject({
-        currentState: "a is not written",
-        title: "a",
-      } as CreateInput);
-      expect(Result.isFailure(withoutGoal)).toBe(true);
-      if (Result.isFailure(withoutGoal)) {
-        expect(withoutGoal.failure.message).toContain("goal state");
-      }
-      const blankCurrent = yield* reject({
-        currentState: "  ",
-        goalState: "b works",
-        title: "b",
-      } as CreateInput);
-      expect(Result.isFailure(blankCurrent)).toBe(true);
-      if (Result.isFailure(blankCurrent)) {
-        expect(blankCurrent.failure.message).toContain("current state");
-      }
+      const reject = (input: CreateInput) => failureMessageOf(() => orchestrator.createTask(input));
+      expect(
+        yield* reject({ currentState: "a is not written", title: "a" } as CreateInput),
+      ).toContain("goal state");
+      expect(
+        yield* reject({ currentState: "  ", goalState: "b works", title: "b" } as CreateInput),
+      ).toContain("current state");
       expect(orchestrator.snapshot.tasks).toEqual([]);
       expect(workers).toHaveLength(0);
     }),
@@ -197,9 +174,7 @@ const waitsForDependenciesAndPassesTheReports = () =>
       expect(b.status).toBe("waiting");
       expect(workers).toHaveLength(1);
 
-      workers[0]?.complete("api is at /v2");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("reviewed a");
+      yield* finishWorkAndReview(workers, 0, "api is at /v2", "reviewed a");
       yield* waitFor(() => workers.length === 3);
       expect(workers[2]?.prompts[0]).toContain("b is not written");
       expect(workers[2]?.prompts[0]).toContain("b works");
@@ -220,9 +195,7 @@ const keepsAMessageToAWaitingTask = () =>
       );
       expect(queued.status).toBe("waiting");
 
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("a reviewed");
+      yield* finishWorkAndReview(workers, 0, "a done", "a reviewed");
       yield* waitFor(() => workers.length === 3);
       expect(workers[2]?.prompts[0]).toContain("also update the docs");
     }),

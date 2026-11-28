@@ -8,7 +8,7 @@ import type rpcClientTypes from "./rpc-client.types.ts";
 import RpcConnection from "./rpc-client/rpc-connection.ts";
 import type rpcTypesTypes from "./rpc-types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 
 export default class RpcClient {
   readonly connection: RpcConnection;
@@ -206,13 +206,11 @@ export default class RpcClient {
     images?: aiTypes.ImageContent[],
     timeout = 60000,
   ): Promise<jsonEventTypes.JsonAgentSessionEvent[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const eventsPromise = this.collectEvents(timeout);
-        yield* awaited(this.prompt(message, images));
-        return yield* awaited(eventsPromise);
-      }, this),
-    );
+    return promisedWith(function* () {
+      const eventsPromise = this.collectEvents(timeout);
+      yield* awaited(this.prompt(message, images));
+      return yield* awaited(eventsPromise);
+    }, this);
   }
 
   start(): Promise<void> {

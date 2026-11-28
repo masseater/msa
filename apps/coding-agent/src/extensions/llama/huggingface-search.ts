@@ -1,6 +1,5 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { Effect } from "effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import type keybindingsTypes from "../../core/keybindings.types.ts";
@@ -11,7 +10,7 @@ import errors from "../../utils/errors.ts";
 import type huggingfaceTypes from "./huggingface.types.ts";
 
 const { schedule } = platform;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { toErrorMessage } = errors;
 
 const { Container, Input, Spacer, Text, fuzzyFilter } = tuiModule;
@@ -153,28 +152,26 @@ export default class HuggingFaceSearch extends tuiModule.Container implements tu
   }
 
   private runSearch(query: string): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const request = new AbortController();
-        this.request = request;
-        try {
-          const results = yield* awaited(this.search(query, request.signal));
-          this.cache.set(query.toLowerCase(), results);
-          if (this.closed || request.signal.aborted || this.query !== query) return;
-          this.results = results;
-          this.selectedIndex = 0;
-          this.status = results.length === 0 ? "No GGUF models found" : "";
-          this.filterResults();
-        } catch (error) {
-          if (this.closed || request.signal.aborted || this.query !== query) return;
-          this.results = [];
-          this.status = toErrorMessage(error);
-          this.filterResults();
-        } finally {
-          if (this.request === request) this.request = undefined;
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      const request = new AbortController();
+      this.request = request;
+      try {
+        const results = yield* awaited(this.search(query, request.signal));
+        this.cache.set(query.toLowerCase(), results);
+        if (this.closed || request.signal.aborted || this.query !== query) return;
+        this.results = results;
+        this.selectedIndex = 0;
+        this.status = results.length === 0 ? "No GGUF models found" : "";
+        this.filterResults();
+      } catch (error) {
+        if (this.closed || request.signal.aborted || this.query !== query) return;
+        this.results = [];
+        this.status = toErrorMessage(error);
+        this.filterResults();
+      } finally {
+        if (this.request === request) this.request = undefined;
+      }
+    }, this);
   }
 
   private close(model: string | undefined): void {

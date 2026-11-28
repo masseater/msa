@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
 import type extensionInternalTypes from "../extension-internal.types.ts";
@@ -11,7 +9,7 @@ import serverState from "./server-state.ts";
 import McpServerWaits from "./server-waits.ts";
 
 const { describeState, isEnabled } = serverState;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { loadMcpRuntime } = runtimeLazy;
 
 export default class McpConnections {
@@ -59,68 +57,59 @@ export default class McpConnections {
   };
 
   readonly reconnectSignedIn = (ctx: extensionsTypesTypes.ExtensionContext) =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(Promise.all(this.tokenSnapshots.values()));
-        const current = yield* awaited(
-          Promise.all(
-            [...this.tokensAtSignIn].map(([connection, tokens]) =>
-              this.storedTokens(connection).then((now) => ({
-                changed: now !== tokens,
-                connection,
-              })),
-            ),
+    promisedWith(function* () {
+      yield* awaited(Promise.all(this.tokenSnapshots.values()));
+      const current = yield* awaited(
+        Promise.all(
+          [...this.tokensAtSignIn].map(([connection, tokens]) =>
+            this.storedTokens(connection).then((now) => ({
+              changed: now !== tokens,
+              connection,
+            })),
           ),
-        );
-        const signedIn = current
-          .filter((entry) => entry.changed)
-          .map((entry) => [entry.connection] as const);
-        if (signedIn.length === 0) return;
-        for (const [connection] of signedIn) {
-          this.tokensAtSignIn.delete(connection);
-          this.tokenSnapshots.delete(connection);
-        }
-        yield* awaited(Promise.allSettled(signedIn.map(([connection]) => connection.reconnect())));
-        this.host.tools.discovery.ensureDiscoveryActive(ctx);
-      }, this),
-    );
+        ),
+      );
+      const signedIn = current
+        .filter((entry) => entry.changed)
+        .map((entry) => [entry.connection] as const);
+      if (signedIn.length === 0) return;
+      for (const [connection] of signedIn) {
+        this.tokensAtSignIn.delete(connection);
+        this.tokenSnapshots.delete(connection);
+      }
+      yield* awaited(Promise.allSettled(signedIn.map(([connection]) => connection.reconnect())));
+      this.host.tools.discovery.ensureDiscoveryActive(ctx);
+    }, this);
 
   readonly createConnection = (
     server: extensionInternalTypes.McpServer,
     isCurrent: () => boolean,
   ): Promise<runtimeTypes.McpServerConnection | undefined> =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const runtime = yield* awaited(loadMcpRuntime());
-        if (!isCurrent()) return undefined;
-        const connection = new runtime.McpServerConnection({
-          createTransport:
-            this.host.state.options.createTransport ?? runtime.createDefaultTransport,
-          credentials: this.resources.getCredentials(runtime),
-          cwd: this.host.state.sessionCwd,
-          entry: server.entry,
-          log: this.resources.getServerLog(runtime),
-          onChange: (serverConnection) => {
-            if (isCurrent()) this.onConnectionChange(serverConnection);
-            else this.tokensAtSignIn.delete(serverConnection);
-          },
-          onTools: (serverConnection) => {
-            if (isCurrent()) this.host.tools.registerTools(serverConnection);
-          },
-          providerToken: (provider) =>
-            Effect.runPromise(
-              awaitingWith(function* () {
-                return yield* awaited(
-                  this.host.state.modelRegistry?.getApiKeyForProvider(provider),
-                );
-              }, this),
-            ),
-        });
-        server.connection = connection;
-        this.host.state.emitChange();
-        return connection;
-      }, this),
-    );
+    promisedWith(function* () {
+      const runtime = yield* awaited(loadMcpRuntime());
+      if (!isCurrent()) return undefined;
+      const connection = new runtime.McpServerConnection({
+        createTransport: this.host.state.options.createTransport ?? runtime.createDefaultTransport,
+        credentials: this.resources.getCredentials(runtime),
+        cwd: this.host.state.sessionCwd,
+        entry: server.entry,
+        log: this.resources.getServerLog(runtime),
+        onChange: (serverConnection) => {
+          if (isCurrent()) this.onConnectionChange(serverConnection);
+          else this.tokensAtSignIn.delete(serverConnection);
+        },
+        onTools: (serverConnection) => {
+          if (isCurrent()) this.host.tools.registerTools(serverConnection);
+        },
+        providerToken: (provider) =>
+          promisedWith(function* () {
+            return yield* awaited(this.host.state.modelRegistry?.getApiKeyForProvider(provider));
+          }, this),
+      });
+      server.connection = connection;
+      this.host.state.emitChange();
+      return connection;
+    }, this);
 
   readonly startConnection = (
     server: extensionInternalTypes.McpServer,
@@ -135,15 +124,13 @@ export default class McpConnections {
       isEnabled(server) &&
       this.host.state.servers.includes(server);
     const ready = (() =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          yield* awaited(after);
-          if (!isCurrent()) return;
-          const connection = yield* awaited(this.createConnection(server, isCurrent));
-          if (connection === undefined || !isCurrent()) return;
-          yield* awaited(connection.getClient().catch(() => undefined));
-        }, this),
-      ))();
+      promisedWith(function* () {
+        yield* awaited(after);
+        if (!isCurrent()) return;
+        const connection = yield* awaited(this.createConnection(server, isCurrent));
+        if (connection === undefined || !isCurrent()) return;
+        yield* awaited(connection.getClient().catch(() => undefined));
+      }, this))();
     server.ready = ready.catch(() => undefined);
     return ready;
   };

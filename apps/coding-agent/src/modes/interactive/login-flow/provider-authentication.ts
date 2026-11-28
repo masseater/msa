@@ -10,7 +10,7 @@ import loginFlowHelpers from "../login-flow-helpers.ts";
 import type LoginFlow from "../login-flow.ts";
 import type loginFlowTypes from "../login-flow.types.ts";
 
-const { awaited, awaitingWith, awaiting } = awaitingModule;
+const { awaited, awaiting, promisedWith } = awaitingModule;
 const { getAuthPath } = config;
 const {
   CREDENTIAL_TIMEOUT_MS,
@@ -108,31 +108,24 @@ export default class ProviderAuthentication {
     authType: loginFlowTypes.AuthType,
     previousModel: compatTypes.Model<any> | undefined,
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const context = this.authenticationContext(
-          authType,
-          providerName,
-          previousModel,
-          providerId,
+    return promisedWith(function* () {
+      const context = this.authenticationContext(authType, providerName, previousModel, providerId);
+      const { host, actionLabel, deferSelection } = context;
+      const finishAuthentication = this.createFinishAuthentication(
+        previousModel,
+        host,
+        providerId,
+        actionLabel,
+      );
+      if (deferSelection) {
+        host.showStatus(
+          `${actionLabel}. Credentials saved to ${getAuthPath()}. Refreshing model catalog…`,
         );
-        const { host, actionLabel, deferSelection } = context;
-        const finishAuthentication = this.createFinishAuthentication(
-          previousModel,
-          host,
-          providerId,
-          actionLabel,
-        );
-        if (deferSelection) {
-          host.showStatus(
-            `${actionLabel}. Credentials saved to ${getAuthPath()}. Refreshing model catalog…`,
-          );
-        } else {
-          yield* awaited(finishAuthentication());
-        }
-        this.refreshCatalog(context, providerId, previousModel, finishAuthentication);
-      }, this),
-    );
+      } else {
+        yield* awaited(finishAuthentication());
+      }
+      this.refreshCatalog(context, providerId, previousModel, finishAuthentication);
+    }, this);
   }
 
   private refreshCatalog(

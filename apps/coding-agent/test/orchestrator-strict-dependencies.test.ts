@@ -7,7 +7,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 
 const { harness } = orchestratorHarness;
 
-const { create } = orchestratorSupport;
+const { create, finishWorkAndReview } = orchestratorSupport;
 
 const { setup, taskStatus, waitFor } = harness;
 
@@ -103,9 +103,7 @@ it("counts only unfinished tasks, so a finished one frees a slot", () =>
       const a = yield* create(orchestrator, work("a"));
       yield* create(orchestrator, work("b"));
       yield* create(orchestrator, work("c"));
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("a reviewed");
+      yield* finishWorkAndReview(workers, 0, "a done", "a reviewed");
       yield* waitFor(() => taskStatus(orchestrator, a.id) === "completed");
 
       const d = yield* create(orchestrator, work("d"));

@@ -10,7 +10,7 @@ import type rpcClientTypes from "../rpc-client.types.ts";
 import type rpcTypesTypes from "../rpc-types.ts";
 import spawnAgent from "./spawn-agent.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { serializeJsonLine, attachJsonlLineReader } = jsonl;
 
 type RpcResponseField = "commands" | "disposition" | "levels" | "messages" | "models" | "text";
@@ -40,32 +40,30 @@ export default class RpcConnection {
   private exitError: Error | null = null;
 
   stop(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.process === null) return;
+    return promisedWith(function* () {
+      if (this.process === null) return;
 
-        this.stopReadingStdout?.();
-        this.stopReadingStdout = null;
-        this.process.kill("SIGTERM");
+      this.stopReadingStdout?.();
+      this.stopReadingStdout = null;
+      this.process.kill("SIGTERM");
 
-        yield* performed(
-          Effect.callback<void>((resume) => {
-            this.process?.on("exit", () => resume(Effect.void));
-          }).pipe(
-            Effect.timeoutOrElse({
-              duration: 1000,
-              orElse: () =>
-                Effect.sync(() => {
-                  this.process?.kill("SIGKILL");
-                }),
-            }),
-          ),
-        );
+      yield* performed(
+        Effect.callback<void>((resume) => {
+          this.process?.on("exit", () => resume(Effect.void));
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: 1000,
+            orElse: () =>
+              Effect.sync(() => {
+                this.process?.kill("SIGKILL");
+              }),
+          }),
+        ),
+      );
 
-        this.process = null;
-        this.pendingRequests.clear();
-      }, this),
-    );
+      this.process = null;
+      this.pendingRequests.clear();
+    }, this);
   }
 
   onEvent(listener: rpcClientTypes.RpcEventListener): () => void {
@@ -197,34 +195,32 @@ export default class RpcConnection {
   }
 
   start(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.process !== null) {
-          throw new Error("Client already started");
-        }
+    return promisedWith(function* () {
+      if (this.process !== null) {
+        throw new Error("Client already started");
+      }
 
-        this.exitError = null;
+      this.exitError = null;
 
-        const childProcess = spawnAgent(this.client.options);
-        this.process = childProcess;
+      const childProcess = spawnAgent(this.client.options);
+      this.process = childProcess;
 
-        this.watchProcess(childProcess);
+      this.watchProcess(childProcess);
 
-        this.stopReadingStdout = attachJsonlLineReader(childProcess.stdout!, (line) => {
-          this.handleLine(line);
-        });
+      this.stopReadingStdout = attachJsonlLineReader(childProcess.stdout!, (line) => {
+        this.handleLine(line);
+      });
 
-        yield* performed(Effect.sleep(100));
+      yield* performed(Effect.sleep(100));
 
-        if (this.process.exitCode !== null) {
-          const error =
-            this.exitError ??
-            this.createProcessExitError(this.process.exitCode, this.process.signalCode);
-          this.exitError = error;
-          throw error;
-        }
-      }, this),
-    );
+      if (this.process.exitCode !== null) {
+        const error =
+          this.exitError ??
+          this.createProcessExitError(this.process.exitCode, this.process.signalCode);
+        this.exitError = error;
+        throw error;
+      }
+    }, this);
   }
 
   private watchProcess(childProcess: nodeChildProcessTypes.ChildProcess): void {
@@ -258,31 +254,25 @@ export default class RpcConnection {
   }
 
   request<T>(command: rpcClientInternalTypes.RpcCommandBody): Promise<T> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const response = yield* awaited(this.send(command));
-        return this.getData<T>(response);
-      }, this),
-    );
+    return promisedWith(function* () {
+      const response = yield* awaited(this.send(command));
+      return this.getData<T>(response);
+    }, this);
   }
 
   command(command: rpcClientInternalTypes.RpcCommandBody): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.send(command));
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(this.send(command));
+    }, this);
   }
 
   requestField<T, K extends keyof T & RpcResponseField>(
     command: rpcClientInternalTypes.RpcCommandBody,
     field: K,
   ): Promise<T[K]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const response = yield* awaited(this.send(command));
-        return this.getData<T>(response)[field];
-      }, this),
-    );
+    return promisedWith(function* () {
+      const response = yield* awaited(this.send(command));
+      return this.getData<T>(response)[field];
+    }, this);
   }
 }

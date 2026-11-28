@@ -1,8 +1,7 @@
 import testing from "@msa/testing";
-import { Effect, Result } from "effect";
+import { Effect } from "effect";
 import { expect, it, vi } from "vite-plus/test";
 
-import errors from "../src/core/orchestrator/errors.ts";
 import goalChecksSupport from "./orchestrator-goal-checks-support.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
@@ -13,8 +12,7 @@ const { joinPath, pollUntil, writeTextFile } = testing;
 const { escalateTriage } = triageSupport;
 const { LINT_CHECK, SHORTCUT_CHECK, inCheckedRepository, inHeldRepository, lintTaskOf } =
   goalChecksSupport;
-const { orchestratorError } = errors;
-const { create } = orchestratorSupport;
+const { create, failureMessageOf } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { advance, fakeClock } = watchdogSupport;
@@ -229,14 +227,9 @@ const rejectsAnUnreadableCheck = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const created = yield* Effect.result(
-        Effect.tryPromise({
-          catch: orchestratorError,
-          try: () =>
-            orchestrator.createTask(lintTaskOf([{ command: "cat lint.txt", output: "(" }])),
-        }),
+      yield* failureMessageOf(() =>
+        orchestrator.createTask(lintTaskOf([{ command: "cat lint.txt", output: "(" }])),
       );
-      expect(Result.isFailure(created)).toBe(true);
       expect(orchestrator.snapshot.tasks).toEqual([]);
       expect(workers).toHaveLength(0);
     }),

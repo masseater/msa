@@ -5,7 +5,8 @@ import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
-const { create, createNamed, replan, stopAndWrapUp } = orchestratorReplanSupport;
+const { create, createNamed, finishWorkAndReview, replan, stopAndWrapUp } =
+  orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 
@@ -48,9 +49,7 @@ it("closes a replaced task and moves the tasks that waited on it to its successo
       expect(result.rewired).toEqual([{ dependsOn: [heir], taskId: c.id }]);
 
       yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("the client speaks v3");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]?.complete("reviewed");
+      yield* finishWorkAndReview(workers, 1, "the client speaks v3", "reviewed");
       yield* waitFor(() => taskStatus(orchestrator, c.id) === "running");
       expect(taskStatus(orchestrator, a.id)).toBe("closed");
     }),

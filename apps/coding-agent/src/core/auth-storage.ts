@@ -12,7 +12,7 @@ import resolveConfigValueModule from "./resolve-config-value.ts";
 
 const { prettyJson } = text;
 const { getAuthPath } = config;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { resolveConfigValue } = resolveConfigValueModule;
 
 export default class AuthStorage implements aiTypes.CredentialStore {
@@ -45,15 +45,13 @@ export default class AuthStorage implements aiTypes.CredentialStore {
     provider: string,
     options?: aiTypes.AuthOperationOptions,
   ): Promise<aiTypes.Credential | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const credential = (yield* performed(this.reader.latest(options))).get(provider);
-        options?.signal?.throwIfAborted();
-        if (credential?.type !== "api_key") return credential;
-        if (credential.key === undefined) return credential;
-        return { ...credential, key: resolveConfigValue(credential.key, credential.env) };
-      }, this),
-    );
+    return promisedWith(function* () {
+      const credential = (yield* performed(this.reader.latest(options))).get(provider);
+      options?.signal?.throwIfAborted();
+      if (credential?.type !== "api_key") return credential;
+      if (credential.key === undefined) return credential;
+      return { ...credential, key: resolveConfigValue(credential.key, credential.env) };
+    }, this);
   }
 
   modify(
@@ -61,67 +59,59 @@ export default class AuthStorage implements aiTypes.CredentialStore {
     fn: (current: aiTypes.Credential | undefined) => Promise<aiTypes.Credential | undefined>,
     options?: aiTypes.AuthOperationOptions,
   ): Promise<aiTypes.Credential | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let latestData = this.reader.data;
-        let revision: string | undefined;
-        const result = yield* awaited(
-          this.storage.withLockAsync(
-            (content) =>
-              Effect.runPromise(
-                awaitingWith(function* () {
-                  const currentData = this.reader.parse(content);
-                  const next = yield* awaited(fn(currentData.get(provider)));
-                  if (next === undefined) {
-                    latestData = currentData;
-                    revision = yield* awaited(this.reader.fileRevision());
-                    return { result: currentData.get(provider) };
-                  }
+    return promisedWith(function* () {
+      let latestData = this.reader.data;
+      let revision: string | undefined;
+      const result = yield* awaited(
+        this.storage.withLockAsync(
+          (content) =>
+            promisedWith(function* () {
+              const currentData = this.reader.parse(content);
+              const next = yield* awaited(fn(currentData.get(provider)));
+              if (next === undefined) {
+                latestData = currentData;
+                revision = yield* awaited(this.reader.fileRevision());
+                return { result: currentData.get(provider) };
+              }
 
-                  const merged = new Map(currentData).set(provider, next);
-                  latestData = merged;
-                  return { next: prettyJson(Object.fromEntries(merged)), result: next };
-                }, this),
-              ),
-            options,
-          ),
-        );
-        this.reader.update(latestData, revision);
-        return result;
-      }, this),
-    );
+              const merged = new Map(currentData).set(provider, next);
+              latestData = merged;
+              return { next: prettyJson(Object.fromEntries(merged)), result: next };
+            }, this),
+          options,
+        ),
+      );
+      this.reader.update(latestData, revision);
+      return result;
+    }, this);
   }
 
   delete(provider: string, options?: aiTypes.AuthOperationOptions): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let latestData = this.reader.data;
-        yield* awaited(
-          this.storage.withLockAsync(
-            (content) =>
-              Effect.runPromise(
-                Effect.sync(() => {
-                  const remaining = new Map(this.reader.parse(content));
-                  remaining.delete(provider);
-                  latestData = remaining;
-                  return { next: prettyJson(Object.fromEntries(remaining)), result: undefined };
-                }),
-              ),
-            options,
-          ),
-        );
-        this.reader.update(latestData);
-      }, this),
-    );
+    return promisedWith(function* () {
+      let latestData = this.reader.data;
+      yield* awaited(
+        this.storage.withLockAsync(
+          (content) =>
+            Effect.runPromise(
+              Effect.sync(() => {
+                const remaining = new Map(this.reader.parse(content));
+                remaining.delete(provider);
+                latestData = remaining;
+                return { next: prettyJson(Object.fromEntries(remaining)), result: undefined };
+              }),
+            ),
+          options,
+        ),
+      );
+      this.reader.update(latestData);
+    }, this);
   }
 
   list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const entries = [...(yield* performed(this.reader.latest(options)))];
-        options?.signal?.throwIfAborted();
-        return entries.map(([providerId, credential]) => ({ providerId, type: credential.type }));
-      }, this),
-    );
+    return promisedWith(function* () {
+      const entries = [...(yield* performed(this.reader.latest(options)))];
+      options?.signal?.throwIfAborted();
+      return entries.map(([providerId, credential]) => ({ providerId, type: credential.type }));
+    }, this);
   }
 }

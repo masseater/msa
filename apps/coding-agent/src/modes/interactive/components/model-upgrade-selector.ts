@@ -1,6 +1,5 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import type modelUpgradeTypes from "../../../core/model-upgrade.types.ts";
@@ -9,7 +8,7 @@ import DynamicBorder from "./dynamic-border.ts";
 import keybindingHints from "./keybinding-hints.ts";
 import type modelUpgradeSelectorTypes from "./model-upgrade-selector.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { getSelectListTheme, theme } = themeModule;
 const { keyDisplayText } = keybindingHints;
 
@@ -87,32 +86,30 @@ export default class ModelUpgradeSelectorComponent
   }
 
   private apply(reference: string): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const candidate = this.candidates.find(
-          (entry) => `${entry.from.provider}/${entry.from.id}` === reference,
+    return promisedWith(function* () {
+      const candidate = this.candidates.find(
+        (entry) => `${entry.from.provider}/${entry.from.id}` === reference,
+      );
+      if (candidate === undefined) return;
+      if (!candidate.confident) {
+        this.statusText.setText(
+          theme.fg("warning", `  ${reference} needs a decision: ${candidate.reason}`),
         );
-        if (candidate === undefined) return;
-        if (!candidate.confident) {
-          this.statusText.setText(
-            theme.fg("warning", `  ${reference} needs a decision: ${candidate.reason}`),
-          );
-          this.callbacks.requestRender();
-          return;
-        }
-        try {
-          const message = yield* awaited(this.callbacks.onApply(candidate));
-          this.candidates = this.candidates.filter((entry) => entry !== candidate);
-          this.replaceList();
-          this.statusText.setText(theme.fg("success", `  ${message}`));
-        } catch (error) {
-          this.statusText.setText(
-            theme.fg("error", `  ${error instanceof Error ? error.message : String(error)}`),
-          );
-        }
         this.callbacks.requestRender();
-      }, this),
-    );
+        return;
+      }
+      try {
+        const message = yield* awaited(this.callbacks.onApply(candidate));
+        this.candidates = this.candidates.filter((entry) => entry !== candidate);
+        this.replaceList();
+        this.statusText.setText(theme.fg("success", `  ${message}`));
+      } catch (error) {
+        this.statusText.setText(
+          theme.fg("error", `  ${error instanceof Error ? error.message : String(error)}`),
+        );
+      }
+      this.callbacks.requestRender();
+    }, this);
   }
 
   private replaceList(): void {

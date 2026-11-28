@@ -1,5 +1,4 @@
 import type mcpTypes from "@msa/mcp/index.types";
-import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import runtimeLazy from "../../extensions/mcp/runtime.lazy.ts";
@@ -9,7 +8,7 @@ import awaitingModule from "../awaiting.ts";
 import memoryModule from "./memory.ts";
 import type memoryTypes from "./memory.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { loadMcpRuntime } = runtimeLazy;
 const { toErrorMessage } = errorsModule;
 const { raceWithAbortSignal } = abortModule;
@@ -84,58 +83,54 @@ export default class SepiaceClient {
   }
 
   private connection(): Promise<memoryTypes.McpConnection> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const runtime = yield* awaited(this.load());
-        const credentials = yield* awaited(this.credentials());
-        this.connectionInternal ??= new runtime.McpServerConnection({
-          createTransport: runtime.createDefaultTransport,
-          credentials,
-          cwd: this.options.cwd,
-          entry: { config: { url: this.options.url }, name: SEPIACE_NAME, source: "memory" },
-          onChange: () => this.options.onChange?.(),
-          onTools: () => {},
-        });
-        return this.connectionInternal;
-      }, this),
-    );
+    return promisedWith(function* () {
+      const runtime = yield* awaited(this.load());
+      const credentials = yield* awaited(this.credentials());
+      this.connectionInternal ??= new runtime.McpServerConnection({
+        createTransport: runtime.createDefaultTransport,
+        credentials,
+        cwd: this.options.cwd,
+        entry: { config: { url: this.options.url }, name: SEPIACE_NAME, source: "memory" },
+        onChange: () => this.options.onChange?.(),
+        onTools: () => {},
+      });
+      return this.connectionInternal;
+    }, this);
   }
 
   private open(): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        this.storeError = undefined;
-        const saved = yield* awaited(
-          this.credentials()
-            .then((credentials) => credentials.tokens(SEPIACE_NAME, this.options.url))
-            .then(
-              (tokens) => ({ tokens }),
-              (error: unknown) => ({
-                error: `could not read the saved sign-in: ${toErrorMessage(error)}`,
-              }),
-            ),
-        );
-        if (this.closed) return false;
-        if ("error" in saved) {
-          this.storeError = saved.error;
-          this.options.onChange?.();
-          return false;
-        }
-        const { tokens } = saved;
-        this.signedOut = tokens === undefined;
-        if (this.signedOut) {
-          this.options.onChange?.();
-          return false;
-        }
-        const connection = yield* awaited(this.connection());
-        try {
-          yield* awaited(connection.getClient());
-          return true;
-        } catch {
-          return false;
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      this.storeError = undefined;
+      const saved = yield* awaited(
+        this.credentials()
+          .then((credentials) => credentials.tokens(SEPIACE_NAME, this.options.url))
+          .then(
+            (tokens) => ({ tokens }),
+            (error: unknown) => ({
+              error: `could not read the saved sign-in: ${toErrorMessage(error)}`,
+            }),
+          ),
+      );
+      if (this.closed) return false;
+      if ("error" in saved) {
+        this.storeError = saved.error;
+        this.options.onChange?.();
+        return false;
+      }
+      const { tokens } = saved;
+      this.signedOut = tokens === undefined;
+      if (this.signedOut) {
+        this.options.onChange?.();
+        return false;
+      }
+      const connection = yield* awaited(this.connection());
+      try {
+        yield* awaited(connection.getClient());
+        return true;
+      } catch {
+        return false;
+      }
+    }, this);
   }
 
   connect(): Promise<boolean> {
@@ -154,19 +149,17 @@ export default class SepiaceClient {
   }
 
   call(request: string, signal: AbortSignal): Promise<memoryTypes.SepiaceReply> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (!(yield* awaited(this.ready(signal)))) throw new Error(this.notConnected());
-        const connection = yield* awaited(this.connection());
-        try {
-          const result = yield* awaited(connection.callTool(SEPIACE_TOOL, { request }, { signal }));
-          return { isError: result.isError === true, text: textOf(result) };
-        } catch (error) {
-          if (this.state === "needs-auth") throw new Error(this.notConnected(), { cause: error });
-          throw error;
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (!(yield* awaited(this.ready(signal)))) throw new Error(this.notConnected());
+      const connection = yield* awaited(this.connection());
+      try {
+        const result = yield* awaited(connection.callTool(SEPIACE_TOOL, { request }, { signal }));
+        return { isError: result.isError === true, text: textOf(result) };
+      } catch (error) {
+        if (this.state === "needs-auth") throw new Error(this.notConnected(), { cause: error });
+        throw error;
+      }
+    }, this);
   }
 
   notConnected(): string {
@@ -178,61 +171,55 @@ export default class SepiaceClient {
   }
 
   signIn(prompt: memoryTypes.SignInPrompt, signal: AbortSignal): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const runtime = yield* awaited(this.load());
-        const connection = yield* awaited(this.connection());
-        if (yield* awaited(this.connect())) return;
-        if (this.state !== "needs-auth") throw new Error(this.notConnected());
-        try {
-          yield* awaited(
-            runtime.signInMcpServer({
-              challenge: connection.auth.challenge,
-              prompt,
-              serverUrl: this.options.url,
-              settings: connection.auth.oauthSettings(),
-              signal,
-              store: (yield* awaited(this.credentials())).forServer(SEPIACE_NAME, this.options.url),
-            }),
-          );
-        } catch (error) {
-          if (Schema.is(runtime.McpSignInCancelledError)(error))
-            throw new Error("Sign-in to sepiace was cancelled or not completed.", { cause: error });
-          throw new Error(`Sign-in to sepiace failed: ${toErrorMessage(error)}`, { cause: error });
-        }
-        connection.auth.challenge = undefined;
-        this.signedOut = false;
-        try {
-          yield* awaited(connection.reconnect());
-        } catch (error) {
-          throw new Error(`Signed in, but sepiace failed to connect: ${toErrorMessage(error)}`, {
-            cause: error,
-          });
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      const runtime = yield* awaited(this.load());
+      const connection = yield* awaited(this.connection());
+      if (yield* awaited(this.connect())) return;
+      if (this.state !== "needs-auth") throw new Error(this.notConnected());
+      try {
+        yield* awaited(
+          runtime.signInMcpServer({
+            challenge: connection.auth.challenge,
+            prompt,
+            serverUrl: this.options.url,
+            settings: connection.auth.oauthSettings(),
+            signal,
+            store: (yield* awaited(this.credentials())).forServer(SEPIACE_NAME, this.options.url),
+          }),
+        );
+      } catch (error) {
+        if (Schema.is(runtime.McpSignInCancelledError)(error))
+          throw new Error("Sign-in to sepiace was cancelled or not completed.", { cause: error });
+        throw new Error(`Sign-in to sepiace failed: ${toErrorMessage(error)}`, { cause: error });
+      }
+      connection.auth.challenge = undefined;
+      this.signedOut = false;
+      try {
+        yield* awaited(connection.reconnect());
+      } catch (error) {
+        throw new Error(`Signed in, but sepiace failed to connect: ${toErrorMessage(error)}`, {
+          cause: error,
+        });
+      }
+    }, this);
   }
 
   signOut(): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const credentials = yield* awaited(this.credentials());
-        const removed = yield* awaited(credentials.remove(SEPIACE_NAME, this.options.url));
-        yield* awaited(this.connectionInternal?.signOut());
-        this.signedOut = true;
-        this.options.onChange?.();
-        return removed;
-      }, this),
-    );
+    return promisedWith(function* () {
+      const credentials = yield* awaited(this.credentials());
+      const removed = yield* awaited(credentials.remove(SEPIACE_NAME, this.options.url));
+      yield* awaited(this.connectionInternal?.signOut());
+      this.signedOut = true;
+      this.options.onChange?.();
+      return removed;
+    }, this);
   }
 
   close(): Promise<void> {
     this.closed = true;
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.connectionInternal?.close());
-        yield* awaited(this.attempt);
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(this.connectionInternal?.close());
+      yield* awaited(this.attempt);
+    }, this);
   }
 }

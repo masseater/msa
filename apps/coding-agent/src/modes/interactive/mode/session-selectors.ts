@@ -8,7 +8,7 @@ import type sessionCwdTypes from "../../../core/session-cwd.types.ts";
 import SessionManager from "../../../core/session-manager.ts";
 import SessionSelectorComponent from "../components/session-selector.ts";
 import type InteractiveMode from "../interactive-mode.ts";
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { formatMissingSessionCwdPrompt } = sessionCwd;
 
 export default class SessionSelectors {
@@ -21,17 +21,15 @@ export default class SessionSelectors {
   promptForMissingSessionCwd(
     error: sessionCwdTypes.MissingSessionCwdError,
   ): Promise<string | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const confirmed = yield* awaited(
-          this.mode.extensions.dialogs.extensionDialogs.confirm(
-            "Session cwd not found",
-            formatMissingSessionCwdPrompt(error.issue),
-          ),
-        );
-        return confirmed ? error.issue.fallbackCwd : undefined;
-      }, this),
-    );
+    return promisedWith(function* () {
+      const confirmed = yield* awaited(
+        this.mode.extensions.dialogs.extensionDialogs.confirm(
+          "Session cwd not found",
+          formatMissingSessionCwdPrompt(error.issue),
+        ),
+      );
+      return confirmed ? error.issue.fallbackCwd : undefined;
+    }, this);
   }
 
   handleResumeSession(
@@ -99,12 +97,10 @@ export default class SessionSelectors {
             ? SessionManager.listAll(onProgress, signal)
             : SessionManager.listAll(this.mode.sessionManager.getSessionDir(), onProgress, signal),
         (sessionPath) =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              done();
-              yield* performed(this.handleResumeSession(sessionPath));
-            }, this),
-          ),
+          promisedWith(function* () {
+            done();
+            yield* performed(this.handleResumeSession(sessionPath));
+          }, this),
         () => {
           done();
           this.mode.ui.requestRender();

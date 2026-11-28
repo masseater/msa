@@ -1,17 +1,14 @@
-import { Effect, Result } from "effect";
+import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import errors from "../src/core/orchestrator/errors.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
-
-const { orchestratorError } = errors;
 
 const { harness } = orchestratorHarness;
 
 const { reviews, setup, taskStatus, waitFor } = harness;
 
-const { create, createNamed } = orchestratorSupport;
+const { create, createNamed, failureMessageOf, finishWorkAndReview } = orchestratorSupport;
 
 const waitsAgainForADependencyAddedAfter = () =>
   Effect.runPromise(
@@ -19,13 +16,7 @@ const waitsAgainForADependencyAddedAfter = () =>
       const { orchestrator, workers } = setup();
       const a = yield* createNamed(orchestrator, "a");
       const c = yield* createNamed(orchestrator, "c");
-      const rejected = yield* Effect.result(
-        Effect.tryPromise({
-          catch: orchestratorError,
-          try: () => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }),
-        }),
-      );
-      expect(Result.isFailure(rejected)).toBe(true);
+      yield* failureMessageOf(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
       expect(taskStatus(orchestrator, a.id)).toBe("running");
 
       yield* Effect.promise(() => orchestrator.stop(a.id));
@@ -67,9 +58,7 @@ const startsReadyTasksInCreationOrderWithin = () =>
       expect(workers).toHaveLength(1);
       expect(workers[0]?.prompts[0]).toContain("a works");
 
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("a reviewed");
+      yield* finishWorkAndReview(workers, 0, "a done", "a reviewed");
       yield* waitFor(() => workers.length === 3);
       expect(taskStatus(orchestrator, a.id)).toBe("completed");
       expect(taskStatus(orchestrator, b.id)).toBe("running");

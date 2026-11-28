@@ -1,10 +1,8 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../../core/awaiting.ts";
 import interop from "../../utils/interop.ts";
 import type huggingfaceTypes from "./huggingface.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { fetchResponse } = interop;
 
 const DEFAULT_HUGGING_FACE_URL = "https://huggingface.co";
@@ -30,118 +28,108 @@ export default class HuggingFaceClient {
   }
 
   private request(path: string, signal?: AbortSignal): Promise<unknown> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const headers = new Headers();
-        if (this.token !== undefined && this.token !== "")
-          headers.set("Authorization", `Bearer ${this.token}`);
-        const timeout = AbortSignal.timeout(15_000);
-        const response = yield* awaited(
-          fetchResponse(`${this.baseUrl}${path}`, {
-            headers,
-            signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
-          }),
-        );
-        let payload: unknown;
-        try {
-          payload = yield* awaited(response.json());
-        } catch {
-          payload = undefined;
+    return promisedWith(function* () {
+      const headers = new Headers();
+      if (this.token !== undefined && this.token !== "")
+        headers.set("Authorization", `Bearer ${this.token}`);
+      const timeout = AbortSignal.timeout(15_000);
+      const response = yield* awaited(
+        fetchResponse(`${this.baseUrl}${path}`, {
+          headers,
+          signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
+        }),
+      );
+      let payload: unknown;
+      try {
+        payload = yield* awaited(response.json());
+      } catch {
+        payload = undefined;
+      }
+      if (!response.ok) {
+        const fallback = `Hugging Face returned HTTP ${response.status}`;
+        if (response.status === 429) {
+          const delay =
+            Number(response.headers.get("retry-after")) ||
+            parseRateLimitDelay(response.headers.get("ratelimit"));
+          throw new Error(
+            delay !== undefined && delay !== 0
+              ? `Hugging Face rate limit reached; retry in ${delay}s`
+              : "Hugging Face rate limit reached",
+          );
         }
-        if (!response.ok) {
-          const fallback = `Hugging Face returned HTTP ${response.status}`;
-          if (response.status === 429) {
-            const delay =
-              Number(response.headers.get("retry-after")) ||
-              parseRateLimitDelay(response.headers.get("ratelimit"));
-            throw new Error(
-              delay !== undefined && delay !== 0
-                ? `Hugging Face rate limit reached; retry in ${delay}s`
-                : "Hugging Face rate limit reached",
-            );
-          }
-          throw new Error(payloadError(payload, fallback));
-        }
-        return payload;
-      }, this),
-    );
+        throw new Error(payloadError(payload, fallback));
+      }
+      return payload;
+    }, this);
   }
 
   search(query: string, signal?: AbortSignal): Promise<huggingfaceTypes.HuggingFaceModel[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const params = new URLSearchParams({
-          direction: "-1",
-          filter: "gguf",
-          limit: "20",
-          search: query,
-          sort: "downloads",
-        });
-        const payload = yield* awaited(this.request(`/api/models?${params}`, signal));
-        if (!Array.isArray(payload))
-          throw new Error("Hugging Face returned invalid search results");
-        return payload.flatMap((value) => {
-          if (
-            typeof value !== "object" ||
-            value === null ||
-            typeof (value as { id?: unknown }).id !== "string"
-          )
-            return [];
-          const model = value as { id: string; downloads?: unknown };
-          return [
-            { downloads: typeof model.downloads === "number" ? model.downloads : 0, id: model.id },
-          ];
-        });
-      }, this),
-    );
+    return promisedWith(function* () {
+      const params = new URLSearchParams({
+        direction: "-1",
+        filter: "gguf",
+        limit: "20",
+        search: query,
+        sort: "downloads",
+      });
+      const payload = yield* awaited(this.request(`/api/models?${params}`, signal));
+      if (!Array.isArray(payload)) throw new Error("Hugging Face returned invalid search results");
+      return payload.flatMap((value) => {
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          typeof (value as { id?: unknown }).id !== "string"
+        )
+          return [];
+        const model = value as { id: string; downloads?: unknown };
+        return [
+          { downloads: typeof model.downloads === "number" ? model.downloads : 0, id: model.id },
+        ];
+      });
+    }, this);
   }
 
   details(id: string, signal?: AbortSignal): Promise<huggingfaceTypes.HuggingFaceModelDetails> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const encodedId = id.split("/").map(encodeURIComponent).join("/");
-        const payload = yield* awaited(this.request(`/api/models/${encodedId}?blobs=true`, signal));
-        if (typeof payload !== "object" || payload === null) {
-          throw new Error("Hugging Face returned invalid model details");
+    return promisedWith(function* () {
+      const encodedId = id.split("/").map(encodeURIComponent).join("/");
+      const payload = yield* awaited(this.request(`/api/models/${encodedId}?blobs=true`, signal));
+      if (typeof payload !== "object" || payload === null) {
+        throw new Error("Hugging Face returned invalid model details");
+      }
+      const model = payload as { id?: unknown; gated?: unknown; siblings?: unknown };
+      const sizes = new Map<string, { total: number; complete: boolean }>();
+      if (Array.isArray(model.siblings)) {
+        for (const value of model.siblings) {
+          if (typeof value !== "object" || value === null) continue;
+          const file = value as { rfilename?: unknown; size?: unknown };
+          if (typeof file.rfilename !== "string" || !file.rfilename.toLowerCase().endsWith(".gguf"))
+            continue;
+          const filename = file.rfilename.split("/").at(-1)!;
+          if (filename.toLowerCase().startsWith("mmproj")) continue;
+          const stem = filename.slice(0, -5).replace(SHARD_SUFFIX_PATTERN, "");
+          const quantization = stem.match(QUANTIZATION_PATTERN)?.[1]?.toUpperCase();
+          if (quantization === undefined || quantization === "") continue;
+          const current = sizes.get(quantization) ?? { complete: true, total: 0 };
+          if (typeof file.size === "number") current.total += file.size;
+          else current.complete = false;
+          sizes.set(quantization, current);
         }
-        const model = payload as { id?: unknown; gated?: unknown; siblings?: unknown };
-        const sizes = new Map<string, { total: number; complete: boolean }>();
-        if (Array.isArray(model.siblings)) {
-          for (const value of model.siblings) {
-            if (typeof value !== "object" || value === null) continue;
-            const file = value as { rfilename?: unknown; size?: unknown };
-            if (
-              typeof file.rfilename !== "string" ||
-              !file.rfilename.toLowerCase().endsWith(".gguf")
-            )
-              continue;
-            const filename = file.rfilename.split("/").at(-1)!;
-            if (filename.toLowerCase().startsWith("mmproj")) continue;
-            const stem = filename.slice(0, -5).replace(SHARD_SUFFIX_PATTERN, "");
-            const quantization = stem.match(QUANTIZATION_PATTERN)?.[1]?.toUpperCase();
-            if (quantization === undefined || quantization === "") continue;
-            const current = sizes.get(quantization) ?? { complete: true, total: 0 };
-            if (typeof file.size === "number") current.total += file.size;
-            else current.complete = false;
-            sizes.set(quantization, current);
-          }
-        }
-        const quantizations = [...sizes]
-          .map(([name, size]) => ({ name, size: size.complete ? size.total : undefined }))
-          .sort((left, right) => {
-            if (left.name === "Q4_K_M") return -1;
-            if (right.name === "Q4_K_M") return 1;
-            return (
-              (left.size ?? Number.MAX_SAFE_INTEGER) - (right.size ?? Number.MAX_SAFE_INTEGER) ||
-              left.name.localeCompare(right.name)
-            );
-          });
-        return {
-          gated: model.gated === "auto" || model.gated === "manual" ? model.gated : false,
-          id: typeof model.id === "string" ? model.id : id,
-          quantizations,
-        };
-      }, this),
-    );
+      }
+      const quantizations = [...sizes]
+        .map(([name, size]) => ({ name, size: size.complete ? size.total : undefined }))
+        .sort((left, right) => {
+          if (left.name === "Q4_K_M") return -1;
+          if (right.name === "Q4_K_M") return 1;
+          return (
+            (left.size ?? Number.MAX_SAFE_INTEGER) - (right.size ?? Number.MAX_SAFE_INTEGER) ||
+            left.name.localeCompare(right.name)
+          );
+        });
+      return {
+        gated: model.gated === "auto" || model.gated === "manual" ? model.gated : false,
+        id: typeof model.id === "string" ? model.id : id,
+        quantizations,
+      };
+    }, this);
   }
 }

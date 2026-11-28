@@ -9,7 +9,7 @@ import awaitingModule from "../awaiting.ts";
 import compactionModule from "../compaction/index.ts";
 import type compactionTypes from "../compaction/index.types.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { toErrorMessage } = errors;
 const { formatNoModelSelectedMessage } = authGuidance;
 const { compact, prepareCompaction } = compactionModule;
@@ -158,33 +158,31 @@ export default class SessionCompaction {
   }
 
   compact(customInstructions?: string): Promise<compactionTypes.CompactionResult> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.session.run.lifecycle.abort());
-        const controller = new AbortController();
-        this.compactionAbortController = controller;
-        this.session.emit({ reason: "manual", type: "compaction_start" });
-        const outcome = { cancelledByExtension: false, fromExtension: false };
-        try {
-          const result = yield* performed(
-            this.compactManually(customInstructions, controller.signal, outcome),
-          );
-          this.clearManualCompactionState();
-          this.session.emit({
-            aborted: false,
-            reason: "manual",
-            result,
-            type: "compaction_end",
-            willRetry: false,
-          });
-          return result;
-        } catch (error) {
-          yield* performed(this.reportManualCompactionFailure(error, controller.signal, outcome));
-          throw error;
-        } finally {
-          this.clearManualCompactionState();
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(this.session.run.lifecycle.abort());
+      const controller = new AbortController();
+      this.compactionAbortController = controller;
+      this.session.emit({ reason: "manual", type: "compaction_start" });
+      const outcome = { cancelledByExtension: false, fromExtension: false };
+      try {
+        const result = yield* performed(
+          this.compactManually(customInstructions, controller.signal, outcome),
+        );
+        this.clearManualCompactionState();
+        this.session.emit({
+          aborted: false,
+          reason: "manual",
+          result,
+          type: "compaction_end",
+          willRetry: false,
+        });
+        return result;
+      } catch (error) {
+        yield* performed(this.reportManualCompactionFailure(error, controller.signal, outcome));
+        throw error;
+      } finally {
+        this.clearManualCompactionState();
+      }
+    }, this);
   }
 }

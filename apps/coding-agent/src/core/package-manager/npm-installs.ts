@@ -7,7 +7,7 @@ import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platform from "../platform/index.ts";
 const { exists } = platform.files;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class NpmInstalls {
   private readonly manager: DefaultPackageManager;
@@ -57,11 +57,9 @@ export default class NpmInstalls {
 
       yield* performed(
         this.manager.progress.withProgress("update", sourceLabel, message, () =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              yield* performed(this.installNpmBatch(specs, scope));
-            }, this),
-          ),
+          promisedWith(function* () {
+            yield* performed(this.installNpmBatch(specs, scope));
+          }, this),
         ),
       );
     }, this);

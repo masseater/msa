@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "../awaiting.ts";
 import settingsManagerHelpers from "../settings-manager-helpers.ts";
 import type settingsManagerInternalTypes from "../settings-manager-internal.types.ts";
@@ -11,7 +9,7 @@ import settingsLoading from "./settings-loading.ts";
 
 const { deepMergeSettings, toSettingsError } = settingsManagerHelpers;
 const { mergeModifiedSettings } = modifiedMerge;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 
 export default class SettingsPersistence {
   private readonly manager: SettingsManager;
@@ -186,46 +184,44 @@ export default class SettingsPersistence {
   }
 
   reload(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.writeQueue);
-        const globalLoad = yield* awaited(
-          settingsLoading.tryLoadFromStorage(this.manager.storage, "global"),
-        );
-        if (globalLoad.error === null) {
-          this.manager.globalSettings = globalLoad.settings;
-          this.manager.globalSettingsLoadError = null;
-        } else {
-          this.manager.globalSettingsLoadError = globalLoad.error;
-          this.recordError("global", globalLoad.error);
-        }
+    return promisedWith(function* () {
+      yield* awaited(this.writeQueue);
+      const globalLoad = yield* awaited(
+        settingsLoading.tryLoadFromStorage(this.manager.storage, "global"),
+      );
+      if (globalLoad.error === null) {
+        this.manager.globalSettings = globalLoad.settings;
+        this.manager.globalSettingsLoadError = null;
+      } else {
+        this.manager.globalSettingsLoadError = globalLoad.error;
+        this.recordError("global", globalLoad.error);
+      }
 
-        this.modifiedFields.clear();
-        this.modifiedNestedFields.clear();
-        this.modifiedProjectFields.clear();
-        this.modifiedProjectNestedFields.clear();
+      this.modifiedFields.clear();
+      this.modifiedNestedFields.clear();
+      this.modifiedProjectFields.clear();
+      this.modifiedProjectNestedFields.clear();
 
-        const projectLoad = yield* awaited(
-          settingsLoading.tryLoadFromStorage(
-            this.manager.storage,
-            "project",
-            this.manager.projectTrusted,
-          ),
-        );
-        if (projectLoad.error === null) {
-          this.manager.projectSettings = projectLoad.settings;
-          this.manager.projectSettingsLoadError = null;
-        } else {
-          this.manager.projectSettingsLoadError = projectLoad.error;
-          this.recordError("project", projectLoad.error);
-        }
+      const projectLoad = yield* awaited(
+        settingsLoading.tryLoadFromStorage(
+          this.manager.storage,
+          "project",
+          this.manager.projectTrusted,
+        ),
+      );
+      if (projectLoad.error === null) {
+        this.manager.projectSettings = projectLoad.settings;
+        this.manager.projectSettingsLoadError = null;
+      } else {
+        this.manager.projectSettingsLoadError = projectLoad.error;
+        this.recordError("project", projectLoad.error);
+      }
 
-        this.manager.settings = deepMergeSettings(
-          this.manager.globalSettings,
-          this.manager.projectSettings,
-        );
-      }, this),
-    );
+      this.manager.settings = deepMergeSettings(
+        this.manager.globalSettings,
+        this.manager.projectSettings,
+      );
+    }, this);
   }
 
   setNestedGlobalSetting<
@@ -277,10 +273,8 @@ export default class SettingsPersistence {
   }
 
   flush(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.writeQueue);
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(this.writeQueue);
+    }, this);
   }
 }

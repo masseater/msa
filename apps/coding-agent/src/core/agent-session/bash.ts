@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
 import bashExecutor from "../bash-executor.ts";
@@ -10,7 +8,7 @@ import bashModule from "../tools/bash.ts";
 import type bashTypes from "../tools/bash.types.ts";
 
 const { nowMs } = platform;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { executeBashWithOperations } = bashExecutor;
 const { createLocalBashOperations } = bashModule;
 
@@ -83,38 +81,36 @@ export default class SessionBash {
       operations?: bashTypes.BashOperations | undefined;
     },
   ): Promise<bashExecutorTypes.BashResult> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const abortController = new AbortController();
-        this.bashAbortControllers.add(abortController);
+    return promisedWith(function* () {
+      const abortController = new AbortController();
+      this.bashAbortControllers.add(abortController);
 
-        const prefix = this.session.settingsManager.resources.getShellCommandPrefix();
-        const shellPath = this.session.settingsManager.resources.getShellPath();
-        const resolvedCommand =
-          prefix !== undefined && prefix !== "" ? `${prefix}\n${command}` : command;
+      const prefix = this.session.settingsManager.resources.getShellCommandPrefix();
+      const shellPath = this.session.settingsManager.resources.getShellPath();
+      const resolvedCommand =
+        prefix !== undefined && prefix !== "" ? `${prefix}\n${command}` : command;
 
-        try {
-          const result = yield* awaited(
-            executeBashWithOperations(
-              resolvedCommand,
-              this.session.sessionManager.getCwd(),
-              options?.operations ?? createLocalBashOperations({ shellPath }),
-              {
-                onChunk: (delta) => {
-                  onChunk?.(delta);
-                  this.session.emit({ delta, id: options?.id, type: "bash_execution_update" });
-                },
-                signal: abortController.signal,
+      try {
+        const result = yield* awaited(
+          executeBashWithOperations(
+            resolvedCommand,
+            this.session.sessionManager.getCwd(),
+            options?.operations ?? createLocalBashOperations({ shellPath }),
+            {
+              onChunk: (delta) => {
+                onChunk?.(delta);
+                this.session.emit({ delta, id: options?.id, type: "bash_execution_update" });
               },
-            ),
-          );
+              signal: abortController.signal,
+            },
+          ),
+        );
 
-          this.recordBashResult(command, result, options);
-          return result;
-        } finally {
-          this.bashAbortControllers.delete(abortController);
-        }
-      }, this),
-    );
+        this.recordBashResult(command, result, options);
+        return result;
+      } finally {
+        this.bashAbortControllers.delete(abortController);
+      }
+    }, this);
   }
 }

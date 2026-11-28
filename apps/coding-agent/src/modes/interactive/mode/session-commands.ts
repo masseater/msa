@@ -10,7 +10,7 @@ import themeModule from "../theme/theme.ts";
 
 const { theme } = themeModule;
 const { Spacer } = tuiModule;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { shareSession } = sessionShare;
 
@@ -53,28 +53,26 @@ export default class SessionCommands {
   }
 
   handleCloneCommand(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const leafId = this.mode.sessionManager.getLeafId();
-        if (leafId === null || leafId === "") {
-          this.mode.display.status.showStatus("Nothing to clone yet");
+    return promisedWith(function* () {
+      const leafId = this.mode.sessionManager.getLeafId();
+      if (leafId === null || leafId === "") {
+        this.mode.display.status.showStatus("Nothing to clone yet");
+        return;
+      }
+
+      try {
+        const result = yield* awaited(this.mode.runtimeHost.fork(leafId, { position: "at" }));
+        if (result.cancelled) {
+          this.mode.ui.requestRender();
           return;
         }
 
-        try {
-          const result = yield* awaited(this.mode.runtimeHost.fork(leafId, { position: "at" }));
-          if (result.cancelled) {
-            this.mode.ui.requestRender();
-            return;
-          }
-
-          this.mode.editor.setText("");
-          this.mode.display.status.showStatus("Cloned to new session");
-        } catch (error: unknown) {
-          this.mode.display.status.showError(toErrorMessage(error));
-        }
-      }, this),
-    );
+        this.mode.editor.setText("");
+        this.mode.display.status.showStatus("Cloned to new session");
+      } catch (error: unknown) {
+        this.mode.display.status.showError(toErrorMessage(error));
+      }
+    }, this);
   }
 
   handleShareCommand(): Effect.Effect<void> {

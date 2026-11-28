@@ -15,7 +15,7 @@ const { formatAttentionAlert } = tuiModule;
 
 const firstLine = (text: string): string => text.split(/\r?\n/u, 1)[0]?.trim() ?? "";
 const { every } = interval;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { basename, readEnv } = platformModule;
 
 export default class SessionEventRouter {
@@ -152,25 +152,21 @@ export default class SessionEventRouter {
 
   subscribeToAgent(): void {
     this.unsubscribe = this.mode.session.subscribe((event) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          yield* awaited(this.handleEvent(event));
-        }, this),
-      ),
+      promisedWith(function* () {
+        yield* awaited(this.handleEvent(event));
+      }, this),
     );
   }
 
   handleEvent(event: agentSessionTypes.AgentSessionEvent): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (!this.mode.lifecycle.startup.isInitialized)
-          yield* awaited(this.mode.lifecycle.startup.init());
-        this.mode.footer.invalidate();
-        this.mode.layout.programStatus.handleEvent(event);
-        if (this.handleProviderEvent(event)) return;
-        if (this.mode.view.streaming.handleStreamEvent(event)) return;
-        yield* performed(this.handleSessionEvent(event));
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (!this.mode.lifecycle.startup.isInitialized)
+        yield* awaited(this.mode.lifecycle.startup.init());
+      this.mode.footer.invalidate();
+      this.mode.layout.programStatus.handleEvent(event);
+      if (this.handleProviderEvent(event)) return;
+      if (this.mode.view.streaming.handleStreamEvent(event)) return;
+      yield* performed(this.handleSessionEvent(event));
+    }, this);
   }
 }

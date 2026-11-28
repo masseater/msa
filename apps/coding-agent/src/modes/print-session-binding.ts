@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import type agentSessionRuntimeTypes from "../core/agent-session-runtime.types.ts";
 import type agentSessionTypes from "../core/agent-session.types.ts";
 import awaitingModule from "../core/awaiting.ts";
@@ -9,7 +7,7 @@ import platform from "../core/platform/index.ts";
 import printModeOutput from "./print-mode-output.ts";
 import type printModeTypes from "./print-mode.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 
 type Runtime = agentSessionRuntimeTypes.AgentSessionRuntime;
 type Session = agentSessionTypes.AgentSession;
@@ -34,21 +32,19 @@ export default class PrintSessionBinding {
   }
 
   rebind(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        this.current = this.runtimeHost.session;
-        yield* awaited(
-          this.current.extensions.binding.bindExtensions({
-            commandContextActions: this.commandContextActions(),
-            mode: this.mode === "json" ? "json" : "print",
-            onError: (err) => {
-              platform.writeError(`Extension error (${err.extensionPath}): ${err.error}`);
-            },
-          }),
-        );
-        this.subscribe();
-      }, this),
-    );
+    return promisedWith(function* () {
+      this.current = this.runtimeHost.session;
+      yield* awaited(
+        this.current.extensions.binding.bindExtensions({
+          commandContextActions: this.commandContextActions(),
+          mode: this.mode === "json" ? "json" : "print",
+          onError: (err) => {
+            platform.writeError(`Extension error (${err.extensionPath}): ${err.error}`);
+          },
+        }),
+      );
+      this.subscribe();
+    }, this);
   }
 
   dispose(): Promise<void> {

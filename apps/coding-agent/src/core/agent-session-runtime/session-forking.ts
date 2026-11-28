@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import agentSessionRuntimeHelpers from "../agent-session-runtime-helpers.ts";
 import type AgentSessionRuntime from "../agent-session-runtime.ts";
 import awaitingModule from "../awaiting.ts";
@@ -7,7 +5,7 @@ import type extensionsTypes from "../extensions/index.types.ts";
 import platform from "../platform/index.ts";
 import SessionManager from "../session-manager.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { exists } = platform.files;
 const { extractUserMessageText } = agentSessionRuntimeHelpers;
 
@@ -27,35 +25,33 @@ export default class SessionForking {
     entryId: string,
     options?: ForkOptions,
   ): Promise<{ cancelled: boolean; selectedText?: string | undefined }> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const position = options?.position ?? "before";
-        const beforeResult = yield* performed(
-          this.runtime.replacement.emitBeforeFork(entryId, { position }),
-        );
-        if (beforeResult.cancelled) {
-          return { cancelled: true };
-        }
-        const { targetLeafId, selectedText } = this.forkTarget(entryId, position);
-        const previousSessionFile = this.runtime.session.sessionFile;
-        const { sessionManager, prepare } = yield* awaited(this.forkedSessionManager(targetLeafId));
-        const persistedBranch =
-          this.runtime.session.sessionManager.isPersisted() &&
-          targetLeafId !== null &&
-          targetLeafId !== "";
-        yield* performed(
-          this.runtime.replacement.replace(
-            "fork",
-            sessionManager,
-            previousSessionFile,
-            persistedBranch
-              ? { cwd: sessionManager.getCwd(), withSession: options?.withSession }
-              : { prepare, withSession: options?.withSession },
-          ),
-        );
-        return { cancelled: false, selectedText };
-      }, this),
-    );
+    return promisedWith(function* () {
+      const position = options?.position ?? "before";
+      const beforeResult = yield* performed(
+        this.runtime.replacement.emitBeforeFork(entryId, { position }),
+      );
+      if (beforeResult.cancelled) {
+        return { cancelled: true };
+      }
+      const { targetLeafId, selectedText } = this.forkTarget(entryId, position);
+      const previousSessionFile = this.runtime.session.sessionFile;
+      const { sessionManager, prepare } = yield* awaited(this.forkedSessionManager(targetLeafId));
+      const persistedBranch =
+        this.runtime.session.sessionManager.isPersisted() &&
+        targetLeafId !== null &&
+        targetLeafId !== "";
+      yield* performed(
+        this.runtime.replacement.replace(
+          "fork",
+          sessionManager,
+          previousSessionFile,
+          persistedBranch
+            ? { cwd: sessionManager.getCwd(), withSession: options?.withSession }
+            : { prepare, withSession: options?.withSession },
+        ),
+      );
+      return { cancelled: false, selectedText };
+    }, this);
   }
 
   private forkTarget(

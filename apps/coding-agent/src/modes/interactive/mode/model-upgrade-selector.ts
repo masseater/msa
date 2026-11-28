@@ -1,11 +1,9 @@
-import { Effect } from "effect";
-
 import awaitingModule from "../../../core/awaiting.ts";
 import modelUpgrade from "../../../core/model-upgrade.ts";
 import ModelUpgradeSelectorComponent from "../components/model-upgrade-selector.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const {
   candidatesNamedByChanges,
   createUpgradeReplacements,
@@ -41,20 +39,18 @@ export default class ModelUpgradeSelector {
     this.mode.editorSlot.showSelector((done) => {
       const component = new ModelUpgradeSelectorComponent(shown, {
         onApply: (candidate) =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              const replacements = createUpgradeReplacements([candidate]);
-              const written = this.mode.settingsManager.models.rewriteModelReferences((layer) =>
-                rewriteModelReferencesInSettings(layer, replacements),
-              );
-              yield* awaited(this.mode.settingsManager.persistence.flush());
-              const count = written.global.length + written.project.length;
-              this.mode.footer.invalidate();
-              return count === 0
-                ? `${candidate.from.id} → ${candidate.to.id} · no setting names it`
-                : `${candidate.from.id} → ${candidate.to.id} · ${count} setting${count === 1 ? "" : "s"}`;
-            }, this),
-          ),
+          promisedWith(function* () {
+            const replacements = createUpgradeReplacements([candidate]);
+            const written = this.mode.settingsManager.models.rewriteModelReferences((layer) =>
+              rewriteModelReferencesInSettings(layer, replacements),
+            );
+            yield* awaited(this.mode.settingsManager.persistence.flush());
+            const count = written.global.length + written.project.length;
+            this.mode.footer.invalidate();
+            return count === 0
+              ? `${candidate.from.id} → ${candidate.to.id} · no setting names it`
+              : `${candidate.from.id} → ${candidate.to.id} · ${count} setting${count === 1 ? "" : "s"}`;
+          }, this),
         onCancel: () => {
           done();
           this.mode.ui.requestRender();

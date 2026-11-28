@@ -1,17 +1,15 @@
 import testing from "@msa/testing";
-import { Effect, Result } from "effect";
+import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import errors from "../src/core/orchestrator/errors.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
-const { orchestratorError } = errors;
-
 const { runTest } = testing;
 
-const { create, createNamed, read, replan, stopAndWrapUp } = orchestratorReplanSupport;
+const { create, createNamed, failureMessageOf, read, replan, stopAndWrapUp } =
+  orchestratorReplanSupport;
 
 const { harness } = orchestratorHarness;
 
@@ -115,35 +113,30 @@ const rejectsACycleAmongTheNewTasks = Effect.gen(function* () {
   const a = yield* createNamed(orchestrator, "a");
   const before = orchestrator.snapshot.tasks.length;
 
-  const result = yield* Effect.result(
-    Effect.tryPromise({
-      catch: orchestratorError,
-      try: () =>
-        orchestrator.replan({
-          keep: [a.id],
-          reason: "new plan",
-          stop: false,
-          tasks: [
-            {
-              currentState: "one is not written",
-              dependsOn: ["two"],
-              goalState: "one works",
-              key: "one",
-              title: "one",
-            },
-            {
-              currentState: "two is not written",
-              dependsOn: ["one"],
-              goalState: "two works",
-              key: "two",
-              title: "two",
-            },
-          ],
-        }),
+  const message = yield* failureMessageOf(() =>
+    orchestrator.replan({
+      keep: [a.id],
+      reason: "new plan",
+      stop: false,
+      tasks: [
+        {
+          currentState: "one is not written",
+          dependsOn: ["two"],
+          goalState: "one works",
+          key: "one",
+          title: "one",
+        },
+        {
+          currentState: "two is not written",
+          dependsOn: ["one"],
+          goalState: "two works",
+          key: "two",
+          title: "two",
+        },
+      ],
     }),
   );
-  expect(Result.isFailure(result)).toBe(true);
-  if (Result.isFailure(result)) expect(result.failure.message).toContain("cycle");
+  expect(message).toContain("cycle");
   expect(orchestrator.snapshot.tasks).toHaveLength(before);
   expect(orchestrator.snapshot.replans).toEqual([]);
   expect(workers).toHaveLength(1);
@@ -157,19 +150,14 @@ const rejectsANewTaskWithoutACurrent = Effect.gen(function* () {
   yield* createNamed(orchestrator, "a");
   const before = orchestrator.snapshot.tasks.length;
 
-  const result = yield* Effect.result(
-    Effect.tryPromise({
-      catch: orchestratorError,
-      try: () =>
-        orchestrator.replan({
-          reason: "new plan",
-          stop: false,
-          tasks: [{ currentState: "half is not written", title: "half" }],
-        }),
+  const message = yield* failureMessageOf(() =>
+    orchestrator.replan({
+      reason: "new plan",
+      stop: false,
+      tasks: [{ currentState: "half is not written", title: "half" }],
     }),
   );
-  expect(Result.isFailure(result)).toBe(true);
-  if (Result.isFailure(result)) expect(result.failure.message).toContain("goal state");
+  expect(message).toContain("goal state");
   expect(orchestrator.snapshot.tasks).toHaveLength(before);
   expect(workers).toHaveLength(1);
 });

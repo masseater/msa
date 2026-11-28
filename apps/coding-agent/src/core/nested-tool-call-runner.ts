@@ -1,5 +1,4 @@
 import type agentTypes from "@msa/agent-core/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
 import NestedCallRecorder from "./nested-call-recorder.ts";
@@ -8,7 +7,7 @@ import platform from "./platform/index.ts";
 import toolResultText from "./tool-result-text.ts";
 
 const { textOf } = toolResultText;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { makeLatch } = platform;
 
 interface CallScope {
@@ -31,48 +30,46 @@ export default class NestedToolCallRunner {
     args: unknown,
     options: nestedToolCallsTypes.NestedToolCallOptions = {},
   ): Promise<agentTypes.AgentToolCallOutcome> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let scope = this.scopes.get(callerId);
-        let toolCall: agentTypes.AgentToolCall | undefined;
-        let release: (() => void) | undefined;
-        let record;
-        ({ toolCall, release, record, scope } = yield* this.startNestedCall(
-          scope,
-          callerId,
-          args,
-          name,
-        ));
-        let outcome: agentTypes.AgentToolCallOutcome;
-        try {
-          outcome = yield* awaited(
-            this.host.runToolCall(
-              toolCall,
-              callerId,
-              options.signal,
-              this.forwardUpdate(toolCall, callerId, name, options),
-            ),
-          );
-        } finally {
-          this.scopes.delete(toolCall.id);
-          release?.();
-        }
-        scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
-        if (outcome.result.usage !== undefined) scope.recorder.addUsage(outcome.result.usage);
-        yield* awaited(
-          this.host.emit({
-            isError: outcome.isError,
-            result: outcome.result,
-            toolCallId: toolCall.id,
-            toolName: name,
-            type: "tool_execution_end",
-            ...(outcome.durationMs === undefined ? {} : { durationMs: outcome.durationMs }),
-            parentToolCallId: callerId,
-          }),
+    return promisedWith(function* () {
+      let scope = this.scopes.get(callerId);
+      let toolCall: agentTypes.AgentToolCall | undefined;
+      let release: (() => void) | undefined;
+      let record;
+      ({ toolCall, release, record, scope } = yield* this.startNestedCall(
+        scope,
+        callerId,
+        args,
+        name,
+      ));
+      let outcome: agentTypes.AgentToolCallOutcome;
+      try {
+        outcome = yield* awaited(
+          this.host.runToolCall(
+            toolCall,
+            callerId,
+            options.signal,
+            this.forwardUpdate(toolCall, callerId, name, options),
+          ),
         );
-        return outcome;
-      }, this),
-    );
+      } finally {
+        this.scopes.delete(toolCall.id);
+        release?.();
+      }
+      scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
+      if (outcome.result.usage !== undefined) scope.recorder.addUsage(outcome.result.usage);
+      yield* awaited(
+        this.host.emit({
+          isError: outcome.isError,
+          result: outcome.result,
+          toolCallId: toolCall.id,
+          toolName: name,
+          type: "tool_execution_end",
+          ...(outcome.durationMs === undefined ? {} : { durationMs: outcome.durationMs }),
+          parentToolCallId: callerId,
+        }),
+      );
+      return outcome;
+    }, this);
   }
 
   private forwardUpdate(
@@ -82,21 +79,19 @@ export default class NestedToolCallRunner {
     options: nestedToolCallsTypes.NestedToolCallOptions,
   ) {
     return (partialResult: agentTypes.AgentToolResult<unknown>) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          options.onUpdate?.(partialResult);
-          yield* awaited(
-            this.host.emit({
-              args: toolCall.arguments,
-              parentToolCallId: callerId,
-              partialResult,
-              toolCallId: toolCall.id,
-              toolName: name,
-              type: "tool_execution_update",
-            }),
-          );
-        }, this),
-      );
+      promisedWith(function* () {
+        options.onUpdate?.(partialResult);
+        yield* awaited(
+          this.host.emit({
+            args: toolCall.arguments,
+            parentToolCallId: callerId,
+            partialResult,
+            toolCallId: toolCall.id,
+            toolName: name,
+            type: "tool_execution_update",
+          }),
+        );
+      }, this);
   }
 
   private *startNestedCall(

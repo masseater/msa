@@ -10,7 +10,7 @@ import type runnerTypes from "../extensions/runner.types.ts";
 import platform from "../platform/index.ts";
 
 const { makeLatch, nowMs } = platform;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class SessionRunLifecycle {
   private readonly session: AgentSession;
@@ -96,32 +96,28 @@ export default class SessionRunLifecycle {
   }
 
   abort(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.isAgentRunActive) {
-          this.agentRunAbortRequested = true;
-          this.runAbort.abort();
-        }
-        this.session.run.retry.abortRetry();
-        this.session.compaction.manual.abortCompaction();
-        this.session.context.tree.abortBranchSummary();
-        this.session.integrations.goal.goalInternal.abort();
-        if (this.isBeforeSettle) this.abortDuringBeforeSettle = true;
-        this.session.agent.abort();
-        yield* awaited(this.waitForIdle());
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (this.isAgentRunActive) {
+        this.agentRunAbortRequested = true;
+        this.runAbort.abort();
+      }
+      this.session.run.retry.abortRetry();
+      this.session.compaction.manual.abortCompaction();
+      this.session.context.tree.abortBranchSummary();
+      this.session.integrations.goal.goalInternal.abort();
+      if (this.isBeforeSettle) this.abortDuringBeforeSettle = true;
+      this.session.agent.abort();
+      yield* awaited(this.waitForIdle());
+    }, this);
   }
 
   waitForIdle(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.session.isIdle) {
-          return;
-        }
-        yield* awaited(this.getIdleWaitPromise());
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (this.session.isIdle) {
+        return;
+      }
+      yield* awaited(this.getIdleWaitPromise());
+    }, this);
   }
 
   private settleRun(): Effect.Effect<void> {

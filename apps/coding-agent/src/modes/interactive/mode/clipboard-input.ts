@@ -8,7 +8,7 @@ import interactiveModeSupport from "../interactive-mode-support.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
 const { quoteIfNeeded } = interactiveModeSupport;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { readClipboardText, readClipboardFilePaths } = clipboard;
 const { toErrorMessage } = errorsModule;
 const { readClipboardImage } = clipboardImage;
@@ -44,24 +44,22 @@ export default class ClipboardInput {
   };
 
   handleRightClickPaste(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const target = this.mode.lifecycle.screen.renderer.getFocusedComponent();
-        const handleInput = target?.handleInput;
-        if (target === null || handleInput === undefined) return;
-        try {
-          const text = yield* awaited(readClipboardText());
-          if (
-            text === null ||
-            text === "" ||
-            this.mode.lifecycle.screen.renderer.getFocusedComponent() !== target
-          )
-            return;
-          handleInput.call(target, `\x1b[200~${text}\x1b[201~`);
-          this.mode.ui.requestRender();
-        } catch {}
-      }, this),
-    );
+    return promisedWith(function* () {
+      const target = this.mode.lifecycle.screen.renderer.getFocusedComponent();
+      const handleInput = target?.handleInput;
+      if (target === null || handleInput === undefined) return;
+      try {
+        const text = yield* awaited(readClipboardText());
+        if (
+          text === null ||
+          text === "" ||
+          this.mode.lifecycle.screen.renderer.getFocusedComponent() !== target
+        )
+          return;
+        handleInput.call(target, `\x1b[200~${text}\x1b[201~`);
+        this.mode.ui.requestRender();
+      } catch {}
+    }, this);
   }
 
   private pasteFromClipboard(): Effect.Effect<void> {
@@ -84,16 +82,14 @@ export default class ClipboardInput {
   }
 
   handleClipboardPaste(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          yield* performed(this.pasteFromClipboard());
-        } catch (error) {
-          this.mode.display.status.showError(
-            `Failed to paste from clipboard: ${toErrorMessage(error)}`,
-          );
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      try {
+        yield* performed(this.pasteFromClipboard());
+      } catch (error) {
+        this.mode.display.status.showError(
+          `Failed to paste from clipboard: ${toErrorMessage(error)}`,
+        );
+      }
+    }, this);
   }
 }

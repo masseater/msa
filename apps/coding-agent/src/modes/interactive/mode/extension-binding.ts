@@ -10,7 +10,7 @@ import themeModule from "../theme/theme.ts";
 
 const { setRegisteredThemes } = themeModule;
 const { matchesKey } = tuiModule;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 
 export default class ExtensionSessionBinding {
@@ -24,25 +24,20 @@ export default class ExtensionSessionBinding {
     entryId: string,
     options: Parameters<extensionsTypes.ExtensionCommandContextActions["fork"]>[1],
   ) {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          const result = yield* awaited(this.mode.runtimeHost.fork(entryId, options));
-          if (!result.cancelled) {
-            this.mode.editor.setText(result.selectedText ?? "");
-            this.mode.display.status.showStatus("Forked to new session");
-          }
-          return { cancelled: result.cancelled };
-        } catch (error: unknown) {
-          return yield* awaited(
-            this.mode.lifecycle.fatalErrors.handleFatalRuntimeError(
-              "Failed to fork session",
-              error,
-            ),
-          );
+    return promisedWith(function* () {
+      try {
+        const result = yield* awaited(this.mode.runtimeHost.fork(entryId, options));
+        if (!result.cancelled) {
+          this.mode.editor.setText(result.selectedText ?? "");
+          this.mode.display.status.showStatus("Forked to new session");
         }
-      }, this),
-    );
+        return { cancelled: result.cancelled };
+      } catch (error: unknown) {
+        return yield* awaited(
+          this.mode.lifecycle.fatalErrors.handleFatalRuntimeError("Failed to fork session", error),
+        );
+      }
+    }, this);
   }
 
   private newSessionFromExtension(
@@ -65,19 +60,17 @@ export default class ExtensionSessionBinding {
       },
       compact: (options) => {
         void (() =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              try {
-                const result = yield* awaited(
-                  this.mode.session.compaction.manual.compact(options?.customInstructions),
-                );
-                options?.onComplete?.(result);
-              } catch (error) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                options?.onError?.(err);
-              }
-            }, this),
-          ))();
+          promisedWith(function* () {
+            try {
+              const result = yield* awaited(
+                this.mode.session.compaction.manual.compact(options?.customInstructions),
+              );
+              options?.onComplete?.(result);
+            } catch (error) {
+              const err = error instanceof Error ? error : new Error(String(error));
+              options?.onError?.(err);
+            }
+          }, this))();
       },
       cwd: this.mode.sessionManager.getCwd(),
       getContextUsage: () => this.mode.session.context.stats.getContextUsage(),
@@ -171,35 +164,33 @@ export default class ExtensionSessionBinding {
   }
 
   rebindCurrentSession(options: { renderBeforeBind?: boolean } = {}): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const session = this.mode.session;
+    return promisedWith(function* () {
+      const session = this.mode.session;
 
-        this.mode.lifecycle.events.unsubscribe?.();
-        this.mode.lifecycle.events.unsubscribe = undefined;
-        this.mode.layout.programStatus.reset();
-        this.mode.lifecycle.screen.applyRuntimeSettings();
+      this.mode.lifecycle.events.unsubscribe?.();
+      this.mode.lifecycle.events.unsubscribe = undefined;
+      this.mode.layout.programStatus.reset();
+      this.mode.lifecycle.screen.applyRuntimeSettings();
 
-        if (options.renderBeforeBind === true) {
-          this.mode.view.history.renderCurrentSessionState();
-          this.mode.lifecycle.events.subscribeToAgent();
-        }
+      if (options.renderBeforeBind === true) {
+        this.mode.view.history.renderCurrentSessionState();
+        this.mode.lifecycle.events.subscribeToAgent();
+      }
 
-        yield* awaited(this.bindCurrentSessionExtensions());
+      yield* awaited(this.bindCurrentSessionExtensions());
 
-        if (this.mode.session !== session) {
-          return;
-        }
+      if (this.mode.session !== session) {
+        return;
+      }
 
-        if (options.renderBeforeBind !== true) {
-          this.mode.lifecycle.events.subscribeToAgent();
-        }
+      if (options.renderBeforeBind !== true) {
+        this.mode.lifecycle.events.subscribeToAgent();
+      }
 
-        this.mode.models.selector.updateAvailableProviderCount();
-        this.mode.input.keys.updateEditorBorderColor();
-        this.mode.lifecycle.events.updateTerminalTitle();
-      }, this),
-    );
+      this.mode.models.selector.updateAvailableProviderCount();
+      this.mode.input.keys.updateEditorBorderColor();
+      this.mode.lifecycle.events.updateTerminalTitle();
+    }, this);
   }
 
   attachToRuntimeHost(): void {

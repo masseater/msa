@@ -10,7 +10,7 @@ import messagesModule from "../messages.ts";
 import SessionManager from "../session-manager.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { estimateProjectedContextTokens } = compactionModule;
 const { convertToLlm } = messagesModule;
 
@@ -212,18 +212,16 @@ export default class SessionBoundary {
   installAgentBoundaryHooks(): void {
     const previousFinishTurn = this.session.agent.finishTurn;
     this.session.agent.finishTurn = (turn, signal) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          this.boundaryDispatchedMessages.add(turn.message);
-          const extensionContinue = yield* performed(
-            this.dispatchTurnEndBoundary(turn.message, turn.toolResults),
-          );
-          const previousDecision = yield* awaited(previousFinishTurn?.(turn, signal));
-          if (previousDecision?.action === "end") return previousDecision;
-          if (extensionContinue || previousDecision?.action === "continue")
-            return { action: "continue" } as const;
-          return undefined;
-        }, this),
-      );
+      promisedWith(function* () {
+        this.boundaryDispatchedMessages.add(turn.message);
+        const extensionContinue = yield* performed(
+          this.dispatchTurnEndBoundary(turn.message, turn.toolResults),
+        );
+        const previousDecision = yield* awaited(previousFinishTurn?.(turn, signal));
+        if (previousDecision?.action === "end") return previousDecision;
+        if (extensionContinue || previousDecision?.action === "continue")
+          return { action: "continue" } as const;
+        return undefined;
+      }, this);
   }
 }

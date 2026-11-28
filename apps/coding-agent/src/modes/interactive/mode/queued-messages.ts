@@ -10,7 +10,7 @@ import themeModule from "../theme/theme.ts";
 
 const { theme } = themeModule;
 const { Spacer, TruncatedText } = tuiModule;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { keyDisplayText } = keybindingHints;
 
@@ -151,20 +151,18 @@ export default class QueuedMessages {
   }
 
   flushCompactionQueue(options?: { willRetry?: boolean }): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.compactionQueuedMessages.length === 0) {
-          return;
-        }
+    return promisedWith(function* () {
+      if (this.compactionQueuedMessages.length === 0) {
+        return;
+      }
 
-        const { queuedMessages, restoreQueue } = this.takeCompactionQueue();
+      const { queuedMessages, restoreQueue } = this.takeCompactionQueue();
 
-        const flushCompactionQueuePart12Result = yield* performed(
-          this.deliverCompactionQueue(options, queuedMessages, restoreQueue),
-        );
-        if (flushCompactionQueuePart12Result.done) return flushCompactionQueuePart12Result.value;
-      }, this),
-    );
+      const flushCompactionQueuePart12Result = yield* performed(
+        this.deliverCompactionQueue(options, queuedMessages, restoreQueue),
+      );
+      if (flushCompactionQueuePart12Result.done) return flushCompactionQueuePart12Result.value;
+    }, this);
   }
 
   private deliverCompactionQueue(

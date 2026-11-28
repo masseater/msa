@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import errors from "../../utils/errors.ts";
 import type AgentSession from "../agent-session.ts";
 import type agentSessionTypes from "../agent-session.types.ts";
@@ -8,7 +6,7 @@ import extensionsModule from "../extensions/index.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import ModelRegistry from "../model-registry.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { toErrorMessage } = errors;
 const { ExtensionRunner } = extensionsModule;
 
@@ -79,37 +77,35 @@ export default class SessionExtensionBinding {
   }
 
   bindExtensions(bindings: agentSessionTypes.ExtensionBindings): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (bindings.uiContext !== undefined) {
-          this.extensionUIContext = bindings.uiContext;
-        }
-        if (bindings.mode !== undefined) {
-          this.extensionMode = bindings.mode;
-        }
-        if (bindings.commandContextActions !== undefined) {
-          this.extensionCommandContextActions = bindings.commandContextActions;
-        }
-        if (bindings.abortHandler !== undefined) {
-          this.extensionAbortHandler = bindings.abortHandler;
-        }
-        if (bindings.shutdownHandler !== undefined) {
-          this.extensionShutdownHandler = bindings.shutdownHandler;
-        }
-        if (bindings.onError !== undefined) {
-          this.extensionErrorListener = bindings.onError;
-        }
+    return promisedWith(function* () {
+      if (bindings.uiContext !== undefined) {
+        this.extensionUIContext = bindings.uiContext;
+      }
+      if (bindings.mode !== undefined) {
+        this.extensionMode = bindings.mode;
+      }
+      if (bindings.commandContextActions !== undefined) {
+        this.extensionCommandContextActions = bindings.commandContextActions;
+      }
+      if (bindings.abortHandler !== undefined) {
+        this.extensionAbortHandler = bindings.abortHandler;
+      }
+      if (bindings.shutdownHandler !== undefined) {
+        this.extensionShutdownHandler = bindings.shutdownHandler;
+      }
+      if (bindings.onError !== undefined) {
+        this.extensionErrorListener = bindings.onError;
+      }
 
-        this.applyExtensionBindings(this.extensionRunnerInternal);
-        yield* awaited(this.extensionRunnerInternal.emit(this.sessionStartEvent));
-        this.extensionRunnerInternal.reportUnhandledMcpServers();
-        yield* performed(
-          this.session.extensions.resources.extendResourcesFromExtensions(
-            this.sessionStartEvent.reason === "reload" ? "reload" : "startup",
-          ),
-        );
-      }, this),
-    );
+      this.applyExtensionBindings(this.extensionRunnerInternal);
+      yield* awaited(this.extensionRunnerInternal.emit(this.sessionStartEvent));
+      this.extensionRunnerInternal.reportUnhandledMcpServers();
+      yield* performed(
+        this.session.extensions.resources.extendResourcesFromExtensions(
+          this.sessionStartEvent.reason === "reload" ? "reload" : "startup",
+        ),
+      );
+    }, this);
   }
 
   createReplacedSessionContext(): extensionsTypes.ReplacedSessionContext {

@@ -7,7 +7,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 
 const { store } = storeModule;
 
-const { createNamed } = orchestratorSupport;
+const { createNamed, finishWorkAndReview } = orchestratorSupport;
 
 const { harness } = orchestratorHarness;
 
@@ -25,9 +25,7 @@ const steersRunningThreadsWithASharedNote = () =>
       expect(delivery.steeredThreads).toHaveLength(1);
       expect(workers[0]?.steered).toEqual(["never touch x.ts"]);
 
-      workers[0]?.complete("a done");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("a reviewed");
+      yield* finishWorkAndReview(workers, 0, "a done", "a reviewed");
       yield* waitFor(() => workers.length === 3);
       expect(workers[2]?.prompts[0]).toContain("never touch x.ts");
       expect(taskStatus(orchestrator, b.id)).toBe("running");
@@ -67,9 +65,7 @@ const searchesReportsAcrossTasksAndThreads = () =>
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
       const task = yield* createNamed(orchestrator, "a");
-      workers[0]?.complete("alpha implementation");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("alpha reviewed");
+      yield* finishWorkAndReview(workers, 0, "alpha implementation", "alpha reviewed");
       yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
 
       const hits = yield* Effect.promise(() => orchestrator.searchReports("alpha"));

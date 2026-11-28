@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
 import type modelRegistryTypes from "./model-registry.types.ts";
@@ -7,7 +6,7 @@ import type modelRuntimeTypes from "./model-runtime.types.ts";
 import type providerComposerTypes from "./provider-composer.types.ts";
 import type virtualModelsTypes from "./virtual-models.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 
 export default class ModelRegistry {
   private readonly runtime: modelRuntimeTypes.ModelRuntime;
@@ -51,44 +50,42 @@ export default class ModelRegistry {
   getApiKeyAndHeaders(
     model: aiTypes.Model<aiTypes.Api>,
   ): Promise<modelRegistryTypes.ResolvedRequestAuth> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          const resolution = yield* awaited(this.runtime.getAuth(model));
-          if (resolution === undefined) {
-            const compatibility = this.runtime.getCompatibilityRequestConfig(model);
-            if (compatibility.authHeader) {
-              return { error: `No API key found for "${model.provider}"`, ok: false };
-            }
-            return { headers: compatibility.headers, ok: true };
+    return promisedWith(function* () {
+      try {
+        const resolution = yield* awaited(this.runtime.getAuth(model));
+        if (resolution === undefined) {
+          const compatibility = this.runtime.getCompatibilityRequestConfig(model);
+          if (compatibility.authHeader) {
+            return { error: `No API key found for "${model.provider}"`, ok: false };
           }
-          return {
-            apiKey: resolution.auth.apiKey,
-            headers: resolution.auth.headers,
-            ok: true,
-            ...(resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
-              ? { baseUrl: resolution.auth.baseUrl }
-              : {}),
-            env: resolution.env,
-          };
-        } catch (error) {
-          const cause = error instanceof Error ? error.cause : undefined;
-          const message =
-            cause instanceof Error
-              ? cause.message
-              : error instanceof Error
-                ? error.message
-                : String(error);
-          return {
-            error:
-              message === "authHeader requires a resolved API key"
-                ? `No API key found for "${model.provider}"`
-                : message,
-            ok: false,
-          };
+          return { headers: compatibility.headers, ok: true };
         }
-      }, this),
-    );
+        return {
+          apiKey: resolution.auth.apiKey,
+          headers: resolution.auth.headers,
+          ok: true,
+          ...(resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
+            ? { baseUrl: resolution.auth.baseUrl }
+            : {}),
+          env: resolution.env,
+        };
+      } catch (error) {
+        const cause = error instanceof Error ? error.cause : undefined;
+        const message =
+          cause instanceof Error
+            ? cause.message
+            : error instanceof Error
+              ? error.message
+              : String(error);
+        return {
+          error:
+            message === "authHeader requires a resolved API key"
+              ? `No API key found for "${model.provider}"`
+              : message,
+          ok: false,
+        };
+      }
+    }, this);
   }
 
   getProviderAuthStatus(provider: string): providerComposerTypes.AuthStatus {
@@ -171,15 +168,13 @@ export default class ModelRegistry {
   }
 
   getApiKeyForProvider(provider: string): Promise<string | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          return (yield* awaited(this.runtime.getAuth(provider)))?.auth.apiKey;
-        } catch {
-          return undefined;
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      try {
+        return (yield* awaited(this.runtime.getAuth(provider)))?.auth.apiKey;
+      } catch {
+        return undefined;
+      }
+    }, this);
   }
 
   isUsingOAuth(model: aiTypes.Model<aiTypes.Api>): boolean {

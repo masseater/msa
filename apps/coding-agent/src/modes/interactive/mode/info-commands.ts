@@ -11,7 +11,7 @@ import hotkeys from "../hotkeys.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 const { isBuiltinSlashCommandName, withSkillCommands, formatHelpMarkdown } = slashCommandsModule;
 const { TuiAltScreen } = tuiModule;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { copyToClipboard } = clipboard;
 const { toErrorMessage } = errorsModule;
 const { reportBug } = bugReport;
@@ -86,37 +86,35 @@ export default class InfoCommands {
   handleCopyCommand(
     options: { flashConfirmation?: boolean; preferSelection?: boolean } = {},
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const { renderer } = this.mode.lifecycle.screen;
-        if (
-          options.preferSelection === true &&
-          renderer instanceof TuiAltScreen &&
-          !renderer.getCopyOnSelect() &&
-          renderer.hasActiveSelection()
-        ) {
-          yield* awaited(renderer.copyActiveSelectionToClipboard());
-          return;
-        }
+    return promisedWith(function* () {
+      const { renderer } = this.mode.lifecycle.screen;
+      if (
+        options.preferSelection === true &&
+        renderer instanceof TuiAltScreen &&
+        !renderer.getCopyOnSelect() &&
+        renderer.hasActiveSelection()
+      ) {
+        yield* awaited(renderer.copyActiveSelectionToClipboard());
+        return;
+      }
 
-        const text = this.mode.session.context.transcript.getLastAssistantText();
-        if (text === undefined || text === "") {
-          this.mode.display.status.showError("No agent messages to copy yet.");
-          return;
-        }
+      const text = this.mode.session.context.transcript.getLastAssistantText();
+      if (text === undefined || text === "") {
+        this.mode.display.status.showError("No agent messages to copy yet.");
+        return;
+      }
 
-        try {
-          yield* awaited(copyToClipboard(text));
-          const current = this.mode.lifecycle.screen.renderer;
-          if (options.flashConfirmation === true && current instanceof TuiAltScreen) {
-            current.flash("Copied!");
-          } else {
-            this.mode.display.status.showStatus("Copied last agent message to clipboard");
-          }
-        } catch (error) {
-          this.mode.display.status.showError(toErrorMessage(error));
+      try {
+        yield* awaited(copyToClipboard(text));
+        const current = this.mode.lifecycle.screen.renderer;
+        if (options.flashConfirmation === true && current instanceof TuiAltScreen) {
+          current.flash("Copied!");
+        } else {
+          this.mode.display.status.showStatus("Copied last agent message to clipboard");
         }
-      }, this),
-    );
+      } catch (error) {
+        this.mode.display.status.showError(toErrorMessage(error));
+      }
+    }, this);
   }
 }

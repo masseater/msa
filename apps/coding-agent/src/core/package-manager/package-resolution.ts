@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import config from "../../config.ts";
 import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
@@ -12,7 +10,7 @@ import sourceInfo from "../source-info.ts";
 
 const { join } = platform;
 const { CONFIG_DIR_NAME } = config;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { BUILTIN_PATH_PREFIX } = sourceInfo;
 
 export default class PackageResolution {
@@ -26,75 +24,71 @@ export default class PackageResolution {
     sources: string[],
     options?: { local?: boolean; temporary?: boolean },
   ): Promise<packageManagerTypes.ResolvedPaths> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const accumulator = this.manager.resources.collection.createAccumulator();
-        const scope: packageManagerTypes.SourceScope =
-          options?.temporary === true ? "temporary" : options?.local === true ? "project" : "user";
-        for (const source of sources.filter((candidate) =>
-          candidate.startsWith(BUILTIN_PATH_PREFIX),
-        )) {
-          this.manager.resources.collection.addResource(
-            accumulator.extensions,
-            source,
-            { origin: "top-level", scope, source: "builtin" },
-            true,
-          );
-        }
-        const packageSources = sources
-          .filter((source) => !source.startsWith(BUILTIN_PATH_PREFIX))
-          .map((source) => ({ pkg: source as settingsManagerTypes.PackageSource, scope }));
-        yield* performed(
-          this.manager.resources.packages.resolvePackageSources(packageSources, accumulator),
+    return promisedWith(function* () {
+      const accumulator = this.manager.resources.collection.createAccumulator();
+      const scope: packageManagerTypes.SourceScope =
+        options?.temporary === true ? "temporary" : options?.local === true ? "project" : "user";
+      for (const source of sources.filter((candidate) =>
+        candidate.startsWith(BUILTIN_PATH_PREFIX),
+      )) {
+        this.manager.resources.collection.addResource(
+          accumulator.extensions,
+          source,
+          { origin: "top-level", scope, source: "builtin" },
+          true,
         );
-        return yield* awaited(this.manager.resources.collection.toResolvedPaths(accumulator));
-      }, this),
-    );
+      }
+      const packageSources = sources
+        .filter((source) => !source.startsWith(BUILTIN_PATH_PREFIX))
+        .map((source) => ({ pkg: source as settingsManagerTypes.PackageSource, scope }));
+      yield* performed(
+        this.manager.resources.packages.resolvePackageSources(packageSources, accumulator),
+      );
+      return yield* awaited(this.manager.resources.collection.toResolvedPaths(accumulator));
+    }, this);
   }
 
   resolve(
     onMissing?: (source: string) => Promise<packageManagerTypes.MissingSourceAction>,
   ): Promise<packageManagerTypes.ResolvedPaths> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const accumulator = this.manager.resources.collection.createAccumulator();
-        const globalSettings = this.manager.settingsManager.getGlobalSettings();
-        const projectSettings = this.manager.settingsManager.getProjectSettings();
+    return promisedWith(function* () {
+      const accumulator = this.manager.resources.collection.createAccumulator();
+      const globalSettings = this.manager.settingsManager.getGlobalSettings();
+      const projectSettings = this.manager.settingsManager.getProjectSettings();
 
-        const allPackages: Array<{
-          pkg: settingsManagerTypes.PackageSource;
-          scope: packageManagerTypes.SourceScope;
-        }> = [];
-        for (const pkg of projectSettings.packages ?? []) {
-          allPackages.push({ pkg, scope: "project" });
-        }
-        const { globalBaseDir, projectBaseDir } = yield* this.resolveConfiguredResources(
-          globalSettings,
-          allPackages,
+      const allPackages: Array<{
+        pkg: settingsManagerTypes.PackageSource;
+        scope: packageManagerTypes.SourceScope;
+      }> = [];
+      for (const pkg of projectSettings.packages ?? []) {
+        allPackages.push({ pkg, scope: "project" });
+      }
+      const { globalBaseDir, projectBaseDir } = yield* this.resolveConfiguredResources(
+        globalSettings,
+        allPackages,
+        accumulator,
+        onMissing,
+        projectSettings,
+      );
+
+      yield* awaited(
+        this.manager.resources.autoDiscovery.addAutoDiscoveredResources(
           accumulator,
-          onMissing,
-          projectSettings,
-        );
-
-        yield* awaited(
-          this.manager.resources.autoDiscovery.addAutoDiscoveredResources(
-            accumulator,
-            globalSettings,
-            projectSettings,
-            globalBaseDir,
-            projectBaseDir,
-          ),
-        );
-
-        this.manager.resources.autoDiscovery.addBuiltinExtensions(accumulator, {
-          globalBaseDir,
           globalSettings,
-          projectBaseDir,
           projectSettings,
-        });
-        return yield* awaited(this.manager.resources.collection.toResolvedPaths(accumulator));
-      }, this),
-    );
+          globalBaseDir,
+          projectBaseDir,
+        ),
+      );
+
+      this.manager.resources.autoDiscovery.addBuiltinExtensions(accumulator, {
+        globalBaseDir,
+        globalSettings,
+        projectBaseDir,
+        projectSettings,
+      });
+      return yield* awaited(this.manager.resources.collection.toResolvedPaths(accumulator));
+    }, this);
   }
 
   private *resolveConfiguredResources(

@@ -10,7 +10,7 @@ import type runtimeCredentialsTypes from "../runtime-credentials.types.ts";
 import type ModelAvailability from "./model-availability.ts";
 import type ProviderCatalog from "./provider-catalog.ts";
 
-const { awaited, awaiting, awaitingWith, performed } = awaitingModule;
+const { awaited, awaiting, performed, promisedWith } = awaitingModule;
 const { makeLatch } = platform;
 const { operationSignal, raceWithAbortSignal } = abortModule;
 
@@ -66,27 +66,23 @@ export default class CredentialOperations {
   ): Promise<aiTypes.Credential> {
     const signal = operationSignal(interaction.signal);
     return this.enqueue(providerId, signal, () =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          const credential = yield* awaited(
-            this.models.login(providerId, type, { ...interaction, signal }, options),
-          );
-          yield* awaited(this.synchronize(providerId, "login", credential, signal));
-          return credential;
-        }, this),
-      ),
+      promisedWith(function* () {
+        const credential = yield* awaited(
+          this.models.login(providerId, type, { ...interaction, signal }, options),
+        );
+        yield* awaited(this.synchronize(providerId, "login", credential, signal));
+        return credential;
+      }, this),
     );
   }
 
   logout(providerId: string, options: aiTypes.AuthOperationOptions): Promise<void> {
     const signal = operationSignal(options.signal);
     return this.enqueue(providerId, signal, () =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          yield* awaited(this.models.logout(providerId, { signal }));
-          yield* awaited(this.synchronize(providerId, "logout", undefined, signal));
-        }, this),
-      ),
+      promisedWith(function* () {
+        yield* awaited(this.models.logout(providerId, { signal }));
+        yield* awaited(this.synchronize(providerId, "logout", undefined, signal));
+      }, this),
     );
   }
 
@@ -116,26 +112,24 @@ export default class CredentialOperations {
     credential: aiTypes.Credential | undefined,
     signal: AbortSignal,
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          signal.throwIfAborted();
-          this.catalog.recompose(providerId);
-          const compositionError = this.catalog.compositionError(providerId);
-          if (compositionError !== undefined && compositionError !== "")
-            throw new Error(compositionError);
-          const result = yield* awaited(
-            this.models.refresh({ allowNetwork: false, providers: [providerId], signal }),
-          );
-          if (result.aborted) signal.throwIfAborted();
-          const refreshError = result.errors.get(providerId);
-          if (refreshError !== undefined) throw refreshError;
-          this.availability.updateModels();
-          yield* performed(this.availability.refreshProvider(providerId, signal));
-        } catch (cause) {
-          throw CredentialSynchronizationError.create(providerId, operation, credential, { cause });
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      try {
+        signal.throwIfAborted();
+        this.catalog.recompose(providerId);
+        const compositionError = this.catalog.compositionError(providerId);
+        if (compositionError !== undefined && compositionError !== "")
+          throw new Error(compositionError);
+        const result = yield* awaited(
+          this.models.refresh({ allowNetwork: false, providers: [providerId], signal }),
+        );
+        if (result.aborted) signal.throwIfAborted();
+        const refreshError = result.errors.get(providerId);
+        if (refreshError !== undefined) throw refreshError;
+        this.availability.updateModels();
+        yield* performed(this.availability.refreshProvider(providerId, signal));
+      } catch (cause) {
+        throw CredentialSynchronizationError.create(providerId, operation, credential, { cause });
+      }
+    }, this);
   }
 }

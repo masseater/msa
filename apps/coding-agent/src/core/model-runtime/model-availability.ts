@@ -6,7 +6,7 @@ import errorsModule from "../../utils/errors.ts";
 import awaitingModule from "../awaiting.ts";
 import type runtimeCredentialsTypes from "../runtime-credentials.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { operationSignal } = abortModule;
 
@@ -103,25 +103,23 @@ export default class ModelAvailability {
     providerId: string | undefined,
     options: aiTypes.AuthOperationOptions | undefined,
   ): Promise<readonly Model[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (providerId === undefined || providerId === "") {
-          yield* awaited(this.refreshAll(options?.signal));
-          return this.snapshot.available;
+    return promisedWith(function* () {
+      if (providerId === undefined || providerId === "") {
+        yield* awaited(this.refreshAll(options?.signal));
+        return this.snapshot.available;
+      }
+      const errorSeq = ++this.errorSeq;
+      try {
+        const available = yield* awaited(this.models.getAvailable(providerId, options));
+        if (errorSeq === this.errorSeq) this.error = undefined;
+        return available;
+      } catch (error) {
+        if (errorSeq === this.errorSeq && options?.signal?.aborted !== true) {
+          this.error = toErrorMessage(error);
         }
-        const errorSeq = ++this.errorSeq;
-        try {
-          const available = yield* awaited(this.models.getAvailable(providerId, options));
-          if (errorSeq === this.errorSeq) this.error = undefined;
-          return available;
-        } catch (error) {
-          if (errorSeq === this.errorSeq && options?.signal?.aborted !== true) {
-            this.error = toErrorMessage(error);
-          }
-          throw error;
-        }
-      }, this),
-    );
+        throw error;
+      }
+    }, this);
   }
 
   refreshAll(signal?: AbortSignal): Promise<void> {

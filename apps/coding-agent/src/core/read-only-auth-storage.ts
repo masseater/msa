@@ -9,7 +9,7 @@ import awaitingModule from "./awaiting.ts";
 import platform from "./platform/index.ts";
 import resolveConfigValueModule from "./resolve-config-value.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { getAuthPath } = config;
 const { normalizePath } = paths;
 const { stripBom } = text;
@@ -96,28 +96,24 @@ export default class ReadOnlyAuthStorage implements aiTypes.CredentialStore {
     providerId: string,
     options?: aiTypes.AuthOperationOptions,
   ): Promise<aiTypes.Credential | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        options?.signal?.throwIfAborted();
-        const credential = (yield* awaited(this.load())).get(providerId);
-        options?.signal?.throwIfAborted();
-        return resolvedCredential(credential);
-      }, this),
-    );
+    return promisedWith(function* () {
+      options?.signal?.throwIfAborted();
+      const credential = (yield* awaited(this.load())).get(providerId);
+      options?.signal?.throwIfAborted();
+      return resolvedCredential(credential);
+    }, this);
   }
 
   list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        options?.signal?.throwIfAborted();
-        const credentials = [...(yield* awaited(this.load()))].map(([providerId, credential]) => ({
-          providerId,
-          type: credential.type,
-        }));
-        options?.signal?.throwIfAborted();
-        return credentials;
-      }, this),
-    );
+    return promisedWith(function* () {
+      options?.signal?.throwIfAborted();
+      const credentials = [...(yield* awaited(this.load()))].map(([providerId, credential]) => ({
+        providerId,
+        type: credential.type,
+      }));
+      options?.signal?.throwIfAborted();
+      return credentials;
+    }, this);
   }
 
   modify(

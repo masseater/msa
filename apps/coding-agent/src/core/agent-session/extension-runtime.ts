@@ -7,7 +7,7 @@ import runnerEvents from "../extensions/runner-events.ts";
 import settingsManagerSupport from "../settings-manager-support.ts";
 
 const { resetApiProviders } = compat;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { DEFAULT_TOOL_NAMES } = settingsManagerSupport;
 const { emitSessionShutdownEvent } = runnerEvents;
 
@@ -45,32 +45,30 @@ export default class SessionExtensionRuntime {
   }
 
   reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const { loadout } = this.session.tools;
-        const oldRunner = this.session.extensions.binding.extensionRunnerInternal;
-        const previousFlagValues = oldRunner.getFlagValues();
-        yield* awaited(
-          emitSessionShutdownEvent(oldRunner, { reason: "reload", type: "session_shutdown" }),
-        );
-        oldRunner.invalidate();
-        const previousDefaultTools = new Set(this.session.tools.policy.currentDefaultTools());
-        yield* awaited(this.session.settingsManager.persistence.reload());
-        this.session.run.queue.syncQueueModesFromSettings();
-        resetApiProviders();
-        yield* awaited(this.session.resourceLoader.reload());
-        const addedDefaultTools = this.session.tools.policy
-          .currentDefaultTools()
-          .filter((name) => !previousDefaultTools.has(name));
-        for (const name of loadout.getActiveToolNames()) loadout.pendingToolNames.add(name);
-        this.buildRuntime({
-          activeToolNames: [...loadout.getActiveToolNames(), ...addedDefaultTools],
-          flagValues: previousFlagValues,
-          includeAllExtensionTools: true,
-        });
-        yield* performed(this.restartBoundExtensions(options));
-      }, this),
-    );
+    return promisedWith(function* () {
+      const { loadout } = this.session.tools;
+      const oldRunner = this.session.extensions.binding.extensionRunnerInternal;
+      const previousFlagValues = oldRunner.getFlagValues();
+      yield* awaited(
+        emitSessionShutdownEvent(oldRunner, { reason: "reload", type: "session_shutdown" }),
+      );
+      oldRunner.invalidate();
+      const previousDefaultTools = new Set(this.session.tools.policy.currentDefaultTools());
+      yield* awaited(this.session.settingsManager.persistence.reload());
+      this.session.run.queue.syncQueueModesFromSettings();
+      resetApiProviders();
+      yield* awaited(this.session.resourceLoader.reload());
+      const addedDefaultTools = this.session.tools.policy
+        .currentDefaultTools()
+        .filter((name) => !previousDefaultTools.has(name));
+      for (const name of loadout.getActiveToolNames()) loadout.pendingToolNames.add(name);
+      this.buildRuntime({
+        activeToolNames: [...loadout.getActiveToolNames(), ...addedDefaultTools],
+        flagValues: previousFlagValues,
+        includeAllExtensionTools: true,
+      });
+      yield* performed(this.restartBoundExtensions(options));
+    }, this);
   }
 
   private restartBoundExtensions(options?: {

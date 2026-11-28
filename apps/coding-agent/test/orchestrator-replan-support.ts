@@ -9,11 +9,6 @@ const { harness } = orchestratorHarness;
 
 const { waitFor } = harness;
 
-const { create, createNamed } = orchestratorSupport;
-
-const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
-  Effect.promise(() => orchestrator.read(id));
-
 function replan(
   orchestrator: orchestratorTypes.Orchestrator,
   input: orchestratorTypesTypes.ReplanInput,
@@ -35,9 +30,7 @@ function stopAndWrapUp(
 }
 
 const orchestratorReplanSupport = {
-  create,
-  createNamed,
-  read,
+  ...orchestratorSupport,
   replan,
   stopAndWrapUp,
 };

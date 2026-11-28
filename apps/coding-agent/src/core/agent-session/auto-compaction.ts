@@ -12,7 +12,7 @@ import virtualModels from "../virtual-models.ts";
 
 const { toEpochMs } = platform;
 const { isVirtualModel } = virtualModels;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { estimateProjectedContextTokens, shouldCompact, prepareCompaction } = compactionModule;
 const { getLatestCompactionEntry } = sessionContext;
 
@@ -79,50 +79,48 @@ export default class SessionAutoCompaction {
   }
 
   runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const model = this.session.model;
-        const settings = this.session.settingsManager.context.getCompactionSettings(model);
-        const outcome = { cancelledByExtension: false, fromExtension: false };
-        let abortController: AbortController | undefined;
-        try {
-          if (model === undefined) return false;
-          const pathEntries = this.session.sessionManager.getBranch();
-          const preparation = prepareCompaction(pathEntries, settings);
-          if (preparation === undefined) return false;
-          abortController = new AbortController();
-          this.autoCompactionAbortController = abortController;
-          this.session.emit({ reason, type: "compaction_start" });
-          const result = yield* performed(
-            this.session.compaction.manual.performCompaction({
-              customInstructions: undefined,
-              manual: false,
-              model,
-              outcome,
-              pathEntries,
-              preparation,
-              reason,
-              signal: abortController.signal,
-              willRetry,
-            }),
+    return promisedWith(function* () {
+      const model = this.session.model;
+      const settings = this.session.settingsManager.context.getCompactionSettings(model);
+      const outcome = { cancelledByExtension: false, fromExtension: false };
+      let abortController: AbortController | undefined;
+      try {
+        if (model === undefined) return false;
+        const pathEntries = this.session.sessionManager.getBranch();
+        const preparation = prepareCompaction(pathEntries, settings);
+        if (preparation === undefined) return false;
+        abortController = new AbortController();
+        this.autoCompactionAbortController = abortController;
+        this.session.emit({ reason, type: "compaction_start" });
+        const result = yield* performed(
+          this.session.compaction.manual.performCompaction({
+            customInstructions: undefined,
+            manual: false,
+            model,
+            outcome,
+            pathEntries,
+            preparation,
+            reason,
+            signal: abortController.signal,
+            willRetry,
+          }),
+        );
+        this.session.emit({ aborted: false, reason, result, type: "compaction_end", willRetry });
+        return willRetry || this.session.agent.hasQueuedMessages();
+      } catch (error) {
+        if (abortController !== undefined) {
+          const aborted = abortController.signal.aborted || outcome.cancelledByExtension;
+          yield* performed(
+            this.reportAutoCompactionFailure(error, reason, aborted, outcome.fromExtension),
           );
-          this.session.emit({ aborted: false, reason, result, type: "compaction_end", willRetry });
-          return willRetry || this.session.agent.hasQueuedMessages();
-        } catch (error) {
-          if (abortController !== undefined) {
-            const aborted = abortController.signal.aborted || outcome.cancelledByExtension;
-            yield* performed(
-              this.reportAutoCompactionFailure(error, reason, aborted, outcome.fromExtension),
-            );
-          }
-          return false;
-        } finally {
-          if (this.autoCompactionAbortController === abortController)
-            this.autoCompactionAbortController = undefined;
-          this.session.run.lifecycle.resolveIdleWaitIfIdle();
         }
-      }, this),
-    );
+        return false;
+      } finally {
+        if (this.autoCompactionAbortController === abortController)
+          this.autoCompactionAbortController = undefined;
+        this.session.run.lifecycle.resolveIdleWaitIfIdle();
+      }
+    }, this);
   }
 
   compactBeforeNextAssistantResponse(
@@ -151,45 +149,43 @@ export default class SessionAutoCompaction {
     skipAbortedCheck = true,
     toolResults: agentTypes.AgentMessage[] = [],
   ): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const settings = this.session.settingsManager.context.getCompactionSettings(
-          this.session.model,
-        );
-        if (!settings.enabled) return false;
-        if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
-        const branch = this.session.sessionManager.getBranch();
-        const compactionEntry = getLatestCompactionEntry(branch);
-        if (
-          compactionEntry !== null &&
-          assistantMessage.timestamp <= toEpochMs(compactionEntry.timestamp)
-        )
-          return false;
-        const projection = this.session.sessionManager.buildSessionProjection();
-        const overflow = this.session.compaction.overflow.assessOverflow(
-          assistantMessage,
-          projection,
-          this.session.sessionManager.getBranch(),
-        );
-        if (overflow.contextOverflow || overflow.recoverableLength)
-          return yield* performed(
-            this.session.compaction.overflow.recoverFromOverflow(
-              assistantMessage,
-              toolResults,
-              overflow.contextOverflow,
-            ),
-          );
-        const contextTokens = this.session.context.stats.measureContextTokens(
-          assistantMessage,
-          projection,
-          branch,
-          compactionEntry,
-        );
-        if (contextTokens === undefined) return false;
-        if (shouldCompact(contextTokens, overflow.contextWindow, settings))
-          return yield* awaited(this.runAutoCompaction("threshold", false));
+    return promisedWith(function* () {
+      const settings = this.session.settingsManager.context.getCompactionSettings(
+        this.session.model,
+      );
+      if (!settings.enabled) return false;
+      if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
+      const branch = this.session.sessionManager.getBranch();
+      const compactionEntry = getLatestCompactionEntry(branch);
+      if (
+        compactionEntry !== null &&
+        assistantMessage.timestamp <= toEpochMs(compactionEntry.timestamp)
+      )
         return false;
-      }, this),
-    );
+      const projection = this.session.sessionManager.buildSessionProjection();
+      const overflow = this.session.compaction.overflow.assessOverflow(
+        assistantMessage,
+        projection,
+        this.session.sessionManager.getBranch(),
+      );
+      if (overflow.contextOverflow || overflow.recoverableLength)
+        return yield* performed(
+          this.session.compaction.overflow.recoverFromOverflow(
+            assistantMessage,
+            toolResults,
+            overflow.contextOverflow,
+          ),
+        );
+      const contextTokens = this.session.context.stats.measureContextTokens(
+        assistantMessage,
+        projection,
+        branch,
+        compactionEntry,
+      );
+      if (contextTokens === undefined) return false;
+      if (shouldCompact(contextTokens, overflow.contextWindow, settings))
+        return yield* awaited(this.runAutoCompaction("threshold", false));
+      return false;
+    }, this);
   }
 }

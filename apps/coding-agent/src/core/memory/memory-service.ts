@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import interop from "../../utils/interop.ts";
 import awaitingModule from "../awaiting.ts";
 import platform from "../platform/index.ts";
@@ -10,7 +8,7 @@ import memoryModule from "./memory.ts";
 import type memoryTypes from "./memory.types.ts";
 import secretCheckLazy from "./secret-check.lazy.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { callbackPromise } = interop;
 const { exists } = platform.files;
 const { migrateLegacyMemories } = legacyMigration;
@@ -90,35 +88,33 @@ export default class MemoryService {
   }
 
   send(request: string, signal?: AbortSignal, timeoutMs = REQUEST_TIMEOUT_MS): Promise<string> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (!this.settings.enabled) throw new Error("Memory is off (settings: memory.enabled).");
-        const text = request.trim();
-        if (text === "") throw new Error("The memory request is empty.");
-        if (text.length > MAX_REQUEST_CHARS)
-          throw new Error(`The memory request is longer than ${MAX_REQUEST_CHARS} characters.`);
-        const secrets = yield* awaited(findSecrets(text));
-        if (secrets.length > 0)
-          throw new Error(
-            `The memory request was not sent because it looks like it holds a secret (${secrets.join(", ")}). Leave secrets out of memories.`,
-          );
-        const outcome = yield* awaited(
-          this.options.client.call(text, bounded(signal, timeoutMs)).then(
-            (result) =>
-              result.isError
-                ? { failure: result.text === "" ? "sepiace reported an error." : result.text }
-                : { reply: result.text },
-            (error: unknown) => ({
-              failure: error instanceof Error ? error.message : String(error),
-            }),
-          ),
+    return promisedWith(function* () {
+      if (!this.settings.enabled) throw new Error("Memory is off (settings: memory.enabled).");
+      const text = request.trim();
+      if (text === "") throw new Error("The memory request is empty.");
+      if (text.length > MAX_REQUEST_CHARS)
+        throw new Error(`The memory request is longer than ${MAX_REQUEST_CHARS} characters.`);
+      const secrets = yield* awaited(findSecrets(text));
+      if (secrets.length > 0)
+        throw new Error(
+          `The memory request was not sent because it looks like it holds a secret (${secrets.join(", ")}). Leave secrets out of memories.`,
         );
-        if (!("failure" in outcome)) this.lastFailure = undefined;
-        else if (signal?.aborted !== true) this.lastFailure = outcome.failure;
-        if ("failure" in outcome) throw new Error(outcome.failure);
-        return outcome.reply;
-      }, this),
-    );
+      const outcome = yield* awaited(
+        this.options.client.call(text, bounded(signal, timeoutMs)).then(
+          (result) =>
+            result.isError
+              ? { failure: result.text === "" ? "sepiace reported an error." : result.text }
+              : { reply: result.text },
+          (error: unknown) => ({
+            failure: error instanceof Error ? error.message : String(error),
+          }),
+        ),
+      );
+      if (!("failure" in outcome)) this.lastFailure = undefined;
+      else if (signal?.aborted !== true) this.lastFailure = outcome.failure;
+      if ("failure" in outcome) throw new Error(outcome.failure);
+      return outcome.reply;
+    }, this);
   }
 
   private recallEnded(
@@ -141,33 +137,30 @@ export default class MemoryService {
   }
 
   recall(prompt: string, signal?: AbortSignal): Promise<memoryTypes.RecallOutcome> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const text = prompt.trim();
-        if (!this.settings.recall || text === "") return { kind: "nothing" };
-        if (this.options.client.state === "needs-auth")
-          return this.recallEnded(undefined, undefined);
-        if ((yield* awaited(findSecrets(text))).length > 0) return { kind: "nothing" };
-        const timeout = AbortSignal.timeout(RECALL_TIMEOUT_MS);
-        const deadline = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
-        if (!(yield* awaited(this.options.client.ready(deadline))))
-          return this.recallEnded(timeout, signal);
-        this.project ??= resolveProjectName(this.options.cwd);
-        const request = recallRequest(text, yield* awaited(this.project));
-        return yield* awaited(
-          this.send(request, deadline, RECALL_TIMEOUT_MS).then(
-            (reply): memoryTypes.RecallOutcome =>
-              reply === "" ? { kind: "nothing" } : { kind: "recalled", text: reply },
-            (error: unknown): memoryTypes.RecallOutcome =>
-              this.recallEnded(
-                timeout,
-                signal,
-                error instanceof Error ? error.message : String(error),
-              ),
-          ),
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      const text = prompt.trim();
+      if (!this.settings.recall || text === "") return { kind: "nothing" };
+      if (this.options.client.state === "needs-auth") return this.recallEnded(undefined, undefined);
+      if ((yield* awaited(findSecrets(text))).length > 0) return { kind: "nothing" };
+      const timeout = AbortSignal.timeout(RECALL_TIMEOUT_MS);
+      const deadline = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+      if (!(yield* awaited(this.options.client.ready(deadline))))
+        return this.recallEnded(timeout, signal);
+      this.project ??= resolveProjectName(this.options.cwd);
+      const request = recallRequest(text, yield* awaited(this.project));
+      return yield* awaited(
+        this.send(request, deadline, RECALL_TIMEOUT_MS).then(
+          (reply): memoryTypes.RecallOutcome =>
+            reply === "" ? { kind: "nothing" } : { kind: "recalled", text: reply },
+          (error: unknown): memoryTypes.RecallOutcome =>
+            this.recallEnded(
+              timeout,
+              signal,
+              error instanceof Error ? error.message : String(error),
+            ),
+        ),
+      );
+    }, this);
   }
 
   legacyPending(): Promise<boolean> {

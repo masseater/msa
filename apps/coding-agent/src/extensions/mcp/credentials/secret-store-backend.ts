@@ -1,5 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
-import { Effect, Predicate } from "effect";
+import { Predicate } from "effect";
 
 import type authStorageTypes from "../../../core/auth-storage.types.ts";
 import awaitingModule from "../../../core/awaiting.ts";
@@ -10,7 +10,7 @@ import credentialHelperConfig from "./credential-helper-config.ts";
 import secretStores from "./secret-stores.ts";
 import type secretStoresTypes from "./secret-stores.types.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { join } = platform;
 const { markSignInsNotSaved } = mcpSignInStorage;
 const { exists, readText, remove } = platform.files;
@@ -124,26 +124,22 @@ export default class SecretStoreAuthBackend implements authStorageTypes.AuthStor
     fn: (current: string | undefined) => Promise<authStorageTypes.LockResult<T>>,
     options?: aiTypes.AuthOperationOptions,
   ): Promise<T> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        options?.signal?.throwIfAborted();
-        yield* awaited(this.store());
-        return yield* awaited(
-          withRefreshLock(this.options.agentDir, LOCK_KEY, () =>
-            Effect.runPromise(
-              awaitingWith(function* () {
-                options?.signal?.throwIfAborted();
-                const store = this.active;
-                const { result, next } = yield* awaited(fn(yield* awaited(store.read())));
-                options?.signal?.throwIfAborted();
-                if (next !== undefined) yield* awaited(this.write(store, next));
-                return result;
-              }, this),
-            ),
-          ),
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      options?.signal?.throwIfAborted();
+      yield* awaited(this.store());
+      return yield* awaited(
+        withRefreshLock(this.options.agentDir, LOCK_KEY, () =>
+          promisedWith(function* () {
+            options?.signal?.throwIfAborted();
+            const store = this.active;
+            const { result, next } = yield* awaited(fn(yield* awaited(store.read())));
+            options?.signal?.throwIfAborted();
+            if (next !== undefined) yield* awaited(this.write(store, next));
+            return result;
+          }, this),
+        ),
+      );
+    }, this);
   }
 
   private fallBack(reason: string, value: string | undefined): void {
@@ -160,40 +156,38 @@ export default class SecretStoreAuthBackend implements authStorageTypes.AuthStor
   }
 
   private resolveStore(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const legacy = (yield* awaited(exists(this.legacyPath)))
-          ? yield* awaited(readText(this.legacyPath))
-          : undefined;
-        const helper = yield* awaited(readCredentialHelper(this.options.agentDir));
-        this.fromHelper = helper !== undefined;
-        const preferred =
-          helper === undefined
-            ? (this.options.defaultStore ?? platformStore(process.platform, this.options.agentDir))
-            : credentialHelperStore(helper);
-        let current: string | undefined;
-        if (preferred === undefined) {
-          this.fallBack("no credential store is available on this platform", undefined);
-        } else {
-          try {
-            current = yield* awaited(preferred.read());
-            this.active = preferred;
-          } catch (error) {
-            if (helper !== undefined) throw error;
-            this.fallBack(reasonOf(error), undefined);
-          }
+    return promisedWith(function* () {
+      const legacy = (yield* awaited(exists(this.legacyPath)))
+        ? yield* awaited(readText(this.legacyPath))
+        : undefined;
+      const helper = yield* awaited(readCredentialHelper(this.options.agentDir));
+      this.fromHelper = helper !== undefined;
+      const preferred =
+        helper === undefined
+          ? (this.options.defaultStore ?? platformStore(process.platform, this.options.agentDir))
+          : credentialHelperStore(helper);
+      let current: string | undefined;
+      if (preferred === undefined) {
+        this.fallBack("no credential store is available on this platform", undefined);
+      } else {
+        try {
+          current = yield* awaited(preferred.read());
+          this.active = preferred;
+        } catch (error) {
+          if (helper !== undefined) throw error;
+          this.fallBack(reasonOf(error), undefined);
         }
-        if (legacy !== undefined) {
-          const legacyStates = parseStates(legacy);
-          this.legacyServers = [...new Set(Object.keys(legacyStates).map(serverOf))];
-          const merged = { ...legacyStates, ...parseStates(current) };
-          yield* awaited(this.write(this.active, `${JSON.stringify(merged, null, 2)}\n`));
-          yield* awaited(remove({ force: true, path: this.legacyPath }));
-          this.legacyDeleted = !this.active.persistent;
-        }
-        this.settled = true;
-        this.deliverNotice();
-      }, this),
-    );
+      }
+      if (legacy !== undefined) {
+        const legacyStates = parseStates(legacy);
+        this.legacyServers = [...new Set(Object.keys(legacyStates).map(serverOf))];
+        const merged = { ...legacyStates, ...parseStates(current) };
+        yield* awaited(this.write(this.active, `${JSON.stringify(merged, null, 2)}\n`));
+        yield* awaited(remove({ force: true, path: this.legacyPath }));
+        this.legacyDeleted = !this.active.persistent;
+      }
+      this.settled = true;
+      this.deliverNotice();
+    }, this);
   }
 }

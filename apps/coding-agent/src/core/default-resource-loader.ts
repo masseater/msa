@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import awaitingModule from "./awaiting.ts";
 import type resourceLoaderTypes from "./resource-loader.types.ts";
 import ContextResources from "./resource-loader/context-resources.ts";
@@ -10,7 +8,7 @@ import ResourceEnvironment from "./resource-loader/resource-environment.ts";
 import SkillResources from "./resource-loader/skill-resources.ts";
 import ThemeResources from "./resource-loader/theme-resources.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 
 type Loader = resourceLoaderTypes.ResourceLoader;
 
@@ -69,31 +67,25 @@ export default class DefaultResourceLoader implements Loader {
   }
 
   extendResources(paths: resourceLoaderTypes.ResourceExtensionPaths): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* this.skills.extend(this.extensions.normalizeExtensionPaths(paths.skillPaths ?? []));
-        yield* this.prompts.extend(
-          this.extensions.normalizeExtensionPaths(paths.promptPaths ?? []),
-        );
-        yield* awaited(
-          this.themes.extend(this.extensions.normalizeExtensionPaths(paths.themePaths ?? [])),
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* this.skills.extend(this.extensions.normalizeExtensionPaths(paths.skillPaths ?? []));
+      yield* this.prompts.extend(this.extensions.normalizeExtensionPaths(paths.promptPaths ?? []));
+      yield* awaited(
+        this.themes.extend(this.extensions.normalizeExtensionPaths(paths.themePaths ?? [])),
+      );
+    }, this);
   }
 
   reload(options?: resourceLoaderTypes.ResourceLoaderReloadOptions): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const plan = yield* this.discovery.discover(options);
-        yield* this.extensions.reload(plan);
-        yield* this.skills.reload(plan);
-        yield* this.prompts.reload(plan);
-        yield* awaited(this.themes.reload(plan));
-        yield* awaited(this.context.reload());
-        this.loaded = true;
-      }, this),
-    );
+    return promisedWith(function* () {
+      const plan = yield* this.discovery.discover(options);
+      yield* this.extensions.reload(plan);
+      yield* this.skills.reload(plan);
+      yield* this.prompts.reload(plan);
+      yield* awaited(this.themes.reload(plan));
+      yield* awaited(this.context.reload());
+      this.loaded = true;
+    }, this);
   }
 
   constructor(options: resourceLoaderTypes.DefaultResourceLoaderOptions) {

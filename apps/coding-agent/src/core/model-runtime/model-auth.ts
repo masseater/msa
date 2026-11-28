@@ -1,5 +1,4 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
@@ -8,7 +7,7 @@ import type runtimeCredentialsTypes from "../runtime-credentials.types.ts";
 import type ModelAvailability from "./model-availability.ts";
 import type ProviderCatalog from "./provider-catalog.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const {
   configuredRequestAuthStatus,
   mergeHeaders,
@@ -38,27 +37,25 @@ export default class ModelAuth {
     providerOrModel: string | aiTypes.AnyModel,
     overrides: modelRuntimeTypes.ModelRuntimeAuthOverrides,
   ): Promise<aiTypes.AuthResult | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (typeof providerOrModel === "string")
-          return yield* awaited(this.models.getAuth(providerOrModel, overrides));
-        const resolution = yield* awaited(this.models.getAuth(providerOrModel, overrides));
-        if (resolution === undefined) return undefined;
-        const configuredHeaders = resolveConfiguredModelHeaders(
-          providerOrModel,
-          this.catalog.configProvider(providerOrModel.provider),
-          this.catalog.extensionConfig(providerOrModel.provider),
-          { ...(resolution.env ?? {}), ...(overrides.env ?? {}) },
-        );
-        return {
-          ...resolution,
-          auth: {
-            ...resolution.auth,
-            headers: mergeHeaders(resolution.auth.headers, configuredHeaders),
-          },
-        };
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (typeof providerOrModel === "string")
+        return yield* awaited(this.models.getAuth(providerOrModel, overrides));
+      const resolution = yield* awaited(this.models.getAuth(providerOrModel, overrides));
+      if (resolution === undefined) return undefined;
+      const configuredHeaders = resolveConfiguredModelHeaders(
+        providerOrModel,
+        this.catalog.configProvider(providerOrModel.provider),
+        this.catalog.extensionConfig(providerOrModel.provider),
+        { ...(resolution.env ?? {}), ...(overrides.env ?? {}) },
+      );
+      return {
+        ...resolution,
+        auth: {
+          ...resolution.auth,
+          headers: mergeHeaders(resolution.auth.headers, configuredHeaders),
+        },
+      };
+    }, this);
   }
 
   compatibilityConfig(
