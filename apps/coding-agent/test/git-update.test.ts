@@ -1,70 +1,51 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import gitUpdateSupport from "./git-update-support.ts";
-import testNetworkEnv from "./test-network-env.ts";
-const { createCommit, getCurrentCommit, getFileContent, git, gitSource, initGitRepo, runCommand } =
-  gitUpdateSupport;
-
-const { allowNetwork } = testNetworkEnv;
-
 const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  pathExists,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
+  createCommit,
+  getCurrentCommit,
+  getFileContent,
+  git,
+  gitSource,
+  initGitRepo,
+  runCommand,
+  useGitUpdateFixture,
+} = gitUpdateSupport;
 
-let tempDir: string;
+const fx = useGitUpdateFixture();
 
-let remoteDir: string;
-
-let agentDir: string;
-
-let installedDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
 const setupRemoteAndInstall = Effect.fn("setupRemoteAndInstall")(function* () {
-  yield* makeDirectory(remoteDir);
-  yield* initGitRepo(remoteDir);
-  yield* createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
+  yield* makeDirectory(fx.remoteDir);
+  yield* initGitRepo(fx.remoteDir);
+  yield* createCommit(fx.remoteDir, "extension.ts", "// v1", "Initial commit");
 
-  yield* makeDirectory(joinPath(agentDir, "git", "github.com", "test"));
-  yield* git(["clone", remoteDir, installedDir], tempDir);
-  yield* git(["config", "--local", "user.email", "test@test.com"], installedDir);
-  yield* git(["config", "--local", "user.name", "Test"], installedDir);
+  yield* makeDirectory(joinPath(fx.agentDir, "git", "github.com", "test"));
+  yield* git(["clone", fx.remoteDir, fx.installedDir], fx.tempDir);
+  yield* git(["config", "--local", "user.email", "test@test.com"], fx.installedDir);
+  yield* git(["config", "--local", "user.name", "Test"], fx.installedDir);
 
-  settingsManager.resources.setPackages([gitSource]);
+  fx.settingsManager.resources.setPackages([gitSource]);
 });
 
 const shouldSkipResetCleanAndInstallWhen = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(remoteDir);
-      yield* initGitRepo(remoteDir);
+      yield* makeDirectory(fx.remoteDir);
+      yield* initGitRepo(fx.remoteDir);
       yield* writeTextFile(
-        joinPath(remoteDir, "package.json"),
+        joinPath(fx.remoteDir, "package.json"),
         yield* toJsonText({ name: "test-extension", version: "1.0.0" }),
       );
-      yield* createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
+      yield* createCommit(fx.remoteDir, "extension.ts", "// v1", "Initial commit");
 
-      yield* makeDirectory(joinPath(agentDir, "git", "github.com", "test"));
-      yield* git(["clone", remoteDir, installedDir], tempDir);
-      settingsManager.resources.setPackages([gitSource]);
+      yield* makeDirectory(joinPath(fx.agentDir, "git", "github.com", "test"));
+      yield* git(["clone", fx.remoteDir, fx.installedDir], fx.tempDir);
+      fx.settingsManager.resources.setPackages([gitSource]);
 
       const executedCommands: string[] = [];
       commandRunner.runCommand = (command, args, options) => {
@@ -73,7 +54,7 @@ const shouldSkipResetCleanAndInstallWhen = () =>
         return runTest(Effect.asVoid(runCommand(command, args, options?.cwd ?? process.cwd())));
       };
 
-      yield* awaited(packageManager.operations.updates.update());
+      yield* awaited(fx.packageManager.operations.updates.update());
 
       expect(executedCommands).toContain(
         "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
@@ -90,14 +71,14 @@ const shouldUpdateToLatestCommitWhenRemote = () =>
   runTest(
     Effect.gen(function* () {
       yield* setupRemoteAndInstall();
-      expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v1");
+      expect(yield* getFileContent(fx.installedDir, "extension.ts")).toBe("// v1");
 
-      const newCommit = yield* createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
+      const newCommit = yield* createCommit(fx.remoteDir, "extension.ts", "// v2", "Second commit");
 
-      yield* awaited(packageManager.operations.updates.update());
+      yield* awaited(fx.packageManager.operations.updates.update());
 
-      expect(yield* getCurrentCommit(installedDir)).toBe(newCommit);
-      expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v2");
+      expect(yield* getCurrentCommit(fx.installedDir)).toBe(newCommit);
+      expect(yield* getFileContent(fx.installedDir, "extension.ts")).toBe("// v2");
     }),
   );
 
@@ -106,60 +87,29 @@ const shouldHandleCompleteHistoryRewrite = () =>
     Effect.gen(function* () {
       yield* setupRemoteAndInstall();
 
-      yield* createCommit(remoteDir, "extension.ts", "// v2", "v2");
-      yield* createCommit(remoteDir, "extension.ts", "// v3", "v3");
+      yield* createCommit(fx.remoteDir, "extension.ts", "// v2", "v2");
+      yield* createCommit(fx.remoteDir, "extension.ts", "// v3", "v3");
 
-      yield* awaited(packageManager.operations.updates.update());
-      expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v3");
+      yield* awaited(fx.packageManager.operations.updates.update());
+      expect(yield* getFileContent(fx.installedDir, "extension.ts")).toBe("// v3");
 
-      yield* git(["reset", "--hard", "HEAD~2"], remoteDir);
-      yield* createCommit(remoteDir, "extension.ts", "// rewrite-a", "Rewrite A");
+      yield* git(["reset", "--hard", "HEAD~2"], fx.remoteDir);
+      yield* createCommit(fx.remoteDir, "extension.ts", "// rewrite-a", "Rewrite A");
       const finalCommit = yield* createCommit(
-        remoteDir,
+        fx.remoteDir,
         "extension.ts",
         "// rewrite-b",
         "Rewrite B",
       );
 
-      yield* awaited(packageManager.operations.updates.update());
+      yield* awaited(fx.packageManager.operations.updates.update());
 
-      expect(yield* getCurrentCommit(installedDir)).toBe(finalCommit);
-      expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// rewrite-b");
-    }),
-  );
-
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      allowNetwork();
-      tempDir = yield* makeTempDir("git-update-test-");
-      remoteDir = joinPath(tempDir, "remote");
-      agentDir = joinPath(tempDir, "agent");
-      installedDir = joinPath(agentDir, "git", "github.com", "test", "extension");
-      yield* makeDirectory(agentDir);
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
-        yield* removePath(tempDir);
-      }
+      expect(yield* getCurrentCommit(fx.installedDir)).toBe(finalCommit);
+      expect(yield* getFileContent(fx.installedDir, "extension.ts")).toBe("// rewrite-b");
     }),
   );
 
 describe("DefaultPackageManager git update", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("normal updates (no force-push)", () => {
     it(
       "should skip reset, clean, and install when already up to date",
@@ -174,10 +124,6 @@ describe("DefaultPackageManager git update", () => {
 });
 
 describe("DefaultPackageManager git update", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("force-push scenarios", () => {
     it("should handle complete history rewrite", shouldHandleCompleteHistoryRewrite);
   });
