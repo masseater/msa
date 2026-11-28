@@ -55,235 +55,134 @@ const neuralwattModel: aiTypes.Model<"anthropic-messages"> = {
 
 const modelsWithNeuralwatt = [...allModels, neuralwattModel];
 
-const doesNotStripInvalidSuffixAsThinking = () => {
-  const registry = policyFreeRuntime(allModels);
+type Query = Parameters<typeof resolveCliModel>[0];
+type Resolved = Readonly<{
+  provider: string;
+  id: string;
+  thinkingLevel?: string;
+  reasoning?: boolean;
+}>;
+type Expected = Readonly<{ resolved: Resolved }> | Readonly<{ failure: readonly string[] }>;
+type Row = readonly [
+  name: string,
+  query: Omit<Query, "modelRuntime">,
+  runtime: Query["modelRuntime"],
+  expected: Expected,
+];
 
-  const result = resolveCliModel({
-    cliModel: "gpt-4o:extended",
-    cliProvider: "openai",
-    modelRuntime: registry,
-  });
+const NEURALWATT = "neuralwatt/zai-org/GLM-5.1-FP8";
+const neuralwatt = policyFreeRuntime(modelsWithNeuralwatt);
+const customId = { id: "zai-org/GLM-5.1-FP8", provider: "neuralwatt" };
 
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("openai");
-  expect(result.model?.id).toBe("gpt-4o:extended");
-};
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
-const allowsCustomModelIdsForExplicitProviders = () => {
-  const registry = policyFreeRuntime(allModels);
-
-  const result = resolveCliModel({
-    cliModel: "openrouter/openai/ghost-model",
-    cliProvider: "openrouter",
-    modelRuntime: registry,
-  });
-
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("openrouter");
-  expect(result.model?.id).toBe("openai/ghost-model");
-};
-
-const returnsAClearErrorWhenThereAre = () => {
-  const registry = policyFreeRuntime([]);
-
-  const result = resolveCliModel({
-    cliModel: "gpt-4o",
-    cliProvider: "openai",
-    modelRuntime: registry,
-  });
-
-  expect(result.model).toBeUndefined();
-  expect(result.error).toContain("No models available");
-};
-
-const selectsTheAuthenticatedGatewayWithOrWithout = () => {
-  for (const [cliModel, thinkingLevel] of [
-    ["anthropic/claude-opus-5.5", undefined],
-    ["anthropic/claude-opus-5.5:high", "high"],
-  ] as const) {
-    const result = resolveCliModel({ cliModel, modelRuntime: registry2(["custom-gateway"]) });
-
-    expect(result.error).toBeUndefined();
-    expect(result.model?.provider).toBe("custom-gateway");
-    expect(result.thinkingLevel).toBe(thinkingLevel);
-  }
-};
-
-const reportsAmbiguityInsteadOfChoosingByCatalog = () => {
-  const result = resolveCliModel({
-    cliModel: "anthropic/claude-opus-5.5",
-    modelRuntime: registry2([]),
-  });
-
-  expect(result.model).toBeUndefined();
-  expect(result.error).toContain(
-    "custom-gateway/anthropic/claude-opus-5.5, openrouter/anthropic/claude-opus-5.5",
-  );
-  expect(result.error).toContain(
-    "No matching provider is authenticated. Use --provider or provider/model.",
-  );
-};
-
-const doesNotLetStoredCredentialsChooseThe = () => {
-  const result = resolveCliModel({
-    cliModel: "anthropic/claude-opus-5.5",
-    inlineApiKey: true,
-    modelRuntime: registry2(["custom-gateway"]),
-  });
-
-  expect(result.model).toBeUndefined();
-  expect(result.error).toContain("--api-key does not choose a provider.");
-};
-
-const stripsThinkingSuffixFromCustomModelId = () => {
-  const registry = policyFreeRuntime(modelsWithNeuralwatt);
-
-  const result = resolveCliModel({
-    cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high",
-    modelRuntime: registry,
-  });
-
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("neuralwatt");
-
-  expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
-  expect(result.model?.reasoning).toBe(true);
-  expect(result.thinkingLevel).toBe("high");
-};
-
-const customModelWithoutThinkingSuffixWorksNormally = () => {
-  const registry = policyFreeRuntime(modelsWithNeuralwatt);
-
-  const result = resolveCliModel({
-    cliModel: "neuralwatt/zai-org/GLM-5.1-FP8",
-    modelRuntime: registry,
-  });
-
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("neuralwatt");
-  expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
-  expect(result.thinkingLevel).toBeUndefined();
-};
-
-const allValidThinkingLevelsWorkInFallback = () => {
-  const registry = policyFreeRuntime(modelsWithNeuralwatt);
-
-  for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) {
-    const result = resolveCliModel({
-      cliModel: `neuralwatt/zai-org/GLM-5.1-FP8:${level}`,
-      modelRuntime: registry,
-    });
-
-    expect(result.error).toBeUndefined();
-    expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
-    expect(result.thinkingLevel).toBe(level);
-  }
-};
-
-const invalidThinkingSuffixOnCustomModelIs = () => {
-  const registry = policyFreeRuntime(modelsWithNeuralwatt);
-
-  const result = resolveCliModel({
-    cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:banana",
-    modelRuntime: registry,
-  });
-
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("neuralwatt");
-
-  expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8:banana");
-  expect(result.thinkingLevel).toBeUndefined();
-};
-
-const explicitProviderWithCustomModelThinkingStrips = () => {
-  const registry = policyFreeRuntime(modelsWithNeuralwatt);
-
-  const result = resolveCliModel({
-    cliModel: "zai-org/GLM-5.1-FP8:high",
-    cliProvider: "neuralwatt",
-    modelRuntime: registry,
-  });
-
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("neuralwatt");
-  expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
-  expect(result.thinkingLevel).toBe("high");
-};
-
-const withExplicitThinkingSuffixIsKeptAs = () => {
-  const registry = policyFreeRuntime(modelsWithNeuralwatt);
-
-  const result = resolveCliModel({
-    cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high",
-    cliThinking: "medium",
-    modelRuntime: registry,
-  });
-
-  expect(result.error).toBeUndefined();
-  expect(result.model?.provider).toBe("neuralwatt");
-
-  expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8:high");
-  expect(result.thinkingLevel).toBeUndefined();
-};
-
-describe("resolveCliModel", () => {
-  test(
+const ROWS: readonly Row[] = [
+  [
     "does not strip invalid :suffix as thinking level in --model (treat as raw id)",
-    doesNotStripInvalidSuffixAsThinking,
-  );
-
-  test(
+    { cliModel: "gpt-4o:extended", cliProvider: "openai" },
+    policyFreeRuntime(allModels),
+    { resolved: { id: "gpt-4o:extended", provider: "openai" } },
+  ],
+  [
     "allows custom model ids for explicit providers without double prefixing",
-    allowsCustomModelIdsForExplicitProviders,
-  );
-
-  test("returns a clear error when there are no models", returnsAClearErrorWhenThereAre);
-
-  describe("duplicate raw ids behind a known provider prefix (#10160)", () => {
-    test(
-      "selects the authenticated gateway, with or without a thinking suffix",
-      selectsTheAuthenticatedGatewayWithOrWithout,
-    );
-
-    test(
-      "reports ambiguity instead of choosing by catalog order",
-      reportsAmbiguityInsteadOfChoosingByCatalog,
-    );
-
-    test(
-      "does not let stored credentials choose the provider for --api-key",
-      doesNotLetStoredCredentialsChooseThe,
-    );
-  });
-});
+    { cliModel: "openrouter/openai/ghost-model", cliProvider: "openrouter" },
+    policyFreeRuntime(allModels),
+    { resolved: { id: "openai/ghost-model", provider: "openrouter" } },
+  ],
+  [
+    "returns a clear error when there are no models",
+    { cliModel: "gpt-4o", cliProvider: "openai" },
+    policyFreeRuntime([]),
+    { failure: ["No models available"] },
+  ],
+  [
+    "selects the authenticated gateway without a thinking suffix",
+    { cliModel: "anthropic/claude-opus-5.5" },
+    registry2(["custom-gateway"]),
+    { resolved: { id: "anthropic/claude-opus-5.5", provider: "custom-gateway" } },
+  ],
+  [
+    "selects the authenticated gateway with a thinking suffix",
+    { cliModel: "anthropic/claude-opus-5.5:high" },
+    registry2(["custom-gateway"]),
+    {
+      resolved: {
+        id: "anthropic/claude-opus-5.5",
+        provider: "custom-gateway",
+        thinkingLevel: "high",
+      },
+    },
+  ],
+  [
+    "reports ambiguity instead of choosing by catalog order",
+    { cliModel: "anthropic/claude-opus-5.5" },
+    registry2([]),
+    {
+      failure: [
+        "custom-gateway/anthropic/claude-opus-5.5, openrouter/anthropic/claude-opus-5.5",
+        "No matching provider is authenticated. Use --provider or provider/model.",
+      ],
+    },
+  ],
+  [
+    "does not let stored credentials choose the provider for --api-key",
+    { cliModel: "anthropic/claude-opus-5.5", inlineApiKey: true },
+    registry2(["custom-gateway"]),
+    { failure: ["--api-key does not choose a provider."] },
+  ],
+  [
+    "strips :thinking suffix from custom model id in fallback path",
+    { cliModel: `${NEURALWATT}:high` },
+    neuralwatt,
+    { resolved: { ...customId, reasoning: true, thinkingLevel: "high" } },
+  ],
+  [
+    "custom model without thinking suffix works normally in fallback path",
+    { cliModel: NEURALWATT },
+    neuralwatt,
+    { resolved: customId },
+  ],
+  ...THINKING_LEVELS.map((level): Row => [
+    `all valid thinking levels work in fallback path (${level})`,
+    { cliModel: `${NEURALWATT}:${level}` },
+    neuralwatt,
+    { resolved: { ...customId, thinkingLevel: level } },
+  ]),
+  [
+    "invalid thinking suffix on custom model is treated as part of model id",
+    { cliModel: `${NEURALWATT}:banana` },
+    neuralwatt,
+    { resolved: { id: "zai-org/GLM-5.1-FP8:banana", provider: "neuralwatt" } },
+  ],
+  [
+    "explicit --provider with custom model:thinking strips suffix correctly",
+    { cliModel: "zai-org/GLM-5.1-FP8:high", cliProvider: "neuralwatt" },
+    neuralwatt,
+    { resolved: { ...customId, thinkingLevel: "high" } },
+  ],
+  [
+    "with explicit --thinking, :suffix is kept as part of model id",
+    { cliModel: `${NEURALWATT}:high`, cliThinking: "medium" },
+    neuralwatt,
+    { resolved: { id: "zai-org/GLM-5.1-FP8:high", provider: "neuralwatt" } },
+  ],
+];
 
 describe("resolveCliModel", () => {
-  describe("custom model fallback with :thinking suffix (#5552)", () => {
-    test(
-      "strips :thinking suffix from custom model id in fallback path",
-      stripsThinkingSuffixFromCustomModelId,
-    );
-
-    test(
-      "custom model without thinking suffix works normally in fallback path",
-      customModelWithoutThinkingSuffixWorksNormally,
-    );
-
-    test("all valid thinking levels work in fallback path", allValidThinkingLevelsWorkInFallback);
-
-    test(
-      "invalid thinking suffix on custom model is treated as part of model id",
-      invalidThinkingSuffixOnCustomModelIs,
-    );
-
-    test(
-      "explicit --provider with custom model:thinking strips suffix correctly",
-      explicitProviderWithCustomModelThinkingStrips,
-    );
-
-    test(
-      "with explicit --thinking, :suffix is kept as part of model id",
-      withExplicitThinkingSuffixIsKeptAs,
-    );
-  });
+  for (const [name, query, modelRuntime, expected] of ROWS) {
+    test(name, () => {
+      const result = resolveCliModel({ ...query, modelRuntime });
+      if ("failure" in expected) {
+        expect(result.model).toBeUndefined();
+        for (const message of expected.failure) expect(result.error).toContain(message);
+        return;
+      }
+      const { provider, id, thinkingLevel, reasoning } = expected.resolved;
+      expect(result.error).toBeUndefined();
+      expect(result.model?.provider).toBe(provider);
+      expect(result.model?.id).toBe(id);
+      expect(result.thinkingLevel).toBe(thinkingLevel);
+      if (reasoning !== undefined) expect(result.model?.reasoning).toBe(reasoning);
+    });
+  }
 });
