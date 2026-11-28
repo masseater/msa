@@ -133,7 +133,7 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
         importRepro(ref, ctx).pipe(
           Effect.catchCause((cause) =>
             Effect.sync(() => {
-              ctx.ui.notify(`ir: ${errorMessage(Cause.squash(cause))}`, "error");
+              ctx.ui.notify(`ir: ${cause.pipe(Cause.squash, errorMessage)}`, "error");
             }),
           ),
         ),

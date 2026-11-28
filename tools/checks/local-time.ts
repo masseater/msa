@@ -24,16 +24,9 @@ import {
 import { SymbolFlags } from "typescript/sync";
 import type { Checker, Project, Symbol as TsSymbol, Type } from "typescript/sync";
 
+import type localTimeTypes from "./local-time.types.ts";
 import typedProject from "./typed-project.ts";
-
-type Finding = {
-  readonly detail: string;
-  readonly file: string;
-  readonly line: number;
-  readonly text: string;
-};
-
-type Scope = { readonly files: (name: string) => boolean; readonly root: string };
+import type typedProjectTypes from "./typed-project.types.ts";
 
 type Hit = { readonly detail: string; readonly node: Node };
 
@@ -268,15 +261,24 @@ const RULES: readonly (typeof namedHits)[] = [namedHits, bindingHits, stringifyH
 
 const findingAt =
   (file: SourceFile, relative: string) =>
-  ({ detail, node }: Hit): Finding => ({ ...locate(file, node), detail, file: relative });
+  ({ detail, node }: Hit): localTimeTypes.Finding => ({
+    ...locate(file, node),
+    detail,
+    file: relative,
+  });
 
-const scanFile = (project: Project, file: SourceFile, relative: string): readonly Finding[] => {
+const scanFile = (
+  project: Project,
+  file: SourceFile,
+  relative: string,
+): readonly localTimeTypes.Finding[] => {
   if (OWNERS.has(relative)) return [];
   const nodes = descendants(file);
   return RULES.flatMap((rule) => rule(project, nodes)).map(findingAt(file, relative));
 };
 
-const scan = (scope: Scope): readonly Finding[] => scanProject(scope, scanFile);
+const scan = (scope: typedProjectTypes.Scope): readonly localTimeTypes.Finding[] =>
+  scanProject(scope, scanFile);
 
 const localTimeCheck = { OWNERS, scan };
 

@@ -84,7 +84,7 @@ const awaitReady: {
           Effect.catchCause((cause) =>
             Effect.suspend(() => {
               ref.release();
-              return Effect.die(Cause.squash(cause));
+              return cause.pipe(Cause.squash, Effect.die);
             }),
           ),
         ),

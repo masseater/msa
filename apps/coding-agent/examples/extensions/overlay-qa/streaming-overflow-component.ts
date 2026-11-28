@@ -61,15 +61,16 @@ export default class StreamingOverflowComponent extends BaseOverlay {
             ChildProcess.make("bash", ["-c", STREAM_SCRIPT], { stdin: "ignore" }),
           );
 
-          yield* Effect.forkScoped(
-            Stream.runForEach(Stream.splitLines(Stream.decodeText(handle.stdout)), (line) =>
-              Effect.sync(() => self.appendLine(line)),
-            ),
+          yield* handle.stdout.pipe(
+            Stream.decodeText,
+            Stream.splitLines,
+            Stream.runForEach((line) => Effect.sync(() => self.appendLine(line))),
+            Effect.forkScoped,
           );
-          yield* Effect.forkScoped(
-            Stream.runForEach(Stream.decodeText(handle.stderr), (chunk) =>
-              Effect.sync(() => self.appendError(chunk)),
-            ),
+          yield* handle.stderr.pipe(
+            Stream.decodeText,
+            Stream.runForEach((chunk) => Effect.sync(() => self.appendError(chunk))),
+            Effect.forkScoped,
           );
 
           yield* handle.exitCode;

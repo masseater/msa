@@ -39,7 +39,7 @@ const claim = <T>(flow: CallbackFlow<T>, code: string, reply: Reply): Effect.Eff
       );
       return yield* flow.finish(exit);
     }
-    const failure = toError(Cause.squash(exit.cause));
+    const failure = exit.cause.pipe(Cause.squash, toError);
     yield* reply(oauthErrorReply(502, `${providerName} sign-in failed.`, failure.message));
     return yield* flow.finish(Exit.die(failure));
   });
@@ -104,10 +104,13 @@ const startTimeout = <T>(
     Effect.sleep(timeoutMs),
     flow.finish(Exit.die(new Error(`${providerName} sign-in timed out`))),
   );
-  return Effect.asVoid(
-    Effect.forkDetach(
-      Effect.raceFirst(Effect.asVoid(Effect.exit(Deferred.await(result))), timedOut),
-    ),
+  return result.pipe(
+    Deferred.await,
+    Effect.exit,
+    Effect.asVoid,
+    Effect.raceFirst(timedOut),
+    Effect.forkDetach,
+    Effect.asVoid,
   );
 };
 
@@ -178,7 +181,7 @@ const waitForCallbackOrManualInput = <T>(
     const signal = yield* Effect.abortSignal;
     const manual = yield* Effect.forkChild(promptManualInput(options, failure, signal));
     const rethrow = Effect.suspend(() =>
-      failure.cause === undefined ? Effect.void : Effect.die(Cause.squash(failure.cause)),
+      failure.cause === undefined ? Effect.void : failure.cause.pipe(Cause.squash, Effect.die),
     );
     return yield* Effect.gen(function* () {
       const { callback } = options;

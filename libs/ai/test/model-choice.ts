@@ -5,7 +5,7 @@ import type typesModule from "../src/types.types.ts";
 const { getModels } = compatModule;
 
 type CatalogModel<TProvider extends compatTypes.BuiltinProvider> = ReturnType<
-  typeof getModels<TProvider>
+  typeof compatModule.getModels<TProvider>
 >[number];
 
 type PricedModel = {

@@ -2,6 +2,7 @@ import { Effect, ManagedRuntime, Schema } from "effect";
 
 import scriptOutput from "../../libs/ai/src/utils/script-output.ts";
 import lintConfig from "../../lint.config.ts";
+import type lintProbeTypes from "./lint-probe.types.ts";
 
 const { lintProbeRoot } = lintConfig;
 
@@ -17,8 +18,6 @@ const LintReport = Schema.fromJsonString(
     ),
   }),
 );
-
-type Diagnostics = (typeof LintReport.Type)["diagnostics"];
 
 const Project = Schema.fromJsonString(
   Schema.Struct({ extends: Schema.String, include: Schema.Array(Schema.String) }),
@@ -92,13 +91,15 @@ const withProbes = <A, E, R>(
     }),
   );
 
-const lintProbes = (probes: Readonly<Record<string, string>>): Promise<Diagnostics> =>
+const lintProbes = (
+  probes: Readonly<Record<string, string>>,
+): Promise<lintProbeTypes.Diagnostics> =>
   probeRuntime.runPromise(withProbes(probes, (_run, lint) => lint));
 
 const lintAndInspectProbes = <A>(
   probes: Readonly<Record<string, string>>,
   inspect: (run: string) => A,
-): Promise<{ readonly diagnostics: Diagnostics; readonly inspected: A }> =>
+): Promise<{ readonly diagnostics: lintProbeTypes.Diagnostics; readonly inspected: A }> =>
   probeRuntime.runPromise(
     withProbes(probes, (run, lint) =>
       Effect.all({
@@ -109,7 +110,7 @@ const lintAndInspectProbes = <A>(
   );
 
 const codesOnLine = (
-  report: Diagnostics,
+  report: lintProbeTypes.Diagnostics,
   file: string,
   line: number,
   prefix: string,
@@ -126,8 +127,11 @@ const codesOnLine = (
   ),
 ];
 
-const msaCodesOnLine = (report: Diagnostics, file: string, line: number): readonly string[] =>
-  codesOnLine(report, file, line, "msa(");
+const msaCodesOnLine = (
+  report: lintProbeTypes.Diagnostics,
+  file: string,
+  line: number,
+): readonly string[] => codesOnLine(report, file, line, "msa(");
 
 const lintProbe = {
   codesOnLine,

@@ -47,18 +47,14 @@ function holdingChildSetup() {
   const progress: { ranNext: boolean } = { ranNext: false };
   const Child = defineTask<null, { phase: "first" } | { phase: "next" }, null>({
     abort: (_task, runtime, abortContext) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ outcome: { status: "aborted" }, status: "terminal" }),
-                abortContext,
-              ),
-            ),
+      Effect.suspend(() =>
+        awaited(
+          runtime.commit(
+            () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+            abortContext,
           ),
         ),
-      ),
+      ).pipe(Effect.asVoid, Effect.runPromise),
     initial: () => ({ phase: "first" }),
     name: "test.child",
     phases: {

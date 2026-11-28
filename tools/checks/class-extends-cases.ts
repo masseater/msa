@@ -1,6 +1,5 @@
+import type classExtendsCasesTypes from "./class-extends-cases.types.ts";
 const LOCAL_EXTENDS = "msa(no-local-class-extends)";
-
-type Cases = readonly (readonly [string, string | undefined, (readonly string[])?])[];
 
 const HEADER = [
   'import tui from "@msa/tui";',
@@ -82,7 +81,7 @@ const HEADER = [
   "({ Container: nestedPkg.Container } = { Container: Base as never });",
 ];
 
-const cases: Cases = [
+const cases: classExtendsCasesTypes.Cases = [
   ["export class A extends Base {}", LOCAL_EXTENDS],
   ["export class B extends ThemedText {}", LOCAL_EXTENDS],
   ["export class C extends StatusIndicator {}", LOCAL_EXTENDS],

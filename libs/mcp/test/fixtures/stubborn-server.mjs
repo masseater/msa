@@ -12,7 +12,7 @@ const grandchild = crossSpawn(
   },
 );
 Effect.runSync(Console.error(`grandchild ${grandchild.pid}`));
-Effect.runFork(Effect.forever(Effect.sleep("1 second")));
+Effect.sleep("1 second").pipe(Effect.forever, Effect.runFork);
 
 const lines = createInterface({ crlfDelay: Infinity, input: process.stdin });
 lines.on("line", (line) => {

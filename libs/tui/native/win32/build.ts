@@ -88,10 +88,9 @@ const program =
     ? Console.log(USAGE)
     : Effect.scoped(build);
 
-NodeRuntime.runMain(
-  Effect.scoped(
-    Effect.flatMap(Layer.build(buildHostLayer), (services) =>
-      Effect.provideContext(program, services),
-    ),
-  ),
+buildHostLayer.pipe(
+  Layer.build,
+  Effect.flatMap((services) => Effect.provideContext(program, services)),
+  Effect.scoped,
+  NodeRuntime.runMain,
 );

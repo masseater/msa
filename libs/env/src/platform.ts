@@ -31,7 +31,7 @@ const win32Path: platformTypes.PathOps = pathOf(NodePath.layerWin32);
 
 const withFs = <A>(
   use: (fs: FileSystem.FileSystem) => Effect.Effect<A, PlatformError>,
-): Effect.Effect<A> => onNode(Effect.orDie(FileSystem.FileSystem.use(use)));
+): Effect.Effect<A> => FileSystem.FileSystem.use(use).pipe(Effect.orDie, onNode);
 
 const fileExists = (path: string): Effect.Effect<boolean> => withFs((fs) => fs.exists(path));
 

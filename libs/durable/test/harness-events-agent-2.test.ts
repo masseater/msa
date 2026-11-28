@@ -152,7 +152,7 @@ const rejectsAttachmentCancelled = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
   const release = deferred();
   const blocking = root.commit(
-    () => runPromise(Effect.asVoid(Effect.suspend(() => awaited(release.promise)))),
+    () => Effect.suspend(() => awaited(release.promise)).pipe(Effect.asVoid, runPromise),
     context,
   );
   const controller = abortController();

@@ -26,7 +26,8 @@ const evictsUnattachedDocument = Effect.gen(function* () {
   yield* awaited(session.commit(() => Promise.resolve(), context));
   yield* awaited(
     session.commit(
-      (tx) => runPromise(Effect.asVoid(Effect.suspend(() => awaited(tx.doc(SessionCounterDoc))))),
+      (tx) =>
+        Effect.suspend(() => awaited(tx.doc(SessionCounterDoc))).pipe(Effect.asVoid, runPromise),
       context,
     ),
   );
@@ -71,6 +72,14 @@ const neverEvictsDocument = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage, clock, sizes } = open(1_000);
+  const touch = () =>
+    awaited(
+      session.commit(
+        (tx) =>
+          Effect.suspend(() => awaited(tx.doc(SessionCounterDoc))).pipe(Effect.asVoid, runPromise),
+        context,
+      ),
+    );
   const conversationId = yield* awaited(createConversation(session));
   yield* bump(session, conversationId);
   const watch = (yield* awaited(session.watchDoc(CounterDoc, conversationId, context)))!;
@@ -88,12 +97,7 @@ const neverEvictsDocument = Effect.gen(function* () {
   yield* eventually(() => seen.includes(2));
   const reads = storage.documentReadCount;
   clock.now += 1_000_000;
-  yield* awaited(
-    session.commit(
-      (tx) => runPromise(Effect.asVoid(Effect.suspend(() => awaited(tx.doc(SessionCounterDoc))))),
-      context,
-    ),
-  );
+  yield* touch();
   yield* settleLine(session);
   expect(yield* awaited(session.snapshot(CounterDoc, conversationId, context))).toEqual({
     count: 2,
@@ -107,12 +111,7 @@ const neverEvictsDocument = Effect.gen(function* () {
   state.dispose();
   clock.now += 1_000_000;
   yield* awaited(session.commit(() => Promise.resolve(), context));
-  yield* awaited(
-    session.commit(
-      (tx) => runPromise(Effect.asVoid(Effect.suspend(() => awaited(tx.doc(SessionCounterDoc))))),
-      context,
-    ),
-  );
+  yield* touch();
   yield* settleLine(session);
   expect(sizes().cached).toBe(1);
   yield* awaited(session.close(context));

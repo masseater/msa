@@ -85,7 +85,7 @@ it("refuses to copy, move, or link a file into another extension", () =>
 const spawnRefusal = (options: scriptOutputTypes.CommandOptions) =>
   Effect.gen(function* () {
     const { processes } = yield* ScriptOutput;
-    return yield* refusal(Effect.scoped(Effect.asVoid(processes.spawn(options))));
+    return yield* processes.spawn(options).pipe(Effect.asVoid, Effect.scoped, refusal);
   });
 
 it("starts a built msa binary only when the path names msa", () =>

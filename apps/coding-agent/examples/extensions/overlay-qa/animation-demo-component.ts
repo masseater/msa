@@ -27,24 +27,20 @@ export default class AnimationDemoComponent extends BaseOverlay {
 
   private startAnimation(): void {
     const self = this;
-    this.fiber = Effect.runFork(
-      Effect.forever(
-        Effect.gen(function* () {
-          self.frame++;
-          self.framesSinceLastFps++;
+    this.fiber = Effect.gen(function* () {
+      self.frame++;
+      self.framesSinceLastFps++;
 
-          const now = yield* Clock.currentTimeMillis;
-          if (now - self.lastFpsUpdate >= 1000) {
-            self.fps = self.framesSinceLastFps;
-            self.framesSinceLastFps = 0;
-            self.lastFpsUpdate = now;
-          }
+      const now = yield* Clock.currentTimeMillis;
+      if (now - self.lastFpsUpdate >= 1000) {
+        self.fps = self.framesSinceLastFps;
+        self.framesSinceLastFps = 0;
+        self.lastFpsUpdate = now;
+      }
 
-          self.tui.requestRender();
-          yield* Effect.sleep(1000 / 30);
-        }),
-      ),
-    );
+      self.tui.requestRender();
+      yield* Effect.sleep(1000 / 30);
+    }).pipe(Effect.forever, Effect.runFork);
   }
 
   handleInput(data: string): void {

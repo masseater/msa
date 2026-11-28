@@ -40,8 +40,10 @@ const noLocalLlmSetup = fileURLToPath(
 
 const onGitHubActions = Effect.runSync(Config.withDefault(Config.Boolean("GITHUB_ACTIONS"), false));
 
-const testShard = Option.getOrUndefined(
-  Effect.runSync(Config.option(Config.NonEmptyString("MSA_TEST_SHARD"))),
+const testShard = Config.NonEmptyString("MSA_TEST_SHARD").pipe(
+  Config.option,
+  Effect.runSync,
+  Option.getOrUndefined,
 );
 
 const testBaseConfig = {

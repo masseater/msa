@@ -49,18 +49,13 @@ const RunResult = Schema.Struct({
 const RpcResult = Schema.Struct({ notices: Schema.Array(Schema.String), stderr: Schema.String });
 
 const ModelRequest = Schema.Struct({
-  messages: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        content: Schema.optional(Schema.Unknown),
-        role: Schema.String,
-      }),
-    ),
-  ),
-  tools: Schema.optional(
-    Schema.Array(
-      Schema.Struct({ function: Schema.optional(Schema.Struct({ name: Schema.String })) }),
-    ),
+  messages: Schema.Struct({
+    content: Schema.optional(Schema.Unknown),
+    role: Schema.String,
+  }).pipe(Schema.Array, Schema.optional),
+  tools: Schema.Struct({ function: Schema.optional(Schema.Struct({ name: Schema.String })) }).pipe(
+    Schema.Array,
+    Schema.optional,
   ),
 });
 

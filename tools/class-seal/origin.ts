@@ -1,25 +1,8 @@
 import lintConfig from "../../lint.config.ts";
 import classFactories from "../oxlint/class-factories.ts";
+import type classOriginTypes from "./origin.types.ts";
 
 const { builtinModuleBases, workspacePackages } = lintConfig;
-
-type Span = { readonly start: number; readonly end: number };
-
-type AstNode = Span & { readonly type: string } & Readonly<Record<string, unknown>>;
-
-type Origin =
-  | { readonly kind: "reference"; readonly containers: readonly Span[] }
-  | { readonly kind: "product"; readonly probe: (callee: string) => string; readonly callee: Span }
-  | { readonly kind: "unknown" };
-
-type Imported = { readonly name: string | undefined; readonly source: string };
-
-type Module = {
-  readonly imports: ReadonlyMap<string, Imported>;
-  readonly shadowed: ReadonlySet<string>;
-};
-
-type Path = { readonly root: AstNode; readonly keys: readonly string[]; readonly spans: Span[] };
 
 const TRANSPARENT: ReadonlySet<string> = new Set([
   "ParenthesizedExpression",
@@ -42,38 +25,47 @@ const BINDERS: ReadonlySet<string> = new Set([
   "VariableDeclarator",
 ]);
 
-const UNKNOWN: Origin = { kind: "unknown" };
+const UNKNOWN: classOriginTypes.Origin = { kind: "unknown" };
 
-const isNode = (value: unknown): value is AstNode =>
+const isNode = (value: unknown): value is classOriginTypes.AstNode =>
   typeof value === "object" && value !== null && "type" in value && "start" in value;
 
-const field = (node: AstNode, name: string): AstNode | undefined => {
+const field = (
+  node: classOriginTypes.AstNode,
+  name: string,
+): classOriginTypes.AstNode | undefined => {
   const value = node[name];
   return isNode(value) ? value : undefined;
 };
 
-const list = (node: AstNode, name: string): readonly AstNode[] => {
+const list = (
+  node: classOriginTypes.AstNode,
+  name: string,
+): readonly classOriginTypes.AstNode[] => {
   const value = node[name];
   return Array.isArray(value) ? value.filter(isNode) : [];
 };
 
-const text = (node: AstNode | undefined, name: string): string | undefined => {
+const text = (node: classOriginTypes.AstNode | undefined, name: string): string | undefined => {
   const value = node?.[name];
   return typeof value === "string" ? value : undefined;
 };
 
-const childrenOf = (node: AstNode): readonly AstNode[] =>
+const childrenOf = (node: classOriginTypes.AstNode): readonly classOriginTypes.AstNode[] =>
   Object.values(node).flatMap((value: unknown) =>
     (Array.isArray(value) ? value : [value]).filter(isNode),
   );
 
-const unwrap = (node: AstNode): AstNode => {
+const unwrap = (node: classOriginTypes.AstNode): classOriginTypes.AstNode => {
   const inner = TRANSPARENT.has(node.type) ? field(node, "expression") : undefined;
   return inner === undefined ? node : unwrap(inner);
 };
 
 const PATTERN_CHILDREN: Readonly<
-  Record<string, (node: AstNode) => readonly (AstNode | undefined)[]>
+  Record<
+    string,
+    (node: classOriginTypes.AstNode) => readonly (classOriginTypes.AstNode | undefined)[]
+  >
 > = {
   ArrayPattern: (node) => list(node, "elements"),
   AssignmentPattern: (node) => [field(node, "left")],
@@ -85,18 +77,19 @@ const PATTERN_CHILDREN: Readonly<
   TSParameterProperty: (node) => [field(node, "parameter")],
 };
 
-const identifierName = (node: AstNode): string => text(node, "name") ?? "";
+const identifierName = (node: classOriginTypes.AstNode): string => text(node, "name") ?? "";
 
-const patternChildren = (node: AstNode): readonly (AstNode | undefined)[] =>
-  PATTERN_CHILDREN[node.type]?.(node) ?? [];
+const patternChildren = (
+  node: classOriginTypes.AstNode,
+): readonly (classOriginTypes.AstNode | undefined)[] => PATTERN_CHILDREN[node.type]?.(node) ?? [];
 
-function patternNames(node: AstNode | undefined): readonly string[] {
+function patternNames(node: classOriginTypes.AstNode | undefined): readonly string[] {
   if (node === undefined) return [];
   if (node.type === "Identifier") return [identifierName(node)];
   return patternChildren(node).flatMap(patternNames);
 }
 
-const boundBy = (node: AstNode): readonly string[] =>
+const boundBy = (node: classOriginTypes.AstNode): readonly string[] =>
   BINDERS.has(node.type)
     ? [
         ...patternNames(field(node, "id")),
@@ -131,14 +124,17 @@ const isPackageSource = (source: string, filename: string): boolean =>
   !isRelativeOrBuiltin(source) &&
   !ownSpecifiers(filename).some((pattern) => matchesSpecifier(source, pattern));
 
-const importedName = (specifier: AstNode): string | undefined => {
+const importedName = (specifier: classOriginTypes.AstNode): string | undefined => {
   if (specifier.type === "ImportNamespaceSpecifier") return undefined;
   if (specifier.type === "ImportDefaultSpecifier") return "default";
   const imported = field(specifier, "imported");
   return text(imported, "name") ?? text(imported, "value");
 };
 
-const importsOf = (program: AstNode, filename: string): Map<string, Imported> =>
+const importsOf = (
+  program: classOriginTypes.AstNode,
+  filename: string,
+): Map<string, classOriginTypes.Imported> =>
   new Map(
     list(program, "body")
       .filter(
@@ -160,9 +156,9 @@ const importsOf = (program: AstNode, filename: string): Map<string, Imported> =>
       }),
   );
 
-const moduleOf = (program: AstNode, filename: string): Module => {
+const moduleOf = (program: classOriginTypes.AstNode, filename: string): classOriginTypes.Module => {
   const shadowed = new Set<string>();
-  const pending: AstNode[] = [program];
+  const pending: classOriginTypes.AstNode[] = [program];
   while (pending.length > 0) {
     const node = pending.pop()!;
     for (const name of boundBy(node)) shadowed.add(name);
@@ -171,21 +167,25 @@ const moduleOf = (program: AstNode, filename: string): Module => {
   return { imports: importsOf(program, filename), shadowed };
 };
 
-const isStringLiteral = (node: AstNode | undefined): boolean =>
+const isStringLiteral = (node: classOriginTypes.AstNode | undefined): boolean =>
   node?.type === "Literal" || node?.type === "StringLiteral";
 
-const memberKey = (node: AstNode): string | undefined => {
+const memberKey = (node: classOriginTypes.AstNode): string | undefined => {
   const property = field(node, "property");
   if (node["computed"] !== true) return text(property, "name");
   return isStringLiteral(property) ? text(property, "value") : undefined;
 };
 
-const extended = (inner: Path | undefined, key: string, object: AstNode): Path | undefined =>
+const extended = (
+  inner: classOriginTypes.Path | undefined,
+  key: string,
+  object: classOriginTypes.AstNode,
+): classOriginTypes.Path | undefined =>
   inner === undefined
     ? undefined
     : { keys: [...inner.keys, key], root: inner.root, spans: [...inner.spans, object] };
 
-const memberPathOf = (value: AstNode): Path | undefined => {
+const memberPathOf = (value: classOriginTypes.AstNode): classOriginTypes.Path | undefined => {
   const object = field(value, "object");
   const key = value.type === "MemberExpression" ? memberKey(value) : undefined;
   return object === undefined || key === undefined
@@ -193,43 +193,57 @@ const memberPathOf = (value: AstNode): Path | undefined => {
     : extended(pathOf(object), key, object);
 };
 
-function pathOf(node: AstNode): Path | undefined {
+function pathOf(node: classOriginTypes.AstNode): classOriginTypes.Path | undefined {
   const value = unwrap(node);
   return value.type === "Identifier" ? { keys: [], root: value, spans: [] } : memberPathOf(value);
 }
 
-const importOf = (module: Module, path: Path, nested: boolean): Imported | undefined => {
+const importOf = (
+  module: classOriginTypes.Module,
+  path: classOriginTypes.Path,
+  nested: boolean,
+): classOriginTypes.Imported | undefined => {
   const name = text(path.root, "name") ?? "";
   return nested && module.shadowed.has(name) ? undefined : module.imports.get(name);
 };
 
-const innermostCallee = (node: AstNode): AstNode => {
+const innermostCallee = (node: classOriginTypes.AstNode): classOriginTypes.AstNode => {
   const value = unwrap(node);
   const callee = value.type === "CallExpression" ? field(value, "callee") : undefined;
   return callee === undefined ? value : innermostCallee(callee);
 };
 
-type Resolved = { readonly imported: Imported; readonly path: Path };
-
-const resolve = (module: Module, node: AstNode, nested: boolean): Resolved | undefined => {
+const resolve = (
+  module: classOriginTypes.Module,
+  node: classOriginTypes.AstNode,
+  nested: boolean,
+): classOriginTypes.Resolved | undefined => {
   const path = pathOf(node);
   const imported = path === undefined ? undefined : importOf(module, path, nested);
   return path === undefined || imported === undefined ? undefined : { imported, path };
 };
 
-const factoryOf = ({ imported, path }: Resolved) =>
+const factoryOf = ({ imported, path }: classOriginTypes.Resolved) =>
   classFactories.get(
     [imported.source, imported.name, ...path.keys].filter((part) => part !== undefined).join("/"),
   );
 
-const productOf = (module: Module, call: AstNode, nested: boolean): Origin => {
+const productOf = (
+  module: classOriginTypes.Module,
+  call: classOriginTypes.AstNode,
+  nested: boolean,
+): classOriginTypes.Origin => {
   const callee = innermostCallee(call);
   const resolved = resolve(module, callee, nested);
   const probe = resolved === undefined ? undefined : factoryOf(resolved);
   return probe === undefined ? UNKNOWN : { callee, kind: "product", probe };
 };
 
-const referenceOf = (module: Module, node: AstNode, nested: boolean): Origin => {
+const referenceOf = (
+  module: classOriginTypes.Module,
+  node: classOriginTypes.AstNode,
+  nested: boolean,
+): classOriginTypes.Origin => {
   const resolved = resolve(module, node, nested);
   if (resolved === undefined) return UNKNOWN;
   const { imported, path } = resolved;
@@ -239,7 +253,11 @@ const referenceOf = (module: Module, node: AstNode, nested: boolean): Origin => 
   };
 };
 
-const originOf = (module: Module, superClass: AstNode, nested: boolean): Origin => {
+const originOf = (
+  module: classOriginTypes.Module,
+  superClass: classOriginTypes.AstNode,
+  nested: boolean,
+): classOriginTypes.Origin => {
   const value = unwrap(superClass);
   return value.type === "CallExpression"
     ? productOf(module, value, nested)

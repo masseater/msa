@@ -70,7 +70,9 @@ const prepareToolCall = (
     if (aborted(request.signal)) return immediateError("Operation aborted");
     return { args, kind: "prepared", tool, toolCall } satisfies toolCallTypes.PreparedToolCall;
   }).pipe(
-    Effect.catchCause((cause) => Effect.succeed(immediateError(errorText(Cause.squash(cause))))),
+    Effect.catchCause((cause) =>
+      cause.pipe(Cause.squash, errorText, immediateError, Effect.succeed),
+    ),
   );
 
 const executePreparedToolCall = ({
@@ -99,7 +101,7 @@ const executePreparedToolCall = ({
     return {
       durationMs,
       isError: true,
-      result: createErrorToolResult(errorText(Cause.squash(exit.cause))),
+      result: exit.cause.pipe(Cause.squash, errorText, createErrorToolResult),
     };
   });
 
@@ -149,7 +151,7 @@ const runAfterHook = (
     Effect.catchCause((cause) =>
       Effect.succeed({
         isError: true,
-        result: createErrorToolResult(errorText(Cause.squash(cause))),
+        result: cause.pipe(Cause.squash, errorText, createErrorToolResult),
       }),
     ),
   );

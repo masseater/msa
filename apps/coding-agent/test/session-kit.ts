@@ -30,7 +30,7 @@ const { closeAgentSession } = closeAgentSessionModule;
 const { createKeyedModelRuntime } = modelRuntimeTestUtils;
 const { createTestExtensionsResult, createTestResourceLoader } = utilities;
 
-type AssistantStream = ReturnType<typeof createAssistantMessageEventStream>;
+type AssistantStream = ReturnType<typeof compat.createAssistantMessageEventStream>;
 
 const assistantMessage = (
   text: string,

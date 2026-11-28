@@ -71,13 +71,9 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
         ? {}
         : { model: [{ content: handoff, role: "user", timestamp: this.#host.now() } as const] };
     const entry = { head: "self", kind: ResetEntry.kind, ...model } as const;
-    return Effect.runPromise(
-      Effect.asVoid(
-        Effect.promise(() =>
-          this.#host.submissions.submit(this.id, { entry, type: "write" }, context),
-        ),
-      ),
-    );
+    return Effect.promise(() =>
+      this.#host.submissions.submit(this.id, { entry, type: "write" }, context),
+    ).pipe(Effect.asVoid, Effect.runPromise);
   }
 
   commit<T>(

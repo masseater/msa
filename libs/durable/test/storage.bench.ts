@@ -179,10 +179,11 @@ type BenchContext = Pick<TestContext, "bench">;
 
 const PERSISTENT_BACKENDS = ["sqlite", "jsonl"] as const;
 
-const reads = Effect.runSync(Effect.cached(seedReads));
-const writePools = Effect.runSync(Effect.cached(seedWrites));
-const reopenFixtures = Effect.runSync(
-  Effect.cached(Effect.forEach(PERSISTENT_BACKENDS, seedReopenFixture)),
+const reads = seedReads.pipe(Effect.cached, Effect.runSync);
+const writePools = seedWrites.pipe(Effect.cached, Effect.runSync);
+const reopenFixtures = Effect.forEach(PERSISTENT_BACKENDS, seedReopenFixture).pipe(
+  Effect.cached,
+  Effect.runSync,
 );
 
 const nextWriteFixture = (pool: Fixture[]): Fixture => {

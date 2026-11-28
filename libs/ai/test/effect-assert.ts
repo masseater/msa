@@ -4,7 +4,7 @@ import { expect } from "vite-plus/test";
 const defectOf = <A, R>(effect: Effect.Effect<A, never, R>): Effect.Effect<unknown, never, R> =>
   Effect.flatMap(Effect.exit(effect), (exit) =>
     Exit.isFailure(exit)
-      ? Effect.succeed(Cause.squash(exit.cause))
+      ? exit.cause.pipe(Cause.squash, Effect.succeed)
       : Effect.die(new Error("expected the effect to fail")),
   );
 

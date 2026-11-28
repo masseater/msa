@@ -139,13 +139,9 @@ const copiesEveryFamily = Effect.gen(function* () {
             yield* awaited(
               Promise.all(
                 Array.from({ length: 260 }, (_, index) =>
-                  runNested(
-                    Effect.asVoid(
-                      Effect.suspend(() =>
-                        awaited(tx.doc(Family, parentId, `member-${index}`, index)),
-                      ),
-                    ),
-                  ),
+                  Effect.suspend(() =>
+                    awaited(tx.doc(Family, parentId, `member-${index}`, index)),
+                  ).pipe(Effect.asVoid, runNested),
                 ),
               ),
             );

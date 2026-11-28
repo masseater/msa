@@ -69,7 +69,10 @@ const faultsPhaseWithout = Effect.gen(function* () {
 
   const Idle = oneStep("test.idle", () => Promise.resolve());
   const DocumentOnly = oneStep("test.document-only", (_task, runtime, ctx) =>
-    runPromise(Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => undefined, ctx))))),
+    Effect.suspend(() => awaited(runtime.commit(() => undefined, ctx))).pipe(
+      Effect.asVoid,
+      runPromise,
+    ),
   );
   const Throws = oneStep("test.throws", () => Promise.reject(new Error("boom")));
   const { harness, root } = yield* openRoot([Idle, DocumentOnly, Throws]);

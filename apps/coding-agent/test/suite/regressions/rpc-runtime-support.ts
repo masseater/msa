@@ -3,6 +3,7 @@ import { vi } from "vite-plus/test";
 
 import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
 import type harnessTypes from "../harness.types.ts";
+import type rpcRuntimeSupportTypes from "./rpc-runtime-support.types.ts";
 
 type NodeListener = Parameters<typeof process.on>[1];
 
@@ -63,7 +64,7 @@ function parseOutputLines(): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-const outputGuardModule = {
+const outputGuardModule: rpcRuntimeSupportTypes.OutputGuardModule = {
   default: {
     flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
     takeOverStdout: vi.fn(),
@@ -74,7 +75,7 @@ const outputGuardModule = {
   },
 };
 
-const jsonlModule = {
+const jsonlModule: rpcRuntimeSupportTypes.JsonlModule = {
   default: {
     attachJsonlLineReader: vi.fn(
       (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {

@@ -146,7 +146,7 @@ function spyOnTermination() {
   const spy = vi.spyOn(Worker.prototype, "terminate").mockImplementation(function (this: Worker) {
     spied.worker = this;
     this.ref();
-    return Effect.runPromise(Deferred.await(termination));
+    return termination.pipe(Deferred.await, Effect.runPromise);
   });
   const release = Effect.suspend(() => {
     const { worker } = spied;

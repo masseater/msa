@@ -1,6 +1,5 @@
 import type inputPatternsTypes from "./input-patterns.types.ts";
 
-type Coverage = inputPatternsTypes.Coverage;
 type Matcher = inputPatternsTypes.Matcher;
 type Rule = inputPatternsTypes.Rule;
 
@@ -39,7 +38,7 @@ const ruleOf = (pattern: string): Rule | undefined => {
   return test === undefined ? undefined : { exclude, test };
 };
 
-const coverageOf = (patterns: ReadonlyArray<string>): Coverage => {
+const coverageOf = (patterns: ReadonlyArray<string>): inputPatternsTypes.Coverage => {
   const rules = patterns.map((pattern) => ({ pattern, rule: ruleOf(pattern) }));
   const unread = rules.filter((entry) => entry.rule === undefined).map((entry) => entry.pattern);
   if (unread.length > 0) return { problem: `cannot read the cache inputs ${unread.join(", ")}` };

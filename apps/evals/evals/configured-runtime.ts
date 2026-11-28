@@ -59,7 +59,7 @@ const completeProbe = (
     Effect.exit,
     Effect.map((exit) =>
       Exit.isFailure(exit)
-        ? failure(errorMessage(Cause.squash(exit.cause)))
+        ? exit.cause.pipe(Cause.squash, errorMessage, failure)
         : {
             result: {
               model: modelFields(model),

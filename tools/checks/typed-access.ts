@@ -32,21 +32,13 @@ import type { Checker, Project, Symbol as TsSymbol } from "typescript/sync";
 
 import lintConfig from "../../lint.config.ts";
 import processEnvWrite from "./process-env-write.ts";
+import type typedAccessTypes from "./typed-access.types.ts";
 import typedKey from "./typed-key.ts";
 import typedProject from "./typed-project.ts";
+import type typedProjectTypes from "./typed-project.types.ts";
 
 const { processEnvWriter } = lintConfig;
 const { descendants, locate, scanProject } = typedProject;
-
-type Finding = {
-  readonly detail: string;
-  readonly file: string;
-  readonly line: number;
-  readonly rule: "computed-key" | "extends-holder";
-  readonly text: string;
-};
-
-type Scope = { readonly files: (name: string) => boolean; readonly root: string };
 
 const TRANSPARENT: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.AsExpression,
@@ -241,19 +233,24 @@ const keyFindings = (project: Project, keys: readonly Node[]) => {
   });
 };
 
-const scanFile = (project: Project, file: SourceFile, relative: string): readonly Finding[] => {
+const scanFile = (
+  project: Project,
+  file: SourceFile,
+  relative: string,
+): readonly typedAccessTypes.Finding[] => {
   const nodes = descendants(file);
   const keys = nodes
     .flatMap((node) => computedKey(node) ?? [])
     .filter(
       (key) => relative !== processEnvWriter || !processEnvWrite.isSanctionedAccess(key.parent!),
     );
-  const at = (rule: Finding["rule"]) => (found: { detail: string; node: Node }) => ({
-    ...locate(file, found.node),
-    detail: found.detail,
-    file: relative,
-    rule,
-  });
+  const at =
+    (rule: typedAccessTypes.Finding["rule"]) => (found: { detail: string; node: Node }) => ({
+      ...locate(file, found.node),
+      detail: found.detail,
+      file: relative,
+      rule,
+    });
   return [
     ...keyFindings(project, keys).map(at("computed-key")),
     ...nodes
@@ -263,7 +260,8 @@ const scanFile = (project: Project, file: SourceFile, relative: string): readonl
   ];
 };
 
-const scan = (scope: Scope): readonly Finding[] => scanProject(scope, scanFile);
+const scan = (scope: typedProjectTypes.Scope): readonly typedAccessTypes.Finding[] =>
+  scanProject(scope, scanFile);
 
 const typedAccess = { scan };
 

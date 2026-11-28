@@ -30,7 +30,7 @@ const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknown> =>
     Effect.flatMap((exit) =>
       Exit.isSuccess(exit)
         ? Effect.die(new Error("Expected the effect to fail"))
-        : Effect.succeed(Cause.squash(exit.cause)),
+        : exit.cause.pipe(Cause.squash, Effect.succeed),
     ),
   );
 

@@ -6,12 +6,12 @@ import type agentProcessTypes from "./agent-process.types.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
-const startAgent = (options: agentProcessTypes.AgentOptions): agentProcessTypes.AgentHandle => {
-  const outbound = Effect.runSync(Queue.unbounded<string>());
-  let stderrText = "";
-  let running = true;
-
-  const program = Effect.gen(function* () {
+const spawnAgent = (
+  options: agentProcessTypes.AgentOptions,
+  outbound: Queue.Queue<string>,
+  state: agentProcessTypes.AgentState,
+) =>
+  Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const handle = yield* spawner.spawn(
       ChildProcess.make(options.command, [...options.args], {
@@ -21,17 +21,20 @@ const startAgent = (options: agentProcessTypes.AgentOptions): agentProcessTypes.
       }),
     );
 
-    yield* Effect.forkScoped(
-      Stream.runForEach(Stream.splitLines(Stream.decodeText(handle.stdout)), (line) =>
-        Effect.sync(() => options.onLine(line)),
-      ),
+    yield* handle.stdout.pipe(
+      Stream.decodeText,
+      Stream.splitLines,
+      Stream.runForEach((line) => Effect.sync(() => options.onLine(line))),
+      Effect.forkScoped,
     );
-    yield* Effect.forkScoped(
-      Stream.runForEach(Stream.decodeText(handle.stderr), (chunk) =>
+    yield* handle.stderr.pipe(
+      Stream.decodeText,
+      Stream.runForEach((chunk) =>
         Effect.sync(() => {
-          stderrText += chunk;
+          state.stderrText += chunk;
         }),
       ),
+      Effect.forkScoped,
     );
     yield* Effect.forkScoped(
       Stream.run(
@@ -41,18 +44,22 @@ const startAgent = (options: agentProcessTypes.AgentOptions): agentProcessTypes.
     );
 
     const exitCode = yield* handle.exitCode;
-    running = false;
+    state.running = false;
     options.onExit(Number(exitCode));
   });
 
-  runtime.runFork(Effect.scoped(program).pipe(Effect.ignore));
+const startAgent = (options: agentProcessTypes.AgentOptions): agentProcessTypes.AgentHandle => {
+  const outbound = Effect.runSync(Queue.unbounded<string>());
+  const state: agentProcessTypes.AgentState = { running: true, stderrText: "" };
+
+  runtime.runFork(Effect.scoped(spawnAgent(options, outbound, state)).pipe(Effect.ignore));
 
   return {
-    isRunning: () => running,
+    isRunning: () => state.running,
     send: (message) => {
       Queue.offerUnsafe(outbound, `${JSON.stringify(message)}\n`);
     },
-    stderrText: () => stderrText,
+    stderrText: () => state.stderrText,
   };
 };
 

@@ -13,7 +13,7 @@ const Step = Schema.Struct({ env: Schema.optional(Env), run: Schema.optional(Sch
 
 const Job = Schema.Struct({
   env: Schema.optional(Env),
-  steps: Schema.optional(Schema.Array(Step)),
+  steps: Step.pipe(Schema.Array, Schema.optional),
 });
 
 const Workflow = Schema.Struct({

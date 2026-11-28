@@ -6,7 +6,7 @@ import storedProviders from "../../ai/test/stored-providers.ts";
 
 const { STORED_PROVIDERS } = storedProviders;
 
-declare module "vitest" {
+declare module "vite-plus/test" {
   interface ProvidedContext {
     readonly storedApiKeys: Readonly<Record<string, string>>;
   }

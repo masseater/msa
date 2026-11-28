@@ -8,16 +8,11 @@ import type taskCommandTypes from "./task-commands.types.ts";
 const { isBuild, matchesFilter, parseNode, parseRun, unwrap } = taskCommands;
 
 type Call = taskBuildDepsTypes.Call;
-type Checked = taskBuildDepsTypes.Checked;
-type Graph = taskBuildDepsTypes.Graph;
 type Problems = taskBuildDepsTypes.Problems;
-type Step = taskBuildDepsTypes.Step;
-type Walker = taskBuildDepsTypes.Walker;
 type Workspace = taskBuildDepsTypes.Workspace;
-type Simple = shellSyntaxTypes.Simple;
 type Word = shellSyntaxTypes.Word;
 type RunRef = taskCommandTypes.RunRef;
-type Handler = (call: Call) => Effect.Effect<Checked>;
+type Handler = (call: Call) => Effect.Effect<taskBuildDepsTypes.Checked>;
 
 const READS_NO_DIST: ReadonlyArray<ReadonlyArray<string>> = [
   ["ast-grep"],
@@ -37,14 +32,21 @@ const NPM_RUN = new Set(["run", "run-script"]);
 const VITEST_PROJECT = "--project";
 const VITEST_PROJECT_INLINE = /^--project=(.*)$/u;
 
-const labelOf = (step: Step, text: string): string => `${step.via.join(" → ")}: ${text}`;
+const labelOf = (step: taskBuildDepsTypes.Step, text: string): string =>
+  `${step.via.join(" → ")}: ${text}`;
 
-const ok = (end: Step, problems: ReadonlyArray<string> = []): Checked => ({ end, problems });
+const ok = (
+  end: taskBuildDepsTypes.Step,
+  problems: ReadonlyArray<string> = [],
+): taskBuildDepsTypes.Checked => ({ end, problems });
 
-const failed = (step: Step, text: string, reason: string): Checked =>
-  ok(step, [`${labelOf(step, text)}\n    ${reason}`]);
+const failed = (
+  step: taskBuildDepsTypes.Step,
+  text: string,
+  reason: string,
+): taskBuildDepsTypes.Checked => ok(step, [`${labelOf(step, text)}\n    ${reason}`]);
 
-const refuse = (call: Call, reason: string): Effect.Effect<Checked> =>
+const refuse = (call: Call, reason: string): Effect.Effect<taskBuildDepsTypes.Checked> =>
   Effect.succeed(failed(call.step, call.text, reason));
 
 const texts = (words: ReadonlyArray<Word>): ReadonlyArray<string> => words.map((word) => word.text);
@@ -56,19 +58,22 @@ const isReadable = (word: Word | undefined): word is Word => word !== undefined 
 const startsWith = (words: ReadonlyArray<string>, prefix: ReadonlyArray<string>): boolean =>
   prefix.every((text, index) => words[index] === text);
 
-const workspaceAt = (graph: Graph, step: Step): Workspace =>
+const workspaceAt = (graph: taskBuildDepsTypes.Graph, step: taskBuildDepsTypes.Step): Workspace =>
   graph.workspaces
     .filter((workspace) => step.cwd === workspace.dir || step.cwd.startsWith(`${workspace.dir}/`))
     .toSorted((left, right) => right.dir.length - left.dir.length)[0] ?? step.workspace;
 
 const isBuildScript = (name: string): boolean => isBuild(name) || name.startsWith("build:");
 
-const afterBuild = (step: Step, built: boolean): Step => ({ ...step, built: step.built || built });
+const afterBuild = (step: taskBuildDepsTypes.Step, built: boolean): taskBuildDepsTypes.Step => ({
+  ...step,
+  built: step.built || built,
+});
 
-const afterInner = (call: Call) => (checked: Checked) =>
+const afterInner = (call: Call) => (checked: taskBuildDepsTypes.Checked) =>
   ok(afterBuild(call.step, checked.end.built), checked.problems);
 
-function checkNode(call: Call): Effect.Effect<Checked> {
+function checkNode(call: Call): Effect.Effect<taskBuildDepsTypes.Checked> {
   const run = parseNode(texts(call.args.slice(1)), call.graph.flags);
   if ("problem" in run) return refuse(call, `cannot find the entry: ${run.problem}`);
   return Effect.map(
@@ -77,7 +82,11 @@ function checkNode(call: Call): Effect.Effect<Checked> {
   );
 }
 
-const runTargets = (graph: Graph, step: Step, ref: RunRef): ReadonlyArray<Workspace> => {
+const runTargets = (
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  ref: RunRef,
+): ReadonlyArray<Workspace> => {
   if (ref.filters.length === 0 && !ref.recursive) return [workspaceAt(graph, step)];
   return graph.workspaces.filter(
     (workspace) =>
@@ -97,7 +106,7 @@ const runProblems = (call: Call, ref: RunRef): Problems => {
   );
 };
 
-function vpRun(call: Call): Effect.Effect<Checked> {
+function vpRun(call: Call): Effect.Effect<taskBuildDepsTypes.Checked> {
   const args = call.args.slice(2);
   if (!isStatic(args)) return refuse(call, "vp run takes an argument from a variable");
   const ref = parseRun(texts(args));
@@ -126,7 +135,7 @@ function vitestProjects(args: ReadonlyArray<string>, projects: ReadonlyArray<str
   return vitestToken(args, projects, token);
 }
 
-function vpTest(call: Call): Effect.Effect<Checked> {
+function vpTest(call: Call): Effect.Effect<taskBuildDepsTypes.Checked> {
   if (!isStatic(call.args)) return refuse(call, "vp test takes an argument from a variable");
   const args = texts(call.args.slice(2));
   const projects = vitestProjects(args[0] === "run" ? args.slice(1) : args, []);
@@ -146,14 +155,18 @@ function runWorkspaceScript(
   workspace: Workspace,
   name: string,
   source: string,
-): Effect.Effect<Checked> {
+): Effect.Effect<taskBuildDepsTypes.Checked> {
   const key = `${workspace.name}#${name}`;
   if (call.step.via.includes(key)) return Effect.succeed(ok(call.step));
   const inner = { ...call.step, cwd: workspace.dir, via: [...call.step.via, key], workspace };
   return Effect.map(call.walker.script(inner, call.graph.parse(source)), afterInner(call));
 }
 
-function runScript(call: Call, name: string, rest: ReadonlyArray<Word>): Effect.Effect<Checked> {
+function runScript(
+  call: Call,
+  name: string,
+  rest: ReadonlyArray<Word>,
+): Effect.Effect<taskBuildDepsTypes.Checked> {
   if (isBuildScript(name)) return Effect.succeed(ok(afterBuild(call.step, true)));
   const workspace = workspaceAt(call.graph, call.step);
   const script = workspace.scripts[name];
@@ -170,18 +183,18 @@ const scriptCall = (call: Call, words: ReadonlyArray<Word>, tool: string) => {
     : refuse(call, `cannot read the ${tool} command`);
 };
 
-const pnpm = (call: Call): Effect.Effect<Checked> =>
+const pnpm = (call: Call): Effect.Effect<taskBuildDepsTypes.Checked> =>
   scriptCall(call, call.args.slice(call.args[1]?.text === "run" ? 2 : 1), "pnpm");
 
-const npm = (call: Call): Effect.Effect<Checked> =>
+const npm = (call: Call): Effect.Effect<taskBuildDepsTypes.Checked> =>
   scriptCall(call, NPM_RUN.has(call.args[1]?.text ?? "") ? call.args.slice(2) : [], "npm");
 
-function shellCode(call: Call, code: Word | undefined): Effect.Effect<Checked> {
+function shellCode(call: Call, code: Word | undefined): Effect.Effect<taskBuildDepsTypes.Checked> {
   if (code === undefined || code.dynamic) return refuse(call, "the -c code comes from a variable");
   return Effect.map(call.walker.script(call.step, call.graph.parse(code.text)), afterInner(call));
 }
 
-function shellFile(call: Call, file: Word): Effect.Effect<Checked> {
+function shellFile(call: Call, file: Word): Effect.Effect<taskBuildDepsTypes.Checked> {
   const path = call.graph.resolve(call.step.cwd, file.text);
   const inner = { ...call.step, via: [...call.step.via, call.graph.relative(path)] };
   return Effect.flatMap(call.graph.readScript(path), (source) =>
@@ -191,7 +204,7 @@ function shellFile(call: Call, file: Word): Effect.Effect<Checked> {
   );
 }
 
-function shell(call: Call): Effect.Effect<Checked> {
+function shell(call: Call): Effect.Effect<taskBuildDepsTypes.Checked> {
   const [first, second] = call.args.slice(1);
   if (!isReadable(first)) return refuse(call, "cannot read the shell command");
   if (first.text === "-c") return shellCode(call, second);
@@ -200,7 +213,7 @@ function shell(call: Call): Effect.Effect<Checked> {
     : shellFile(call, first);
 }
 
-function cd(call: Call): Effect.Effect<Checked> {
+function cd(call: Call): Effect.Effect<taskBuildDepsTypes.Checked> {
   const [dir, extra] = call.args.slice(1);
   if (dir === undefined || dir.dynamic || extra !== undefined)
     return refuse(call, "cannot tell which directory cd moves to");
@@ -221,11 +234,14 @@ const PROGRAMS: Readonly<Record<string, Handler>> = {
 const handlerOf = (words: ReadonlyArray<string>): Handler | undefined =>
   PROGRAMS[`${words[0]} ${words[1]}`] ?? PROGRAMS[words[0] ?? ""];
 
-const setsNodeOptions = (simple: Simple): boolean =>
+const setsNodeOptions = (simple: shellSyntaxTypes.Simple): boolean =>
   simple.assignments.some((assignment) => assignment.name === NODE_OPTIONS) ||
   simple.words.some((word) => word.text.startsWith(`${NODE_OPTIONS}=`));
 
-const knownProgram = (call: Call, words: ReadonlyArray<string>): Effect.Effect<Checked> => {
+const knownProgram = (
+  call: Call,
+  words: ReadonlyArray<string>,
+): Effect.Effect<taskBuildDepsTypes.Checked> => {
   const handler = handlerOf(words);
   if (handler !== undefined) return handler(call);
   if (READS_NO_DIST.some((prefix) => startsWith(words, prefix)))
@@ -234,11 +250,11 @@ const knownProgram = (call: Call, words: ReadonlyArray<string>): Effect.Effect<C
 };
 
 function checkProgram(
-  walker: Walker,
-  graph: Graph,
-  step: Step,
-  simple: Simple,
-): Effect.Effect<Checked> {
+  walker: taskBuildDepsTypes.Walker,
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  simple: shellSyntaxTypes.Simple,
+): Effect.Effect<taskBuildDepsTypes.Checked> {
   const args = unwrap(simple.words);
   const call = { args, graph, step, text: simple.text, walker };
   const [program] = args;

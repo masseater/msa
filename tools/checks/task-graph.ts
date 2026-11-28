@@ -14,11 +14,7 @@ const { afterBuild, checkProgram, failed, isBuild, ok } = taskPrograms;
 const { taskCommand } = taskCommands;
 
 type Checked = taskBuildDepsTypes.Checked;
-type Graph = taskBuildDepsTypes.Graph;
-type Problems = taskBuildDepsTypes.Problems;
-type Step = taskBuildDepsTypes.Step;
 type TaskDef = taskBuildDepsTypes.TaskDef;
-type Tasks = taskBuildDepsTypes.Tasks;
 type Walker = taskBuildDepsTypes.Walker;
 type Item = shellSyntaxTypes.Item;
 type Link = shellSyntaxTypes.Link;
@@ -28,9 +24,9 @@ type Simple = shellSyntaxTypes.Simple;
 type TaskConfig = NonNullable<NonNullable<typeof viteConfig.run>["tasks"]>[string];
 
 interface Progress {
-  readonly end: Step;
+  readonly end: taskBuildDepsTypes.Step;
   readonly problems: ReadonlyArray<string>;
-  readonly start: Step;
+  readonly start: taskBuildDepsTypes.Step;
 }
 
 const taskObject = (task: TaskConfig) =>
@@ -79,24 +75,32 @@ const packageTasks: Readonly<Record<string, Readonly<Record<string, string>>>> =
   ]),
 );
 
-const loadTasks = (): Tasks =>
+const loadTasks = (): taskBuildDepsTypes.Tasks =>
   Object.fromEntries(
     Object.entries(viteConfig.run?.tasks ?? {}).map(([name, task]) => [name, toTaskDef(task)]),
   );
 
-const dependsOnBuild = (graph: Graph, name: string, seen: ReadonlySet<string>): boolean => {
+const dependsOnBuild = (
+  graph: taskBuildDepsTypes.Graph,
+  name: string,
+  seen: ReadonlySet<string>,
+): boolean => {
   const task = graph.tasks[name];
   if (task === undefined || seen.has(name)) return false;
   const next = new Set([...seen, name]);
   return task.dependsOn.some((dep) => isBuild(dep) || dependsOnBuild(graph, dep, next));
 };
 
-const walkerOf = (graph: Graph): Walker => ({
+const walkerOf = (graph: taskBuildDepsTypes.Graph): Walker => ({
   run: (step, name) => checkRun(graph, step, name),
   script: (step, script) => checkScript(graph, step, script),
 });
 
-function checkSimple(graph: Graph, step: Step, simple: Simple): Effect.Effect<Checked> {
+function checkSimple(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  simple: Simple,
+): Effect.Effect<Checked> {
   return Effect.gen(function* () {
     const substituted = yield* Effect.forEach(simple.substitutions, (script) =>
       checkScript(graph, step, script),
@@ -109,7 +113,11 @@ function checkSimple(graph: Graph, step: Step, simple: Simple): Effect.Effect<Ch
   });
 }
 
-function checkItem(graph: Graph, step: Step, item: Item): Effect.Effect<Checked> {
+function checkItem(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  item: Item,
+): Effect.Effect<Checked> {
   if (step.built) return Effect.succeed(ok(step));
   if (item.kind === "unreadable")
     return Effect.succeed(failed(step, item.text, `cannot read ${item.syntax}`));
@@ -119,7 +127,7 @@ function checkItem(graph: Graph, step: Step, item: Item): Effect.Effect<Checked>
   );
 }
 
-const STARTS: Readonly<Record<Link, (progress: Progress) => Step>> = {
+const STARTS: Readonly<Record<Link, (progress: Progress) => taskBuildDepsTypes.Step>> = {
   and: (progress) => progress.end,
   concurrent: (progress) => progress.start,
   or: (progress) => ({ ...progress.end, built: progress.start.built }),
@@ -127,7 +135,11 @@ const STARTS: Readonly<Record<Link, (progress: Progress) => Step>> = {
   start: (progress) => progress.end,
 };
 
-function checkScript(graph: Graph, step: Step, script: Script): Effect.Effect<Checked> {
+function checkScript(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  script: Script,
+): Effect.Effect<Checked> {
   const initial: Progress = { end: step, problems: [], start: step };
   return Effect.map(
     Effect.reduce(
@@ -146,22 +158,39 @@ function checkScript(graph: Graph, step: Step, script: Script): Effect.Effect<Ch
   );
 }
 
-function checkCommand(graph: Graph, step: Step, command: string): Problems {
+function checkCommand(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  command: string,
+): taskBuildDepsTypes.Problems {
   return Effect.map(checkScript(graph, step, graph.parse(command)), (checked) => checked.problems);
 }
 
-function checkTask(graph: Graph, step: Step, name: string, task: TaskDef): Problems {
+function checkTask(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  name: string,
+  task: TaskDef,
+): taskBuildDepsTypes.Problems {
   const built = step.built || dependsOnBuild(graph, name, new Set());
   const cwd = graph.resolve(step.workspace.dir, task.cwd);
   return checkCommand(graph, { ...step, built, cwd, inputs: task.inputs }, task.command);
 }
 
-function checkScriptOf(graph: Graph, step: Step, name: string): Problems {
+function checkScriptOf(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  name: string,
+): taskBuildDepsTypes.Problems {
   const script = step.workspace.scripts[name];
   return script === undefined ? Effect.succeed([]) : checkCommand(graph, step, script);
 }
 
-function checkRun(graph: Graph, step: Step, name: string): Problems {
+function checkRun(
+  graph: taskBuildDepsTypes.Graph,
+  step: taskBuildDepsTypes.Step,
+  name: string,
+): taskBuildDepsTypes.Problems {
   const key = `${step.workspace.name}#${name}`;
   if (step.via.includes(key)) return Effect.succeed([]);
   const next = { ...step, via: [...step.via, key] };

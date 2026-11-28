@@ -39,7 +39,7 @@ export default class RemoteRef implements coreTypes.RefCore {
     this.owner = owner;
     this.wantsState = wantsState;
     const ready = Deferred.makeUnsafe<void>();
-    this.ready = Effect.runPromise(Deferred.await(ready));
+    this.ready = ready.pipe(Deferred.await, Effect.runPromise);
     this.ready.catch(noop);
     this.#settleReady = ready;
     this.proxy = new Proxy(this, {

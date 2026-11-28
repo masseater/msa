@@ -100,7 +100,9 @@ const program = Effect.suspend(() => {
   return mode === "worker-exit" ? workerExit(addon) : sharedReader(addon, mode);
 }).pipe(
   Effect.catchCause((cause) =>
-    Console.error(Cause.squash(cause)).pipe(
+    cause.pipe(
+      Cause.squash,
+      Console.error,
       Effect.andThen(
         Effect.sync(() => {
           process.exitCode = 1;

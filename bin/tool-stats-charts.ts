@@ -3,8 +3,6 @@ import type toolStatsReportTypes from "./tool-stats-report.types.ts";
 
 const { escapeXml: escapeHtml } = htmlModule;
 
-type Row = toolStatsReportTypes.HistogramRow;
-
 const fmt = (value: number): string => Math.round(value).toLocaleString("en-US");
 
 const shortLabel = (label: string): string => label.replaceAll(/000(?!\d)/gu, "k");
@@ -17,8 +15,8 @@ const dataCell = (value: number, max: number, tooltip: string): string =>
 const LABEL_HEADROOM = 1.25;
 
 const totalsChart = (
-  rows: ReadonlyArray<Row>,
-  value: (row: Row) => number,
+  rows: ReadonlyArray<toolStatsReportTypes.HistogramRow>,
+  value: (row: toolStatsReportTypes.HistogramRow) => number,
   unit: string,
 ): string => {
   const max = Math.max(0, ...rows.map(value)) * LABEL_HEADROOM;
@@ -32,7 +30,7 @@ const totalsChart = (
 };
 
 const histogramChart = (
-  row: Row,
+  row: toolStatsReportTypes.HistogramRow,
   labels: ReadonlyArray<string>,
   className: string,
   showLabels: boolean,
@@ -48,14 +46,15 @@ const histogramChart = (
   return `<table class="charts-css column ${options} data-spacing-1 ${className}"><tbody>${body}</tbody></table>`;
 };
 
-const resultsOf = (row: Row): number => row.results ?? row.samples.length;
+const resultsOf = (row: toolStatsReportTypes.HistogramRow): number =>
+  row.results ?? row.samples.length;
 
-const summary = (row: Row): string =>
+const summary = (row: toolStatsReportTypes.HistogramRow): string =>
   `${fmt(row.calls)} calls, ${fmt(resultsOf(row))} results, ${fmt(row.estimatedTokens)} estimated result tokens, ${fmt(row.avg)} avg/result`;
 
 const selectedHistograms = (
   group: string,
-  rows: ReadonlyArray<Row>,
+  rows: ReadonlyArray<toolStatsReportTypes.HistogramRow>,
   labels: ReadonlyArray<string>,
 ): string =>
   rows.length === 0
@@ -67,13 +66,22 @@ const selectedHistograms = (
         )
         .join("");
 
-const tableRow = (group: string, labels: ReadonlyArray<string>) => (row: Row, index: number) =>
-  `<tr><td><label><input type="radio" name="${group}" id="${group}-${index}"${index === 0 ? " checked" : ""}> <span class="name" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</span></label></td><td class="number">${fmt(row.calls)}</td><td class="number">${fmt(resultsOf(row))}</td><td class="number">${fmt(row.estimatedTokens)}</td><td class="number">${fmt(row.avg)}</td><td>${histogramChart(row, labels, "mini", false)}</td></tr>`;
+const tableRow =
+  (group: string, labels: ReadonlyArray<string>) =>
+  (row: toolStatsReportTypes.HistogramRow, index: number) =>
+    `<tr><td><label><input type="radio" name="${group}" id="${group}-${index}"${index === 0 ? " checked" : ""}> <span class="name" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</span></label></td><td class="number">${fmt(row.calls)}</td><td class="number">${fmt(resultsOf(row))}</td><td class="number">${fmt(row.estimatedTokens)}</td><td class="number">${fmt(row.avg)}</td><td>${histogramChart(row, labels, "mini", false)}</td></tr>`;
 
-const table = (group: string, rows: ReadonlyArray<Row>, labels: ReadonlyArray<string>): string =>
+const table = (
+  group: string,
+  rows: ReadonlyArray<toolStatsReportTypes.HistogramRow>,
+  labels: ReadonlyArray<string>,
+): string =>
   `<div class="overflow-auto"><table class="striped"><thead><tr><th>Name</th><th class="number">Calls</th><th class="number">Results</th><th class="number">Est. tokens</th><th class="number">Avg/result</th><th>Histogram</th></tr></thead><tbody>${rows.map(tableRow(group, labels)).join("")}</tbody></table></div>`;
 
-const selectionCss = (group: string, rows: ReadonlyArray<Row>): string =>
+const selectionCss = (
+  group: string,
+  rows: ReadonlyArray<toolStatsReportTypes.HistogramRow>,
+): string =>
   rows
     .map(
       (_row, index) =>

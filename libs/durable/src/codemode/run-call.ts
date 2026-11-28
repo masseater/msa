@@ -184,12 +184,14 @@ class CodemodeRunner {
       `The script took a different path when resumed after a restart: ${message}`,
     );
     this.ended = result;
-    Effect.runFork(
-      Effect.map(Effect.exit(this.decide(result)), (exit) =>
+    this.decide(result).pipe(
+      Effect.exit,
+      Effect.map((exit) =>
         Exit.isSuccess(exit)
           ? this.controller.abort(new Error(message))
           : this.fail(Cause.squash(exit.cause)),
       ),
+      Effect.runFork,
     );
   }
 

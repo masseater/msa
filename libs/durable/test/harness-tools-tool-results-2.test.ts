@@ -117,10 +117,9 @@ const appliesAddToolsTerminates = Effect.gen(function* () {
     tool("extra", () => Promise.resolve({ output: [] })),
   );
   const first = yield* run(setup, [calls(["stop", {}, "c1"])], (_harness, root) =>
-    runPromise(
-      Effect.asVoid(
-        Effect.suspend(() => awaited(root.configure({ tools: [stop, grow] }, context))),
-      ),
+    Effect.suspend(() => awaited(root.configure({ tools: [stop, grow] }, context))).pipe(
+      Effect.asVoid,
+      runPromise,
     ),
   );
   expect(first.status).toBe("done");

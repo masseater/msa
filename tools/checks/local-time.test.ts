@@ -6,7 +6,7 @@ import localTimeCheck from "./local-time.ts";
 
 const { codesOnLine, lintAndInspectProbes, probePath, repoRoot } = lintProbe;
 
-const PROPERTIES = "eslint(no-restricted-properties)";
+const PROPERTIES = "msa(local-time-via-chord)";
 
 const MEMBER = "msa(no-restricted-member)";
 

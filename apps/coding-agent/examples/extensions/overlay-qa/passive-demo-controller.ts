@@ -31,15 +31,11 @@ export default class PassiveDemoController extends BaseOverlay {
       width: 22,
     });
     const self = this;
-    this.fiber = Effect.runFork(
-      Effect.forever(
-        Effect.gen(function* () {
-          self.timerComponent.tick();
-          self.tui.requestRender();
-          yield* Effect.sleep(1000);
-        }),
-      ),
-    );
+    this.fiber = Effect.gen(function* () {
+      self.timerComponent.tick();
+      self.tui.requestRender();
+      yield* Effect.sleep(1000);
+    }).pipe(Effect.forever, Effect.runFork);
   }
 
   handleInput(data: string): void {

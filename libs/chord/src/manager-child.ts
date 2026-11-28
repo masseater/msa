@@ -22,7 +22,7 @@ const fatalMessage = (error: unknown): managerTypesModule.ControlMessage => ({
 });
 
 const lockFromEnvironment = Effect.fn(function* (fatal: (error: unknown) => void) {
-  const name = yield* Effect.orDie(Config.option(Config.String(LOCK_ENV)));
+  const name = yield* Config.String(LOCK_ENV).pipe(Config.option, Effect.orDie);
   if (Option.isNone(name)) return;
   yield* acquireProcessLock(name.value).pipe(
     Effect.tapDefect((error) => Effect.sync(() => fatal(error))),
@@ -70,7 +70,7 @@ function childControl(channel: linkIpcTypes.IpcChannel = parentChannel()): {
   const fatal = (error: unknown): void => send(fatalMessage(error));
   return {
     fatal,
-    init: Effect.runPromise(Deferred.await(init)),
+    init: init.pipe(Deferred.await, Effect.runPromise),
     lock: () => Effect.runPromise(lockFromEnvironment(fatal)),
     onShutdown: (handler) => shutdown.add(handler),
     ready: () => send({ type: "ready" }),

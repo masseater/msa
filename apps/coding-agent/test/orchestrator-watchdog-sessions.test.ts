@@ -81,7 +81,7 @@ const putsTasksOfAGoneProcessBackToWaiting = () =>
   });
 
 it("puts the tasks of a gone orchestrator process back to waiting", () =>
-  Effect.runPromise(Effect.scoped(putsTasksOfAGoneProcessBackToWaiting())));
+  putsTasksOfAGoneProcessBackToWaiting().pipe(Effect.scoped, Effect.runPromise));
 
 const leavesALiveOrchestratorsThreadsAlone = () =>
   Effect.gen(function* () {
@@ -101,7 +101,7 @@ const leavesALiveOrchestratorsThreadsAlone = () =>
   });
 
 it("leaves the threads of a live orchestrator alone", () =>
-  Effect.runPromise(Effect.scoped(leavesALiveOrchestratorsThreadsAlone())));
+  leavesALiveOrchestratorsThreadsAlone().pipe(Effect.scoped, Effect.runPromise));
 
 const closingASessionPutsItsTasksBackToWaiting = () =>
   Effect.gen(function* () {
@@ -132,7 +132,7 @@ const closingASessionPutsItsTasksBackToWaiting = () =>
   });
 
 it("puts the tasks of a closed session back to waiting and reports them on reopen", () =>
-  Effect.runPromise(Effect.scoped(closingASessionPutsItsTasksBackToWaiting())));
+  closingASessionPutsItsTasksBackToWaiting().pipe(Effect.scoped, Effect.runPromise));
 
 const leavesAProjectWithoutAnOwnerUntilItReopens = () =>
   Effect.gen(function* () {
@@ -163,4 +163,4 @@ const leavesAProjectWithoutAnOwnerUntilItReopens = () =>
   });
 
 it("leaves a project with no recorded owner until its session reopens", () =>
-  Effect.runPromise(Effect.scoped(leavesAProjectWithoutAnOwnerUntilItReopens())));
+  leavesAProjectWithoutAnOwnerUntilItReopens().pipe(Effect.scoped, Effect.runPromise));

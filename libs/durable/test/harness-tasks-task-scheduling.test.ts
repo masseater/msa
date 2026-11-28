@@ -34,8 +34,9 @@ const rejectsUnknownTasks = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Done = oneStep("test.quick", (_task, runtime, ctx) =>
-    runPromise(
-      Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => completed(null), ctx)))),
+    Effect.suspend(() => awaited(runtime.commit(() => completed(null), ctx))).pipe(
+      Effect.asVoid,
+      runPromise,
     ),
   );
   const { harness, root } = yield* openRoot([Done]);
@@ -71,14 +72,17 @@ const rejectsTaskWaits = Effect.gen(function* () {
   const { harness, root } = yield* openRoot([Blocking], { storage });
   const id = yield* awaited(start(root, Blocking));
 
+  const commitBlocker = () =>
+    harness.commit(
+      (tx) =>
+        Effect.suspend(() => awaited(tx.appendEntry(root.id, { kind: "blocker" }))).pipe(
+          Effect.asVoid,
+          runPromise,
+        ),
+      context,
+    );
   const held = storage.holdCommits();
-  const blocker = harness.commit(
-    (tx) =>
-      runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(tx.appendEntry(root.id, { kind: "blocker" })))),
-      ),
-    context,
-  );
+  const blocker = commitBlocker();
   yield* awaited(held.entered);
   const controller = abortController();
   const cancelledWhileQueued = harness.waitForTask(id, withSignal(controller.signal));
@@ -92,13 +96,7 @@ const rejectsTaskWaits = Effect.gen(function* () {
   const conversationIdle = root.waitForIdle(context);
   yield* flush;
   const heldAgain = storage.holdCommits();
-  const blockerAgain = harness.commit(
-    (tx) =>
-      runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(tx.appendEntry(root.id, { kind: "blocker" })))),
-      ),
-    context,
-  );
+  const blockerAgain = commitBlocker();
   yield* awaited(heldAgain.entered);
   const closedWhileQueued = harness.waitForTask(id, context);
   const closing = harness.close(context);

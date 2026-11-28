@@ -47,23 +47,19 @@ export default class StreamingInputController extends BaseOverlay {
     }
 
     const self = this;
-    this.streamFiber = Effect.runFork(
-      Effect.forever(
-        Effect.gen(function* () {
-          self.lineCount++;
-          const timestamp = codingAgent.formatLocalTime(
-            yield* Clock.currentTimeMillis,
-            "YYYY-MM-DD HH:mm:ss",
-          );
-          self.streamLines.push(`[${timestamp}] Streaming line ${self.lineCount}...`);
-          if (self.streamLines.length > 8) {
-            self.streamLines.shift();
-          }
-          self.tui.requestRender();
-          yield* Effect.sleep(500);
-        }),
-      ),
-    );
+    this.streamFiber = Effect.gen(function* () {
+      self.lineCount++;
+      const timestamp = codingAgent.formatLocalTime(
+        yield* Clock.currentTimeMillis,
+        "YYYY-MM-DD HH:mm:ss",
+      );
+      self.streamLines.push(`[${timestamp}] Streaming line ${self.lineCount}...`);
+      if (self.streamLines.length > 8) {
+        self.streamLines.shift();
+      }
+      self.tui.requestRender();
+      yield* Effect.sleep(500);
+    }).pipe(Effect.forever, Effect.runFork);
   }
 
   private cycleFocus(): void {

@@ -4,7 +4,7 @@ import lintProbe from "./lint-probe.ts";
 
 const { codesOnLine, lintProbes, probePath } = lintProbe;
 
-const RESTRICTED = "eslint(no-restricted-properties)";
+const RESTRICTED = "msa(timers-armed-by-the-run)";
 
 const cases: readonly (readonly [statement: string, expected: string | undefined])[] = [
   ["export const a = process.getActiveResourcesInfo();", RESTRICTED],

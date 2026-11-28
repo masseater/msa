@@ -235,10 +235,11 @@ const runMainWith: {
     program: Effect.Effect<A, E, ROut | ScriptOutput>,
     layer: Layer.Layer<ROut, E2, ScriptOutput>,
   ): void => {
-    const main = Effect.scoped(
-      Effect.flatMap(Layer.build(Layer.provideMerge(layer, scriptOutputLayer)), (services) =>
-        Effect.provideContext(program, services),
-      ),
+    const main = layer.pipe(
+      Layer.provideMerge(scriptOutputLayer),
+      Layer.build,
+      Effect.flatMap((services) => Effect.provideContext(program, services)),
+      Effect.scoped,
     );
     NodeRuntime.runMain(main);
   },

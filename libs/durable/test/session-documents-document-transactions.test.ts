@@ -114,8 +114,9 @@ const rejectsTokensSemantics = Effect.gen(function* () {
     expect(
       session.commit(
         (tx) =>
-          runPromise(
-            Effect.asVoid(Effect.suspend(() => awaited(tx.doc(RewindableLiveDoc, conversationId)))),
+          Effect.suspend(() => awaited(tx.doc(RewindableLiveDoc, conversationId))).pipe(
+            Effect.asVoid,
+            runPromise,
           ),
         context,
       ),
@@ -125,8 +126,9 @@ const rejectsTokensSemantics = Effect.gen(function* () {
     expect(
       session.commit(
         (tx) =>
-          runPromise(
-            Effect.asVoid(Effect.suspend(() => awaited(tx.doc(LiveDocV2, conversationId)))),
+          Effect.suspend(() => awaited(tx.doc(LiveDocV2, conversationId))).pipe(
+            Effect.asVoid,
+            runPromise,
           ),
         context,
       ),
@@ -156,7 +158,7 @@ const rejectsNonJson = Effect.gen(function* () {
   yield* awaited(
     expect(
       session.commit(
-        (tx) => runPromise(Effect.asVoid(Effect.suspend(() => awaited(tx.doc(DateDoc))))),
+        (tx) => Effect.suspend(() => awaited(tx.doc(DateDoc))).pipe(Effect.asVoid, runPromise),
         context,
       ),
     ).rejects.toThrow("strict JSON"),

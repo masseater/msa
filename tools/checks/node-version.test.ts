@@ -11,7 +11,10 @@ const Step = Schema.Struct({
 });
 
 const Workflow = Schema.Struct({
-  jobs: Schema.Record(Schema.String, Schema.Struct({ steps: Schema.optional(Schema.Array(Step)) })),
+  jobs: Schema.Record(
+    Schema.String,
+    Schema.Struct({ steps: Step.pipe(Schema.Array, Schema.optional) }),
+  ),
 });
 
 const runtime = ManagedRuntime.make(NodeServices.layer);

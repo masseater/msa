@@ -24,18 +24,11 @@ const payments = new Map<string, number>();
 type PaymentState = { phase: "prepare" } | { phase: "charge"; key: string };
 const Payment = defineTask<{ amount: number }, PaymentState, { receipt: number }>({
   abort: (_task, runtime, taskContext) =>
-    Effect.runPromise(
-      Effect.asVoid(
-        Effect.suspend(() =>
-          awaited(
-            runtime.commit(
-              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
-              taskContext,
-            ),
-          ),
-        ),
+    Effect.suspend(() =>
+      awaited(
+        runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), taskContext),
       ),
-    ),
+    ).pipe(Effect.asVoid, Effect.runPromise),
   initial: () => ({ phase: "prepare" }),
   name: "example.payment",
   phases: {
@@ -54,21 +47,17 @@ const Payment = defineTask<{ amount: number }, PaymentState, { receipt: number }
         }),
       ),
     prepare: (task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({
-                  checkpoint: { key: `payment-${task.id}`, phase: "charge" },
-                  status: "running",
-                }),
-                taskContext,
-              ),
-            ),
+      Effect.suspend(() =>
+        awaited(
+          runtime.commit(
+            () => ({
+              checkpoint: { key: `payment-${task.id}`, phase: "charge" },
+              status: "running",
+            }),
+            taskContext,
           ),
         ),
-      ),
+      ).pipe(Effect.asVoid, Effect.runPromise),
   },
   version: 1,
 });

@@ -26,7 +26,7 @@ const onNode = <A, E, R>(
 
 const withFs = <A>(
   use: (fs: FileSystem.FileSystem) => Effect.Effect<A, PlatformError>,
-): Effect.Effect<A> => onNode(Effect.orDie(FileSystem.FileSystem.use(use)));
+): Effect.Effect<A> => FileSystem.FileSystem.use(use).pipe(Effect.orDie, onNode);
 
 const makeDirectory = (path: string): Effect.Effect<void> =>
   withFs((fs) => fs.makeDirectory(path, { recursive: true }));
@@ -47,18 +47,17 @@ const command = ([program = "", ...args]: readonly string[]) =>
   ChildProcess.make(program, args, { detached: false, stdin: "ignore" });
 
 const runText = (argv: readonly string[]): Effect.Effect<string> =>
-  onNode(
-    Effect.orDie(
-      ChildProcessSpawner.ChildProcessSpawner.use((spawner) => spawner.string(command(argv))),
-    ),
+  ChildProcessSpawner.ChildProcessSpawner.use((spawner) => spawner.string(command(argv))).pipe(
+    Effect.orDie,
+    onNode,
   );
 
 const runStatus = (argv: readonly string[]): Effect.Effect<number> =>
-  onNode(
-    Effect.orDie(
-      ChildProcessSpawner.ChildProcessSpawner.use((spawner) => spawner.exitCode(command(argv))),
-    ),
-  ).pipe(Effect.map(Number));
+  ChildProcessSpawner.ChildProcessSpawner.use((spawner) => spawner.exitCode(command(argv))).pipe(
+    Effect.orDie,
+    onNode,
+    Effect.map(Number),
+  );
 
 const startBackground = ([
   program = "",
@@ -66,16 +65,12 @@ const startBackground = ([
 ]: readonly string[]): Effect.Effect<platformTypes.Background> =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
-    yield* onNode(
-      Effect.orDie(
-        ChildProcess.make(program, args, {
-          detached: false,
-          stderr: "ignore",
-          stdin: "ignore",
-          stdout: "ignore",
-        }),
-      ),
-    ).pipe(Scope.provide(scope));
+    yield* ChildProcess.make(program, args, {
+      detached: false,
+      stderr: "ignore",
+      stdin: "ignore",
+      stdout: "ignore",
+    }).pipe(Effect.orDie, onNode, Scope.provide(scope));
     return { stop: Scope.close(scope, Exit.void) };
   });
 

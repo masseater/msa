@@ -3,10 +3,8 @@ import { Effect, Stream } from "effect";
 import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 
-const { stream } = compat;
-
 function collectEvents(
-  streamResult: ReturnType<typeof stream>,
+  streamResult: ReturnType<typeof compat.stream>,
 ): Promise<typesModule.AssistantMessageEvent[]> {
   return Effect.runPromise(
     Effect.gen(function* () {

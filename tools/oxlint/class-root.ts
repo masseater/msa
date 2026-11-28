@@ -5,13 +5,7 @@ import type classRootTypes from "./class-root.types.ts";
 import type flowTypes from "./flow.types.ts";
 import scopeLookup from "./scope-lookup.ts";
 
-type Node = flowTypes.Node;
-
-type Root = classRootTypes.Root;
-
-type Walk = classRootTypes.Walk;
-
-const TRANSPARENT: ReadonlySet<Node["type"]> = new Set([
+const TRANSPARENT: ReadonlySet<flowTypes.Node["type"]> = new Set([
   "ParenthesizedExpression",
   "TSAsExpression",
   "TSInstantiationExpression",
@@ -20,10 +14,13 @@ const TRANSPARENT: ReadonlySet<Node["type"]> = new Set([
   "TSTypeAssertion",
 ]);
 
-const unwrap = (node: Node): Node =>
-  TRANSPARENT.has(node.type) ? unwrap((node as { readonly expression: Node }).expression) : node;
+const unwrap = (node: flowTypes.Node): flowTypes.Node =>
+  TRANSPARENT.has(node.type)
+    ? unwrap((node as { readonly expression: flowTypes.Node }).expression)
+    : node;
 
-const parentOf = (node: Node): Node | null => node.parent as Node | null;
+const parentOf = (node: flowTypes.Node): flowTypes.Node | null =>
+  node.parent as flowTypes.Node | null;
 
 const matchesSpecifier = (specifier: string, pattern: string): boolean => {
   const [prefix = "", suffix] = pattern.split("*");
@@ -35,7 +32,7 @@ const matchesSpecifier = (specifier: string, pattern: string): boolean => {
   );
 };
 
-const isPackageSpecifier = (walk: Walk, specifier: string): boolean =>
+const isPackageSpecifier = (walk: classRootTypes.Walk, specifier: string): boolean =>
   !/^(?:[./#]|node:)/u.test(specifier) &&
   !walk.builtins.has(specifier.split("/")[0] ?? specifier) &&
   !walk.selfSpecifiers.some((pattern) => matchesSpecifier(specifier, pattern));
@@ -45,7 +42,7 @@ const importSource = (def: Definition): string | undefined =>
     ? def.parent.source.value
     : undefined;
 
-const isPackageImport = (walk: Walk, defs: readonly Definition[]): boolean => {
+const isPackageImport = (walk: classRootTypes.Walk, defs: readonly Definition[]): boolean => {
   const sources = defs.map(importSource);
   const [source] = sources;
   return sources.length === 1 && source !== undefined && isPackageSpecifier(walk, source);
@@ -65,7 +62,10 @@ const importBase = (def: Definition): string | undefined => {
   return name === undefined ? source : `${source}/${name}`;
 };
 
-const packageImportRoot = (walk: Walk, node: Node): Root | undefined => {
+const packageImportRoot = (
+  walk: classRootTypes.Walk,
+  node: flowTypes.Node,
+): classRootTypes.Root | undefined => {
   const variable = scopeLookup.variableOf(walk.context, node);
   if (variable === undefined || !isPackageImport(walk, variable.defs)) return undefined;
   return {
@@ -83,7 +83,10 @@ const staticKey = (node: ESTree.MemberExpression): string | undefined => {
     : undefined;
 };
 
-const memberRoot = (walk: Walk, node: ESTree.MemberExpression): Root | undefined => {
+const memberRoot = (
+  walk: classRootTypes.Walk,
+  node: ESTree.MemberExpression,
+): classRootTypes.Root | undefined => {
   const key = staticKey(node);
   const root = key === undefined ? undefined : rootOf(walk, node.object);
   return root === undefined || key === undefined
@@ -91,13 +94,19 @@ const memberRoot = (walk: Walk, node: ESTree.MemberExpression): Root | undefined
     : { ...root, path: [...root.path, key] };
 };
 
-const ROOTS: Readonly<Partial<Record<Node["type"], (walk: Walk, node: Node) => Root | undefined>>> =
-  {
-    Identifier: packageImportRoot,
-    MemberExpression: (walk, node) => memberRoot(walk, node as ESTree.MemberExpression),
-  };
+const ROOTS: Readonly<
+  Partial<
+    Record<
+      flowTypes.Node["type"],
+      (walk: classRootTypes.Walk, node: flowTypes.Node) => classRootTypes.Root | undefined
+    >
+  >
+> = {
+  Identifier: packageImportRoot,
+  MemberExpression: (walk, node) => memberRoot(walk, node as ESTree.MemberExpression),
+};
 
-function rootOf(walk: Walk, node: Node): Root | undefined {
+function rootOf(walk: classRootTypes.Walk, node: flowTypes.Node): classRootTypes.Root | undefined {
   const value = unwrap(node);
   return ROOTS[value.type]?.(walk, value);
 }
@@ -113,7 +122,7 @@ const factoryKey = (
 const isFactoryKey = (base: string | undefined, keys: readonly (string | undefined)[]): boolean =>
   classFactories.has(factoryKey(base, keys) ?? "");
 
-function isFactoryCallee(walk: Walk, callee: Node): boolean {
+function isFactoryCallee(walk: classRootTypes.Walk, callee: flowTypes.Node): boolean {
   const value = unwrap(callee);
   if (value.type === "CallExpression") return isFactoryCallee(walk, value.callee);
   const root = rootOf(walk, value);

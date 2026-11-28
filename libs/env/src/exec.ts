@@ -128,28 +128,27 @@ function runExec(request: ExecRequest): Promise<ExecResult> {
     },
     signal: controller.signal,
   });
-  return Effect.runPromise(
-    Effect.exit(Effect.promise(() => reply)).pipe(
-      Effect.map((exit): ExecResult => {
-        if (state.callbackError !== undefined) return err(state.callbackError);
-        if (Exit.isFailure(exit)) {
-          return err(failureOf(Cause.squash(exit.cause), request.options?.timeout));
-        }
-        const { json } = exit.value;
-        const spillPath = json["spillPath"];
-        return ok({
-          exitCode: json["exitCode"] as number,
-          ...(typeof spillPath === "string" ? { spillPath } : {}),
-        });
+  return Effect.exit(Effect.promise(() => reply)).pipe(
+    Effect.map((exit): ExecResult => {
+      if (state.callbackError !== undefined) return err(state.callbackError);
+      if (Exit.isFailure(exit)) {
+        return err(failureOf(Cause.squash(exit.cause), request.options?.timeout));
+      }
+      const { json } = exit.value;
+      const spillPath = json["spillPath"];
+      return ok({
+        exitCode: json["exitCode"] as number,
+        ...(typeof spillPath === "string" ? { spillPath } : {}),
+      });
+    }),
+    Effect.ensuring(
+      Effect.sync(() => {
+        state.settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        if (state.running !== undefined) request.running.delete(state.running);
       }),
-      Effect.ensuring(
-        Effect.sync(() => {
-          state.settled = true;
-          signal?.removeEventListener("abort", onAbort);
-          if (state.running !== undefined) request.running.delete(state.running);
-        }),
-      ),
     ),
+    Effect.runPromise,
   );
 }
 

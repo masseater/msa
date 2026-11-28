@@ -46,12 +46,10 @@ export default class StreamChannel implements linkIpcTypes.IpcChannel {
       Stream.pipeThroughChannel(Ndjson.encode()),
       Stream.run(outgoing),
     );
-    return Effect.asVoid(
-      Effect.forkScoped(
-        Effect.raceFirst(Effect.ignore(reading), Effect.ignore(writing)).pipe(
-          Effect.ensuring(Effect.sync(() => this.#disconnect())),
-        ),
-      ),
+    return Effect.raceFirst(Effect.ignore(reading), Effect.ignore(writing)).pipe(
+      Effect.ensuring(Effect.sync(() => this.#disconnect())),
+      Effect.forkScoped,
+      Effect.asVoid,
     );
   }
 

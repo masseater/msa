@@ -2,25 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach } from "vite-plus/test";
 
+import type tempDirTypes from "./temp-dir.types.ts";
+
 const { awaited, joinPath, makeDirectory, makeTempDir, removeDir, removeDirIfSet, runTest } =
   testing;
 
-interface TempDir {
-  path: string;
-}
-
-interface AgentDir {
-  agentDir: string;
-  path: string;
-}
-
-interface ExtensionsDir {
-  extensionsDir: string;
-  path: string;
-}
-
-const useTempDir = (prefix: string): TempDir => {
-  const dir: TempDir = { path: "" };
+const useTempDir = (prefix: string): tempDirTypes.TempDir => {
+  const dir: tempDirTypes.TempDir = { path: "" };
 
   beforeEach(() =>
     runTest(
@@ -42,8 +30,8 @@ const useTempDir = (prefix: string): TempDir => {
   return dir;
 };
 
-const useSubdirectory = (temp: TempDir, name: string): TempDir => {
-  const sub: TempDir = { path: "" };
+const useSubdirectory = (temp: tempDirTypes.TempDir, name: string): tempDirTypes.TempDir => {
+  const sub: tempDirTypes.TempDir = { path: "" };
 
   beforeEach(() =>
     runTest(
@@ -57,7 +45,7 @@ const useSubdirectory = (temp: TempDir, name: string): TempDir => {
   return sub;
 };
 
-const useAgentDir = (prefix: string): AgentDir => {
+const useAgentDir = (prefix: string): tempDirTypes.AgentDir => {
   const temp = useTempDir(prefix);
   const agent = useSubdirectory(temp, "agent");
   return {
@@ -70,7 +58,7 @@ const useAgentDir = (prefix: string): AgentDir => {
   };
 };
 
-const useExtensionsDir = (prefix: string): ExtensionsDir => {
+const useExtensionsDir = (prefix: string): tempDirTypes.ExtensionsDir => {
   const temp = useTempDir(prefix);
   const extensions = useSubdirectory(temp, "extensions");
   return {

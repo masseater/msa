@@ -116,7 +116,7 @@ function instanceOf(
   return (exited: Promise<managerTypesModule.Exit>): managerTypesModule.Instance => ({
     exited,
     killTree: () => {
-      Effect.runFork(Effect.ignore(handle.kill({ killSignal: "SIGKILL" })));
+      handle.kill({ killSignal: "SIGKILL" }).pipe(Effect.ignore, Effect.runFork);
     },
     link: ipcLink(channel, { compression: options.compression }),
     onControl: (listener) => listeners.add(listener),
@@ -164,9 +164,9 @@ const spawnInstance = Effect.fn(function* (options: managerTypesModule.ForkDrive
 function forkDriver(options: managerTypesModule.ForkDriverOptions): managerTypesModule.Driver {
   return {
     spawn: () =>
-      Effect.runPromise(Effect.orDie(spawnInstance(options))).then(([instance, exited]) =>
-        instance(Effect.runPromise(Deferred.await(exited))),
-      ),
+      spawnInstance(options)
+        .pipe(Effect.orDie, Effect.runPromise)
+        .then(([instance, exited]) => exited.pipe(Deferred.await, Effect.runPromise, instance)),
   };
 }
 

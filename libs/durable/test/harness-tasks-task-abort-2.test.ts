@@ -77,13 +77,9 @@ const writesNoFault = Effect.gen(function* () {
     held = storage.holdCommits();
     void harnessRef!.commit(
       (tx) =>
-        runPromise(
-          Effect.asVoid(
-            Effect.suspend(() =>
-              awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),
-            ),
-          ),
-        ),
+        Effect.suspend(() =>
+          awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),
+        ).pipe(Effect.asVoid, runPromise),
       context,
     );
     return Promise.reject(new Error("would fault"));

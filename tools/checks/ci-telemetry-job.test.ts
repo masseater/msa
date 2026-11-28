@@ -12,7 +12,7 @@ const Step = Schema.Struct({ run: Schema.optional(Schema.String) });
 const Job = Schema.Struct({
   if: Schema.optional(Schema.Unknown),
   needs: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
-  steps: Schema.optional(Schema.Array(Step)),
+  steps: Step.pipe(Schema.Array, Schema.optional),
 });
 
 const Workflow = Schema.Struct({ jobs: Schema.Record(Schema.String, Job) });

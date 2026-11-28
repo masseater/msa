@@ -5,7 +5,8 @@
     "security:minimumReleaseAgeNpm",
     ":semanticCommits",
     "group:allNonMajor",
-    "github>masseater/ecosystems//libs/vite-plus-adopt/renovate"
+    "github>masseater/ecosystems//libs/vite-plus-adopt/renovate",
+    "github>masseater/ecosystems//libs/msch/renovate"
   ],
   "enabledManagers": ["nodenv", "custom.regex"],
   "packageRules": [

@@ -9,7 +9,7 @@ const { captureProcess, processRunnerLayer } = testProcess;
 const repoRoot = `${import.meta.dirname}/../..`;
 const rule = `${repoRoot}/tools/rules/no-counted-wait-loop.yml`;
 
-const Matches = Schema.fromJsonString(Schema.Array(Schema.Struct({ file: Schema.String })));
+const Matches = Schema.Struct({ file: Schema.String }).pipe(Schema.Array, Schema.fromJsonString);
 
 const counted: readonly string[] = [
   "function* f() { for (let i = 0; i < 50 && !done(); i++) yield* Effect.sleep(5); }",

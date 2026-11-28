@@ -39,46 +39,38 @@ const pendingPrompt =
 const startPlain = () => start({ complete: (code) => Effect.succeed(code), state: undefined });
 
 it("returns the browser callback and aborts the manual prompt", () =>
-  Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const prompted = yield* Deferred.make<AbortSignal | undefined>();
-        const server = yield* startPlain();
-        const result = yield* Effect.forkChild(
-          waitForCallbackOrManualInput({
-            callback: server,
-            interaction: interaction(
-              pendingPrompt((prompt) => {
-                Deferred.doneUnsafe(prompted, Effect.succeed(prompt.signal));
-              }),
-            ),
-            message: "paste",
-            placeholder: server.redirectUri,
+  Effect.gen(function* () {
+    const prompted = yield* Deferred.make<AbortSignal | undefined>();
+    const server = yield* startPlain();
+    const result = yield* Effect.forkChild(
+      waitForCallbackOrManualInput({
+        callback: server,
+        interaction: interaction(
+          pendingPrompt((prompt) => {
+            Deferred.doneUnsafe(prompted, Effect.succeed(prompt.signal));
           }),
-        );
-        const manualSignal = yield* Deferred.await(prompted);
-        yield* request(callbackUrl(server.redirectUri, { code: "from-browser" }));
-        expect(yield* Fiber.join(result)).toEqual({ type: "callback", value: "from-browser" });
-        expect(manualSignal?.aborted).toBe(true);
+        ),
+        message: "paste",
+        placeholder: server.redirectUri,
       }),
-    ),
-  ));
+    );
+    const manualSignal = yield* Deferred.await(prompted);
+    yield* request(callbackUrl(server.redirectUri, { code: "from-browser" }));
+    expect(yield* Fiber.join(result)).toEqual({ type: "callback", value: "from-browser" });
+    expect(manualSignal?.aborted).toBe(true);
+  }).pipe(Effect.scoped, Effect.runPromise));
 
 it("returns pasted input and stops waiting for the browser", () =>
-  Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const server = yield* startPlain();
-        const result = yield* waitForCallbackOrManualInput({
-          callback: server,
-          interaction: interaction(() => Promise.resolve("pasted")),
-          message: "paste",
-          placeholder: server.redirectUri,
-        });
-        expect(result).toEqual({ input: "pasted", type: "manual" });
-      }),
-    ),
-  ));
+  Effect.gen(function* () {
+    const server = yield* startPlain();
+    const result = yield* waitForCallbackOrManualInput({
+      callback: server,
+      interaction: interaction(() => Promise.resolve("pasted")),
+      message: "paste",
+      placeholder: server.redirectUri,
+    });
+    expect(result).toEqual({ input: "pasted", type: "manual" });
+  }).pipe(Effect.scoped, Effect.runPromise));
 
 it("uses only the manual prompt without a callback server", () =>
   Effect.runPromise(
@@ -94,19 +86,15 @@ it("uses only the manual prompt without a callback server", () =>
   ));
 
 it("propagates manual prompt failures", () =>
-  Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const server = yield* startPlain();
-        yield* expectDefect(
-          waitForCallbackOrManualInput({
-            callback: server,
-            interaction: interaction(() => Promise.reject(new Error("prompt cancelled"))),
-            message: "paste",
-            placeholder: server.redirectUri,
-          }),
-          "prompt cancelled",
-        );
+  Effect.gen(function* () {
+    const server = yield* startPlain();
+    yield* expectDefect(
+      waitForCallbackOrManualInput({
+        callback: server,
+        interaction: interaction(() => Promise.reject(new Error("prompt cancelled"))),
+        message: "paste",
+        placeholder: server.redirectUri,
       }),
-    ),
-  ));
+      "prompt cancelled",
+    );
+  }).pipe(Effect.scoped, Effect.runPromise));

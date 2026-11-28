@@ -107,22 +107,18 @@ const placesHookSummaryStep1 = Effect.gen(function* () {
           yield* awaited(
             chat.harness.commit(
               (tx) =>
-                runNested(
-                  Effect.asVoid(
-                    Effect.suspend(() =>
-                      awaited(
-                        tx.createTask(
-                          Child,
-                          {},
-                          {
-                            conversationId: chat.root.id,
-                            ownership: { kind: "task", taskId: api.taskId },
-                          },
-                        ),
-                      ),
+                Effect.suspend(() =>
+                  awaited(
+                    tx.createTask(
+                      Child,
+                      {},
+                      {
+                        conversationId: chat.root.id,
+                        ownership: { kind: "task", taskId: api.taskId },
+                      },
                     ),
                   ),
-                ),
+                ).pipe(Effect.asVoid, runNested),
               hookContext,
             ),
           );
@@ -175,18 +171,14 @@ describe("compaction estimates and interactions", () => {
 function defineChildTask(gate: PromiseWithResolvers<void>) {
   return defineTask<Record<string, never>, { phase: "run" }, null>({
     abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ outcome: { status: "aborted" }, status: "terminal" }),
-                taskContext,
-              ),
-            ),
+      Effect.suspend(() =>
+        awaited(
+          runtime.commit(
+            () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+            taskContext,
           ),
         ),
-      ),
+      ).pipe(Effect.asVoid, Effect.runPromise),
     initial: () => ({ phase: "run" }),
     name: "test.child",
     phases: {

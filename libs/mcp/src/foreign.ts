@@ -26,7 +26,7 @@ const unwrapForeign = <A, E, R>(
   );
 
 const toPromise = <A, E>(effect: Effect.Effect<A, E>): Promise<A> =>
-  Effect.runPromise(unwrapForeign(effect));
+  effect.pipe(unwrapForeign, Effect.runPromise);
 
 const foreignModule = {
   McpForeignError,

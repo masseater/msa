@@ -151,33 +151,29 @@ const runCommand: {
     args: ReadonlyArray<string>,
     options: CommandOptions,
   ): Effect.Effect<platformTypes.CommandResult> =>
-    provideNodeServices(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-          const handle = yield* spawner.spawn(
-            ChildProcess.make(command, [...args], {
-              cwd: options.cwd,
-              env: options.env,
-              extendEnv: true,
-              stderr: options.output === "ignore" ? "ignore" : "inherit",
-              stdin: options.output === "inherit" ? "inherit" : "ignore",
-              stdout: STDOUT_MODES[options.output],
-            }),
-          );
-          const [stdout, exitCode] = yield* Effect.all(
-            [
-              options.output === "capture"
-                ? Stream.mkString(Stream.decodeText(handle.stdout))
-                : Effect.succeed(""),
-              handle.exitCode,
-            ],
-            { concurrency: "unbounded" },
-          );
-          return { status: exitCode, stdout };
+    Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const handle = yield* spawner.spawn(
+        ChildProcess.make(command, [...args], {
+          cwd: options.cwd,
+          env: options.env,
+          extendEnv: true,
+          stderr: options.output === "ignore" ? "ignore" : "inherit",
+          stdin: options.output === "inherit" ? "inherit" : "ignore",
+          stdout: STDOUT_MODES[options.output],
         }),
-      ),
-    ).pipe(Effect.orDie),
+      );
+      const [stdout, exitCode] = yield* Effect.all(
+        [
+          options.output === "capture"
+            ? handle.stdout.pipe(Stream.decodeText, Stream.mkString)
+            : Effect.succeed(""),
+          handle.exitCode,
+        ],
+        { concurrency: "unbounded" },
+      );
+      return { status: exitCode, stdout };
+    }).pipe(Effect.scoped, provideNodeServices, Effect.orDie),
 );
 
 const readEnv = (name: string): string | undefined =>

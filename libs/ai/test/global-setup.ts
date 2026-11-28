@@ -10,7 +10,7 @@ const { STORED_PROVIDERS } = storedProviders;
 
 const { resolveLiveAuthProviders } = liveAuth;
 
-declare module "vitest" {
+declare module "vite-plus/test" {
   interface ProvidedContext {
     readonly localLlms: {
       readonly llamaCpp: boolean;

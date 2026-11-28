@@ -129,7 +129,10 @@ const finalizesHeldOutcome = Effect.gen(function* () {
   const path = yield* sqlitePath();
   const held = { outcome: { result: "parent", status: "completed" }, status: "completing" };
   const { parent, children } = yield* seed(path, ["c1"], (set, { parent: parentInner3 }) =>
-    runPromise(Effect.asVoid(Effect.suspend(() => awaited(set(parentInner3, { state: held }))))),
+    Effect.suspend(() => awaited(set(parentInner3, { state: held }))).pipe(
+      Effect.asVoid,
+      runPromise,
+    ),
   );
   let opened = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   yield* until(() => log.includes("run:c1"));
@@ -167,23 +170,19 @@ const resumesBottomUp = Effect.gen(function* () {
     path,
     ["c1"],
     (set, { parent: parentInner, children: childrenInner }) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              set(parentInner, {
-                abortRequested: true,
-                state: {
-                  checkpoint: { phase: "resume", round: 1 },
-                  on: childrenInner,
-                  policy: "allSettled",
-                  status: "waiting",
-                },
-              }),
-            ),
-          ),
+      Effect.suspend(() =>
+        awaited(
+          set(parentInner, {
+            abortRequested: true,
+            state: {
+              checkpoint: { phase: "resume", round: 1 },
+              on: childrenInner,
+              policy: "allSettled",
+              status: "waiting",
+            },
+          }),
         ),
-      ),
+      ).pipe(Effect.asVoid, runPromise),
   );
   const { harness } = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("aborted");

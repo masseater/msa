@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "vp config --no-agent && effect-tsgo patch --oxlint && vpa --prepare"
+    "catalog": "msch-fix",
+    "prepare": "vp config --no-agent && effect-tsgo patch --typescript --oxlint --tsrs && vpa --prepare"
   },
   "devDependencies": {
     "@anthropic-ai/sandbox-runtime": "catalog:",
@@ -14,6 +15,8 @@
     "@effect/tsgo": "catalog:stack",
     "@jridgewell/remapping": "catalog:",
     "@picocss/pico": "catalog:",
+    "@r_masseater/h56m": "catalog:",
+    "@r_masseater/msch": "catalog:",
     "@r_masseater/vite-plus-adopt": "catalog:",
     "@types/d3-array": "catalog:",
     "@types/node": "catalog:",
@@ -25,6 +28,7 @@
     "eslint-plugin-no-comments": "catalog:",
     "fallow": "catalog:stack",
     "fallow-similar-code": "catalog:stack",
+    "fallow-type-aware": "catalog:stack",
     "magic-string": "catalog:",
     "shx": "catalog:",
     "srvx": "catalog:",

@@ -122,7 +122,7 @@ function awaitMemo(
   memo: Deferred.Deferred<string, string>,
 ): Effect.Effect<string, string> {
   return Effect.gen(function* () {
-    const awaited = yield* Effect.result(Deferred.await(memo).pipe(Effect.timeoutOption(TIMEOUT)));
+    const awaited = yield* Deferred.await(memo).pipe(Effect.timeoutOption(TIMEOUT), Effect.result);
     if (Result.isFailure(awaited)) return yield* Effect.fail(awaited.failure);
     if (Option.isNone(awaited.success)) {
       cancel(runtime, threadId);

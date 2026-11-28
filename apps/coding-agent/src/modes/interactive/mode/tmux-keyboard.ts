@@ -21,7 +21,7 @@ function checkTmuxKeyboardSetup(): Promise<string | undefined> {
               stdin: "ignore",
             });
             const [stdout, code] = yield* Effect.all(
-              [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
+              [handle.stdout.pipe(Stream.decodeText, Stream.mkString), handle.exitCode],
               { concurrency: 2 },
             );
             return code === 0 ? stdout.trim() : undefined;

@@ -33,7 +33,7 @@ export default class TerminalWriteLog {
     this.path =
       configured === ""
         ? undefined
-        : Effect.runSync(Effect.cached(resolveWriteLogPath(configured)));
+        : resolveWriteLogPath(configured).pipe(Effect.cached, Effect.runSync);
   }
 
   append(data: string): void {

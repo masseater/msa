@@ -24,21 +24,17 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
 
   function startAnimation(ctx: codingAgentTypes.ExtensionContext) {
     stopAnimation(ctx);
-    fiber = Effect.runFork(
-      Effect.forever(
-        Effect.sync(() => {
-          const frame = BRAILLE_FRAMES[frameIndex % BRAILLE_FRAMES.length];
-          const cwd = baseName(process.cwd());
-          const session = msa.getSessionName();
-          const title =
-            session !== undefined && session.length > 0
-              ? `${frame} msa - ${session} - ${cwd}`
-              : `${frame} msa - ${cwd}`;
-          ctx.ui.setTitle(title);
-          frameIndex++;
-        }).pipe(Effect.andThen(Effect.sleep(80))),
-      ),
-    );
+    fiber = Effect.sync(() => {
+      const frame = BRAILLE_FRAMES[frameIndex % BRAILLE_FRAMES.length];
+      const cwd = baseName(process.cwd());
+      const session = msa.getSessionName();
+      const title =
+        session !== undefined && session.length > 0
+          ? `${frame} msa - ${session} - ${cwd}`
+          : `${frame} msa - ${cwd}`;
+      ctx.ui.setTitle(title);
+      frameIndex++;
+    }).pipe(Effect.andThen(Effect.sleep(80)), Effect.forever, Effect.runFork);
   }
 
   msa.on("agent_start", (_event, ctx) => {

@@ -6,6 +6,8 @@ packages:
   - tools/*
   - .claude
 
+registry: https://npm.flatt.tech/
+
 catalogMode: prefer
 
 catalog:
@@ -15,12 +17,15 @@ catalog:
   "@anthropic-ai/sdk": 0.137.0
   "@ast-grep/cli": 0.51.0
   "@commitlint/config-conventional": 21.2.4
-  "@effect/platform-node": 4.1.4
+  "@earendil-works/gondolin": 0.14.0
+  "@effect/platform-node": 4.1.5
   "@google/genai": 2.32.0
-  "@jridgewell/remapping": ^2.3.5
+  "@jridgewell/remapping": 2.3.5
   "@modelcontextprotocol/sdk": 1.32.2
   "@picocss/pico": 2.1.1
-  "@r_masseater/vite-plus-adopt": 0.9.0
+  "@r_masseater/h56m": 0.3.0
+  "@r_masseater/msch": 0.61.1
+  "@r_masseater/vite-plus-adopt": 0.14.0
   "@secretlint/core": 13.1.0
   "@secretlint/secretlint-rule-preset-recommend": 13.1.0
   "@silvia-odwyer/photon": 0.3.3
@@ -79,19 +84,20 @@ catalog:
 
 catalogs:
   stack:
-    "@effect/tsgo": 0.68.1
-    "@effect/vitest": 4.1.4
-    effect: 4.1.4
-    fallow: 3.42.0
-    fallow-similar-code: 3.42.0
-    vite-plus: 1.6.0
+    "@effect/tsgo": 0.73.4
+    "@effect/vitest": 4.1.5
+    effect: 4.1.5
+    fallow: 3.48.0
+    fallow-similar-code: 3.48.0
+    fallow-type-aware: 3.48.0
+    vite-plus: 1.8.0
 
 overrides:
-  "@effect/platform-node-shared": 4.1.4
-  vite@*: npm:@voidzero-dev/vite-plus-core@1.6.0
+  "@effect/platform-node-shared": 4.1.5
+  vite@*: npm:@voidzero-dev/vite-plus-core@8.3.8001
   "@anthropic-ai/sandbox-runtime>zod": 4.6.7
   simple-git: 4.0.2
-  "steiger>@feature-sliced/steiger-plugin": "-"
+  protobufjs: 7.6.6
   glob@>=9.0.0 <=14.0.1: ^14.0.2
   katex@>=0.11.0 <0.18.2: ^0.19.0
 
@@ -119,7 +125,7 @@ ignoredOptionalDependencies:
 
 minimumReleaseAge: 2880
 minimumReleaseAgeExclude:
-  - "@r_masseater/vite-plus-adopt@0.9.0"
+  - "@r_masseater/*"
 
 audit:
   ignore:

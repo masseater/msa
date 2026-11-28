@@ -14,7 +14,7 @@ const unusedStreamFunction = (): typesModule.StreamFn => () => {
 };
 
 const awaitDeferred = (deferred: Deferred.Deferred<void>): Promise<void> =>
-  Effect.runPromise(Deferred.await(deferred));
+  deferred.pipe(Deferred.await, Effect.runPromise);
 
 const release = (deferred: Deferred.Deferred<void>): void => {
   Deferred.doneUnsafe(deferred, Effect.void);

@@ -45,15 +45,11 @@ type TransferState = { phase: "prepare" } | { phase: "apply"; key: string };
 function transferTask(service: TransferService, interrupt: { first: boolean }) {
   return defineTask<{ amount: number }, TransferState, { receipt: number }>({
     abort: (_task, runtime, ctx) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
-            ),
-          ),
+      Effect.suspend(() =>
+        awaited(
+          runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
         ),
-      ),
+      ).pipe(Effect.asVoid, Effect.runPromise),
     initial: () => ({ phase: "prepare" }),
     name: "test.transfer",
     phases: {

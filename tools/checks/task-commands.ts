@@ -2,16 +2,10 @@ import type shellSyntaxTypes from "./shell-syntax.types.ts";
 import type taskCommandTypes from "./task-commands.types.ts";
 
 type ExportTarget = taskCommandTypes.ExportTarget;
-type PackageEntry = taskCommandTypes.PackageEntry;
-type RunRef = taskCommandTypes.RunRef;
 type TaskCommand = taskCommandTypes.TaskCommand;
-type TaskEntry = taskCommandTypes.TaskEntry;
 
-type NodeFlags = taskCommandTypes.NodeFlags;
 type FlagRead = taskCommandTypes.FlagRead;
 type NodeRun = taskCommandTypes.NodeRun;
-type Parsed = taskCommandTypes.Parsed;
-type Word = shellSyntaxTypes.Word;
 
 const HELP_LINE = /^ {2}(-[^ ].*?)(?: {2,}|$)/u;
 const FLAG_NAME = /^-{1,2}[\w-]+/u;
@@ -35,7 +29,7 @@ const helpEntries = (spec: string) => {
   return aliases.map((alias) => [flagName(alias), takesValue] as const);
 };
 
-const nodeFlags = (help: string): NodeFlags =>
+const nodeFlags = (help: string): taskCommandTypes.NodeFlags =>
   new Map(
     help.split("\n").flatMap((line) => {
       const spec = HELP_LINE.exec(line)?.[1];
@@ -43,34 +37,40 @@ const nodeFlags = (help: string): NodeFlags =>
     }),
   );
 
-const flagTakesValue = (flags: NodeFlags, name: string): boolean | undefined => {
+const flagTakesValue = (flags: taskCommandTypes.NodeFlags, name: string): boolean | undefined => {
   const known = flags.get(name);
   if (known !== undefined || !name.startsWith("--no-")) return known;
   return flags.get(`--${name.slice(5)}`) === false ? false : undefined;
 };
 
-const isWord = (word: Word | undefined, text: string): boolean =>
+const isWord = (word: shellSyntaxTypes.Word | undefined, text: string): boolean =>
   word !== undefined && !word.dynamic && word.text === text;
 
-const withoutPrefix = (rest: ReadonlyArray<Word>, prefix: ReadonlyArray<string>) =>
+const withoutPrefix = (rest: ReadonlyArray<shellSyntaxTypes.Word>, prefix: ReadonlyArray<string>) =>
   prefix.every((text, index) => isWord(rest[index], text)) ? rest.slice(prefix.length) : undefined;
 
-const runsProgram = (stripped: ReadonlyArray<Word> | undefined): boolean =>
+const runsProgram = (stripped: ReadonlyArray<shellSyntaxTypes.Word> | undefined): boolean =>
   stripped !== undefined && !(stripped[0]?.text ?? "-").startsWith("-");
 
-const isAssignment = (word: Word): boolean => !word.dynamic && ASSIGNMENT.test(word.text);
+const isAssignment = (word: shellSyntaxTypes.Word): boolean =>
+  !word.dynamic && ASSIGNMENT.test(word.text);
 
-const programWord = (word: Word): Word =>
+const programWord = (word: shellSyntaxTypes.Word): shellSyntaxTypes.Word =>
   !word.dynamic && word.text.startsWith("/")
     ? { dynamic: false, text: word.text.slice(word.text.lastIndexOf("/") + 1) }
     : word;
 
-const fromProgram = (words: ReadonlyArray<Word>, start: number): ReadonlyArray<Word> => {
+const fromProgram = (
+  words: ReadonlyArray<shellSyntaxTypes.Word>,
+  start: number,
+): ReadonlyArray<shellSyntaxTypes.Word> => {
   const [program, ...rest] = start === -1 ? [] : words.slice(start);
   return program === undefined ? [] : [programWord(program), ...rest];
 };
 
-const unwrap = (words: ReadonlyArray<Word>): ReadonlyArray<Word> => {
+const unwrap = (
+  words: ReadonlyArray<shellSyntaxTypes.Word>,
+): ReadonlyArray<shellSyntaxTypes.Word> => {
   const rest = fromProgram(
     words,
     words.findIndex((word) => !isAssignment(word)),
@@ -85,7 +85,11 @@ const inlineValue = (token: string, name: string): string | undefined =>
 const valueRead = (name: string, inline: string | undefined, next: string | undefined): FlagRead =>
   inline === undefined ? { name, size: 2, value: next ?? "" } : { name, size: 1, value: inline };
 
-const readFlag = (token: string, next: string | undefined, flags: NodeFlags): FlagRead => {
+const readFlag = (
+  token: string,
+  next: string | undefined,
+  flags: taskCommandTypes.NodeFlags,
+): FlagRead => {
   const name = flagName(token);
   const takesValue = flagTakesValue(flags, name);
   if (takesValue === undefined) return { problem: `${name} is not a node option` };
@@ -111,10 +115,10 @@ const isEntry = (token: string): boolean => token === "--" || !token.startsWith(
 
 const parseFrom = (
   args: ReadonlyArray<string>,
-  flags: NodeFlags,
+  flags: taskCommandTypes.NodeFlags,
   test: boolean,
   run: NodeRun,
-): Parsed => {
+): taskCommandTypes.Parsed => {
   const [token, next] = args;
   if (token === undefined || isEntry(token)) return { ...run, entries: entriesFrom(args, test) };
   const read = readFlag(token, next, flags);
@@ -122,10 +126,17 @@ const parseFrom = (
   return parseFrom(args.slice(read.size), flags, test, collectFlag(run, read.name, read.value));
 };
 
-const parseNode = (args: ReadonlyArray<string>, flags: NodeFlags): Parsed =>
+const parseNode = (
+  args: ReadonlyArray<string>,
+  flags: taskCommandTypes.NodeFlags,
+): taskCommandTypes.Parsed =>
   parseFrom(args, flags, args.includes("--test"), { conditions: [], entries: [], preloads: [] });
 
-const runFlag = (ref: RunRef, name: string, value: string): RunRef => ({
+const runFlag = (
+  ref: taskCommandTypes.RunRef,
+  name: string,
+  value: string,
+): taskCommandTypes.RunRef => ({
   filters: name === "--filter" ? [...ref.filters, value] : ref.filters,
   name: ref.name,
   recursive: ref.recursive || name === "-r" || name === "--recursive",
@@ -144,27 +155,37 @@ const readRunFlag = (
   return RUN_VALUE_FLAGS.has(name) ? [name, ...runValue(args, name)] : undefined;
 };
 
-type RunRead = RunRef | { readonly problem: string };
+type RunRead = taskCommandTypes.RunRef | { readonly problem: string };
 
-const finishRun = (ref: RunRef): RunRead => (ref.name === "" ? { problem: "no task name" } : ref);
+const finishRun = (ref: taskCommandTypes.RunRef): RunRead =>
+  ref.name === "" ? { problem: "no task name" } : ref;
 
-const takeRunName = (args: ReadonlyArray<string>, ref: RunRef, name: string): RunRead =>
-  ref.name === "" ? parseRunFrom(args.slice(1), { ...ref, name }) : ref;
+const takeRunName = (
+  args: ReadonlyArray<string>,
+  ref: taskCommandTypes.RunRef,
+  name: string,
+): RunRead => (ref.name === "" ? parseRunFrom(args.slice(1), { ...ref, name }) : ref);
 
-const takeRunFlag = (args: ReadonlyArray<string>, ref: RunRef, token: string): RunRead => {
+const takeRunFlag = (
+  args: ReadonlyArray<string>,
+  ref: taskCommandTypes.RunRef,
+  token: string,
+): RunRead => {
   const read = readRunFlag(args);
   if (read === undefined)
     return { problem: `${flagName(token)} is not a vp run option this check knows` };
   return parseRunFrom(args.slice(read[2]), runFlag(ref, read[0], read[1]));
 };
 
-function parseRunFrom(args: ReadonlyArray<string>, ref: RunRef): RunRead {
+function parseRunFrom(args: ReadonlyArray<string>, ref: taskCommandTypes.RunRef): RunRead {
   const [token] = args;
   if (token === undefined || token === "--") return finishRun(ref);
   return token.startsWith("-") ? takeRunFlag(args, ref, token) : takeRunName(args, ref, token);
 }
 
-const parseRun = (args: ReadonlyArray<string>): RunRef | { readonly problem: string } =>
+const parseRun = (
+  args: ReadonlyArray<string>,
+): taskCommandTypes.RunRef | { readonly problem: string } =>
   parseRunFrom(args, { filters: [], name: "", recursive: false });
 
 const isBuild = (name: string): boolean => name === "build" || name.endsWith("#build");
@@ -207,7 +228,7 @@ const legacyTarget = (main: string | undefined, subpath: string): string =>
   subpath === "." ? `./${main ?? "index.js"}` : subpath;
 
 const packageTarget = (
-  entry: PackageEntry,
+  entry: taskCommandTypes.PackageEntry,
   subpath: string,
   conditions: ReadonlySet<string>,
 ): string | undefined => {
@@ -220,11 +241,11 @@ const packageTarget = (
 const commandText = (command: TaskCommand): string =>
   typeof command === "string" ? command : command.join(" && ");
 
-const taskCommand = (task: TaskEntry): string =>
+const taskCommand = (task: taskCommandTypes.TaskEntry): string =>
   typeof task === "object" && "command" in task ? commandText(task.command) : commandText(task);
 
 const taskScripts = (
-  tasks: Readonly<Record<string, TaskEntry>>,
+  tasks: Readonly<Record<string, taskCommandTypes.TaskEntry>>,
 ): Readonly<Record<string, string>> =>
   Object.fromEntries(Object.entries(tasks).map(([name, task]) => [name, taskCommand(task)]));
 

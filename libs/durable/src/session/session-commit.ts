@@ -85,7 +85,7 @@ const publishCommit = (
 const failWith = (cause: Cause.Cause<never>, cleanup: () => void): Effect.Effect<never> =>
   Effect.suspend(() => {
     cleanup();
-    return Effect.die(Cause.squash(cause));
+    return cause.pipe(Cause.squash, Effect.die);
   });
 
 const applyChange = <T>(

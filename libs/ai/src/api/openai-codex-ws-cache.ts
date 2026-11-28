@@ -25,7 +25,7 @@ const websocketSessionCache = new Map<
 
 function clearIdleTimer(entry: openaiCodexWsCacheTypes.CachedWebSocketConnection): void {
   if (entry.idleTimer === undefined) return;
-  Effect.runFork(Fiber.interrupt(entry.idleTimer));
+  entry.idleTimer.pipe(Fiber.interrupt, Effect.runFork);
   entry.idleTimer = undefined;
 }
 

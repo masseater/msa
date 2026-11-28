@@ -24,7 +24,7 @@ const fingerprintsOf = (file: string): Effect.Effect<string[], Error> =>
       });
       const [output] = yield* Effect.all(
         [
-          Stream.mkString(Stream.decodeText(child.stdout)),
+          child.stdout.pipe(Stream.decodeText, Stream.mkString),
           Stream.runDrain(child.stderr),
           child.exitCode,
         ],

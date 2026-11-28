@@ -79,7 +79,7 @@ export default class DoomOverlayComponent implements tuiTypes.Component {
         this.onExit();
       }
     });
-    this.fiber = Effect.runFork(Effect.forever(tick.pipe(Effect.andThen(Effect.sleep(1000 / 35)))));
+    this.fiber = tick.pipe(Effect.andThen(Effect.sleep(1000 / 35)), Effect.forever, Effect.runFork);
   }
 
   handleInput(data: string): void {

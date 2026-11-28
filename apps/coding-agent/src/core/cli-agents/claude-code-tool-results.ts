@@ -13,7 +13,7 @@ export default class ToolResults {
     }
     const waiter = Deferred.makeUnsafe<CallToolResult>();
     this.waiting.set(id, waiter);
-    return Effect.runPromise(Deferred.await(waiter));
+    return waiter.pipe(Deferred.await, Effect.runPromise);
   }
 
   give(id: string, result: CallToolResult): void {

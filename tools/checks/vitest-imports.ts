@@ -3,17 +3,15 @@ import { createVitest } from "vite-plus/test/node";
 import type { TestProject } from "vite-plus/test/node";
 
 import inputPatterns from "./input-patterns.ts";
+import type taskBuildDepsTypes from "./task-build-deps.types.ts";
 import type vitestImportsTypes from "./vitest-imports.types.ts";
 
 const { coverageOf } = inputPatterns;
 
-type Options = vitestImportsTypes.Options;
-type Problems = Effect.Effect<ReadonlyArray<string>>;
-
 interface Visit {
   readonly covers: ((file: string) => boolean) | undefined;
   readonly mocked: ReadonlySet<string>;
-  readonly options: Options;
+  readonly options: vitestImportsTypes.Options;
   readonly project: TestProject;
   readonly seen: Set<string>;
 }
@@ -49,10 +47,10 @@ const idOf = (resolved: { readonly id: string } | null): string | undefined => {
   return id === undefined || isVirtual(id) ? undefined : id;
 };
 
-const isSource = (options: Options, file: string): boolean =>
+const isSource = (options: vitestImportsTypes.Options, file: string): boolean =>
   file.startsWith(options.root) && !file.includes("/node_modules/");
 
-const isBuildOutput = (options: Options, file: string): boolean =>
+const isBuildOutput = (options: vitestImportsTypes.Options, file: string): boolean =>
   isSource(options, file) && options.relative(file).split("/").includes("dist");
 
 const unresolved = (visit: Visit, spec: string, importer: string, reason: string) =>
@@ -60,7 +58,12 @@ const unresolved = (visit: Visit, spec: string, importer: string, reason: string
     ? [`${visit.options.relative(importer)}: vitest cannot resolve ${spec} (${reason})`]
     : [];
 
-const reached = (visit: Visit, spec: string, importer: string, id: string): Problems => {
+const reached = (
+  visit: Visit,
+  spec: string,
+  importer: string,
+  id: string,
+): taskBuildDepsTypes.Problems => {
   const { options } = visit;
   if (isBuildOutput(options, id))
     return Effect.succeed([
@@ -69,7 +72,7 @@ const reached = (visit: Visit, spec: string, importer: string, id: string): Prob
   return isSource(options, id) ? visitFile(visit, id) : Effect.succeed([]);
 };
 
-function follow(visit: Visit, spec: string, importer: string): Problems {
+function follow(visit: Visit, spec: string, importer: string): taskBuildDepsTypes.Problems {
   if (visit.mocked.has(spec)) return Effect.succeed([]);
   return Effect.flatMap(resolveIn(visit.project, spec, importer), (result) => {
     if (Result.isFailure(result))
@@ -91,7 +94,7 @@ const uncovered = (visit: Visit, file: string): ReadonlyArray<string> =>
 const visitKey = (visit: Visit, file: string): string =>
   `${[...visit.mocked].toSorted().join(",")}|${file}`;
 
-function visitFile(visit: Visit, file: string): Problems {
+function visitFile(visit: Visit, file: string): taskBuildDepsTypes.Problems {
   const key = visitKey(visit, file);
   if (visit.seen.has(key) || file.endsWith(".json")) return Effect.succeed([]);
   visit.seen.add(key);
@@ -118,10 +121,10 @@ const visitEntry = (walk: Walk, entry: string) =>
   );
 
 const projectProblems = (
-  options: Options,
+  options: vitestImportsTypes.Options,
   covers: Visit["covers"],
   project: TestProject,
-): Problems =>
+): taskBuildDepsTypes.Problems =>
   Effect.gen(function* () {
     const walk = { covers, options, project, seen: new Set<string>() };
     const entries = yield* entriesOf(project);
@@ -131,7 +134,10 @@ const projectProblems = (
     return problems.flat().map((problem) => `[${project.name}] ${problem}`);
   });
 
-const walkProjects = (options: Options, covers: Visit["covers"]): Problems =>
+const walkProjects = (
+  options: vitestImportsTypes.Options,
+  covers: Visit["covers"],
+): taskBuildDepsTypes.Problems =>
   Effect.acquireUseRelease(
     Effect.promise(() =>
       createVitest({
@@ -149,7 +155,7 @@ const walkProjects = (options: Options, covers: Visit["covers"]): Problems =>
     (vitest) => Effect.promise(() => vitest.close()),
   );
 
-const violations = (options: Options): Problems => {
+const violations = (options: vitestImportsTypes.Options): taskBuildDepsTypes.Problems => {
   if (options.inputs === undefined) return walkProjects(options, undefined);
   const coverage = coverageOf(options.inputs);
   return "problem" in coverage

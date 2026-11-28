@@ -28,7 +28,7 @@ const latch = <T = void>(): timingTypes.Latch<T> => {
     open: (value) => {
       Deferred.doneUnsafe(deferred, Effect.succeed(value));
     },
-    promise: Effect.runPromise(Deferred.await(deferred)),
+    promise: deferred.pipe(Deferred.await, Effect.runPromise),
     wait: Deferred.await(deferred),
   };
 };

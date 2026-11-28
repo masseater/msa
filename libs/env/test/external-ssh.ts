@@ -45,7 +45,7 @@ function externalTarget(root: string): sshTypes.SshTarget {
 const toJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const log = (text: string): void => {
-  const now = DateTime.formatIso(Effect.runSync(DateTime.now));
+  const now = DateTime.now.pipe(Effect.runSync, DateTime.formatIso);
   process.stderr.write(`[ssh-external ${now}] ${text}\n`);
 };
 

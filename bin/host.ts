@@ -29,7 +29,7 @@ const makeFiles = Effect.gen(function* () {
   };
 });
 
-const hostLayer: Layer.Layer<Host> = Layer.effect(
+const hostLayer = Layer.effect(
   Host,
   Effect.gen(function* () {
     const { path, processes } = yield* ScriptOutput;

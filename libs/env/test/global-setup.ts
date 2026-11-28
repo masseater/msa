@@ -4,7 +4,7 @@ import type { TestProject } from "vite-plus/test/node";
 import daemon from "./daemon.ts";
 import platform from "./platform.ts";
 
-declare module "vitest" {
+declare module "vite-plus/test" {
   interface ProvidedContext {
     readonly deployedName: string;
     readonly sshd: string;
