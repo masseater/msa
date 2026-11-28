@@ -2,19 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
-import argsModule from "../src/cli/args.ts";
 import authCheckRuntime from "../src/cli/auth-check-runtime.ts";
-import authCheck from "../src/cli/auth-check.ts";
 import authCommand from "../src/cli/auth-command.ts";
 import AuthStorage from "../src/core/auth-storage.ts";
-import ReadOnlyAuthStorage from "../src/core/read-only-auth-storage.ts";
 import authCheckSupport from "./auth-check-support.ts";
-const { checkProviderAuth } = authCheck;
 const { createAuthCheckModelRuntime } = authCheckRuntime;
-const { parseArgs } = argsModule;
 const { parseAuthCommand } = authCommand;
 
-const { afterEachHook, beforeEachHook, createRuntime, tempDir } = authCheckSupport;
+const { afterEachHook, beforeEachHook, checkOpenaiAuth, tempDir } = authCheckSupport;
 
 const { awaited, joinPath, pathExists, runTest, toJsonText, writeTextFile } = testing;
 
@@ -28,15 +23,11 @@ const doesNotTreatAnUnresolvedStoredEnvironment = () =>
           openai: { key: "$MISSING_AUTH_CHECK_KEY", type: "api_key" as const },
         }),
       );
-      const runtime = yield* awaited(createRuntime(new ReadOnlyAuthStorage(authPath)));
-
-      yield* awaited(
-        expect(checkProviderAuth(parseArgs(["--provider", "openai"]), runtime)).resolves.toEqual({
-          provider: "openai",
-          reason: "credentials_not_configured",
-          status: "not_ready",
-        }),
-      );
+      expect(yield* checkOpenaiAuth(authPath)).toEqual({
+        provider: "openai",
+        reason: "credentials_not_configured",
+        status: "not_ready",
+      });
     }),
   );
 
@@ -45,15 +36,11 @@ const reportsMalformedAuthStateAsInvalid = () =>
     Effect.gen(function* () {
       const authPath = joinPath(tempDir, "auth.json");
       yield* writeTextFile(authPath, "{invalid-json");
-      const runtime = yield* awaited(createRuntime(new ReadOnlyAuthStorage(authPath)));
-
-      yield* awaited(
-        expect(checkProviderAuth(parseArgs(["--provider", "openai"]), runtime)).resolves.toEqual({
-          provider: "openai",
-          reason: "invalid_state",
-          status: "invalid",
-        }),
-      );
+      expect(yield* checkOpenaiAuth(authPath)).toEqual({
+        provider: "openai",
+        reason: "invalid_state",
+        status: "invalid",
+      });
     }),
   );
 
@@ -61,16 +48,10 @@ const doesNotCreateAnAuthFileOr = () =>
   runTest(
     Effect.gen(function* () {
       const authPath = joinPath(tempDir, "agent", "auth.json");
-      const runtime = yield* awaited(createRuntime(new ReadOnlyAuthStorage(authPath)));
-
-      yield* awaited(
-        expect(
-          checkProviderAuth(parseArgs(["--provider", "openai"]), runtime),
-        ).resolves.toMatchObject({
-          reason: "credentials_not_configured",
-          status: "not_ready",
-        }),
-      );
+      expect(yield* checkOpenaiAuth(authPath)).toMatchObject({
+        reason: "credentials_not_configured",
+        status: "not_ready",
+      });
       expect(yield* pathExists(authPath)).toBe(false);
       expect(yield* pathExists(joinPath(tempDir, "agent"))).toBe(false);
     }),

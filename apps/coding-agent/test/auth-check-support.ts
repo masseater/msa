@@ -4,9 +4,15 @@ import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
+import args from "../src/cli/args.ts";
+import authCheck from "../src/cli/auth-check.ts";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import ModelRuntime from "../src/core/model-runtime.ts";
 import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
+import ReadOnlyAuthStorage from "../src/core/read-only-auth-storage.ts";
+
+const { checkProviderAuth } = authCheck;
+const { parseArgs } = args;
 const { InMemoryModelsStore } = ai;
 
 const {
@@ -41,6 +47,12 @@ function createRuntime(
   );
 }
 
+const checkOpenaiAuth = (authPath: string) =>
+  Effect.gen(function* () {
+    const runtime = yield* awaited(createRuntime(new ReadOnlyAuthStorage(authPath)));
+    return yield* awaited(checkProviderAuth(parseArgs(["--provider", "openai"]), runtime));
+  });
+
 const beforeEachHook = () =>
   runTest(
     Effect.gen(function* () {
@@ -59,6 +71,7 @@ const afterEachHook = () =>
 const authCheckSupport = {
   afterEachHook,
   beforeEachHook,
+  checkOpenaiAuth,
   createRuntime,
   tempDir,
 };
