@@ -2,29 +2,21 @@ import { fileURLToPath } from "node:url";
 
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import loader from "../src/core/extensions/loader.ts";
+import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
 
-const {
-  awaited,
-  dirnameOf,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  resolvePath,
-  runTest,
-  writeTextFile,
-} = testing;
+const { awaited, dirnameOf, joinPath, makeDirectory, resolvePath, runTest, writeTextFile } =
+  testing;
+
+const { useExtensionsDir } = tempDirKit;
+
+const extTemp = useExtensionsDir("msa-ext-test-");
 
 const currentDir = dirnameOf(fileURLToPath(import.meta.url));
-
-let tempDir: string;
-
-let extensionsDir: string;
 
 const extensionCode = `
 		export default function(msa) {
@@ -49,11 +41,11 @@ const reportsErrorsForInvalidExtensionCode = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(
-        joinPath(extensionsDir, "invalid.ts"),
+        joinPath(extTemp.extensionsDir, "invalid.ts"),
         "this is not valid typescript export",
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.path).toContain("invalid.ts");
@@ -64,11 +56,13 @@ const reportsErrorsForInvalidExtensionCode = () =>
 const handlesExplicitlyConfiguredPaths = () =>
   runTest(
     Effect.gen(function* () {
-      const customPath = joinPath(tempDir, "custom-location", "my-ext.ts");
+      const customPath = joinPath(extTemp.path, "custom-location", "my-ext.ts");
       yield* makeDirectory(dirnameOf(customPath));
       yield* writeTextFile(customPath, extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([customPath], tempDir, tempDir));
+      const result = yield* awaited(
+        discoverAndLoadExtensions([customPath], extTemp.path, extTemp.path),
+      );
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -81,7 +75,9 @@ const resolvesDependenciesFromExtensionSOwnNode = () =>
     Effect.gen(function* () {
       const extPath = resolvePath(currentDir, "../examples/extensions/with-deps");
 
-      const result = yield* awaited(discoverAndLoadExtensions([extPath], tempDir, tempDir));
+      const result = yield* awaited(
+        discoverAndLoadExtensions([extPath], extTemp.path, extTemp.path),
+      );
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -107,9 +103,9 @@ const registersMessageAndEntryRenderers = () =>
 				});
 			}
 		`;
-      yield* writeTextFile(joinPath(extensionsDir, "with-renderer.ts"), extCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-renderer.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -127,9 +123,9 @@ const reportsErrorWhenExtensionThrowsDuringInitialization = () =>
 				throw new Error("Initialization failed!");
 			}
 		`;
-      yield* writeTextFile(joinPath(extensionsDir, "throws.ts"), extCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "throws.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.error).toContain("Initialization failed!");
@@ -145,9 +141,9 @@ const reportsErrorWhenExtensionHasNoDefault = () =>
 				msa.registerCommand("test", { handler: async () => {} });
 			}
 		`;
-      yield* writeTextFile(joinPath(extensionsDir, "no-default.ts"), extCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "no-default.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.error).toContain("does not export a valid factory function");
@@ -158,10 +154,16 @@ const reportsErrorWhenExtensionHasNoDefault = () =>
 const allowsMultipleExtensionsToRegisterDifferentTools = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extensionsDir, "tool-a.ts"), extensionCodeWithTool("tool-a"));
-      yield* writeTextFile(joinPath(extensionsDir, "tool-b.ts"), extensionCodeWithTool("tool-b"));
+      yield* writeTextFile(
+        joinPath(extTemp.extensionsDir, "tool-a.ts"),
+        extensionCodeWithTool("tool-a"),
+      );
+      yield* writeTextFile(
+        joinPath(extTemp.extensionsDir, "tool-b.ts"),
+        extensionCodeWithTool("tool-b"),
+      );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(2);
@@ -187,9 +189,9 @@ const loadsExtensionWithEventHandlers = () =>
 				msa.on("agent_end", async () => {});
 			}
 		`;
-      yield* writeTextFile(joinPath(extensionsDir, "with-handlers.ts"), extCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-handlers.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -210,9 +212,9 @@ const loadsExtensionWithShortcuts = () =>
 				});
 			}
 		`;
-      yield* writeTextFile(joinPath(extensionsDir, "with-shortcut.ts"), extCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-shortcut.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -231,9 +233,9 @@ const loadsExtensionWithFlags = () =>
 				});
 			}
 		`;
-      yield* writeTextFile(joinPath(extensionsDir, "with-flag.ts"), extCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-flag.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -241,18 +243,7 @@ const loadsExtensionWithFlags = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir("msa-ext-test-");
-      extensionsDir = joinPath(tempDir, "extensions");
-      yield* makeDirectory(extensionsDir);
-    }),
-  );
-
 describe("extensions discovery 3", () => {
-  beforeEach(beforeEachHook);
-  afterEach(() => runTest(removePath(tempDir)));
   it("reports errors for invalid extension code", reportsErrorsForInvalidExtensionCode);
   it("handles explicitly configured paths", handlesExplicitlyConfiguredPaths);
   it(

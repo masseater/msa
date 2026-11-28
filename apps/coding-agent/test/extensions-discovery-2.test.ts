@@ -1,25 +1,17 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import loader from "../src/core/extensions/loader.ts";
+import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
 
-const {
-  awaited,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
+const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
-let tempDir: string;
+const { useExtensionsDir } = tempDirKit;
 
-let extensionsDir: string;
+const extTemp = useExtensionsDir("msa-ext-test-");
 
 const extensionCode = `
 		export default function(msa) {
@@ -43,7 +35,7 @@ const extensionCodeWithTool = (toolName: string) => `
 const keepsPackageJsonMsaExtensionEntriesWith = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "tilde-package");
+      const subdir = joinPath(extTemp.extensionsDir, "tilde-package");
       const directExtensionPath = joinPath(subdir, "~entry.ts");
       const slashExtensionPath = joinPath(subdir, "~", "entry.ts");
       yield* makeDirectory(joinPath(subdir, "~"));
@@ -59,7 +51,7 @@ const keepsPackageJsonMsaExtensionEntriesWith = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions.map((extension) => extension.path).sort()).toEqual(
@@ -71,7 +63,7 @@ const keepsPackageJsonMsaExtensionEntriesWith = () =>
 const packageJsonCanDeclareMultipleExtensions = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-package");
+      const subdir = joinPath(extTemp.extensionsDir, "my-package");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "ext1.ts"), extensionCode);
       yield* writeTextFile(joinPath(subdir, "ext2.ts"), extensionCode);
@@ -85,7 +77,7 @@ const packageJsonCanDeclareMultipleExtensions = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(2);
@@ -95,7 +87,7 @@ const packageJsonCanDeclareMultipleExtensions = () =>
 const packageJsonWithMsaFieldTakesPrecedence = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-package");
+      const subdir = joinPath(extTemp.extensionsDir, "my-package");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCodeWithTool("from-index"));
       yield* writeTextFile(joinPath(subdir, "custom.ts"), extensionCodeWithTool("from-custom"));
@@ -109,7 +101,7 @@ const packageJsonWithMsaFieldTakesPrecedence = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -123,7 +115,7 @@ const packageJsonWithMsaFieldTakesPrecedence = () =>
 const ignoresPackageJsonWithoutMsaFieldFalls = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-package");
+      const subdir = joinPath(extTemp.extensionsDir, "my-package");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
       yield* writeTextFile(
@@ -134,7 +126,7 @@ const ignoresPackageJsonWithoutMsaFieldFalls = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -145,12 +137,12 @@ const ignoresPackageJsonWithoutMsaFieldFalls = () =>
 const ignoresSubdirectoryWithoutIndexOrPackageJson = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "not-an-extension");
+      const subdir = joinPath(extTemp.extensionsDir, "not-an-extension");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "helper.ts"), extensionCode);
       yield* writeTextFile(joinPath(subdir, "utils.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(0);
@@ -160,13 +152,13 @@ const ignoresSubdirectoryWithoutIndexOrPackageJson = () =>
 const doesNotRecurseBeyondOneLevel = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "container");
+      const subdir = joinPath(extTemp.extensionsDir, "container");
       const nested = joinPath(subdir, "nested");
       yield* makeDirectory(subdir);
       yield* makeDirectory(nested);
       yield* writeTextFile(joinPath(nested, "index.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(0);
@@ -176,13 +168,13 @@ const doesNotRecurseBeyondOneLevel = () =>
 const handlesMixedDirectFilesAndSubdirectories = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extensionsDir, "direct.ts"), extensionCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "direct.ts"), extensionCode);
 
-      const subdir1 = joinPath(extensionsDir, "with-index");
+      const subdir1 = joinPath(extTemp.extensionsDir, "with-index");
       yield* makeDirectory(subdir1);
       yield* writeTextFile(joinPath(subdir1, "index.ts"), extensionCode);
 
-      const subdir2 = joinPath(extensionsDir, "with-manifest");
+      const subdir2 = joinPath(extTemp.extensionsDir, "with-manifest");
       yield* makeDirectory(subdir2);
       yield* writeTextFile(joinPath(subdir2, "entry.ts"), extensionCode);
       yield* writeTextFile(
@@ -190,7 +182,7 @@ const handlesMixedDirectFilesAndSubdirectories = () =>
         yield* toJsonText({ msa: { extensions: ["./entry.ts"] } }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(3);
@@ -200,7 +192,7 @@ const handlesMixedDirectFilesAndSubdirectories = () =>
 const skipsNonExistentPathsDeclaredInPackage = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-package");
+      const subdir = joinPath(extTemp.extensionsDir, "my-package");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "exists.ts"), extensionCode);
       yield* writeTextFile(
@@ -212,7 +204,7 @@ const skipsNonExistentPathsDeclaredInPackage = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -223,9 +215,9 @@ const skipsNonExistentPathsDeclaredInPackage = () =>
 const loadsExtensionsAndRegistersCommands = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extensionsDir, "with-command.ts"), extensionCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-command.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -237,11 +229,11 @@ const loadsExtensionsAndRegistersTools = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(
-        joinPath(extensionsDir, "with-tool.ts"),
+        joinPath(extTemp.extensionsDir, "with-tool.ts"),
         extensionCodeWithTool("my-tool"),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -249,18 +241,7 @@ const loadsExtensionsAndRegistersTools = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir("msa-ext-test-");
-      extensionsDir = joinPath(tempDir, "extensions");
-      yield* makeDirectory(extensionsDir);
-    }),
-  );
-
 describe("extensions discovery 2", () => {
-  beforeEach(beforeEachHook);
-  afterEach(() => runTest(removePath(tempDir)));
   it(
     "keeps package.json msa extension entries with leading tilde package-relative",
     keepsPackageJsonMsaExtensionEntriesWith,

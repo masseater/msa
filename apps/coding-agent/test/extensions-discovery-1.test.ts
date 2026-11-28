@@ -1,26 +1,18 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import loader from "../src/core/extensions/loader.ts";
+import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
 
-const {
-  awaited,
-  basenameOf,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
+const { awaited, basenameOf, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } =
+  testing;
 
-let tempDir: string;
+const { useExtensionsDir } = tempDirKit;
 
-let extensionsDir: string;
+const extTemp = useExtensionsDir("msa-ext-test-");
 
 const extensionCode = `
 		export default function(msa) {
@@ -31,10 +23,10 @@ const extensionCode = `
 const discoversDirectTsFilesInExtensions = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extensionsDir, "foo.ts"), extensionCode);
-      yield* writeTextFile(joinPath(extensionsDir, "bar.ts"), extensionCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "foo.ts"), extensionCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "bar.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(2);
@@ -46,7 +38,7 @@ const loadsTheCodingAgentEntrypointWithoutRewriting = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(
-        joinPath(extensionsDir, "coding-agent-import.ts"),
+        joinPath(extTemp.extensionsDir, "coding-agent-import.ts"),
         `
 				import { getAgentDir } from "@msa/coding-agent";
 				void getAgentDir;
@@ -56,7 +48,7 @@ const loadsTheCodingAgentEntrypointWithoutRewriting = () =>
 			`,
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -66,10 +58,10 @@ const loadsTheCodingAgentEntrypointWithoutRewriting = () =>
 const doesNotInferPackageOwnershipFromAncestor = () =>
   runTest(
     Effect.gen(function* () {
-      const dependencyDir = joinPath(tempDir, "node_modules", "@msa", "coding-agent");
+      const dependencyDir = joinPath(extTemp.path, "node_modules", "@msa", "coding-agent");
       yield* makeDirectory(dependencyDir);
       yield* writeTextFile(
-        joinPath(tempDir, "package.json"),
+        joinPath(extTemp.path, "package.json"),
         yield* toJsonText({
           dependencies: { "@msa/coding-agent": "1.0.0" },
           name: "application",
@@ -89,7 +81,7 @@ const doesNotInferPackageOwnershipFromAncestor = () =>
         "export const physicalDependency = true;",
       );
       yield* writeTextFile(
-        joinPath(extensionsDir, "compiled-esm-extension.js"),
+        joinPath(extTemp.extensionsDir, "compiled-esm-extension.js"),
         `
 				import { physicalDependency } from "@msa/coding-agent";
 				export default function(msa) {
@@ -98,7 +90,7 @@ const doesNotInferPackageOwnershipFromAncestor = () =>
 			`,
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toEqual([]);
       expect(result.extensions).toHaveLength(1);
@@ -111,7 +103,7 @@ const keepsTheTypeOnlyMsaAiOauth = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(
-        joinPath(extensionsDir, "oauth-import.ts"),
+        joinPath(extTemp.extensionsDir, "oauth-import.ts"),
         `
 				import * as oauth from "@msa/ai/oauth";
 				void oauth;
@@ -121,7 +113,7 @@ const keepsTheTypeOnlyMsaAiOauth = () =>
 			`,
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toEqual([]);
       expect(result.extensions).toHaveLength(1);
@@ -131,9 +123,9 @@ const keepsTheTypeOnlyMsaAiOauth = () =>
 const discoversDirectJsFilesInExtensions = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extensionsDir, "foo.js"), extensionCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "foo.js"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -146,11 +138,11 @@ const discoversDirectJsFilesInExtensions = () =>
 const discoversSubdirectoryWithIndexTs = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-extension");
+      const subdir = joinPath(extTemp.extensionsDir, "my-extension");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -162,11 +154,11 @@ const discoversSubdirectoryWithIndexTs = () =>
 const discoversSubdirectoryWithIndexJs = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-extension");
+      const subdir = joinPath(extTemp.extensionsDir, "my-extension");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.js"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -177,12 +169,12 @@ const discoversSubdirectoryWithIndexJs = () =>
 const prefersIndexTsOverIndexJs = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-extension");
+      const subdir = joinPath(extTemp.extensionsDir, "my-extension");
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
       yield* writeTextFile(joinPath(subdir, "index.js"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -193,7 +185,7 @@ const prefersIndexTsOverIndexJs = () =>
 const discoversSubdirectoryWithPackageJsonMsaField = () =>
   runTest(
     Effect.gen(function* () {
-      const subdir = joinPath(extensionsDir, "my-package");
+      const subdir = joinPath(extTemp.extensionsDir, "my-package");
       const srcDir = joinPath(subdir, "src");
       yield* makeDirectory(subdir);
       yield* makeDirectory(srcDir);
@@ -208,7 +200,7 @@ const discoversSubdirectoryWithPackageJsonMsaField = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], tempDir, tempDir));
+      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -217,18 +209,7 @@ const discoversSubdirectoryWithPackageJsonMsaField = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir("msa-ext-test-");
-      extensionsDir = joinPath(tempDir, "extensions");
-      yield* makeDirectory(extensionsDir);
-    }),
-  );
-
 describe("extensions discovery 1", () => {
-  beforeEach(beforeEachHook);
-  afterEach(() => runTest(removePath(tempDir)));
   it("discovers direct .ts files in extensions/", discoversDirectTsFilesInExtensions);
   it(
     "loads the coding-agent entrypoint without rewriting msa-ai provider subpaths",

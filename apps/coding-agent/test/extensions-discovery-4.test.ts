@@ -1,13 +1,14 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
-  testing;
+import tempDirKit from "./temp-dir.ts";
 
-let tempDir: string;
+const { awaited, joinPath, runTest, writeTextFile } = testing;
 
-let extensionsDir: string;
+const { useExtensionsDir } = tempDirKit;
+
+const extTemp = useExtensionsDir("msa-ext-test-");
 
 const extensionCode = `
 		export default function(msa) {
@@ -32,16 +33,16 @@ const loadextensionsOnlyLoadsExplicitPathsWithoutDiscovery = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(
-        joinPath(extensionsDir, "discovered.ts"),
+        joinPath(extTemp.extensionsDir, "discovered.ts"),
         extensionCodeWithTool("discovered"),
       );
 
-      const explicitPath = joinPath(tempDir, "explicit.ts");
+      const explicitPath = joinPath(extTemp.path, "explicit.ts");
       yield* writeTextFile(explicitPath, extensionCodeWithTool("explicit"));
 
       const { loadExtensions } = (yield* awaited(import("../src/core/extensions/loader.ts")))
         .default;
-      const result = yield* awaited(loadExtensions([explicitPath], tempDir));
+      const result = yield* awaited(loadExtensions([explicitPath], extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(1);
@@ -53,29 +54,18 @@ const loadextensionsOnlyLoadsExplicitPathsWithoutDiscovery = () =>
 const loadextensionsWithNoPathsLoadsNothing = () =>
   runTest(
     Effect.gen(function* () {
-      yield* writeTextFile(joinPath(extensionsDir, "discovered.ts"), extensionCode);
+      yield* writeTextFile(joinPath(extTemp.extensionsDir, "discovered.ts"), extensionCode);
 
       const { loadExtensions } = (yield* awaited(import("../src/core/extensions/loader.ts")))
         .default;
-      const result = yield* awaited(loadExtensions([], tempDir));
+      const result = yield* awaited(loadExtensions([], extTemp.path));
 
       expect(result.errors).toHaveLength(0);
       expect(result.extensions).toHaveLength(0);
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir("msa-ext-test-");
-      extensionsDir = joinPath(tempDir, "extensions");
-      yield* makeDirectory(extensionsDir);
-    }),
-  );
-
 describe("extensions discovery 4", () => {
-  beforeEach(beforeEachHook);
-  afterEach(() => runTest(removePath(tempDir)));
   it(
     "loadExtensions only loads explicit paths without discovery",
     loadextensionsOnlyLoadsExplicitPathsWithoutDiscovery,

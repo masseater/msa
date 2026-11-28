@@ -14,6 +14,11 @@ interface AgentDir {
   path: string;
 }
 
+interface ExtensionsDir {
+  extensionsDir: string;
+  path: string;
+}
+
 const useTempDir = (prefix: string): TempDir => {
   const dir: TempDir = { path: "" };
 
@@ -37,25 +42,45 @@ const useTempDir = (prefix: string): TempDir => {
   return dir;
 };
 
-const useAgentDir = (prefix: string): AgentDir => {
-  const temp = useTempDir(prefix);
-  const dir: AgentDir = {
-    agentDir: "",
-    get path() {
-      return temp.path;
-    },
-  };
+const useSubdirectory = (temp: TempDir, name: string): TempDir => {
+  const sub: TempDir = { path: "" };
 
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        dir.agentDir = joinPath(temp.path, "agent");
-        yield* makeDirectory(dir.agentDir);
+        sub.path = joinPath(temp.path, name);
+        yield* makeDirectory(sub.path);
       }),
     ),
   );
 
-  return dir;
+  return sub;
+};
+
+const useAgentDir = (prefix: string): AgentDir => {
+  const temp = useTempDir(prefix);
+  const agent = useSubdirectory(temp, "agent");
+  return {
+    get agentDir() {
+      return agent.path;
+    },
+    get path() {
+      return temp.path;
+    },
+  };
+};
+
+const useExtensionsDir = (prefix: string): ExtensionsDir => {
+  const temp = useTempDir(prefix);
+  const extensions = useSubdirectory(temp, "extensions");
+  return {
+    get extensionsDir() {
+      return extensions.path;
+    },
+    get path() {
+      return temp.path;
+    },
+  };
 };
 
 const useRemovedDirs = (): string[] => {
@@ -89,6 +114,7 @@ const useCleanups = (): { cleanup: () => Promise<void> | void }[] => {
 const tempDirKit = {
   useAgentDir,
   useCleanups,
+  useExtensionsDir,
   useRemovedDirs,
   useTempDir,
 };
