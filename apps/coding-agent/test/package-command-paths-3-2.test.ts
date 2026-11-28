@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
 import codingAgent from "../src/index.ts";
@@ -8,35 +8,18 @@ import mainModule from "../src/main.ts";
 import ConfigSelectorComponent from "../src/modes/interactive/components/config-selector.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
-import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
 const { DefaultPackageManager, SettingsManager } = codingAgent;
 
 const { initTheme } = themeModule;
 const { main } = mainModule;
 
-const { paths, setupPackageTest, teardownPackageTest, toJsonTextSync } = packageCommandPathsSupport;
+const { paths, toJsonTextSync, usePackageTest } = packageCommandPathsSupport;
+
+const pkg = usePackageTest();
 
 const { awaited, fromJsonText, joinPath, readTextFile, runTest, toJsonText, writeTextFile } =
   testing;
-
-let state: packageCommandPathsSupportTypes.PackageTestState;
-
-let tempDir = "";
-
-let agentDir = "";
-
-let projectDir = "";
-
-const assignState = (
-  next: packageCommandPathsSupportTypes.PackageTestState,
-): packageCommandPathsSupportTypes.PackageTestState => {
-  state = next;
-  tempDir = next.tempDir;
-  agentDir = next.agentDir;
-  projectDir = next.projectDir;
-  return next;
-};
 
 const cyclesProjectPackageOverridesInConfigLocal = () =>
   runTest(
@@ -46,14 +29,14 @@ const cyclesProjectPackageOverridesInConfigLocal = () =>
       const settingsManager = yield* Effect.promise(() =>
         SettingsManager.fromStorage(storage, { projectTrusted: true }),
       );
-      const resolvedPaths = paths.extension(joinPath(tempDir, "pkg"), "npm:msa-tools", "user", [
+      const resolvedPaths = paths.extension(joinPath(pkg.tempDir, "pkg"), "npm:msa-tools", "user", [
         "bar.ts",
       ]);
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
         settingsManager,
-        projectDir,
-        agentDir,
+        pkg.projectDir,
+        pkg.agentDir,
         () => {},
         () => {},
         () => {},
@@ -79,7 +62,7 @@ const cyclesProjectPackageOverridesInConfigLocal = () =>
 const togglesBuiltInExtensionsInConfigGlobal = () =>
   runTest(
     Effect.gen(function* () {
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", pkg.tempDir);
       const settingsManager = yield* Effect.promise(() =>
         SettingsManager.fromStorage(new InMemorySettingsStorage(), {
           projectTrusted: true,
@@ -87,17 +70,17 @@ const togglesBuiltInExtensionsInConfigGlobal = () =>
       );
       const resolvedPaths = yield* awaited(
         new DefaultPackageManager({
-          agentDir,
+          agentDir: pkg.agentDir,
           builtinExtensions: ["llama.cpp", "mcp"],
-          cwd: projectDir,
+          cwd: pkg.projectDir,
           settingsManager,
         }).resolution.resolve(),
       );
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
         settingsManager,
-        projectDir,
-        agentDir,
+        pkg.projectDir,
+        pkg.agentDir,
         () => {},
         () => {},
         () => {},
@@ -119,7 +102,7 @@ const togglesBuiltInExtensionsInConfigGlobal = () =>
 const cyclesProjectBuiltInExtensionOverridesIn = () =>
   runTest(
     Effect.gen(function* () {
-      vi.stubEnv("HOME", tempDir);
+      vi.stubEnv("HOME", pkg.tempDir);
       const storage = new InMemorySettingsStorage();
       storage.withLock("global", () => toJsonTextSync({ extensions: ["-builtin:mcp"] }));
       const settingsManager = yield* Effect.promise(() =>
@@ -127,17 +110,17 @@ const cyclesProjectBuiltInExtensionOverridesIn = () =>
       );
       const resolvedPaths = yield* awaited(
         new DefaultPackageManager({
-          agentDir,
+          agentDir: pkg.agentDir,
           builtinExtensions: ["mcp"],
-          cwd: projectDir,
+          cwd: pkg.projectDir,
           settingsManager,
         }).resolution.resolve(),
       );
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
         settingsManager,
-        projectDir,
-        agentDir,
+        pkg.projectDir,
+        pkg.agentDir,
         () => {},
         () => {},
         () => {},
@@ -178,7 +161,7 @@ const showsAFriendlyErrorForUnknownInstall = () =>
 const suggestsTheConfiguredSourceWhenUpdateInput = () =>
   runTest(
     Effect.gen(function* () {
-      const settingsPath = joinPath(agentDir, "settings.json");
+      const settingsPath = joinPath(pkg.agentDir, "settings.json");
       yield* writeTextFile(settingsPath, yield* toJsonText({ packages: ["npm:msa-formatter"] }));
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -224,10 +207,6 @@ const showsAFriendlyErrorForMissingInstall = () =>
   );
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it(
     "cycles project package overrides in config local mode",
     cyclesProjectPackageOverridesInConfigLocal,
@@ -244,10 +223,6 @@ describe("package commands", () => {
 });
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it(
     "suggests the configured source when update input omits the npm prefix",
     suggestsTheConfiguredSourceWhenUpdateInput,

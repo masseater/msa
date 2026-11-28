@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { vi } from "vite-plus/test";
+import { afterEach, beforeEach, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
@@ -15,7 +15,7 @@ const { handlePackageCommand } = packageManagerCli;
 
 const { allowNetwork } = testNetworkEnv;
 
-const { awaited, joinPath, makeDirectory, makeTempDir, removePath, toJsonText } = testing;
+const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText } = testing;
 
 const toJsonTextSync = (value: unknown): string => Effect.runSync(toJsonText(value));
 
@@ -82,6 +82,19 @@ const teardownPackageTest = (
     return removePath(state.tempDir);
   });
 
+const usePackageTest = (): packageCommandPathsSupportTypes.PackageTestState => {
+  const holder = {} as packageCommandPathsSupportTypes.PackageTestState;
+  beforeEach(() =>
+    runTest(
+      Effect.map(setupPackageTest, (next) => {
+        Object.assign(holder, next);
+      }),
+    ),
+  );
+  afterEach(() => runTest(teardownPackageTest(holder)));
+  return holder;
+};
+
 const runPackageCommandDirectly = (args: string[]): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* awaited(handlePackageCommand(args)))) {
@@ -120,6 +133,7 @@ const packageCommandPathsSupport = {
   setupPackageTest,
   teardownPackageTest,
   toJsonTextSync,
+  usePackageTest,
 };
 
 export default packageCommandPathsSupport;

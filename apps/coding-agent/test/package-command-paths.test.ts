@@ -1,14 +1,15 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import ProjectTrustStore from "../src/core/project-trust-store.ts";
 import mainModule from "../src/main.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
-import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
 const { main } = mainModule;
-const { setupPackageTest, teardownPackageTest } = packageCommandPathsSupport;
+const { usePackageTest } = packageCommandPathsSupport;
+
+const pkg = usePackageTest();
 
 const {
   awaited,
@@ -22,36 +23,21 @@ const {
   writeTextFile,
 } = testing;
 
-let state: packageCommandPathsSupportTypes.PackageTestState;
-let agentDir = "";
-let projectDir = "";
-let packageDir = "";
-
-const assignState = (
-  next: packageCommandPathsSupportTypes.PackageTestState,
-): packageCommandPathsSupportTypes.PackageTestState => {
-  state = next;
-  agentDir = next.agentDir;
-  projectDir = next.projectDir;
-  packageDir = next.packageDir;
-  return next;
-};
-
 const shouldPersistGlobalRelativeLocalPackagePaths = () =>
   runTest(
     Effect.gen(function* () {
-      const relativePkgDir = joinPath(projectDir, "packages", "local-package");
+      const relativePkgDir = joinPath(pkg.projectDir, "packages", "local-package");
       yield* makeDirectory(relativePkgDir);
 
       yield* awaited(main(["install", "./packages/local-package"]));
 
-      const settingsPath = joinPath(agentDir, "settings.json");
+      const settingsPath = joinPath(pkg.agentDir, "settings.json");
       const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
         packages?: string[];
       };
       expect(settings.packages?.length).toBe(1);
       const stored = settings.packages?.[0] ?? "";
-      const resolvedFromSettings = yield* realPath(joinPath(agentDir, stored));
+      const resolvedFromSettings = yield* realPath(joinPath(pkg.agentDir, stored));
       expect(resolvedFromSettings).toBe(yield* realPath(relativePkgDir));
     }),
   );
@@ -59,15 +45,15 @@ const shouldPersistGlobalRelativeLocalPackagePaths = () =>
 const shouldRemoveLocalPackagesUsingAPath = () =>
   runTest(
     Effect.gen(function* () {
-      yield* awaited(main(["install", `${packageDir}/`]));
+      yield* awaited(main(["install", `${pkg.packageDir}/`]));
 
-      const settingsPath = joinPath(agentDir, "settings.json");
+      const settingsPath = joinPath(pkg.agentDir, "settings.json");
       const installedSettings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
         packages?: string[];
       };
       expect(installedSettings.packages?.length).toBe(1);
 
-      yield* awaited(main(["remove", `${packageDir}/`]));
+      yield* awaited(main(["remove", `${pkg.packageDir}/`]));
 
       const removedSettings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
         packages?: string[];
@@ -79,9 +65,9 @@ const shouldRemoveLocalPackagesUsingAPath = () =>
 const skipsUntrustedProjectPackageSettings = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -101,12 +87,12 @@ const skipsUntrustedProjectPackageSettings = () =>
 const usesRememberedProjectTrustForList = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, true));
+      yield* awaited(new ProjectTrustStore(pkg.agentDir).set(pkg.projectDir, true));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -126,12 +112,12 @@ const usesRememberedProjectTrustForList = () =>
 const overridesRememberedTrustForListWithNo = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, true));
+      yield* awaited(new ProjectTrustStore(pkg.agentDir).set(pkg.projectDir, true));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -150,9 +136,9 @@ const overridesRememberedTrustForListWithNo = () =>
 const approvesProjectTrustForListWithApprove = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -172,10 +158,6 @@ const approvesProjectTrustForListWithApprove = () =>
   );
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it(
     "should persist global relative local package paths relative to settings.json",
     shouldPersistGlobalRelativeLocalPackagePaths,

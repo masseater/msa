@@ -1,22 +1,18 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import platform from "../src/core/platform/index.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
-import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
 const { readEnv } = platform;
 const { PACKAGE_NAME, VERSION } = config;
 
-const {
-  env,
-  getNewerPatchVersion,
-  runPackageCommandDirectly,
-  setupPackageTest,
-  teardownPackageTest,
-} = packageCommandPathsSupport;
+const { env, getNewerPatchVersion, runPackageCommandDirectly, usePackageTest } =
+  packageCommandPathsSupport;
+
+const pkg = usePackageTest();
 
 const {
   awaited,
@@ -30,27 +26,6 @@ const {
 } = testing;
 
 const twoNodeChildrenTimeout = 60_000;
-
-let state: packageCommandPathsSupportTypes.PackageTestState;
-
-let tempDir = "";
-
-let agentDir = "";
-
-let projectDir = "";
-
-let originalExecPath = "";
-
-const assignState = (
-  next: packageCommandPathsSupportTypes.PackageTestState,
-): packageCommandPathsSupportTypes.PackageTestState => {
-  state = next;
-  tempDir = next.tempDir;
-  agentDir = next.agentDir;
-  projectDir = next.projectDir;
-  originalExecPath = next.originalExecPath;
-  return next;
-};
 
 const allowsExplicitSelfUpdateChecksWhenAutomatic = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -105,13 +80,13 @@ const selfUpdatesThroughTheGlobalNpmPrefixSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const globalPrefix = joinPath(tempDir, "global-prefix");
-    const projectPrefix = joinPath(tempDir, "project-prefix");
+    const globalPrefix = joinPath(pkg.tempDir, "global-prefix");
+    const projectPrefix = joinPath(pkg.tempDir, "project-prefix");
     const selfPackageDir = joinPath(globalPrefix, "lib", "node_modules", "@msa", "coding-agent");
-    const fakeNpmPath = joinPath(tempDir, "fake-npm.cjs");
-    const recordPath = joinPath(tempDir, "self-update.json");
+    const fakeNpmPath = joinPath(pkg.tempDir, "fake-npm.cjs");
+    const recordPath = joinPath(pkg.tempDir, "self-update.json");
     yield* makeDirectory(selfPackageDir);
-    yield* makeDirectory(joinPath(projectDir, ".msa"));
+    yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
     yield* writeTextFile(
       fakeNpmPath,
       `const fs=require("node:fs"),path=require("node:path"),args=process.argv.slice(2),prefix=args[args.indexOf("--prefix")+1];
@@ -133,15 +108,15 @@ const selfUpdatesThroughTheGlobalNpmPrefix = Effect.gen(function* () {
   const { effectRunPromise, fakeNpmPath, globalPrefix, projectPrefix, recordPath, selfPackageDir } =
     yield* selfUpdatesThroughTheGlobalNpmPrefixSetup();
   yield* writeTextFile(
-    joinPath(agentDir, "settings.json"),
+    joinPath(pkg.agentDir, "settings.json"),
     yield* toJsonText({
-      npmCommand: [originalExecPath, fakeNpmPath, "--prefix", globalPrefix],
+      npmCommand: [pkg.originalExecPath, fakeNpmPath, "--prefix", globalPrefix],
     }),
   );
   yield* writeTextFile(
-    joinPath(projectDir, ".msa", "settings.json"),
+    joinPath(pkg.projectDir, ".msa", "settings.json"),
     yield* toJsonText({
-      npmCommand: [originalExecPath, fakeNpmPath, "--prefix", projectPrefix],
+      npmCommand: [pkg.originalExecPath, fakeNpmPath, "--prefix", projectPrefix],
     }),
   );
   vi.stubEnv("MSA_PACKAGE_DIR", selfPackageDir);
@@ -180,7 +155,7 @@ const installsTheLatestReleaseOfTheCurrentSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const globalPrefix = joinPath(tempDir, "global-prefix");
+    const globalPrefix = joinPath(pkg.tempDir, "global-prefix");
     const selfPackageDir = joinPath(
       globalPrefix,
       "lib",
@@ -194,8 +169,8 @@ const installsTheLatestReleaseOfTheCurrentSetup = () =>
 const installsTheLatestReleaseOfTheCurrent = Effect.gen(function* () {
   const { effectRunPromise, globalPrefix, selfPackageDir } =
     yield* installsTheLatestReleaseOfTheCurrentSetup();
-  const fakeNpmPath = joinPath(tempDir, "fake-npm.cjs");
-  const recordPath = joinPath(tempDir, "self-update.json");
+  const fakeNpmPath = joinPath(pkg.tempDir, "fake-npm.cjs");
+  const recordPath = joinPath(pkg.tempDir, "self-update.json");
   yield* makeDirectory(selfPackageDir);
   yield* writeTextFile(
     fakeNpmPath,
@@ -205,9 +180,9 @@ else fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(args)
 `,
   );
   yield* writeTextFile(
-    joinPath(agentDir, "settings.json"),
+    joinPath(pkg.agentDir, "settings.json"),
     yield* toJsonText({
-      npmCommand: [originalExecPath, fakeNpmPath, "--prefix", globalPrefix],
+      npmCommand: [pkg.originalExecPath, fakeNpmPath, "--prefix", globalPrefix],
     }),
   );
   vi.stubEnv("MSA_PACKAGE_DIR", selfPackageDir);
@@ -242,10 +217,6 @@ else fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(args)
 });
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it("allows explicit self-update checks when automatic version checks are disabled", () =>
     runTest(allowsExplicitSelfUpdateChecksWhenAutomatic));
 

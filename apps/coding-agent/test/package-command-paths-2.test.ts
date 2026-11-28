@@ -1,14 +1,15 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import ProjectTrustStore from "../src/core/project-trust-store.ts";
 import mainModule from "../src/main.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
-import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
 const { main } = mainModule;
-const { setupPackageTest, teardownPackageTest } = packageCommandPathsSupport;
+const { usePackageTest } = packageCommandPathsSupport;
+
+const pkg = usePackageTest();
 
 const {
   awaited,
@@ -23,35 +24,16 @@ const {
   writeTextFile,
 } = testing;
 
-let state: packageCommandPathsSupportTypes.PackageTestState;
-let tempDir = "";
-let agentDir = "";
-let projectDir = "";
-let packageDir = "";
-let originalExecPath = "";
-
-const assignState = (
-  next: packageCommandPathsSupportTypes.PackageTestState,
-): packageCommandPathsSupportTypes.PackageTestState => {
-  state = next;
-  tempDir = next.tempDir;
-  agentDir = next.agentDir;
-  projectDir = next.projectDir;
-  packageDir = next.packageDir;
-  originalExecPath = next.originalExecPath;
-  return next;
-};
-
 const usesDefaultProjectTrustForList = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(agentDir, "settings.json"),
+        joinPath(pkg.agentDir, "settings.json"),
         yield* toJsonText({ defaultProjectTrust: "always" }),
       );
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -73,9 +55,9 @@ const usesDefaultProjectTrustForList = () =>
 const usesProjectTrustExtensionsForPackageCommands = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -107,21 +89,21 @@ const usesProjectTrustExtensionsForPackageCommands = () =>
 const doesNotPromptOrAskExtensionsFor = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(agentDir, "settings.json"),
+        joinPath(pkg.agentDir, "settings.json"),
         yield* toJsonText({ defaultProjectTrust: "always" }),
       );
-      const fakeNpmPath = joinPath(tempDir, "fake-project-npm.cjs");
-      const recordPath = joinPath(tempDir, "project-update.json");
+      const fakeNpmPath = joinPath(pkg.tempDir, "fake-project-npm.cjs");
+      const recordPath = joinPath(pkg.tempDir, "project-update.json");
       yield* writeTextFile(
         fakeNpmPath,
         `const fs=require("node:fs");fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(process.argv.slice(2)));`,
       );
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({
-          npmCommand: [originalExecPath, fakeNpmPath],
+          npmCommand: [pkg.originalExecPath, fakeNpmPath],
           packages: ["npm:fake-package"],
         }),
       );
@@ -156,21 +138,21 @@ const doesNotPromptOrAskExtensionsFor = () =>
 const usesSavedProjectTrustDuringUpdate = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
-      const fakeNpmPath = joinPath(tempDir, "fake-trusted-project-npm.cjs");
-      const recordPath = joinPath(tempDir, "trusted-project-update.json");
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
+      const fakeNpmPath = joinPath(pkg.tempDir, "fake-trusted-project-npm.cjs");
+      const recordPath = joinPath(pkg.tempDir, "trusted-project-update.json");
       yield* writeTextFile(
         fakeNpmPath,
         `const fs=require("node:fs");fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(process.argv.slice(2)));`,
       );
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({
-          npmCommand: [originalExecPath, fakeNpmPath],
+          npmCommand: [pkg.originalExecPath, fakeNpmPath],
           packages: ["npm:fake-package"],
         }),
       );
-      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, true));
+      yield* awaited(new ProjectTrustStore(pkg.agentDir).set(pkg.projectDir, true));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -187,16 +169,16 @@ const usesSavedProjectTrustDuringUpdate = () =>
 const letsTrustJsonOverrideDefaultProjectTrust = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(
-        joinPath(agentDir, "settings.json"),
+        joinPath(pkg.agentDir, "settings.json"),
         yield* toJsonText({ defaultProjectTrust: "always" }),
       );
       yield* writeTextFile(
-        joinPath(projectDir, ".msa", "settings.json"),
+        joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, false));
+      yield* awaited(new ProjectTrustStore(pkg.agentDir).set(pkg.projectDir, false));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -215,8 +197,8 @@ const letsTrustJsonOverrideDefaultProjectTrust = () =>
 const blocksLocalPackageChangesWhenProjectIs = () =>
   runTest(
     Effect.gen(function* () {
-      yield* makeDirectory(joinPath(projectDir, ".msa"));
-      yield* writeTextFile(joinPath(projectDir, ".msa", "settings.json"), "{}");
+      yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
+      yield* writeTextFile(joinPath(pkg.projectDir, ".msa", "settings.json"), "{}");
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       try {
@@ -236,26 +218,22 @@ const blocksLocalPackageChangesWhenProjectIs = () =>
 const allowsLocalPackageInstallToInitializeFresh = () =>
   runTest(
     Effect.gen(function* () {
-      yield* awaited(main(["install", "-l", packageDir]));
+      yield* awaited(main(["install", "-l", pkg.packageDir]));
 
-      const settingsPath = joinPath(projectDir, ".msa", "settings.json");
+      const settingsPath = joinPath(pkg.projectDir, ".msa", "settings.json");
       const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
         packages?: string[];
       };
       expect(settings.packages?.length).toBe(1);
       const stored = settings.packages?.[0] ?? "";
-      expect(yield* realPath(joinPath(projectDir, ".msa", stored))).toBe(
-        yield* realPath(packageDir),
+      expect(yield* realPath(joinPath(pkg.projectDir, ".msa", stored))).toBe(
+        yield* realPath(pkg.packageDir),
       );
       expect(process.exitCode).toBeUndefined();
     }),
   );
 
 describe("package commands", () => {
-  beforeEach(() => runTest(setupPackageTest).then(assignState));
-
-  afterEach(() => runTest(teardownPackageTest(state)));
-
   it("uses default project trust for list", usesDefaultProjectTrustForList);
 
   it(

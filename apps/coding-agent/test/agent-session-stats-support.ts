@@ -18,7 +18,7 @@ const { Agent } = agentModule;
 
 const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
-const { createTestResourceLoader } = utilities;
+const { assistantMsg, createTestResourceLoader } = utilities;
 
 const { awaited, runTest } = testing;
 
@@ -47,12 +47,10 @@ function createAssistantMessage(
   timestamp: number,
 ): compatTypes.AssistantMessage {
   return {
+    ...assistantMsg(text),
     api: model.api,
-    content: [{ text, type: "text" as const }],
     model: model.id,
     provider: model.provider,
-    role: "assistant",
-    stopReason: "stop",
     timestamp,
     usage: createUsage(totalTokens),
   };
