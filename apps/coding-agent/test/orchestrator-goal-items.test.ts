@@ -11,6 +11,7 @@ const { makeTempDir, removePath } = testing;
 const { escalateTriage } = triageSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { passingDecide } = reviewVerdictSupport;
 
@@ -40,8 +41,11 @@ const reviewing = (where: { databasePath?: string } = {}) =>
       goalState: GOAL,
       title: "cache reads",
     });
-    setUp.workers[0]!.complete("added the cache and its test");
-    yield* waitFor(() => setUp.workers.length === 2);
+    yield* completing(
+      setUp.workers[0],
+      "added the cache and its test",
+      () => setUp.workers.length === 2,
+    );
     return { ...setUp, reviewer: setUp.workers[1]!, task };
   });
 

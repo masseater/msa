@@ -1,13 +1,15 @@
 import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { vi } from "vite-plus/test";
+import { expect, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import AuthStorage from "../src/core/auth-storage.ts";
+import claudeAccounts from "../src/core/cli-agents/claude-accounts.ts";
 import ModelRuntime from "../src/core/model-runtime.ts";
 
 const { ENV_AGENT_DIR } = config;
+const { loadAccounts } = claudeAccounts;
 const { InMemoryModelsStore } = ai;
 
 const {
@@ -51,6 +53,11 @@ const fakeClaude = Effect.fn("fakeClaude")(function* (script: string) {
   vi.stubEnv("CLAUDE_BIN", joinPath(bin, "claude"));
 });
 
+const expectAccounts = (expected: unknown) =>
+  Effect.gen(function* () {
+    expect(yield* Effect.promise(() => loadAccounts())).toEqual(expected);
+  });
+
 const createModelRuntime = () =>
   awaited(
     ModelRuntime.create({
@@ -66,6 +73,7 @@ const cliAgentsSupport = {
   cleanAgentDir,
   createModelRuntime,
   currentAgentDir,
+  expectAccounts,
   fakeClaude,
   managed,
   prepareAgentDir,

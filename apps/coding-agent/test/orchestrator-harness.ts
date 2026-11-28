@@ -113,13 +113,31 @@ function withTempDir<A, E>(prefix: string, body: (directory: string) => Effect.E
 function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
   return pollUntil(Effect.sync(predicate), attempts, 2);
 }
+function completing(
+  worker: FakeWorker | undefined,
+  result: string,
+  until: () => boolean,
+): Effect.Effect<void> {
+  if (worker === undefined) return Effect.die(new Error("the worker does not exist"));
+  worker.complete(result);
+  return waitFor(until);
+}
 function taskStatus(orchestrator: orchestratorTypes.Orchestrator, id: string): string | undefined {
   return orchestrator.snapshot.tasks.find((task) => task.id === id)?.status;
 }
 function reviews(orchestrator: orchestratorTypes.Orchestrator) {
   return orchestrator.snapshot.tasks.filter((task) => task.kind === "review");
 }
-const harness = { disposeRunning, model, reviews, setup, taskStatus, waitFor, withTempDir };
+const harness = {
+  completing,
+  disposeRunning,
+  model,
+  reviews,
+  setup,
+  taskStatus,
+  waitFor,
+  withTempDir,
+};
 
 const orchestratorHarness = {
   MODELS,

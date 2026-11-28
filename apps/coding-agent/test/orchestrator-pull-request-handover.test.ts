@@ -12,6 +12,7 @@ import worktreeSupport from "./worktree-support.ts";
 const { dirnameOf } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { read, runCommand, sh, shortId } = worktreeSupport;
 const { commitAndPush, withRemote } = pullRequestSupport;
@@ -35,8 +36,7 @@ function openedAndWaitingForCi(
     const number = yield* github.open(branch);
     github.ci.set(yield* github.head(branch), "pending");
     const polled = github.calls + 3;
-    workers[0]!.complete("waiting for CI");
-    yield* waitFor(() => github.calls >= polled);
+    yield* completing(workers[0], "waiting for CI", () => github.calls >= polled);
     return { branch, number, task };
   });
 }
@@ -207,14 +207,14 @@ function partMergedIntoAWaitingTarget(
     });
     const partBranch = `task/${shortId(part.id)}`;
     yield* commitAndPush(workers[1]!.cwd, "part.txt", partBranch);
-    workers[1]!.complete("pushed the part");
-    yield* waitFor(() => workers.length === 3);
-    workers[2]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, part.id) === "completed");
-    workers[0]!.complete("gate done");
-    yield* waitFor(() => workers.length === 4);
-    workers[3]!.complete("acceptable");
-    yield* waitFor(() => workers.length === 5);
+    yield* completing(workers[1], "pushed the part", () => workers.length === 3);
+    yield* completing(
+      workers[2],
+      "acceptable",
+      () => taskStatus(orchestrator, part.id) === "completed",
+    );
+    yield* completing(workers[0], "gate done", () => workers.length === 4);
+    yield* completing(workers[3], "acceptable", () => workers.length === 5);
     return { part, partBranch, target, targetBranch: `task/${shortId(target.id)}` };
   });
 }
@@ -245,8 +245,11 @@ const showsTheTargetPullRequestOnAMergedTask = () =>
         yield* waitFor(() => workers.length === 6);
         expect((yield* read(orchestrator, part.id)).pullRequest?.number).toBe(number);
 
-        workers[5]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, target.id) === "completed");
+        yield* completing(
+          workers[5],
+          "acceptable",
+          () => taskStatus(orchestrator, target.id) === "completed",
+        );
         expect(github.merged).toMatchObject([{ number, sha: head }]);
         expect(yield* sh(`git branch --list ${partBranch} ${targetBranch}`, repository)).toBe("");
         expect(yield* sh(`git worktree list --porcelain | grep -c '^worktree'`, repository)).toBe(

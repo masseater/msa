@@ -10,6 +10,7 @@ const { rejection } = orchestratorMergeSupport;
 
 const { create, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { gatedTarget, read } = worktreeSupport;
 
@@ -28,10 +29,12 @@ const refusesToInheritAStartedTarget = () =>
       yield* Effect.promise(() =>
         orchestrator.setDepends({ remove: [part.id], taskIds: [target.id] }),
       );
-      workers[0]!.complete("gate done");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]!.complete("acceptable");
-      yield* waitFor(() => taskStatus(orchestrator, target.id) === "running");
+      yield* completing(workers[0], "gate done", () => workers.length === 3);
+      yield* completing(
+        workers[2],
+        "acceptable",
+        () => taskStatus(orchestrator, target.id) === "running",
+      );
       const before = orchestrator.snapshot.tasks.length;
 
       const refused = yield* rejection(() =>
@@ -69,10 +72,12 @@ const replacesAStartedTargetWithItsSource = () =>
       yield* Effect.promise(() =>
         orchestrator.setDepends({ remove: [part.id], taskIds: [target.id] }),
       );
-      workers[0]!.complete("gate done");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]!.complete("acceptable");
-      yield* waitFor(() => taskStatus(orchestrator, target.id) === "running");
+      yield* completing(workers[0], "gate done", () => workers.length === 3);
+      yield* completing(
+        workers[2],
+        "acceptable",
+        () => taskStatus(orchestrator, target.id) === "running",
+      );
       yield* waitFor(() => workers.length === 4);
 
       const pending = orchestrator.replan({

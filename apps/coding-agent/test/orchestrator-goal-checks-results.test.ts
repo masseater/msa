@@ -10,6 +10,7 @@ const { joinPath, writeTextFile } = testing;
 const { LINT_CHECK, inCheckedRepository, inHeldRepository, lintTaskOf } = goalChecksSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { taskStatus, waitFor } = harness;
 
 const ESCAPED_CASES = [
@@ -35,8 +36,7 @@ for (const { name, check, goalState, written, sent } of ESCAPED_CASES) {
       Effect.gen(function* () {
         yield* create(orchestrator, lintTaskOf([check], { goalState }));
         yield* writeTextFile(joinPath(workers[0]!.cwd, "lint.txt"), written);
-        workers[0]?.complete("lint is clean");
-        yield* waitFor(() => workers[0]?.prompts.length === 2);
+        yield* completing(workers[0], "lint is clean", () => workers[0]?.prompts.length === 2);
         expect(workers[0]?.prompts[1]).toContain(sent);
         expect(workers[0]?.prompts[1]?.match(/<\/check>/gu)).toHaveLength(1);
       }),
@@ -48,19 +48,16 @@ const countsTheRoundsAgainAfterTheChecksPass = () =>
   inHeldRepository(({ held, orchestrator, workers }) =>
     Effect.gen(function* () {
       const task = yield* create(orchestrator, lintTaskOf([LINT_CHECK]));
-      workers[0]?.complete("done, try 1");
-      yield* waitFor(() => held.calls.length === 1);
+      yield* completing(workers[0], "done, try 1", () => held.calls.length === 1);
       held.calls[0]?.release("3 errors\n");
       yield* waitFor(() => workers[0]?.prompts.length === 2);
-      workers[0]?.complete("done, try 2");
-      yield* waitFor(() => held.calls.length === 2);
+      yield* completing(workers[0], "done, try 2", () => held.calls.length === 2);
       yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
       held.calls[1]?.release();
       yield* waitFor(() => workers[0]?.prompts.length === 3);
       expect(workers[0]?.prompts[2]).toContain("also keep the old API");
 
-      workers[0]?.complete("kept the old API");
-      yield* waitFor(() => held.calls.length === 3);
+      yield* completing(workers[0], "kept the old API", () => held.calls.length === 3);
       held.calls[2]?.release("3 errors\n");
       yield* waitFor(() => workers[0]?.prompts.length === 4);
       expect(workers[0]?.prompts[3]).toContain("goal-checks-failed");

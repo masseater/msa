@@ -10,7 +10,7 @@ import worktreeSupport from "./worktree-support.ts";
 const { joinPath, pathExists, pollUntil, writeTextFile } = testing;
 const { GIT, runCommand, sh, shortId } = worktreeSupport;
 const { create } = orchestratorSupport;
-const { setup, taskStatus, waitFor, withTempDir } = orchestratorHarness.harness;
+const { completing, setup, taskStatus, withTempDir } = orchestratorHarness.harness;
 
 interface Remote {
   repository: string;
@@ -130,8 +130,7 @@ function reviewed(remote: Remote, options: orchestratorHarnessTypes.HarnessOptio
     const head = yield* remote.github.head(run.branch);
     remote.github.ci.set(head, "success");
     const worktree = run.workers[0]!.cwd;
-    run.workers[0]!.complete("CI is green");
-    yield* waitFor(() => run.workers.length === 2);
+    yield* completing(run.workers[0], "CI is green", () => run.workers.length === 2);
     return { ...run, head, worktree };
   });
 }
@@ -169,8 +168,7 @@ function acceptedMerge<E>({
   return reviewedScenario((run) =>
     Effect.gen(function* () {
       prepare(run);
-      run.workers[1]!.complete("acceptable");
-      yield* waitFor(() => until(run));
+      yield* completing(run.workers[1], "acceptable", () => until(run));
       yield* check(run);
     }),
   );

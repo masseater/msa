@@ -10,6 +10,7 @@ const { rejection } = orchestratorMergeSupport;
 
 const { create, replan, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { GIT, gatedTarget, read, runCommand, sh, shortId, withRepository } = worktreeSupport;
 
@@ -127,13 +128,10 @@ const listsOnlyTheSourcesStillWorking = () =>
           }),
         );
 
-        workers[0]!.complete("gate done");
-        yield* waitFor(() => workers.length === 5);
+        yield* completing(workers[0], "gate done", () => workers.length === 5);
         workers[4]!.complete("acceptable");
-        workers[3]!.complete("kept part pushed");
-        yield* waitFor(() => workers.length === 6);
-        workers[5]!.complete("acceptable");
-        yield* waitFor(() => workers.length === 7);
+        yield* completing(workers[3], "kept part pushed", () => workers.length === 6);
+        yield* completing(workers[5], "acceptable", () => workers.length === 7);
 
         const prompt = workers[6]!.prompts[0] ?? "";
         expect(prompt).toContain(`- task/${shortId(kept.id)} (task ${kept.id} "kept part")`);

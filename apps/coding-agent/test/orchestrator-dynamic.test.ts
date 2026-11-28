@@ -5,6 +5,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 
 const { reviews, setup, taskStatus, waitFor } = harness;
 
@@ -22,14 +23,16 @@ const waitsAgainForADependencyAddedAfter = () =>
       yield* Effect.promise(() => orchestrator.stop(a.id));
       yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
       yield* Effect.promise(() => orchestrator.rerun(a.id));
-      workers[2]?.complete("a first pass");
-      yield* waitFor(() => taskStatus(orchestrator, a.id) === "waiting");
+      yield* completing(
+        workers[2],
+        "a first pass",
+        () => taskStatus(orchestrator, a.id) === "waiting",
+      );
       expect(
         orchestrator.snapshot.tasks.find((task) => task.id === a.id)?.waitingReason?.kind,
       ).toBe("dependencies");
 
-      workers[1]?.complete("c done");
-      yield* waitFor(() => workers.length === 4);
+      yield* completing(workers[1], "c done", () => workers.length === 4);
       workers[3]?.complete("c reviewed");
       yield* waitFor(() =>
         workers.some(

@@ -38,64 +38,83 @@ afterEach(() =>
 const writeAuthJson = (data: Record<string, unknown>): Effect.Effect<void> =>
   writeJsonFile(authJsonPath, data);
 
-const readsAndResolvesStoredApiKeyCredentials = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* writeAuthJson({
+const oauthCredential = () => ({
+  access: "access-token",
+  expires: currentTimeMillis() + 60_000,
+  refresh: "refresh-token",
+  type: "oauth" as const,
+});
+
+interface ReadCase {
+  readonly env?: Record<string, string>;
+  readonly exact: boolean;
+  readonly expected: () => Record<string, unknown>;
+  readonly name: string;
+  readonly stored: () => { memory: boolean; credentials: Record<string, unknown> };
+}
+
+const readCases: readonly ReadCase[] = [
+  {
+    env: { TEST_AUTH_STORAGE_KEY: "environment-key" },
+    exact: true,
+    expected: () => ({ key: "environment-key", type: "api_key" }),
+    name: "reads and resolves stored API-key credentials",
+    stored: () => ({
+      credentials: {
         "anthropic-api": { key: "$TEST_AUTH_STORAGE_KEY", type: "api_key" as const },
-      });
-      const storage = AuthStorage.create(authJsonPath);
-      expect(yield* awaited(storage.read("anthropic-api"))).toEqual({
-        key: "environment-key",
-        type: "api_key" as const,
-      });
-    }).pipe(withEnv({ TEST_AUTH_STORAGE_KEY: "environment-key" })),
-  );
-
-const resolvesCommandBackedApiKeyCredentials = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* writeAuthJson({
+      },
+      memory: false,
+    }),
+  },
+  {
+    exact: true,
+    expected: () => ({ key: "command-key", type: "api_key" }),
+    name: "resolves command-backed API-key credentials",
+    stored: () => ({
+      credentials: {
         "anthropic-api": { key: "!printf 'command-key'", type: "api_key" as const },
-      });
-      const storage = AuthStorage.create(authJsonPath);
-      expect(yield* awaited(storage.read("anthropic-api"))).toEqual({
-        key: "command-key",
-        type: "api_key" as const,
-      });
+      },
+      memory: false,
     }),
-  );
-
-const returnsOauthCredentialsUnchanged = () =>
-  runTest(
-    Effect.gen(function* () {
-      const credential = {
-        access: "access-token",
-        expires: currentTimeMillis() + 60_000,
-        refresh: "refresh-token",
-        type: "oauth" as const,
-      };
-      const storage = AuthStorage.inMemory({ "anthropic-api": credential });
-      expect(yield* awaited(storage.read("anthropic-api"))).toEqual(credential);
+  },
+  {
+    exact: true,
+    expected: () => oauthCredential(),
+    name: "returns OAuth credentials unchanged",
+    stored: () => ({ credentials: { "anthropic-api": oauthCredential() }, memory: true }),
+  },
+  {
+    exact: false,
+    expected: () => ({
+      env: { REGION: "test-region", SCOPED_KEY: "scoped-value" },
+      key: "scoped-value",
     }),
-  );
-
-const credentialScopedEnvTakesPrecedenceAndRemains = () =>
-  runTest(
-    Effect.gen(function* () {
-      yield* writeAuthJson({
+    name: "credential-scoped env takes precedence and remains inspectable",
+    stored: () => ({
+      credentials: {
         "anthropic-api": {
           env: { REGION: "test-region", SCOPED_KEY: "scoped-value" },
           key: "$SCOPED_KEY",
           type: "api_key" as const,
         },
-      });
-      const storage = AuthStorage.create(authJsonPath);
-      expect(yield* awaited(storage.read("anthropic-api"))).toMatchObject({
-        env: { REGION: "test-region", SCOPED_KEY: "scoped-value" },
-        key: "scoped-value",
-      });
+      },
+      memory: false,
     }),
+  },
+];
+
+const readsStoredCredential = ({ env, exact, expected, stored }: ReadCase) =>
+  runTest(
+    Effect.gen(function* () {
+      const { credentials, memory } = stored();
+      if (!memory) yield* writeAuthJson(credentials);
+      const storage = memory
+        ? AuthStorage.inMemory(credentials as never)
+        : AuthStorage.create(authJsonPath);
+      const read = yield* awaited(storage.read("anthropic-api"));
+      if (exact) expect(read).toEqual(expected());
+      else expect(read).toMatchObject(expected());
+    }).pipe(withEnv(env ?? {})),
   );
 
 const modifyPersistsACredentialWhilePreservingUnrelated = () =>
@@ -221,16 +240,7 @@ const doesNotOverwriteMalformedAuthFiles = () =>
   );
 
 describe("AuthStorage", () => {
-  test("reads and resolves stored API-key credentials", readsAndResolvesStoredApiKeyCredentials);
-
-  test("resolves command-backed API-key credentials", resolvesCommandBackedApiKeyCredentials);
-
-  test("returns OAuth credentials unchanged", returnsOauthCredentialsUnchanged);
-
-  test(
-    "credential-scoped env takes precedence and remains inspectable",
-    credentialScopedEnvTakesPrecedenceAndRemains,
-  );
+  test.each(readCases)("$name", readsStoredCredential);
 
   test(
     "modify persists a credential while preserving unrelated external edits",

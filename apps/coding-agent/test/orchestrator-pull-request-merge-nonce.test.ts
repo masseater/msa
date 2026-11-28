@@ -7,7 +7,7 @@ import pullRequestSupport from "./pull-request-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { dirnameOf, joinPath } = testing;
-const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, setup, taskStatus, waitFor } = orchestratorHarness.harness;
 const { acceptedMerge, cleanedUp, reviewed, reviewedScenario, withRemote } = pullRequestSupport;
 const { runCommand } = worktreeSupport;
 
@@ -63,8 +63,11 @@ const stopsWhenAnUnansweredMergeIsSomeoneElses = reviewedScenario((run) =>
       github.beforeMerge = undefined;
       commit = yield* github.mergeOutside(number, "harness");
     });
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     expect(taskStatus(orchestrator, taskId)).toBe("stopped");
     expect(github.pulls[0]).toMatchObject({ head, state: "MERGED" });
     const stopped = reports.at(-1)?.text ?? "";

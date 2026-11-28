@@ -13,6 +13,7 @@ const { joinPath, makeTempDir, removePath } = testing;
 const { LINT_CHECK } = goalChecksSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { sh, withRepository } = worktreeSupport;
 const { runCommand } = orchestratorCallbacks;
@@ -47,10 +48,16 @@ function lintAfterABlocker(session: Session, cwd: string) {
 
 function finishBlocker(session: Session, blockerId: string) {
   return Effect.gen(function* () {
-    session.workers[0]!.complete("the notes are in notes.md");
-    yield* waitFor(() => session.workers.length === 2);
-    session.workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(session.orchestrator, blockerId) === "completed");
+    yield* completing(
+      session.workers[0],
+      "the notes are in notes.md",
+      () => session.workers.length === 2,
+    );
+    yield* completing(
+      session.workers[1],
+      "acceptable",
+      () => taskStatus(session.orchestrator, blockerId) === "completed",
+    );
   });
 }
 

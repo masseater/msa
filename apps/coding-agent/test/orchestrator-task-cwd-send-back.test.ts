@@ -6,7 +6,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import reviewVerdictSupport from "./review-verdict-support.ts";
 import taskCwdFollowUpSupport from "./task-cwd-follow-up-support.ts";
 
-const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, setup, taskStatus, waitFor } = orchestratorHarness.harness;
 const { classifierDecide } = reviewVerdictSupport;
 const { lintTask, refusalsOf, removeTaskCwd, reportedStarted, threadsOf, withLintRepository } =
   taskCwdFollowUpSupport;
@@ -20,12 +20,14 @@ const doesNotReportARefusedSendBackAsStarted = () =>
         const session = setup({ cwd: repository, decide, runCommand });
         const { orchestrator } = session;
         const lint = yield* lintTask(session, repository, false);
-        session.workers[0]!.complete("lint is clean");
-        yield* waitFor(() => session.workers.length === 2);
+        yield* completing(session.workers[0], "lint is clean", () => session.workers.length === 2);
         yield* removeTaskCwd(repository);
 
-        session.workers[1]!.complete("Not acceptable.\nlint.txt still lists errors");
-        yield* waitFor(() => refusalsOf(session, lint.id).length === 1);
+        yield* completing(
+          session.workers[1],
+          "Not acceptable.\nlint.txt still lists errors",
+          () => refusalsOf(session, lint.id).length === 1,
+        );
         yield* waitFor(() =>
           session.reports.some(
             (report) => report.details.taskId === lint.id && report.details.role === "reviewer",

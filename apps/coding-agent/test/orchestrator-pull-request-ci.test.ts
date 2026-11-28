@@ -8,6 +8,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { read } = worktreeSupport;
 const { commitAndPush, withRemote, openedTask } = pullRequestSupport;
@@ -104,8 +105,11 @@ const passesAGreenRerunOfACancelledCheck = () =>
         const head = yield* github.head(branch);
         github.ci.set(head, "success");
         github.rerun.add(head);
-        workers[0]!.complete("the edited body restarted verify, which passed");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(
+          workers[0],
+          "the edited body restarted verify, which passed",
+          () => workers.length === 2,
+        );
         expect(workers[0]!.prompts).toHaveLength(1);
       }),
     ),
@@ -146,13 +150,19 @@ const passesAPullRequestWithoutChecks = () =>
       Effect.gen(function* () {
         const { github } = remote;
         const { orchestrator, workers, number, taskId } = yield* openedTask(remote);
-        workers[0]!.complete("opened, and this repository has no CI");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(
+          workers[0],
+          "opened, and this repository has no CI",
+          () => workers.length === 2,
+        );
         expect((yield* Effect.promise(() => orchestrator.read(taskId))).pullRequest?.ci).toBe(
           "none",
         );
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+        yield* completing(
+          workers[1],
+          "acceptable",
+          () => taskStatus(orchestrator, taskId) === "completed",
+        );
         expect(github.merged).toMatchObject([{ number }]);
       }),
     ),
@@ -187,8 +197,11 @@ const stopsWhenGhCannotReadPullRequests = () =>
             yield* openedTask(remote);
           yield* read(orchestrator, taskId);
           github.unavailable = failure;
-          workers[0]!.complete("done");
-          yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+          yield* completing(
+            workers[0],
+            "done",
+            () => taskStatus(orchestrator, taskId) === "stopped",
+          );
           expect(workers[0]!.prompts).toHaveLength(1);
           expect(reports.at(-1)?.text).toContain(failure.stderr);
           expectsOpenPullRequest(reports.at(-1), "stopped", number, branch);
@@ -208,18 +221,18 @@ const sendsBackWhenTheBodyChangedAfterReview = () =>
       Effect.gen(function* () {
         const { github } = remote;
         const { orchestrator, reports, workers, number, taskId } = yield* openedTask(remote);
-        workers[0]!.complete("opened");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "opened", () => workers.length === 2);
         github.pulls[0]!.body = "Rewritten after the review.";
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => workers.length === 3);
+        yield* completing(workers[1], "acceptable", () => workers.length === 3);
         expect(github.merged).toEqual([]);
         expect(reports.at(-1)?.details.status).toBe("sent-back");
 
-        workers[2]!.complete("the body now matches the diff");
-        yield* waitFor(() => workers.length === 4);
-        workers[3]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+        yield* completing(workers[2], "the body now matches the diff", () => workers.length === 4);
+        yield* completing(
+          workers[3],
+          "acceptable",
+          () => taskStatus(orchestrator, taskId) === "completed",
+        );
         expect(github.merged).toMatchObject([{ number }]);
       }),
     ),
@@ -238,8 +251,7 @@ const recordsNothingFromACheckThatOutlivedItsRun = () =>
         const { orchestrator, workers, branch, taskId } = yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "pending");
         const polled = github.calls + 2;
-        workers[0]!.complete("waiting for CI");
-        yield* waitFor(() => github.calls >= polled);
+        yield* completing(workers[0], "waiting for CI", () => github.calls >= polled);
 
         github.hold();
         const inFlight = github.calls + 1;

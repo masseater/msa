@@ -33,6 +33,7 @@ const {
   accountsFile,
   cleanAgentDir,
   currentAgentDir,
+  expectAccounts,
   fakeClaude,
   managed,
   prepareAgentDir,
@@ -89,10 +90,7 @@ const keepsTheImplicitDefaultAccountWhenThe = () =>
   runTest(
     Effect.gen(function* () {
       yield* Effect.promise(() => addAccount("work"));
-      expect(yield* accountsNow).toEqual([
-        { name: "default" },
-        { configDir: managed("work"), name: "work" },
-      ]);
+      yield* expectAccounts([{ name: "default" }, { configDir: managed("work"), name: "work" }]);
     }),
   );
 

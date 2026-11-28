@@ -12,6 +12,7 @@ const { store } = storeModule;
 const { replanStore } = replanStoreModule;
 const { create } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { joinPath, makeTempDir, removeDirs, runTest } = testing;
 
@@ -158,8 +159,7 @@ it("keeps a task closed when the run it had already started reports", () =>
       const other = store.openDatabase(path);
       store.closeTask(other, a.id, "rp-elsewhere", 2);
       other.close();
-      workers[0]?.complete("the docs are current");
-      yield* waitFor(() => reports.length > 0);
+      yield* completing(workers[0], "the docs are current", () => reports.length > 0);
       yield* Effect.sleep(20);
       expect(taskStatus(orchestrator, a.id)).toBe("closed");
       expect(workers).toHaveLength(1);

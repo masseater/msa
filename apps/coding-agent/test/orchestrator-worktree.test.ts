@@ -9,6 +9,7 @@ import worktreeSupport from "./worktree-support.ts";
 const { joinPath } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor, withTempDir } = harness;
 const { GIT, commitOnBranch, gatedTarget, read, runCommand, sh, shortId, withRepository } =
   worktreeSupport;
@@ -91,17 +92,18 @@ const branchesFromTheMergeTarget = () =>
         expect((yield* read(orchestrator, target.id)).dependsOn).toEqual(
           [gate.id, part.id].toSorted(),
         );
-        workers[0]!.complete("gate done");
-        yield* waitFor(() => workers.length === 3);
-        workers[2]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, gate.id) === "completed");
+        yield* completing(workers[0], "gate done", () => workers.length === 3);
+        yield* completing(
+          workers[2],
+          "acceptable",
+          () => taskStatus(orchestrator, gate.id) === "completed",
+        );
         expect(taskStatus(orchestrator, target.id)).toBe("waiting");
         expect(workers).toHaveLength(3);
 
         partWorker.complete("part pushed");
         yield* waitFor(() => workers.length === 4);
-        workers[3]!.complete("acceptable");
-        yield* waitFor(() => workers.length === 5);
+        yield* completing(workers[3], "acceptable", () => workers.length === 5);
         const targetWorker = workers[4]!;
         expect(yield* sh("git rev-parse --abbrev-ref HEAD", targetWorker.cwd)).toBe(targetBranch);
         expect(yield* sh("git log -1 --format=%s", targetWorker.cwd)).toBe("target");

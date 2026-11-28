@@ -7,7 +7,7 @@ import pullRequestSupport from "./pull-request-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, writeTextFile } = testing;
-const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, setup, taskStatus } = orchestratorHarness.harness;
 const { cleanedUp, commitAndPush, reviewed, withRemote } = pullRequestSupport;
 const { GIT, runCommand, sh } = worktreeSupport;
 
@@ -205,8 +205,11 @@ const completesAStoppedTask = reviewedScenario((run, remote) =>
     const { github } = remote;
     const { orchestrator, workers, branch, head, number, taskId, worktree } = run;
     github.mergeRefusal = REFUSED;
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     expect(taskStatus(orchestrator, taskId)).toBe("stopped");
     expect(github.pulls[0]?.state).toBe("OPEN");
     github.mergeRefusal = undefined;
@@ -235,8 +238,11 @@ const stopsOnAnOutsideMergeOfAStoppedTask = reviewedScenario((run, remote) =>
     const { github } = remote;
     const { orchestrator, workers, head, number, taskId, worktree, branch } = run;
     github.mergeRefusal = REFUSED;
-    workers[1]!.complete("acceptable");
-    yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+    yield* completing(
+      workers[1],
+      "acceptable",
+      () => taskStatus(orchestrator, taskId) !== "running",
+    );
     yield* commitAndPush(worktree, "late.txt", branch);
     const late = yield* github.head(branch);
     github.ci.set(late, "success");

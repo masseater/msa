@@ -9,7 +9,7 @@ import providerWaitSupport from "./provider-wait-support.ts";
 import triageSupport from "./triage-support.ts";
 
 const { create } = orchestratorSupport;
-const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, setup, taskStatus, waitFor } = orchestratorHarness.harness;
 const { advance, fakeClock, settledUntil } = watchdogSupport;
 const { HOUR, MINUTE, sessionLimit } = providerWaitSupport;
 const { escalateTriage } = triageSupport;
@@ -91,8 +91,7 @@ it("keeps a reviewer answered by send_message from resuming while a dependency a
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 2 });
       const a = yield* create(orchestrator, work("a"));
-      workers[0]!.complete("a done");
-      yield* waitFor(() => workers.length === 2);
+      yield* completing(workers[0], "a done", () => workers.length === 2);
       const reviewer = workers[1]!;
       yield* Effect.promise(() => reviewer.requestDecision(REQUEST));
       yield* escalateTriage(workers);

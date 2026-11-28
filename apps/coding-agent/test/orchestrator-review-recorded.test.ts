@@ -11,6 +11,7 @@ import triageSupport from "./triage-support.ts";
 const { isTriage, runningTriage } = triageSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { classifierDecide } = reviewVerdictSupport;
 
@@ -58,8 +59,11 @@ const reviewing = (decide: Decide) =>
       goalState: GOAL,
       title: "cache reads",
     });
-    setUp.workers[0]!.complete("added the cache, its test, and the README section");
-    yield* waitFor(() => setUp.workers.length === 2);
+    yield* completing(
+      setUp.workers[0],
+      "added the cache, its test, and the README section",
+      () => setUp.workers.length === 2,
+    );
     return { ...setUp, reviewer: setUp.workers[1]!, task };
   });
 

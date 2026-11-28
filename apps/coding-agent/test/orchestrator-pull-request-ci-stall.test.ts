@@ -7,7 +7,7 @@ import reviewVerdictSupport from "./review-verdict-support.ts";
 import triageSupport from "./triage-support.ts";
 
 const { runningTriage } = triageSupport;
-const { taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, taskStatus, waitFor } = orchestratorHarness.harness;
 const { openedTask, withRemote } = pullRequestSupport;
 const { classifierDecide } = reviewVerdictSupport;
 
@@ -27,8 +27,11 @@ const stalledCi = (remote: Remote, options: Parameters<typeof openedTask>[1] = {
     const { github } = remote;
     const opened = yield* openedTask(remote, { ciWaitMs: 50, ...options });
     github.ci.set(yield* github.head(opened.branch), "pending");
-    opened.workers[0]!.complete("waiting for CI");
-    yield* waitFor(() => runningTriage(opened.workers) !== undefined);
+    yield* completing(
+      opened.workers[0],
+      "waiting for CI",
+      () => runningTriage(opened.workers) !== undefined,
+    );
     return { ...opened, triage: runningTriage(opened.workers)! };
   });
 

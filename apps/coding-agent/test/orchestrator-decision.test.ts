@@ -11,6 +11,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { classifierDecide, reportOf } = reviewVerdictSupport;
 const { commitAndPush, withRemote } = pullRequestSupport;
@@ -74,10 +75,12 @@ const waitsForADecisionTheWorkerAsksFor = () =>
       expect(workers[0]!.prompts[1]).toContain("Keep the old API; the user agreed");
       expect(workers[0]!.prompts[1]).toContain(REQUEST.unmet);
 
-      workers[0]!.complete("kept the old API");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]!.complete("Acceptable.");
-      yield* waitFor(() => taskStatus(orchestrator, first.id) === "completed");
+      yield* completing(workers[0], "kept the old API", () => workers.length === 3);
+      yield* completing(
+        workers[2],
+        "Acceptable.",
+        () => taskStatus(orchestrator, first.id) === "completed",
+      );
       yield* waitFor(() => workers.length === 4);
       expect(taskStatus(orchestrator, second.id)).toBe("running");
     }),
@@ -92,8 +95,7 @@ const waitsForADecisionTheReviewerAsksFor = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, reports, workers, first } = yield* startTwoTasks();
-      workers[0]!.complete("removed the old API");
-      yield* waitFor(() => workers.length === 2);
+      yield* completing(workers[0], "removed the old API", () => workers.length === 2);
       yield* Effect.promise(() => workers[1]!.requestDecision(REQUEST));
       yield* escalateTriage(workers);
       yield* waitFor(() => taskStatus(orchestrator, first.id) === "needs-decision");
@@ -106,8 +108,11 @@ const waitsForADecisionTheReviewerAsksFor = () =>
       yield* waitFor(() => workers[1]!.prompts.length === 2);
       expect(workers).toHaveLength(3);
       expect(workers[1]!.prompts[1]).toContain("Judge it with the old API kept.");
-      workers[1]!.complete("Acceptable.");
-      yield* waitFor(() => taskStatus(orchestrator, first.id) === "completed");
+      yield* completing(
+        workers[1],
+        "Acceptable.",
+        () => taskStatus(orchestrator, first.id) === "completed",
+      );
     }),
   );
 
@@ -136,10 +141,12 @@ const doesNotPassAKnownLimitationInTheReport = () =>
         goalState: "repeated reads hit the cache",
         title: "cache reads",
       });
-      workers[0]!.complete("added the cache");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]!.complete("Acceptable. Known limitation: the second read still goes out.");
-      yield* waitFor(() => workers.length === 3);
+      yield* completing(workers[0], "added the cache", () => workers.length === 2);
+      yield* completing(
+        workers[1],
+        "Acceptable. Known limitation: the second read still goes out.",
+        () => workers.length === 3,
+      );
       expect(taskStatus(orchestrator, task.id)).toBe("running");
       expect(reports.at(-1)?.details.status).toBe("sent-back");
       expect(reports.at(-1)?.text).toContain("Review verdict: fail");
@@ -184,10 +191,8 @@ const doesNotMergeAKnownLimitationInThePullRequest = () =>
           "Adds feature.txt.\n\nKnown limitation: not documented.",
         );
         github.ci.set(yield* github.head(branch), "success");
-        workers[0]!.complete("opened the pull request");
-        yield* waitFor(() => workers.length === 2);
-        workers[1]!.complete("Acceptable.");
-        yield* waitFor(() => workers.length === 3);
+        yield* completing(workers[0], "opened the pull request", () => workers.length === 2);
+        yield* completing(workers[1], "Acceptable.", () => workers.length === 3);
         expect(seen.at(-1)?.["pullRequestBody"]).toContain("Known limitation: not documented.");
         expect(github.merged).toEqual([]);
         expect(taskStatus(orchestrator, task.id)).toBe("running");

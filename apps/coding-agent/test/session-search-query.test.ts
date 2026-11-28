@@ -7,7 +7,8 @@ import type sessionSearchTypes from "../src/core/session-search/session-search.t
 import fixture from "./session-search-fixture.ts";
 
 const { joinPath, removeDirs, runTest } = testing;
-const { assistant, header, makeLocations, toolCall, toolResult, user, writeSession } = fixture;
+const { assistant, header, makeLocations, searchOldest, toolCall, toolResult, user, writeSession } =
+  fixture;
 
 const directories: string[] = [];
 
@@ -40,9 +41,9 @@ const find = (
   query: string,
   filters: sessionSearchTypes.Filters = {},
 ) =>
-  Effect.promise(() =>
-    sessionSearch.searchSessions(locations, { filters, limit: 50, order: "oldest", query }),
-  ).pipe(Effect.map(({ hits }) => hits.map((hit) => `${hit.entryId ?? "?"}:${hit.kind}`)));
+  Effect.promise(() => searchOldest(locations, query, filters)).pipe(
+    Effect.map(({ hits }) => hits.map((hit) => `${hit.entryId ?? "?"}:${hit.kind}`)),
+  );
 
 const matchesJapaneseWordsInsideLongerRuns = () =>
   runTest(

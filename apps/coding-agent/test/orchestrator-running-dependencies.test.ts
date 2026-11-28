@@ -9,6 +9,7 @@ import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 const { runTest } = testing;
 const { create, finishWorkAndReview } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 
 type Orchestrator = orchestratorTypes.Orchestrator;
@@ -86,10 +87,12 @@ const givesARunningWorkerAFinishedDependency = (path: Path) =>
       const done = yield* create(orchestrator, work("done"));
       const a = yield* create(orchestrator, work("a"));
       yield* waitFor(() => workers.length === 2);
-      workers[0]?.complete("done done");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]?.complete("done reviewed");
-      yield* waitFor(() => taskStatus(orchestrator, done.id) === "completed");
+      yield* completing(workers[0], "done done", () => workers.length === 3);
+      yield* completing(
+        workers[2],
+        "done reviewed",
+        () => taskStatus(orchestrator, done.id) === "completed",
+      );
       expect(runningRole(orchestrator, a.id)).toBe("worker");
 
       const refused = yield* addDependency(path, orchestrator, a.id, done.id);
@@ -105,8 +108,7 @@ const holdsARunningReviewOnAnUnfinishedDependency = (path: Path) =>
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 1 });
       const a = yield* create(orchestrator, work("a"));
-      workers[0]?.complete("a done");
-      yield* waitFor(() => runningRole(orchestrator, a.id) === "reviewer");
+      yield* completing(workers[0], "a done", () => runningRole(orchestrator, a.id) === "reviewer");
       const before = yield* create(orchestrator, { ...work("before a"), round: "later" });
 
       const refused = yield* addDependency(path, orchestrator, a.id, before.id);

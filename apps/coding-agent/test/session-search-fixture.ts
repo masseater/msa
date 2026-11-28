@@ -6,6 +6,7 @@ import storeModule from "../src/core/orchestrator/store.ts";
 import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import indexStore from "../src/core/session-search/index-store.ts";
+import sessionSearch from "../src/core/session-search/session-search.ts";
 import type sessionSearchTypes from "../src/core/session-search/session-search.types.ts";
 
 const { store } = storeModule;
@@ -177,6 +178,12 @@ function seedThreads(orchestratorDatabase: string, seeds: readonly ThreadSeed[])
   database.close();
 }
 
+const searchOldest = (
+  locations: sessionSearchTypes.Locations,
+  query: string,
+  filters: sessionSearchTypes.Filters = {},
+) => sessionSearch.searchSessions(locations, { filters, limit: 50, order: "oldest", query });
+
 const sessionSearchFixture = {
   assistant,
   currentIndexPath,
@@ -184,6 +191,7 @@ const sessionSearchFixture = {
   header,
   indexVersionDirectory,
   makeLocations,
+  searchOldest,
   seedThreads,
   sessionText,
   toolCall,

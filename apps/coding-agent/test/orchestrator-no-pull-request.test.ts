@@ -8,6 +8,7 @@ import worktreeSupport from "./worktree-support.ts";
 
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
+const { completing } = harness;
 const { setup, taskStatus, waitFor } = harness;
 const { GIT, gatedTarget, read, runCommand, sh, shortId } = worktreeSupport;
 const { withRemote } = pullRequestSupport;
@@ -39,12 +40,14 @@ const completesWithoutAPullRequest = () =>
         const task = yield* create(orchestrator, TAG_TASK);
         expect(task.opensPullRequest).toBe(false);
 
-        workers[0]!.complete("tagged v1");
-        yield* waitFor(() => workers.length === 2);
+        yield* completing(workers[0], "tagged v1", () => workers.length === 2);
         expect(workers[0]!.prompts).toHaveLength(1);
 
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+        yield* completing(
+          workers[1],
+          "acceptable",
+          () => taskStatus(orchestrator, task.id) === "completed",
+        );
         expect(github.merged).toEqual([]);
         expect((yield* read(orchestrator, task.id)).pullRequest).toBeNull();
         yield* expectCleanedUp(repository, task.id);
@@ -90,8 +93,7 @@ const refusesToCompleteWithCommits = () =>
         yield* waitFor(() => workers.length === 2);
 
         yield* sh(`echo b > b.txt && git add b.txt && ${GIT} commit -q -m b`, worker.cwd);
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => workers.length === 3);
+        yield* completing(workers[1], "acceptable", () => workers.length === 3);
         expect(taskStatus(orchestrator, task.id)).toBe("running");
         expect(reports.at(-1)?.details.status).toBe("sent-back");
         expect(github.merged).toEqual([]);
@@ -120,8 +122,7 @@ const stillAsksForAPullRequestByDefault = () =>
         });
         expect(task.opensPullRequest).toBe(true);
 
-        workers[0]!.complete("tagged v1");
-        yield* waitFor(() => workers[0]!.prompts.length === 2);
+        yield* completing(workers[0], "tagged v1", () => workers[0]!.prompts.length === 2);
         expect(workers).toHaveLength(1);
         expect(taskStatus(orchestrator, task.id)).toBe("running");
         expect((yield* read(orchestrator, task.id)).pullRequest).toBeNull();
@@ -149,10 +150,12 @@ const replanCreatesATaskWithoutAPullRequest = () =>
         const id = result.created[0]!.taskId;
         expect((yield* read(orchestrator, id)).opensPullRequest).toBe(false);
 
-        workers[0]!.complete("tagged v1");
-        yield* waitFor(() => workers.length === 2);
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, id) === "completed");
+        yield* completing(workers[0], "tagged v1", () => workers.length === 2);
+        yield* completing(
+          workers[1],
+          "acceptable",
+          () => taskStatus(orchestrator, id) === "completed",
+        );
         expect(github.merged).toEqual([]);
         yield* expectCleanedUp(repository, id);
       }),

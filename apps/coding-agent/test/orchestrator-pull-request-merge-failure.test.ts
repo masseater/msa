@@ -4,7 +4,7 @@ import { expect, it } from "vite-plus/test";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
-const { taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, taskStatus, waitFor } = orchestratorHarness.harness;
 const { acceptedMerge, advanceMain, cleanedUp, reviewed, reviewedScenario, withRemote } =
   pullRequestSupport;
 
@@ -90,8 +90,7 @@ const completesWhenTheRunEndsRightAfterTheMerge = () =>
             stopping = orchestrator.stop(taskId);
           }
         });
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => stopping !== undefined);
+        yield* completing(workers[1], "acceptable", () => stopping !== undefined);
         yield* Effect.promise(() => stopping!);
         unsubscribe();
         yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
@@ -114,8 +113,11 @@ const stopsWhenMergedOutsideAfterAFailedMerge = acceptedMerge({
   check: ({ orchestrator, reports, workers, number, taskId, github }) =>
     Effect.gen(function* () {
       const commit = yield* github.mergeOutside(number, "someone-else");
-      workers[2]!.complete("rebased");
-      yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+      yield* completing(
+        workers[2],
+        "rebased",
+        () => taskStatus(orchestrator, taskId) === "stopped",
+      );
       expect(github.merged).toEqual([]);
       expect(reports.at(-1)?.text).toContain("someone-else");
       expect(reports.at(-1)?.text).toContain(commit.slice(0, 12));

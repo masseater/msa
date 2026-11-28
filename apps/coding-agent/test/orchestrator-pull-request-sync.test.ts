@@ -10,7 +10,7 @@ import triageSupport from "./triage-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { runTest } = testing;
-const { taskStatus, waitFor } = orchestratorHarness.harness;
+const { completing, taskStatus, waitFor } = orchestratorHarness.harness;
 const { cleanedUp, commitAndPush, holdBranchDeletion, openedTask, withRemote } = pullRequestSupport;
 const { classifierDecide } = reviewVerdictSupport;
 const { escalateTriage } = triageSupport;
@@ -38,8 +38,7 @@ const waitingForADecision = (
     const reviewed = yield* github.head(opened.branch);
     github.ci.set(reviewed, "success");
     const worktree = workers[0]!.cwd;
-    workers[0]!.complete("CI is green");
-    yield* waitFor(() => workers.length === 2);
+    yield* completing(workers[0], "CI is green", () => workers.length === 2);
     yield* Effect.promise(() =>
       workers[1]!.recordGoalItems(
         [{ evidence: "feature.txt is in the diff", item: 1, status: "met" }],
