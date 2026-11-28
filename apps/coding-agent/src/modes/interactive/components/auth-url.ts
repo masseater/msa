@@ -1,6 +1,5 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import clipboard from "../../../utils/clipboard.ts";
@@ -10,7 +9,7 @@ import keybindingHints from "./keybinding-hints.ts";
 
 const { theme } = themeModule;
 const { keyHint } = keybindingHints;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { copyToClipboard } = clipboard;
 const { toErrorMessage } = errors;
 
@@ -40,15 +39,13 @@ export default class AuthUrlComponent extends tuiModule.Container {
   }
 
   copy(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          yield* awaited(copyToClipboard(this.url));
-          this.setHint(theme.fg("success", "Copied URL to clipboard"));
-        } catch (error) {
-          this.setHint(theme.fg("error", toErrorMessage(error)));
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      try {
+        yield* awaited(copyToClipboard(this.url));
+        this.setHint(theme.fg("success", "Copied URL to clipboard"));
+      } catch (error) {
+        this.setHint(theme.fg("error", toErrorMessage(error)));
+      }
+    }, this);
   }
 }

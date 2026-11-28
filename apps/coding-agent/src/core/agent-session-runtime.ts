@@ -1,5 +1,3 @@
-import * as Effect from "effect/Effect";
-
 import type agentSessionRuntimeTypes from "./agent-session-runtime.types.ts";
 import SessionForking from "./agent-session-runtime/session-forking.ts";
 import SessionReplacement from "./agent-session-runtime/session-replacement.ts";
@@ -9,7 +7,7 @@ import type agentSessionTypes from "./agent-session.types.ts";
 import awaitingModule from "./awaiting.ts";
 import runnerEvents from "./extensions/runner-events.ts";
 import type telemetryTypesNs from "./observability/telemetry.types.ts";
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { emitSessionShutdownEvent } = runnerEvents;
 
 export default class AgentSessionRuntime {
@@ -64,20 +62,18 @@ export default class AgentSessionRuntime {
   }
 
   dispose(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(
-          emitSessionShutdownEvent(this.session.extensions.binding.extensionRunner, {
-            reason: "quit",
-            type: "session_shutdown",
-          }),
-        );
-        this.beforeSessionInvalidate?.();
-        yield* awaited(this.session.dispose());
-        yield* awaited(this.session.settingsManager.persistence.flush());
-        yield* awaited(this.telemetry?.dispose() ?? Promise.resolve());
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(
+        emitSessionShutdownEvent(this.session.extensions.binding.extensionRunner, {
+          reason: "quit",
+          type: "session_shutdown",
+        }),
+      );
+      this.beforeSessionInvalidate?.();
+      yield* awaited(this.session.dispose());
+      yield* awaited(this.session.settingsManager.persistence.flush());
+      yield* awaited(this.telemetry?.dispose() ?? Promise.resolve());
+    }, this);
   }
 
   fork(...args: Parameters<SessionForking["fork"]>): ReturnType<SessionForking["fork"]> {

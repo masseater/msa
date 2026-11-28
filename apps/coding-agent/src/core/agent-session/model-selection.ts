@@ -11,7 +11,7 @@ import virtualModels from "../virtual-models.ts";
 
 const { isVirtualModel, findLatestResponse, getBranchSelection } = virtualModels;
 const { modelsAreEqual } = compat;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class SessionModelSelection {
   private readonly session: AgentSession;
@@ -185,31 +185,27 @@ export default class SessionModelSelection {
     model: compatTypes.Model<any>,
     options: agentSessionTypes.ModelMutationOptions = {},
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if ((yield* awaited(this.modelRuntimeInternal.checkAuth(model.provider))) === undefined) {
-          throw new Error(`No API key for ${model.provider}/${model.id}`);
-        }
-        yield* performed(this.switchModel({ model }, options, "set"));
-        this.session.run.fallback.resumeAfterModelChange();
-      }, this),
-    );
+    return promisedWith(function* () {
+      if ((yield* awaited(this.modelRuntimeInternal.checkAuth(model.provider))) === undefined) {
+        throw new Error(`No API key for ${model.provider}/${model.id}`);
+      }
+      yield* performed(this.switchModel({ model }, options, "set"));
+      this.session.run.fallback.resumeAfterModelChange();
+    }, this);
   }
 
   cycleModel(
     direction: "forward" | "backward" = "forward",
     options: agentSessionTypes.ModelMutationOptions = {},
   ): Promise<agentSessionTypes.ModelCycleResult | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const result =
-          this.scopedModelsInternal.length > 0
-            ? yield* performed(this.cycleScopedModel(direction, options))
-            : yield* performed(this.cycleAvailableModel(direction, options));
-        if (result !== undefined) this.session.run.fallback.resumeAfterModelChange();
-        return result;
-      }, this),
-    );
+    return promisedWith(function* () {
+      const result =
+        this.scopedModelsInternal.length > 0
+          ? yield* performed(this.cycleScopedModel(direction, options))
+          : yield* performed(this.cycleAvailableModel(direction, options));
+      if (result !== undefined) this.session.run.fallback.resumeAfterModelChange();
+      return result;
+    }, this);
   }
 
   private cycleScopedModel(

@@ -7,7 +7,7 @@ import BashExecutionComponent from "../components/bash-execution.ts";
 import type bashExecutionTypes from "../components/bash-execution.types.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class BashInput {
   private readonly mode: InteractiveMode;
@@ -106,27 +106,25 @@ export default class BashInput {
   }
 
   handleBashCommand(command: string, excludeFromContext = false): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let eventResult: extensionsTypes.UserBashEventResult | undefined;
-        try {
-          eventResult = yield* awaited(
-            this.mode.session.extensions.binding.extensionRunner.emitUserBash({
-              command,
-              cwd: this.mode.sessionManager.getCwd(),
-              excludeFromContext,
-              type: "user_bash",
-            }),
-          );
-        } catch {
-          return;
-        }
-        if (eventResult?.result !== undefined) {
-          this.showExtensionBashResult(command, eventResult.result, excludeFromContext);
-          return;
-        }
-        yield* performed(this.runBashCommand(command, excludeFromContext, eventResult?.operations));
-      }, this),
-    );
+    return promisedWith(function* () {
+      let eventResult: extensionsTypes.UserBashEventResult | undefined;
+      try {
+        eventResult = yield* awaited(
+          this.mode.session.extensions.binding.extensionRunner.emitUserBash({
+            command,
+            cwd: this.mode.sessionManager.getCwd(),
+            excludeFromContext,
+            type: "user_bash",
+          }),
+        );
+      } catch {
+        return;
+      }
+      if (eventResult?.result !== undefined) {
+        this.showExtensionBashResult(command, eventResult.result, excludeFromContext);
+        return;
+      }
+      yield* performed(this.runBashCommand(command, excludeFromContext, eventResult?.operations));
+    }, this);
   }
 }

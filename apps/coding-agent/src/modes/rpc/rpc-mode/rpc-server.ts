@@ -10,7 +10,7 @@ import RpcExtensionUi from "./extension-ui.ts";
 import rpcInput from "./rpc-input.ts";
 import rpcOutput from "./rpc-output.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { flushRawStdout, waitForRawStdoutBackpressure } = outputGuard;
 const { killTrackedDetachedChildren } = shell;
 const { toJsonEvent } = jsonEvent;
@@ -75,30 +75,28 @@ export default class RpcServer {
   }
 
   rebindSession(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        this.session = this.runtimeHost.session;
-        yield* awaited(
-          this.session.extensions.binding.bindExtensions({
-            commandContextActions: this.commandContextActions(),
-            mode: "rpc",
-            onError: (err) => {
-              output({
-                error: err.error,
-                event: err.event,
-                extensionPath: err.extensionPath,
-                type: "extension_error",
-              });
-            },
-            shutdownHandler: () => {
-              this.shutdownRequested = true;
-            },
-            uiContext: this.ui.context(),
-          }),
-        );
-        this.subscribe();
-      }, this),
-    );
+    return promisedWith(function* () {
+      this.session = this.runtimeHost.session;
+      yield* awaited(
+        this.session.extensions.binding.bindExtensions({
+          commandContextActions: this.commandContextActions(),
+          mode: "rpc",
+          onError: (err) => {
+            output({
+              error: err.error,
+              event: err.event,
+              extensionPath: err.extensionPath,
+              type: "extension_error",
+            });
+          },
+          shutdownHandler: () => {
+            this.shutdownRequested = true;
+          },
+          uiContext: this.ui.context(),
+        }),
+      );
+      this.subscribe();
+    }, this);
   }
 
   private subscribe(): void {

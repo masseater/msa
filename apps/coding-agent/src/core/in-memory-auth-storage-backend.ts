@@ -1,11 +1,12 @@
 import type aiTypes from "@msa/ai/index.types";
-import * as Effect from "effect/Effect";
 
 import abortModule from "../utils/abort.ts";
+import authStorageTransaction from "./auth-storage-transaction.ts";
 import type authStorageTypes from "./auth-storage.types.ts";
 import awaitingModule from "./awaiting.ts";
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { raceWithAbortSignal } = abortModule;
+const { transact } = authStorageTransaction;
 
 export default class InMemoryAuthStorageBackend implements authStorageTypes.AuthStorageBackend {
   private value: string | undefined;
@@ -21,18 +22,17 @@ export default class InMemoryAuthStorageBackend implements authStorageTypes.Auth
   ): Promise<T> {
     const previous = this.asyncChain;
     const operation = (() =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          yield* awaited(previous.catch(() => {}));
-          options?.signal?.throwIfAborted();
-          const { result, next } = yield* awaited(fn(this.value));
-          options?.signal?.throwIfAborted();
-          if (next !== undefined) {
+      promisedWith(function* () {
+        yield* awaited(previous.catch(() => {}));
+        return yield* transact({
+          fn,
+          read: () => this.value,
+          signal: options?.signal,
+          write: (next) => {
             this.value = next;
-          }
-          return result;
-        }, this),
-      ))();
+          },
+        });
+      }, this))();
     this.asyncChain = operation.catch(() => {});
     return raceWithAbortSignal(operation, options?.signal);
   }

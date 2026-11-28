@@ -9,7 +9,7 @@ import type extensionsTypes from "../extensions/index.types.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 
 const { contentText } = ai;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { generateBranchSummary, collectEntriesForBranchSummary } = compactionModule;
 
 export default class SessionTree {
@@ -201,39 +201,37 @@ export default class SessionTree {
     aborted?: boolean;
     summaryEntry?: sessionManagerTypes.BranchSummaryEntry | undefined;
   }> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        this.assertTreeNavigable();
-        const oldLeafId = this.session.sessionManager.getLeafId();
-        if (targetId === oldLeafId) return { cancelled: false };
-        if (options.summarize === true && this.session.model === undefined)
-          throw new Error("No model available for summarization");
-        const targetEntry = this.session.sessionManager.getEntry(targetId);
-        if (targetEntry === undefined) throw new Error(`Entry ${targetId} not found`);
-        const { entries: entriesToSummarize, commonAncestorId } = collectEntriesForBranchSummary(
-          this.session.sessionManager,
-          oldLeafId,
-          targetId,
-        );
-        const preparation: extensionsTypes.TreePreparation = {
-          commonAncestorId,
-          customInstructions: options.customInstructions,
-          entriesToSummarize,
-          label: options.label,
-          oldLeafId,
-          replaceInstructions: options.replaceInstructions,
-          targetId,
-          userWantsSummary: options.summarize ?? false,
-        };
-        const controller = new AbortController();
-        this.branchSummaryAbortController = controller;
-        try {
-          return yield* performed(this.navigateTreeTo(targetEntry, preparation, controller.signal));
-        } finally {
-          this.branchSummaryAbortController = undefined;
-          this.session.run.lifecycle.resolveIdleWaitIfIdle();
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      this.assertTreeNavigable();
+      const oldLeafId = this.session.sessionManager.getLeafId();
+      if (targetId === oldLeafId) return { cancelled: false };
+      if (options.summarize === true && this.session.model === undefined)
+        throw new Error("No model available for summarization");
+      const targetEntry = this.session.sessionManager.getEntry(targetId);
+      if (targetEntry === undefined) throw new Error(`Entry ${targetId} not found`);
+      const { entries: entriesToSummarize, commonAncestorId } = collectEntriesForBranchSummary(
+        this.session.sessionManager,
+        oldLeafId,
+        targetId,
+      );
+      const preparation: extensionsTypes.TreePreparation = {
+        commonAncestorId,
+        customInstructions: options.customInstructions,
+        entriesToSummarize,
+        label: options.label,
+        oldLeafId,
+        replaceInstructions: options.replaceInstructions,
+        targetId,
+        userWantsSummary: options.summarize ?? false,
+      };
+      const controller = new AbortController();
+      this.branchSummaryAbortController = controller;
+      try {
+        return yield* performed(this.navigateTreeTo(targetEntry, preparation, controller.signal));
+      } finally {
+        this.branchSummaryAbortController = undefined;
+        this.session.run.lifecycle.resolveIdleWaitIfIdle();
+      }
+    }, this);
   }
 }

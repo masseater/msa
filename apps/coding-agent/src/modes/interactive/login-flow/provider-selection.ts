@@ -7,7 +7,7 @@ import type oauthSelectorTypes from "../components/oauth-selector.types.ts";
 import type LoginFlow from "../login-flow.ts";
 import type loginFlowTypes from "../login-flow.types.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class ProviderSelection {
   private readonly flow: LoginFlow;
@@ -85,22 +85,20 @@ export default class ProviderSelection {
         "login",
         providerOptions,
         (providerId, selectedAuthType) =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              done();
-              const providerOption = providerOptions.find(
-                (provider) => provider.id === providerId && provider.authType === selectedAuthType,
-              );
-              if (providerOption === undefined) {
-                return;
-              }
-              yield* performed(
-                this.providerLogin.startProviderLogin(providerOption, () =>
-                  this.selection.showProviderSelector(authType, initialSearchInput),
-                ),
-              );
-            }, this.flow),
-          ),
+          promisedWith(function* () {
+            done();
+            const providerOption = providerOptions.find(
+              (provider) => provider.id === providerId && provider.authType === selectedAuthType,
+            );
+            if (providerOption === undefined) {
+              return;
+            }
+            yield* performed(
+              this.providerLogin.startProviderLogin(providerOption, () =>
+                this.selection.showProviderSelector(authType, initialSearchInput),
+              ),
+            );
+          }, this.flow),
         () => {
           this.providerSelectorBack(done, authType, host);
         },

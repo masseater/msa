@@ -7,7 +7,7 @@ import awaitingModule from "../../../core/awaiting.ts";
 import mcpServerConnectionHelpers from "../mcp-server-connection-helpers.ts";
 import type McpServerConnection from "../mcp-server-connection.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { McpHttpError, McpSessionExpiredError } = mcp;
 const {
   signInRequiredMessage,
@@ -71,33 +71,31 @@ export default class McpRequests {
     run: (client: mcpTypes.McpClient) => Promise<T>,
     readOnly = false,
   ): Promise<T> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        for (let attempt = 1; ; attempt++) {
-          const client = yield* awaited(this.getClient());
-          try {
-            return yield* awaited(run(client));
-          } catch (error) {
-            if (
-              readOnly &&
-              attempt === 1 &&
-              Schema.is(McpHttpError)(error) &&
-              isTransientError(error)
-            ) {
-              yield* performed(Effect.sleep(CONNECT_RETRY_DELAYS_MS[0] ?? 0));
-              continue;
-            }
-            if (Schema.is(McpSessionExpiredError)(error) && attempt === 1) {
-              if (this.client === client) this.client = undefined;
-              continue;
-            }
-            if (!this.lifecycle.needsSignIn(error)) throw error;
-            yield* awaited(this.lifecycle.dropClient(client));
-            this.lifecycle.markNeedsAuth();
-            throw new Error(signInRequiredMessage(this.entry), { cause: error });
+    return promisedWith(function* () {
+      for (let attempt = 1; ; attempt++) {
+        const client = yield* awaited(this.getClient());
+        try {
+          return yield* awaited(run(client));
+        } catch (error) {
+          if (
+            readOnly &&
+            attempt === 1 &&
+            Schema.is(McpHttpError)(error) &&
+            isTransientError(error)
+          ) {
+            yield* performed(Effect.sleep(CONNECT_RETRY_DELAYS_MS[0] ?? 0));
+            continue;
           }
+          if (Schema.is(McpSessionExpiredError)(error) && attempt === 1) {
+            if (this.client === client) this.client = undefined;
+            continue;
+          }
+          if (!this.lifecycle.needsSignIn(error)) throw error;
+          yield* awaited(this.lifecycle.dropClient(client));
+          this.lifecycle.markNeedsAuth();
+          throw new Error(signInRequiredMessage(this.entry), { cause: error });
         }
-      }, this.connection),
-    );
+      }
+    }, this.connection);
   }
 }

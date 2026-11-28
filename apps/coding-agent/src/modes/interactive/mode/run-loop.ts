@@ -12,7 +12,7 @@ import tmuxKeyboard from "./tmux-keyboard.ts";
 
 const { APP_NAME } = config;
 const { takeUnnotifiedCrash } = crashLog;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { formatLocalDateTime } = platform;
 const { offerHandoff } = handoffResume;
 const { checkTmuxKeyboardSetup } = tmuxKeyboard;
@@ -98,16 +98,14 @@ export default class ModeRunLoop {
   }
 
   run(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.mode.lifecycle.startup.init());
-        this.mode.lifecycle.backgroundChecks.start();
-        this.warnAboutTmuxKeyboard();
-        this.showStartupDiagnostics();
-        const { initialImages, initialMessage, initialMessages } = this.mode.options;
-        const crash = yield* awaited(takeUnnotifiedCrash());
-        yield* performed(this.runInputLoop(crash, initialMessage, initialImages, initialMessages));
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(this.mode.lifecycle.startup.init());
+      this.mode.lifecycle.backgroundChecks.start();
+      this.warnAboutTmuxKeyboard();
+      this.showStartupDiagnostics();
+      const { initialImages, initialMessage, initialMessages } = this.mode.options;
+      const crash = yield* awaited(takeUnnotifiedCrash());
+      yield* performed(this.runInputLoop(crash, initialMessage, initialImages, initialMessages));
+    }, this);
   }
 }

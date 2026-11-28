@@ -9,7 +9,7 @@ import type McpExtensionHost from "./host.ts";
 import serverState from "./server-state.ts";
 
 const { hasDirectTools, isEnabled } = serverState;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { callbackPromise } = interop;
 
 export default class McpServerWaits {
@@ -23,66 +23,62 @@ export default class McpServerWaits {
     waiting: readonly extensionInternalTypes.McpServer[],
     signal: AbortSignal | undefined,
   ) =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const readyOf = () =>
-          waiting.flatMap((server) =>
-            isEnabled(server) &&
-            this.host.state.servers.includes(server) &&
-            server.ready !== undefined
-              ? [{ ready: server.ready, server }]
-              : [],
-          );
-        const unchanged = (ready: ReturnType<typeof readyOf>) =>
-          ready.every(
-            (attempt) =>
-              !isEnabled(attempt.server) ||
-              !this.host.state.servers.includes(attempt.server) ||
-              attempt.ready === attempt.server.ready,
-          );
-        for (;;) {
-          const ready = readyOf();
-          if (ready.length === 0 || signal?.aborted === true) return;
-          let onAbort: (() => void) | undefined;
-          yield* awaited(
-            Promise.race([
-              Promise.all(ready.map((attempt) => attempt.ready)),
-              callbackPromise<void>((done) => {
-                onAbort = () => done();
-                signal?.addEventListener("abort", onAbort, { once: true });
-              }),
-            ]),
-          );
-          if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
-          if ((signal?.aborted ?? false) || unchanged(ready)) return;
-        }
-      }, this),
-    );
-
-  readonly waitForDirectServers = (ctx: extensionsTypesTypes.ExtensionContext) =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.host.state.waitedForStartup) return;
-        this.host.state.waitedForStartup = true;
-        const ready = this.host.state.servers.flatMap((server) =>
-          isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
-            ? [server.ready]
+    promisedWith(function* () {
+      const readyOf = () =>
+        waiting.flatMap((server) =>
+          isEnabled(server) &&
+          this.host.state.servers.includes(server) &&
+          server.ready !== undefined
+            ? [{ ready: server.ready, server }]
             : [],
         );
-        if (ready.length === 0) return;
-        const finished = Option.isSome(
-          yield* performed(
-            Effect.promise(() => Promise.all(ready)).pipe(
-              Effect.timeoutOption(this.host.state.startupWaitMs),
-            ),
-          ),
+      const unchanged = (ready: ReturnType<typeof readyOf>) =>
+        ready.every(
+          (attempt) =>
+            !isEnabled(attempt.server) ||
+            !this.host.state.servers.includes(attempt.server) ||
+            attempt.ready === attempt.server.ready,
         );
-        if (!finished) {
-          ctx.ui.notify(
-            "MCP servers are still connecting; their tools become available once connected.",
-            "info",
-          );
-        }
-      }, this),
-    );
+      for (;;) {
+        const ready = readyOf();
+        if (ready.length === 0 || signal?.aborted === true) return;
+        let onAbort: (() => void) | undefined;
+        yield* awaited(
+          Promise.race([
+            Promise.all(ready.map((attempt) => attempt.ready)),
+            callbackPromise<void>((done) => {
+              onAbort = () => done();
+              signal?.addEventListener("abort", onAbort, { once: true });
+            }),
+          ]),
+        );
+        if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+        if ((signal?.aborted ?? false) || unchanged(ready)) return;
+      }
+    }, this);
+
+  readonly waitForDirectServers = (ctx: extensionsTypesTypes.ExtensionContext) =>
+    promisedWith(function* () {
+      if (this.host.state.waitedForStartup) return;
+      this.host.state.waitedForStartup = true;
+      const ready = this.host.state.servers.flatMap((server) =>
+        isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
+          ? [server.ready]
+          : [],
+      );
+      if (ready.length === 0) return;
+      const finished = Option.isSome(
+        yield* performed(
+          Effect.promise(() => Promise.all(ready)).pipe(
+            Effect.timeoutOption(this.host.state.startupWaitMs),
+          ),
+        ),
+      );
+      if (!finished) {
+        ctx.ui.notify(
+          "MCP servers are still connecting; their tools become available once connected.",
+          "info",
+        );
+      }
+    }, this);
 }

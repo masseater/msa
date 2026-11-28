@@ -9,7 +9,7 @@ import packageEnv from "./package-env.ts";
 const { isOfflineModeEnabled } = platformEnv;
 
 const { UPDATE_CHECK_CONCURRENCY, GIT_UPDATE_CONCURRENCY } = packageEnv;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { runWithConcurrency } = concurrency;
 
 export default class PackageUpdates {
@@ -83,16 +83,14 @@ export default class PackageUpdates {
 
     const npmCheckTasks = npmCandidates.map(
       (entry) => () =>
-        Effect.runPromise(
-          awaitingWith(function* () {
-            return {
-              entry,
-              shouldUpdate: yield* performed(
-                this.manager.npm.updates.shouldUpdateNpmSource(entry.parsed, entry.scope),
-              ),
-            };
-          }, this),
-        ),
+        promisedWith(function* () {
+          return {
+            entry,
+            shouldUpdate: yield* performed(
+              this.manager.npm.updates.shouldUpdateNpmSource(entry.parsed, entry.scope),
+            ),
+          };
+        }, this),
     );
     const npmCheckResults = yield* performed(
       runWithConcurrency(npmCheckTasks, UPDATE_CHECK_CONCURRENCY),
@@ -113,51 +111,49 @@ export default class PackageUpdates {
   }
 
   update(source?: string): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const globalSettings = this.manager.settingsManager.getGlobalSettings();
-        const projectSettings = this.manager.settingsManager.getProjectSettings();
-        const identity =
-          source !== undefined && source !== ""
-            ? this.manager.sources.getPackageIdentity(source)
-            : undefined;
-        let matched = false;
-        const updateSources: defaultPackageManagerInternalTypes.ConfiguredUpdateSource[] = [];
+    return promisedWith(function* () {
+      const globalSettings = this.manager.settingsManager.getGlobalSettings();
+      const projectSettings = this.manager.settingsManager.getProjectSettings();
+      const identity =
+        source !== undefined && source !== ""
+          ? this.manager.sources.getPackageIdentity(source)
+          : undefined;
+      let matched = false;
+      const updateSources: defaultPackageManagerInternalTypes.ConfiguredUpdateSource[] = [];
 
-        for (const pkg of globalSettings.packages ?? []) {
-          const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-          if (
-            identity !== undefined &&
-            identity !== "" &&
-            this.manager.sources.getPackageIdentity(sourceStr, "user") !== identity
-          )
-            continue;
-          matched = true;
-          updateSources.push({ scope: "user", source: sourceStr });
-        }
-        for (const pkg of projectSettings.packages ?? []) {
-          const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-          if (
-            identity !== undefined &&
-            identity !== "" &&
-            this.manager.sources.getPackageIdentity(sourceStr, "project") !== identity
-          )
-            continue;
-          matched = true;
-          updateSources.push({ scope: "project", source: sourceStr });
-        }
+      for (const pkg of globalSettings.packages ?? []) {
+        const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
+        if (
+          identity !== undefined &&
+          identity !== "" &&
+          this.manager.sources.getPackageIdentity(sourceStr, "user") !== identity
+        )
+          continue;
+        matched = true;
+        updateSources.push({ scope: "user", source: sourceStr });
+      }
+      for (const pkg of projectSettings.packages ?? []) {
+        const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
+        if (
+          identity !== undefined &&
+          identity !== "" &&
+          this.manager.sources.getPackageIdentity(sourceStr, "project") !== identity
+        )
+          continue;
+        matched = true;
+        updateSources.push({ scope: "project", source: sourceStr });
+      }
 
-        if (source !== undefined && source !== "" && !matched) {
-          throw new Error(
-            this.manager.configured.buildNoMatchingPackageMessage(source, [
-              ...(globalSettings.packages ?? []),
-              ...(projectSettings.packages ?? []),
-            ]),
-          );
-        }
+      if (source !== undefined && source !== "" && !matched) {
+        throw new Error(
+          this.manager.configured.buildNoMatchingPackageMessage(source, [
+            ...(globalSettings.packages ?? []),
+            ...(projectSettings.packages ?? []),
+          ]),
+        );
+      }
 
-        yield* performed(this.updateConfiguredSources(updateSources));
-      }, this),
-    );
+      yield* performed(this.updateConfiguredSources(updateSources));
+    }, this);
   }
 }

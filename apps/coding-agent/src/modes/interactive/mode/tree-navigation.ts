@@ -11,7 +11,7 @@ import type InteractiveMode from "../interactive-mode.ts";
 
 const { createBranchSummaryStatusIndicator } = statusIndicators;
 const { Spacer } = tuiModule;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { copyToClipboard } = clipboard;
 const { toErrorMessage } = errorsModule;
 
@@ -146,31 +146,29 @@ export default class TreeNavigation {
   }
 
   private onTreeEntrySelected(entryId: string, done: () => void): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        done();
-        if (entryId === this.mode.sessionManager.getLeafId()) {
-          this.mode.display.status.showStatus("Already at this point");
-          return;
-        }
-        const choice = yield* performed(this.askBranchSummary());
-        if (choice === undefined) {
-          this.showTreeSelector(entryId);
-          return;
-        }
-        if (this.mode.session.isStreaming) {
-          this.mode.input.queue.restoreQueuedMessagesToEditor();
-          yield* awaited(this.mode.session.run.lifecycle.abort());
-        }
-        if (this.mode.session.compaction.manual.isCompacting) {
-          this.mode.display.status.showError(
-            "Wait for the current compaction or tree navigation to finish before navigating the session tree.",
-          );
-          return;
-        }
-        yield* performed(this.navigateToTreeEntry(entryId, choice));
-      }, this),
-    );
+    return promisedWith(function* () {
+      done();
+      if (entryId === this.mode.sessionManager.getLeafId()) {
+        this.mode.display.status.showStatus("Already at this point");
+        return;
+      }
+      const choice = yield* performed(this.askBranchSummary());
+      if (choice === undefined) {
+        this.showTreeSelector(entryId);
+        return;
+      }
+      if (this.mode.session.isStreaming) {
+        this.mode.input.queue.restoreQueuedMessagesToEditor();
+        yield* awaited(this.mode.session.run.lifecycle.abort());
+      }
+      if (this.mode.session.compaction.manual.isCompacting) {
+        this.mode.display.status.showError(
+          "Wait for the current compaction or tree navigation to finish before navigating the session tree.",
+        );
+        return;
+      }
+      yield* performed(this.navigateToTreeEntry(entryId, choice));
+    }, this);
   }
 
   showTreeSelector(initialSelectedId?: string): void {

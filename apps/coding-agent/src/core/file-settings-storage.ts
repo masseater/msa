@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import config from "../config.ts";
@@ -11,7 +10,7 @@ const { resolvePath } = pathsModule;
 const { dirname, join } = platformModule;
 const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { CONFIG_DIR_NAME } = config;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 
 const LOCK_RETRIES = { factor: 1, maxTimeout: 20, minTimeout: 20, retries: 9 };
 
@@ -34,22 +33,20 @@ export default class FileSettingsStorage implements settingsManagerTypes.Setting
     fn: (current: string | undefined) => string | undefined,
   ): Promise<void> {
     const path = scope === "global" ? this.globalSettingsPath : this.projectSettingsPath;
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const fileExists = yield* awaited(exists(path));
-        let release: (() => Promise<void>) | undefined;
-        try {
-          if (fileExists) release = yield* awaited(lockSettingsFile(path));
-          const current = fileExists ? yield* awaited(readText(path)) : undefined;
-          const next = fn(current);
-          if (next === undefined) return;
-          yield* awaited(makeDirectory({ path: dirname(path) }));
-          release ??= yield* awaited(lockSettingsFile(path));
-          yield* awaited(writeFile({ data: next, path }));
-        } finally {
-          if (release !== undefined) yield* awaited(release());
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      const fileExists = yield* awaited(exists(path));
+      let release: (() => Promise<void>) | undefined;
+      try {
+        if (fileExists) release = yield* awaited(lockSettingsFile(path));
+        const current = fileExists ? yield* awaited(readText(path)) : undefined;
+        const next = fn(current);
+        if (next === undefined) return;
+        yield* awaited(makeDirectory({ path: dirname(path) }));
+        release ??= yield* awaited(lockSettingsFile(path));
+        yield* awaited(writeFile({ data: next, path }));
+      } finally {
+        if (release !== undefined) yield* awaited(release());
+      }
+    }, this);
   }
 }

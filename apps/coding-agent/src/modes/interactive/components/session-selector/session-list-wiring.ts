@@ -9,7 +9,7 @@ import sessionSelectorHelpers from "../session-selector-helpers.ts";
 import type sessionSelectorSearchTypes from "../session-selector-search.types.ts";
 import type SessionSelectorComponent from "../session-selector.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { deleteSessionFile } = sessionSelectorHelpers;
 
 const { Spacer } = tui;
@@ -28,43 +28,41 @@ export default class SessionListWiring {
 
   wireDeletion() {
     this.selector.sessionList.onDeleteSession = (sessionPath: string) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          const result = yield* awaited(deleteSessionFile(sessionPath));
+      promisedWith(function* () {
+        const result = yield* awaited(deleteSessionFile(sessionPath));
 
-          if (result.ok) {
-            if (this.loading.currentSessions !== null) {
-              this.loading.currentSessions = this.loading.currentSessions.filter(
-                (s) => s.path !== sessionPath,
-              );
-            }
-            if (this.loading.allSessions !== null) {
-              this.loading.allSessions = this.loading.allSessions.filter(
-                (s) => s.path !== sessionPath,
-              );
-            }
-
-            const sessions =
-              this.scope === "all"
-                ? (this.loading.allSessions ?? [])
-                : (this.loading.currentSessions ?? []);
-            const showCwd = this.scope === "all";
-            this.sessionList.setSessions(sessions, showCwd);
-
-            const msg = result.method === "trash" ? "Session moved to trash" : "Session deleted";
-            this.header.setStatusMessage({ message: msg, type: "info" }, 2000);
-            yield* performed(this.loading.refreshSessionsAfterMutation());
-          } else {
-            const errorMessage = result.error ?? "Unknown error";
-            this.header.setStatusMessage(
-              { message: `Failed to delete: ${errorMessage}`, type: "error" },
-              3000,
+        if (result.ok) {
+          if (this.loading.currentSessions !== null) {
+            this.loading.currentSessions = this.loading.currentSessions.filter(
+              (s) => s.path !== sessionPath,
+            );
+          }
+          if (this.loading.allSessions !== null) {
+            this.loading.allSessions = this.loading.allSessions.filter(
+              (s) => s.path !== sessionPath,
             );
           }
 
-          this.requestRender();
-        }, this.selector),
-      );
+          const sessions =
+            this.scope === "all"
+              ? (this.loading.allSessions ?? [])
+              : (this.loading.currentSessions ?? []);
+          const showCwd = this.scope === "all";
+          this.sessionList.setSessions(sessions, showCwd);
+
+          const msg = result.method === "trash" ? "Session moved to trash" : "Session deleted";
+          this.header.setStatusMessage({ message: msg, type: "info" }, 2000);
+          yield* performed(this.loading.refreshSessionsAfterMutation());
+        } else {
+          const errorMessage = result.error ?? "Unknown error";
+          this.header.setStatusMessage(
+            { message: `Failed to delete: ${errorMessage}`, type: "error" },
+            3000,
+          );
+        }
+
+        this.requestRender();
+      }, this.selector);
 
     void Effect.runFork(this.selector.loading.loadScope("current"));
   }

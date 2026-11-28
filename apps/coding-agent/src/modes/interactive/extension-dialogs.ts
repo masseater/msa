@@ -8,7 +8,7 @@ import ExtensionInputComponent from "./components/extension-input.ts";
 import ExtensionSelectorComponent from "./components/extension-selector.ts";
 import type extensionDialogsTypes from "./extension-dialogs.types.ts";
 import type programStatusReporterTypes from "./program-status-reporter.types.ts";
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 type Dialog = tuiTypes.Component & { dispose?(): void };
 
 export default class ExtensionDialogs {
@@ -48,17 +48,15 @@ export default class ExtensionDialogs {
     message: string,
     opts?: extensionsTypes.ExtensionUIDialogOptions,
   ): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const result = yield* awaited(
-          this.select(`${title}\n${message}`, ["Yes", "No"], opts, {
-            kind: "permission",
-            message: title,
-          }),
-        );
-        return result === "Yes";
-      }, this),
-    );
+    return promisedWith(function* () {
+      const result = yield* awaited(
+        this.select(`${title}\n${message}`, ["Yes", "No"], opts, {
+          kind: "permission",
+          message: title,
+        }),
+      );
+      return result === "Yes";
+    }, this);
   }
 
   input(

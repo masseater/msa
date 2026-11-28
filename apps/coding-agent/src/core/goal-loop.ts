@@ -6,7 +6,7 @@ import awaitingModule from "./awaiting.ts";
 import goalModule from "./goal.ts";
 import type goalTypes from "./goal.types.ts";
 import platform from "./platform/index.ts";
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { nowMs, sleepFor } = platform;
 const { toErrorMessage } = errors;
 const {
@@ -93,25 +93,23 @@ export default class GoalLoop {
   }
 
   afterRun(): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const goal = this.active;
-        if (goal === undefined) return false;
-        const last = this.host.lastAssistant();
-        if (last?.stopReason === "aborted") return false;
-        const controller = new AbortController();
-        this.abortController = controller;
-        try {
-          if (last?.stopReason === "error")
-            return yield* performed(this.afterError(goal, last, controller.signal));
-          goal.errorTurns = 0;
-          goal.rateLimitWaits = 0;
-          return yield* awaited(this.evaluate(goal, controller.signal));
-        } finally {
-          if (this.abortController === controller) this.abortController = undefined;
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      const goal = this.active;
+      if (goal === undefined) return false;
+      const last = this.host.lastAssistant();
+      if (last?.stopReason === "aborted") return false;
+      const controller = new AbortController();
+      this.abortController = controller;
+      try {
+        if (last?.stopReason === "error")
+          return yield* performed(this.afterError(goal, last, controller.signal));
+        goal.errorTurns = 0;
+        goal.rateLimitWaits = 0;
+        return yield* awaited(this.evaluate(goal, controller.signal));
+      } finally {
+        if (this.abortController === controller) this.abortController = undefined;
+      }
+    }, this);
   }
 
   private start(condition: string): ActiveGoal {
@@ -180,16 +178,14 @@ export default class GoalLoop {
   }
 
   private evaluate(goal: ActiveGoal, signal: AbortSignal): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const toolUsed = goal.toolUsed;
-        goal.toolUsed = false;
-        const turn = goal.turns + 1;
-        const outcome = yield* awaited(this.judge(goal, signal, turn));
-        if (typeof outcome === "boolean") return outcome;
-        return this.applyVerdict(goal, outcome, turn, toolUsed);
-      }, this),
-    );
+    return promisedWith(function* () {
+      const toolUsed = goal.toolUsed;
+      goal.toolUsed = false;
+      const turn = goal.turns + 1;
+      const outcome = yield* awaited(this.judge(goal, signal, turn));
+      if (typeof outcome === "boolean") return outcome;
+      return this.applyVerdict(goal, outcome, turn, toolUsed);
+    }, this);
   }
 
   private judge(
@@ -197,38 +193,36 @@ export default class GoalLoop {
     signal: AbortSignal,
     turn: number,
   ): Promise<goalTypes.GoalEvaluation | boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const prompt = buildGoalEvaluationPrompt({
-          condition: goal.condition,
-          elapsedMs: nowMs() - goal.startedAt,
-          messages: this.host.messages(),
-          turn,
-        });
-        goal.evaluating = true;
-        this.host.changed();
-        let evaluation: goalTypes.GoalEvaluation | undefined;
-        try {
-          const text = yield* awaited(this.host.evaluate(prompt, signal));
-          evaluation = parseGoalEvaluation(text);
-          if (evaluation === undefined)
-            throw new Error(`Evaluator returned no verdict: ${text.slice(0, 200)}`);
-        } catch (error) {
-          goal.evaluating = false;
-          if (signal.aborted || this.active !== goal) {
-            this.host.changed();
-            return false;
-          }
-          return this.pause(goal, `Goal evaluation failed: ${toErrorMessage(error)}`);
-        }
+    return promisedWith(function* () {
+      const prompt = buildGoalEvaluationPrompt({
+        condition: goal.condition,
+        elapsedMs: nowMs() - goal.startedAt,
+        messages: this.host.messages(),
+        turn,
+      });
+      goal.evaluating = true;
+      this.host.changed();
+      let evaluation: goalTypes.GoalEvaluation | undefined;
+      try {
+        const text = yield* awaited(this.host.evaluate(prompt, signal));
+        evaluation = parseGoalEvaluation(text);
+        if (evaluation === undefined)
+          throw new Error(`Evaluator returned no verdict: ${text.slice(0, 200)}`);
+      } catch (error) {
         goal.evaluating = false;
         if (signal.aborted || this.active !== goal) {
           this.host.changed();
           return false;
         }
-        return evaluation;
-      }, this),
-    );
+        return this.pause(goal, `Goal evaluation failed: ${toErrorMessage(error)}`);
+      }
+      goal.evaluating = false;
+      if (signal.aborted || this.active !== goal) {
+        this.host.changed();
+        return false;
+      }
+      return evaluation;
+    }, this);
   }
 
   private applyVerdict(

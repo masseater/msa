@@ -8,7 +8,7 @@ import versionCheck from "../../../utils/version-check.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import modelCatalogRefresh from "../model-catalog-refresh.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { readEnv, schedule } = platform;
 const { refreshModelCatalogs } = modelCatalogRefresh;
 const { checkForNewMsaVersion } = versionCheck;
@@ -98,26 +98,24 @@ export default class BackgroundChecks {
   }
 
   checkForPackageUpdates(): Promise<string[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (readEnv("MSA_OFFLINE") !== undefined && readEnv("MSA_OFFLINE") !== "") {
-          return [];
-        }
+    return promisedWith(function* () {
+      if (readEnv("MSA_OFFLINE") !== undefined && readEnv("MSA_OFFLINE") !== "") {
+        return [];
+      }
 
-        try {
-          const packageManager = new DefaultPackageManager({
-            agentDir: getAgentDir(),
-            cwd: this.mode.sessionManager.getCwd(),
-            settingsManager: this.mode.settingsManager,
-          });
-          const updates = yield* awaited(
-            packageManager.operations.updateCheck.checkForAvailableUpdates(),
-          );
-          return updates.map((update) => update.displayName);
-        } catch {
-          return [];
-        }
-      }, this),
-    );
+      try {
+        const packageManager = new DefaultPackageManager({
+          agentDir: getAgentDir(),
+          cwd: this.mode.sessionManager.getCwd(),
+          settingsManager: this.mode.settingsManager,
+        });
+        const updates = yield* awaited(
+          packageManager.operations.updateCheck.checkForAvailableUpdates(),
+        );
+        return updates.map((update) => update.displayName);
+      } catch {
+        return [];
+      }
+    }, this);
   }
 }

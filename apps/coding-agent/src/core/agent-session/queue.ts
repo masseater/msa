@@ -12,7 +12,7 @@ import promptTemplates from "../prompt-templates.ts";
 
 const { nowMs } = platform;
 const { contentText } = ai;
-const { awaitingWith, performed } = awaitingModule;
+const { awaitingWith, performed, promisedWith } = awaitingModule;
 const { expandPromptTemplate } = promptTemplates;
 
 export default class SessionQueue {
@@ -197,13 +197,11 @@ export default class SessionQueue {
     images?: compatTypes.ImageContent[],
     options?: { source?: extensionsTypes.InputSource },
   ): Promise<agentSessionTypes.QueuedInputDisposition> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        return yield* performed(
-          this.queueUserInput(text, images, "steer", options?.source ?? "interactive"),
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      return yield* performed(
+        this.queueUserInput(text, images, "steer", options?.source ?? "interactive"),
+      );
+    }, this);
   }
 
   followUp(
@@ -211,12 +209,10 @@ export default class SessionQueue {
     images?: compatTypes.ImageContent[],
     options?: { source?: extensionsTypes.InputSource },
   ): Promise<agentSessionTypes.QueuedInputDisposition> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        return yield* performed(
-          this.queueUserInput(text, images, "followUp", options?.source ?? "interactive"),
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      return yield* performed(
+        this.queueUserInput(text, images, "followUp", options?.source ?? "interactive"),
+      );
+    }, this);
   }
 }

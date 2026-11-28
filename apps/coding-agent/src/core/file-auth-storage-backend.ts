@@ -4,6 +4,7 @@ import lockfile from "proper-lockfile";
 
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
+import authStorageTransaction from "./auth-storage-transaction.ts";
 import type authStorageTypes from "./auth-storage.types.ts";
 import awaitingModule from "./awaiting.ts";
 import platformModule from "./platform/index.ts";
@@ -11,7 +12,8 @@ const { dirname, nowMs, randomUnit, sleepFor } = platformModule;
 const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { getAuthPath } = config;
 const { normalizePath } = paths;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
+const { transact } = authStorageTransaction;
 const MAX_EPERM_RETRIES = 5;
 function getRetryableLockErrorCode(error: unknown): "ELOCKED" | "EPERM" | undefined {
   const code = error instanceof Error && "code" in error ? error.code : undefined;
@@ -90,47 +92,41 @@ export default class FileAuthStorageBackend implements authStorageTypes.AuthStor
     fn: (current: string | undefined) => Promise<authStorageTypes.LockResult<T>>,
     options?: aiTypes.AuthOperationOptions,
   ): Promise<T> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        options?.signal?.throwIfAborted();
-        yield* awaited(this.ensureFile());
+    return promisedWith(function* () {
+      options?.signal?.throwIfAborted();
+      yield* awaited(this.ensureFile());
 
-        let release: (() => Promise<void>) | undefined;
-        let lockCompromised = false;
-        let lockCompromisedError: Error | undefined;
-        const throwIfCompromised = () => {
-          if (lockCompromised) {
-            throw lockCompromisedError ?? new Error("Auth storage lock was compromised");
-          }
-        };
-
-        try {
-          release = yield* performed(
-            this.acquireLockAsync(options?.signal, (error) => {
-              lockCompromised = true;
-              lockCompromisedError = error;
-            }),
-          );
-
-          throwIfCompromised();
-          options?.signal?.throwIfAborted();
-          const current = yield* awaited(this.readCurrent());
-          const { result, next } = yield* awaited(fn(current));
-          throwIfCompromised();
-          options?.signal?.throwIfAborted();
-          if (next !== undefined) {
-            yield* awaited(writeFile({ data: next, mode: AUTH_FILE_MODE, path: this.authPath }));
-          }
-          throwIfCompromised();
-          return result;
-        } finally {
-          if (release !== undefined) {
-            try {
-              yield* awaited(release());
-            } catch {}
-          }
+      let release: (() => Promise<void>) | undefined;
+      let lockCompromised = false;
+      let lockCompromisedError: Error | undefined;
+      const throwIfCompromised = () => {
+        if (lockCompromised) {
+          throw lockCompromisedError ?? new Error("Auth storage lock was compromised");
         }
-      }, this),
-    );
+      };
+
+      try {
+        release = yield* performed(
+          this.acquireLockAsync(options?.signal, (error) => {
+            lockCompromised = true;
+            lockCompromisedError = error;
+          }),
+        );
+
+        return yield* transact({
+          checkpoint: throwIfCompromised,
+          fn,
+          read: () => this.readCurrent(),
+          signal: options?.signal,
+          write: (next) => writeFile({ data: next, mode: AUTH_FILE_MODE, path: this.authPath }),
+        });
+      } finally {
+        if (release !== undefined) {
+          try {
+            yield* awaited(release());
+          } catch {}
+        }
+      }
+    }, this);
   }
 }

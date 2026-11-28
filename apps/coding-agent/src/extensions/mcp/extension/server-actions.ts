@@ -10,7 +10,7 @@ import runtimeLazy from "../runtime.lazy.ts";
 import type uiTypes from "../ui.types.ts";
 import type McpExtensionHost from "./host.ts";
 
-const { awaited, awaiting, awaitingWith } = awaitingModule;
+const { awaited, awaiting, promisedWith } = awaitingModule;
 const { loadMcpRuntime } = runtimeLazy;
 const { toErrorMessage } = errorsModule;
 
@@ -50,61 +50,57 @@ export default class McpServerActions {
     prompt: oauthTypesNs.McpSignInPrompt,
     cancel?: AbortSignal,
   ): Promise<string | undefined> =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const connection = server.connection;
-        const url = connection?.auth.oauthUrl;
-        if (connection === undefined || url === undefined || url === "")
-          return `MCP server "${server.entry.name}" does not use OAuth.`;
-        const runtime = yield* awaited(loadMcpRuntime());
-        const signal =
-          cancel === undefined
-            ? this.host.state.session.signal
-            : AbortSignal.any([this.host.state.session.signal, cancel]);
-        try {
-          yield* awaited(
-            this.host.state.track(
-              runtime.signInMcpServer({
-                challenge: connection.auth.challenge,
-                prompt,
-                serverUrl: url,
-                settings: connection.auth.oauthSettings(),
-                signal,
-                store: this.host.connections.resources
-                  .getCredentials(runtime)
-                  .forServer(server.entry.name, url),
-              }),
-            ),
-          );
-        } catch (error) {
-          if (Schema.is(runtime.McpSignInCancelledError)(error)) return "Sign-in cancelled.";
-          return `Sign-in failed: ${toErrorMessage(error)}`;
-        }
+    promisedWith(function* () {
+      const connection = server.connection;
+      const url = connection?.auth.oauthUrl;
+      if (connection === undefined || url === undefined || url === "")
+        return `MCP server "${server.entry.name}" does not use OAuth.`;
+      const runtime = yield* awaited(loadMcpRuntime());
+      const signal =
+        cancel === undefined
+          ? this.host.state.session.signal
+          : AbortSignal.any([this.host.state.session.signal, cancel]);
+      try {
+        yield* awaited(
+          this.host.state.track(
+            runtime.signInMcpServer({
+              challenge: connection.auth.challenge,
+              prompt,
+              serverUrl: url,
+              settings: connection.auth.oauthSettings(),
+              signal,
+              store: this.host.connections.resources
+                .getCredentials(runtime)
+                .forServer(server.entry.name, url),
+            }),
+          ),
+        );
+      } catch (error) {
+        if (Schema.is(runtime.McpSignInCancelledError)(error)) return "Sign-in cancelled.";
+        return `Sign-in failed: ${toErrorMessage(error)}`;
+      }
 
-        connection.auth.challenge = undefined;
-        try {
-          yield* awaited(connection.reconnect());
-        } catch (error) {
-          return `Signed in, but ${toErrorMessage(error)}`;
-        }
-        return undefined;
-      }, this),
-    );
+      connection.auth.challenge = undefined;
+      try {
+        yield* awaited(connection.reconnect());
+      } catch (error) {
+        return `Signed in, but ${toErrorMessage(error)}`;
+      }
+      return undefined;
+    }, this);
 
   readonly signOut = (server: extensionInternalTypes.McpServer): Promise<boolean> =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const connection = server.connection;
-        const url = connection?.auth.oauthUrl;
-        if (connection === undefined || url === undefined || url === "") return false;
-        const credentials = this.host.connections.resources.getCredentials(
-          yield* awaited(loadMcpRuntime()),
-        );
-        const removed = yield* awaited(credentials.remove(server.entry.name, url));
-        yield* awaited(connection.signOut());
-        return removed;
-      }, this),
-    );
+    promisedWith(function* () {
+      const connection = server.connection;
+      const url = connection?.auth.oauthUrl;
+      if (connection === undefined || url === undefined || url === "") return false;
+      const credentials = this.host.connections.resources.getCredentials(
+        yield* awaited(loadMcpRuntime()),
+      );
+      const removed = yield* awaited(credentials.remove(server.entry.name, url));
+      yield* awaited(connection.signOut());
+      return removed;
+    }, this);
 
   readonly reconnect = (server: extensionInternalTypes.McpServer): Promise<string | undefined> =>
     Effect.runPromise(
@@ -134,31 +130,29 @@ export default class McpServerActions {
     enabled: boolean,
     inProject = false,
   ): Promise<string | undefined> =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const failed = yield* awaited(this.saveConfig(server, { enabled }, inProject));
-        if (failed !== undefined && failed !== "") return failed;
-        if (!enabled) {
-          const connection = server.connection;
-          server.attempt = undefined;
-          server.connection = undefined;
-          if (connection !== undefined) {
-            server.closing = Promise.all([connection.close(), server.ready]).then(() => undefined);
-          }
-          const closing = server.closing;
-          this.host.tools.hideTools(server.entry.name);
-          this.host.state.emitChange();
-          try {
-            yield* awaited(closing);
-          } finally {
-            if (server.closing === closing) server.closing = undefined;
-          }
-          return undefined;
+    promisedWith(function* () {
+      const failed = yield* awaited(this.saveConfig(server, { enabled }, inProject));
+      if (failed !== undefined && failed !== "") return failed;
+      if (!enabled) {
+        const connection = server.connection;
+        server.attempt = undefined;
+        server.connection = undefined;
+        if (connection !== undefined) {
+          server.closing = Promise.all([connection.close(), server.ready]).then(() => undefined);
         }
-        yield* awaited(this.host.connections.startConnection(server, server.closing));
+        const closing = server.closing;
+        this.host.tools.hideTools(server.entry.name);
+        this.host.state.emitChange();
+        try {
+          yield* awaited(closing);
+        } finally {
+          if (server.closing === closing) server.closing = undefined;
+        }
         return undefined;
-      }, this),
-    );
+      }
+      yield* awaited(this.host.connections.startConnection(server, server.closing));
+      return undefined;
+    }, this);
 
   readonly setExposure = (
     server: extensionInternalTypes.McpServer,

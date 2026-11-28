@@ -5,7 +5,7 @@ import MissingSessionCwdError from "../../../core/missing-session-cwd-error.ts";
 import SessionImportFileNotFoundError from "../../../core/session-import-file-not-found-error.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class SessionImport {
   private readonly mode: InteractiveMode;
@@ -51,30 +51,28 @@ export default class SessionImport {
   }
 
   handleImportCommand(text: string): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const inputPath = this.mode.commands.router.getPathCommandArgument(text, "/import");
-        if (inputPath === undefined || inputPath === "") {
-          this.mode.display.status.showError("Usage: /import <path.jsonl>");
-          return;
-        }
-        const confirmed = yield* awaited(
-          this.mode.extensions.dialogs.extensionDialogs.confirm(
-            "Import session",
-            `Replace current session with ${inputPath}?`,
-          ),
-        );
-        if (!confirmed) {
-          this.mode.display.status.showStatus("Import cancelled");
-          return;
-        }
-        try {
-          this.mode.display.indicator.clearStatusIndicator();
-          yield* performed(this.importSession(inputPath));
-        } catch (error: unknown) {
-          yield* performed(this.recoverFromImportError(inputPath, error));
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      const inputPath = this.mode.commands.router.getPathCommandArgument(text, "/import");
+      if (inputPath === undefined || inputPath === "") {
+        this.mode.display.status.showError("Usage: /import <path.jsonl>");
+        return;
+      }
+      const confirmed = yield* awaited(
+        this.mode.extensions.dialogs.extensionDialogs.confirm(
+          "Import session",
+          `Replace current session with ${inputPath}?`,
+        ),
+      );
+      if (!confirmed) {
+        this.mode.display.status.showStatus("Import cancelled");
+        return;
+      }
+      try {
+        this.mode.display.indicator.clearStatusIndicator();
+        yield* performed(this.importSession(inputPath));
+      } catch (error: unknown) {
+        yield* performed(this.recoverFromImportError(inputPath, error));
+      }
+    }, this);
   }
 }

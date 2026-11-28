@@ -13,7 +13,7 @@ const { isOfflineModeEnabled } = platform;
 
 const { exists } = platform.files;
 const { UPDATE_CHECK_CONCURRENCY } = packageEnv;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { runWithConcurrency } = concurrency;
 
 type ConfiguredEntry = {
@@ -31,18 +31,16 @@ export default class PackageUpdateCheck {
   }
 
   checkForAvailableUpdates(): Promise<packageManagerTypes.PackageUpdate[]> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (isOfflineModeEnabled()) {
-          return [];
-        }
-        const checks = this.configuredEntries().map((entry) => () => this.checkEntry(entry));
-        const results = yield* performed(runWithConcurrency(checks, UPDATE_CHECK_CONCURRENCY));
-        return results.filter(
-          (result): result is packageManagerTypes.PackageUpdate => result !== undefined,
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (isOfflineModeEnabled()) {
+        return [];
+      }
+      const checks = this.configuredEntries().map((entry) => () => this.checkEntry(entry));
+      const results = yield* performed(runWithConcurrency(checks, UPDATE_CHECK_CONCURRENCY));
+      return results.filter(
+        (result): result is packageManagerTypes.PackageUpdate => result !== undefined,
+      );
+    }, this);
   }
 
   private configuredEntries(): ConfiguredEntry[] {
@@ -63,19 +61,17 @@ export default class PackageUpdateCheck {
   }
 
   private checkEntry(entry: ConfiguredEntry): Promise<Update> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const source = typeof entry.pkg === "string" ? entry.pkg : entry.pkg.source;
-        const parsed = this.manager.sources.parseSource(source);
-        if (parsed.type === "local" || parsed.pinned) {
-          return undefined;
-        }
-        if (parsed.type === "npm") {
-          return yield* performed(this.checkNpm(parsed, entry.scope, source));
-        }
-        return yield* awaited(this.checkGit(parsed, entry.scope, source));
-      }, this),
-    );
+    return promisedWith(function* () {
+      const source = typeof entry.pkg === "string" ? entry.pkg : entry.pkg.source;
+      const parsed = this.manager.sources.parseSource(source);
+      if (parsed.type === "local" || parsed.pinned) {
+        return undefined;
+      }
+      if (parsed.type === "npm") {
+        return yield* performed(this.checkNpm(parsed, entry.scope, source));
+      }
+      return yield* awaited(this.checkGit(parsed, entry.scope, source));
+    }, this);
   }
 
   private checkNpm(

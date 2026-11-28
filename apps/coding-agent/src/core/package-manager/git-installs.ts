@@ -15,7 +15,7 @@ const { dirname, join } = platformModule;
 const { exists, makeDirectory, remove, writeFile } = platformModule.files;
 const { ensureExtensionTempFolder } = packageManager;
 const { NETWORK_TIMEOUT_MS } = packageEnv;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class GitInstalls {
   private readonly manager: DefaultPackageManager;
@@ -143,40 +143,30 @@ export default class GitInstalls {
   }
 
   updateGit(source: gitTypes.GitSource, scope: packageManagerTypes.SourceScope): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const targetDir = this.manager.git.paths.getGitInstallPath(source, scope);
-        if (!(yield* awaited(exists(targetDir)))) {
-          yield* performed(this.installGit(source, scope));
-          return;
-        }
-        yield* performed(this.updateExistingGit(targetDir, source));
-      }, this),
-    );
+    return promisedWith(function* () {
+      const targetDir = this.manager.git.paths.getGitInstallPath(source, scope);
+      if (!(yield* awaited(exists(targetDir)))) {
+        yield* performed(this.installGit(source, scope));
+        return;
+      }
+      yield* performed(this.updateExistingGit(targetDir, source));
+    }, this);
   }
 
   refreshTemporaryGitSource(source: gitTypes.GitSource, sourceStr: string): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (isOfflineModeEnabled()) {
-          return;
-        }
-        try {
-          yield* performed(
-            this.manager.progress.withProgress(
-              "pull",
-              sourceStr,
-              `Refreshing ${sourceStr}...`,
-              () =>
-                Effect.runPromise(
-                  awaitingWith(function* () {
-                    yield* awaited(this.updateGit(source, "temporary"));
-                  }, this),
-                ),
-            ),
-          );
-        } catch {}
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (isOfflineModeEnabled()) {
+        return;
+      }
+      try {
+        yield* performed(
+          this.manager.progress.withProgress("pull", sourceStr, `Refreshing ${sourceStr}...`, () =>
+            promisedWith(function* () {
+              yield* awaited(this.updateGit(source, "temporary"));
+            }, this),
+          ),
+        );
+      } catch {}
+    }, this);
   }
 }

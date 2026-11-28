@@ -12,7 +12,7 @@ import addExtensionConflictDiagnostics from "./extension-conflicts.ts";
 
 const { isSyntheticPath, BUILTIN_PATH_PREFIX } = sourceInfoModule;
 const { resolvePath } = pathsModule;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { createExtensionRuntime, loadExtensionFromFactory, loadExtensionsCached } = loader;
 const { collectExtensionPackageWarnings, mergeExtensionWarnings, omitReplacedExtensions } =
   defaultResourceLoaderHelpers;
@@ -36,13 +36,11 @@ export default class ExtensionLoading {
   }
 
   loadProjectTrustExtensions(): Promise<extensionsTypesTypes.LoadExtensionsResult> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        yield* awaited(this.owner.environment.settingsManager.persistence.setProjectTrusted(false));
-        yield* awaited(this.owner.environment.settingsManager.persistence.reload());
-        return yield* performed(this.loadCurrentExtensionSet());
-      }, this),
-    );
+    return promisedWith(function* () {
+      yield* awaited(this.owner.environment.settingsManager.persistence.setProjectTrusted(false));
+      yield* awaited(this.owner.environment.settingsManager.persistence.reload());
+      return yield* performed(this.loadCurrentExtensionSet());
+    }, this);
   }
 
   private *currentExtensionPaths() {

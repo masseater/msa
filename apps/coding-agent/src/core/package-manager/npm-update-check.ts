@@ -10,7 +10,7 @@ import packageEnv from "./package-env.ts";
 const { isOfflineModeEnabled } = platformEnv;
 
 const { NETWORK_TIMEOUT_MS } = packageEnv;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 
 export default class NpmUpdateCheck {
   private readonly manager: DefaultPackageManager;
@@ -77,34 +77,32 @@ export default class NpmUpdateCheck {
   }
 
   getLatestNpmVersion(packageSpec: string, range?: string): Promise<string> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const npmCommand = this.manager.npm.tool.getNpmCommand();
-        const stdout = yield* awaited(
-          commandRunner.runCommandCapture(
-            npmCommand.command,
-            [...npmCommand.args, "view", packageSpec, "version", "--json"],
-            { cwd: this.manager.cwd, timeoutMs: NETWORK_TIMEOUT_MS },
-          ),
+    return promisedWith(function* () {
+      const npmCommand = this.manager.npm.tool.getNpmCommand();
+      const stdout = yield* awaited(
+        commandRunner.runCommandCapture(
+          npmCommand.command,
+          [...npmCommand.args, "view", packageSpec, "version", "--json"],
+          { cwd: this.manager.cwd, timeoutMs: NETWORK_TIMEOUT_MS },
+        ),
+      );
+      const raw = stdout.trim();
+      if (raw === "") throw new Error("Empty response from npm view");
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed === "string") {
+        return parsed;
+      }
+      if (Array.isArray(parsed)) {
+        const versions = parsed.filter(
+          (value): value is string => typeof value === "string" && value.length > 0,
         );
-        const raw = stdout.trim();
-        if (raw === "") throw new Error("Empty response from npm view");
-        const parsed = JSON.parse(raw) as unknown;
-        if (typeof parsed === "string") {
-          return parsed;
-        }
-        if (Array.isArray(parsed)) {
-          const versions = parsed.filter(
-            (value): value is string => typeof value === "string" && value.length > 0,
-          );
-          const latest =
-            range !== undefined && range !== ""
-              ? maxSatisfying(versions, range)
-              : [...versions].sort(rcompare)[0];
-          if (latest !== undefined && latest !== null && latest !== "") return latest;
-        }
-        throw new Error("Unexpected response from npm view");
-      }, this),
-    );
+        const latest =
+          range !== undefined && range !== ""
+            ? maxSatisfying(versions, range)
+            : [...versions].sort(rcompare)[0];
+        if (latest !== undefined && latest !== null && latest !== "") return latest;
+      }
+      throw new Error("Unexpected response from npm view");
+    }, this);
   }
 }

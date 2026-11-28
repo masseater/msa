@@ -8,7 +8,7 @@ import type extensionsTypes from "../extensions/index.types.ts";
 import platform from "../platform/index.ts";
 
 const { nowMs } = platform;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 
 export default class SessionExtensionEvents {
   private readonly session: AgentSession;
@@ -89,57 +89,53 @@ export default class SessionExtensionEvents {
   }
 
   handleAgentEvent(event: agentTypes.AgentEvent): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (event.type === "agent_start" && this.session.run.lifecycle.agentRunAbortRequested)
-          this.session.agent.abort();
-        this.session.tools.calls.attachNestedCalls(event);
-        if (event.type === "tool_execution_start")
-          this.session.integrations.goal.goalInternal.noteToolUse();
-        if (event.type === "message_start" && event.message.role === "user")
-          this.session.run.queue.dequeueDeliveredUserMessage(event.message);
-        yield* awaited(this.emitExtensionEvent(event));
-        this.session.emit(
-          event.type === "agent_end"
-            ? { ...event, willRetry: this.session.run.retry.willRetryAfterAgentEnd(event) }
-            : event,
-        );
-        if (event.type === "message_end")
-          this.session.context.transcript.persistMessage(event.message);
-        if (event.type === "turn_end") {
-          this.session.run.lifecycle.lastAssistantToolResults = event.toolResults;
-          this.session.run.prompting.flushPendingCustomMessages();
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (event.type === "agent_start" && this.session.run.lifecycle.agentRunAbortRequested)
+        this.session.agent.abort();
+      this.session.tools.calls.attachNestedCalls(event);
+      if (event.type === "tool_execution_start")
+        this.session.integrations.goal.goalInternal.noteToolUse();
+      if (event.type === "message_start" && event.message.role === "user")
+        this.session.run.queue.dequeueDeliveredUserMessage(event.message);
+      yield* awaited(this.emitExtensionEvent(event));
+      this.session.emit(
+        event.type === "agent_end"
+          ? { ...event, willRetry: this.session.run.retry.willRetryAfterAgentEnd(event) }
+          : event,
+      );
+      if (event.type === "message_end")
+        this.session.context.transcript.persistMessage(event.message);
+      if (event.type === "turn_end") {
+        this.session.run.lifecycle.lastAssistantToolResults = event.toolResults;
+        this.session.run.prompting.flushPendingCustomMessages();
+      }
+    }, this);
   }
 
   private emitExtensionEvent(event: agentTypes.AgentEvent): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (event.type === "agent_start") {
-          this.turnIndex = 0;
-          yield* awaited(
-            this.session.extensions.binding.extensionRunnerInternal.emit({ type: "agent_start" }),
+    return promisedWith(function* () {
+      if (event.type === "agent_start") {
+        this.turnIndex = 0;
+        yield* awaited(
+          this.session.extensions.binding.extensionRunnerInternal.emit({ type: "agent_start" }),
+        );
+        return;
+      }
+      if (event.type === "turn_end") {
+        if (
+          event.message.role === "assistant" &&
+          !this.session.run.boundary.boundaryDispatchedMessages.delete(event.message)
+        )
+          yield* performed(
+            this.session.run.boundary.dispatchTurnEndBoundary(event.message, event.toolResults),
           );
-          return;
-        }
-        if (event.type === "turn_end") {
-          if (
-            event.message.role === "assistant" &&
-            !this.session.run.boundary.boundaryDispatchedMessages.delete(event.message)
-          )
-            yield* performed(
-              this.session.run.boundary.dispatchTurnEndBoundary(event.message, event.toolResults),
-            );
-          this.turnIndex++;
-          return;
-        }
-        if (event.type === "message_end") return;
-        const forwarded = this.forwardedExtensionEvent(event);
-        if (forwarded !== undefined)
-          yield* awaited(this.session.extensions.binding.extensionRunnerInternal.emit(forwarded));
-      }, this),
-    );
+        this.turnIndex++;
+        return;
+      }
+      if (event.type === "message_end") return;
+      const forwarded = this.forwardedExtensionEvent(event);
+      if (forwarded !== undefined)
+        yield* awaited(this.session.extensions.binding.extensionRunnerInternal.emit(forwarded));
+    }, this);
   }
 }

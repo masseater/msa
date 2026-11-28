@@ -9,7 +9,7 @@ import ModelSelectorComponent from "../components/model-selector.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import modelReferenceLookup from "./model-reference-lookup.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { findModelPolicyDenial, formatModelPolicyDenialError } = modelPolicyDenial;
 const { saveModelPolicy } = modelPolicy;
@@ -43,23 +43,21 @@ export default class ModelSelector {
     persist: boolean,
     done: () => void,
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        try {
-          yield* awaited(this.mode.session.models.selection.setModel(model, { persist }));
-          this.updateAvailableProviderCount();
-          this.mode.footer.invalidate();
-          this.mode.input.keys.updateEditorBorderColor();
-          done();
-          this.mode.display.status.showStatus(
-            persist ? `Default model: ${model.provider}/${model.id}` : `Model: ${model.id}`,
-          );
-        } catch (error) {
-          done();
-          this.mode.display.status.showError(toErrorMessage(error));
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      try {
+        yield* awaited(this.mode.session.models.selection.setModel(model, { persist }));
+        this.updateAvailableProviderCount();
+        this.mode.footer.invalidate();
+        this.mode.input.keys.updateEditorBorderColor();
+        done();
+        this.mode.display.status.showStatus(
+          persist ? `Default model: ${model.provider}/${model.id}` : `Model: ${model.id}`,
+        );
+      } catch (error) {
+        done();
+        this.mode.display.status.showError(toErrorMessage(error));
+      }
+    }, this);
   }
 
   showModelSelector(initialSearchInput?: string): void {

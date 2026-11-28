@@ -12,7 +12,7 @@ import themeModule from "../theme/theme.ts";
 
 const { theme, onThemeChange } = themeModule;
 const { Text } = tuiModule;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { writeLog } = platform;
 const { formatKeyText } = keybindingHints;
 const { createChatViewport } = chatViewport;
@@ -99,33 +99,31 @@ export default class ModeStartup {
   }
 
   init(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.isInitialized) return;
+    return promisedWith(function* () {
+      if (this.isInitialized) return;
 
-        const changelogMarkdown = yield* awaited(
-          this.mode.display.notices.startup.getChangelogForDisplay(),
+      const changelogMarkdown = yield* awaited(
+        this.mode.display.notices.startup.getChangelogForDisplay(),
+      );
+      const startupVisibility = this.prepareStartupLayout();
+      this.mode.display.notices.startup.changelogMarkdown = changelogMarkdown;
+      yield* performed(this.startTui());
+
+      if (startupVisibility.header) {
+        const { showDetails, withWordmark, compactInstructions, expandedInstructions } =
+          this.mode.lifecycle.startupHeader.startupHeaderText(startupVisibility);
+        this.mode.lifecycle.startupHeader.mountStartupHeader(
+          showDetails,
+          withWordmark,
+          compactInstructions,
+          expandedInstructions,
         );
-        const startupVisibility = this.prepareStartupLayout();
-        this.mode.display.notices.startup.changelogMarkdown = changelogMarkdown;
-        yield* performed(this.startTui());
-
-        if (startupVisibility.header) {
-          const { showDetails, withWordmark, compactInstructions, expandedInstructions } =
-            this.mode.lifecycle.startupHeader.startupHeaderText(startupVisibility);
-          this.mode.lifecycle.startupHeader.mountStartupHeader(
-            showDetails,
-            withWordmark,
-            compactInstructions,
-            expandedInstructions,
-          );
-        } else {
-          this.mode.layout.builtInHeader = new Text("", 0, 0);
-          this.mode.layout.headerContainer.addChild(this.mode.layout.builtInHeader);
-        }
-        yield* performed(this.finishStartup());
-      }, this),
-    );
+      } else {
+        this.mode.layout.builtInHeader = new Text("", 0, 0);
+        this.mode.layout.headerContainer.addChild(this.mode.layout.builtInHeader);
+      }
+      yield* performed(this.finishStartup());
+    }, this);
   }
 
   private finishStartup(): Effect.Effect<void> {

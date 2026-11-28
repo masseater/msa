@@ -1,11 +1,9 @@
-import { Effect } from "effect";
-
 import awaitingModule from "../../../core/awaiting.ts";
 import errorsModule from "../../../utils/errors.ts";
 import UserMessageSelectorComponent from "../components/user-message-selector.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 
 export default class ForkSelector {
@@ -29,23 +27,21 @@ export default class ForkSelector {
       const selector = new UserMessageSelectorComponent(
         userMessages.map((m) => ({ id: m.entryId, text: m.text })),
         (entryId) =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              done();
-              try {
-                const result = yield* awaited(this.mode.runtimeHost.fork(entryId));
-                if (result.cancelled) {
-                  this.mode.ui.requestRender();
-                  return;
-                }
-
-                this.mode.editor.setText(result.selectedText ?? "");
-                this.mode.display.status.showStatus("Forked to new session");
-              } catch (error: unknown) {
-                this.mode.display.status.showError(toErrorMessage(error));
+          promisedWith(function* () {
+            done();
+            try {
+              const result = yield* awaited(this.mode.runtimeHost.fork(entryId));
+              if (result.cancelled) {
+                this.mode.ui.requestRender();
+                return;
               }
-            }, this),
-          ),
+
+              this.mode.editor.setText(result.selectedText ?? "");
+              this.mode.display.status.showStatus("Forked to new session");
+            } catch (error: unknown) {
+              this.mode.display.status.showError(toErrorMessage(error));
+            }
+          }, this),
         () => {
           done();
           this.mode.ui.requestRender();

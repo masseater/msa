@@ -14,7 +14,7 @@ const { join } = platform;
 const { getAgentDir } = config;
 const { getFileRevision, normalizePath } = paths;
 const { prettyJson, stripBom } = text;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { raceWithAbortSignal } = abortModule;
 
 type StoredModels = Map<string, aiTypes.ModelsStoreEntry>;
@@ -124,13 +124,11 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
     providerId: string,
     options?: aiTypes.ModelsStoreOperationOptions,
   ): Promise<aiTypes.ModelsStoreEntry | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const entry = (yield* performed(this.readLatest(this.readState, options))).get(providerId);
-        options?.signal?.throwIfAborted();
-        return entry === undefined ? undefined : structuredClone(entry);
-      }, this),
-    );
+    return promisedWith(function* () {
+      const entry = (yield* performed(this.readLatest(this.readState, options))).get(providerId);
+      options?.signal?.throwIfAborted();
+      return entry === undefined ? undefined : structuredClone(entry);
+    }, this);
   }
 
   write(
@@ -138,48 +136,44 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
     entry: aiTypes.ModelsStoreEntry,
     options?: aiTypes.ModelsStoreOperationOptions,
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let latest: StoredModels | undefined;
-        yield* awaited(
-          this.storage.withLockAsync(
-            (content) =>
-              Effect.runPromise(
-                Effect.sync(() => {
-                  const current = this.parse(content);
-                  current.set(providerId, structuredClone(entry));
-                  latest = current;
-                  return { next: prettyJson(Object.fromEntries(current)), result: undefined };
-                }),
-              ),
-            options,
-          ),
-        );
-        if (latest !== undefined) this.updateReadState(this.readState, latest);
-      }, this),
-    );
+    return promisedWith(function* () {
+      let latest: StoredModels | undefined;
+      yield* awaited(
+        this.storage.withLockAsync(
+          (content) =>
+            Effect.runPromise(
+              Effect.sync(() => {
+                const current = this.parse(content);
+                current.set(providerId, structuredClone(entry));
+                latest = current;
+                return { next: prettyJson(Object.fromEntries(current)), result: undefined };
+              }),
+            ),
+          options,
+        ),
+      );
+      if (latest !== undefined) this.updateReadState(this.readState, latest);
+    }, this);
   }
 
   delete(providerId: string, options?: aiTypes.ModelsStoreOperationOptions): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let latest: StoredModels | undefined;
-        yield* awaited(
-          this.storage.withLockAsync(
-            (content) =>
-              Effect.runPromise(
-                Effect.sync(() => {
-                  const current = this.parse(content);
-                  current.delete(providerId);
-                  latest = current;
-                  return { next: prettyJson(Object.fromEntries(current)), result: undefined };
-                }),
-              ),
-            options,
-          ),
-        );
-        if (latest !== undefined) this.updateReadState(this.readState, latest);
-      }, this),
-    );
+    return promisedWith(function* () {
+      let latest: StoredModels | undefined;
+      yield* awaited(
+        this.storage.withLockAsync(
+          (content) =>
+            Effect.runPromise(
+              Effect.sync(() => {
+                const current = this.parse(content);
+                current.delete(providerId);
+                latest = current;
+                return { next: prettyJson(Object.fromEntries(current)), result: undefined };
+              }),
+            ),
+          options,
+        ),
+      );
+      if (latest !== undefined) this.updateReadState(this.readState, latest);
+    }, this);
   }
 }

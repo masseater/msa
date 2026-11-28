@@ -41,12 +41,20 @@ const awaitingWith: {
   drive(() => body.call(self)),
 );
 
+const promisedWith: {
+  <This>(self: This): <A>(body: (this: This) => Steps<A>) => Promise<A>;
+  <This, A>(body: (this: This) => Steps<A>, self: This): Promise<A>;
+} = dual(2, <This, A>(body: (this: This) => Steps<A>, self: This): Promise<A> =>
+  Effect.runPromise(drive(() => body.call(self))),
+);
+
 const awaitingModule = {
   awaited,
   awaiting,
   awaitingWith,
   performed,
   promised,
+  promisedWith,
 };
 
 export default awaitingModule;

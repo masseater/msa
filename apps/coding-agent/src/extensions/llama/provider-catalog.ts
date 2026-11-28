@@ -9,7 +9,7 @@ import LlamaClient from "./llama-client.ts";
 import llamaModels from "./llama-models.ts";
 import type providerInternalTypes from "./provider-internal.types.ts";
 
-const { awaited, awaiting, awaitingWith } = awaitingModule;
+const { awaited, awaiting, promisedWith } = awaitingModule;
 const { nowMs } = platform;
 const { isModelType } = ai;
 const {
@@ -45,13 +45,11 @@ export default class LlamaCatalog {
   };
 
   refresh(context: aiTypes.RefreshModelsContext): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const contextWindows: ContextWindows = new Map();
-        if (!(yield* awaited(this.restore(context, contextWindows)))) return;
-        yield* awaited(this.fetch(context, contextWindows));
-      }, this),
-    );
+    return promisedWith(function* () {
+      const contextWindows: ContextWindows = new Map();
+      if (!(yield* awaited(this.restore(context, contextWindows)))) return;
+      yield* awaited(this.fetch(context, contextWindows));
+    }, this);
   }
 
   private restore(
@@ -80,40 +78,38 @@ export default class LlamaCatalog {
     context: aiTypes.RefreshModelsContext,
     contextWindows: ContextWindows,
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const { credential, signal } = context;
-        if (!context.allowNetwork || signal.aborted || credential?.type !== "api_key") return;
-        const serverUrl = credentialServerUrl(credential);
-        if (serverUrl === undefined || serverUrl === "") return;
-        const client = new LlamaClient(serverUrl, credential.key);
-        const catalog = yield* awaited(client.list({ signal }));
-        if (signal.aborted) return;
-        const routerAutoload = yield* awaited(routerAutoloadEnabled(client, catalog, signal));
-        if (signal.aborted) return;
-        const selectable = catalog.filter((model) => modelIsSelectable(model, routerAutoload));
-        const refreshed = yield* awaited(
-          Promise.all(
-            selectable
-              .filter(isChatModel)
-              .map((model) => chatModelWithProps(client, model, serverUrl, contextWindows, signal)),
-          ),
-        );
-        const refreshedClassifiers = selectable.map((model) =>
-          toMsaClassifierModel(model, serverUrl, contextWindows.get(model.id)),
-        );
-        if (signal.aborted) return;
-        yield* awaited(
-          context.publish({
-            persist: { checkedAt: nowMs(), models: [...refreshed, ...refreshedClassifiers] },
-            update: () => {
-              this.models = refreshed;
-              this.classifiers = refreshedClassifiers;
-            },
-          }),
-        );
-      }, this),
-    );
+    return promisedWith(function* () {
+      const { credential, signal } = context;
+      if (!context.allowNetwork || signal.aborted || credential?.type !== "api_key") return;
+      const serverUrl = credentialServerUrl(credential);
+      if (serverUrl === undefined || serverUrl === "") return;
+      const client = new LlamaClient(serverUrl, credential.key);
+      const catalog = yield* awaited(client.list({ signal }));
+      if (signal.aborted) return;
+      const routerAutoload = yield* awaited(routerAutoloadEnabled(client, catalog, signal));
+      if (signal.aborted) return;
+      const selectable = catalog.filter((model) => modelIsSelectable(model, routerAutoload));
+      const refreshed = yield* awaited(
+        Promise.all(
+          selectable
+            .filter(isChatModel)
+            .map((model) => chatModelWithProps(client, model, serverUrl, contextWindows, signal)),
+        ),
+      );
+      const refreshedClassifiers = selectable.map((model) =>
+        toMsaClassifierModel(model, serverUrl, contextWindows.get(model.id)),
+      );
+      if (signal.aborted) return;
+      yield* awaited(
+        context.publish({
+          persist: { checkedAt: nowMs(), models: [...refreshed, ...refreshedClassifiers] },
+          update: () => {
+            this.models = refreshed;
+            this.classifiers = refreshedClassifiers;
+          },
+        }),
+      );
+    }, this);
   }
 }
 

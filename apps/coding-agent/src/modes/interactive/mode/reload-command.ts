@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import awaitingModule from "../../../core/awaiting.ts";
 import ProjectTrustStore from "../../../core/project-trust-store.ts";
 import trustManager from "../../../core/trust-manager.ts";
@@ -9,7 +7,7 @@ import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
 
 const { setRegisteredThemes } = themeModule;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, performed, promisedWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { isExpandable } = expandableTextSupport;
 const { hasTrustRequiringProjectResources } = trustManager;
@@ -85,42 +83,40 @@ export default class ReloadCommand {
   }
 
   handleReloadCommand(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.mode.session.isStreaming) {
-          this.mode.display.status.showWarning(
-            "Wait for the current response to finish before reloading.",
-          );
-          return;
-        }
-        if (this.mode.session.compaction.manual.isCompacting) {
-          this.mode.display.status.showWarning("Wait for compaction to finish before reloading.");
-          return;
-        }
-        const reload = yield* performed(this.mode.commands.reloadBlocker.showReloadBlocker());
-        let { chatRestoredBeforeSessionStart } = reload;
-        const restoreChatBeforeSessionStart = () => {
-          if (chatRestoredBeforeSessionStart) return;
-          this.mode.display.thinking.hideThinkingBlock =
-            this.mode.settingsManager.display.getHideThinkingBlock();
-          this.mode.display.thinking.outputPad = this.mode.settingsManager.terminal.getOutputPad();
-          this.mode.view.history.rebuildChatFromMessages();
-          chatRestoredBeforeSessionStart = true;
-        };
-        try {
-          yield* awaited(
-            this.mode.session.extensions.runtime.reload({
-              beforeSessionStart: restoreChatBeforeSessionStart,
-            }),
-          );
-          restoreChatBeforeSessionStart();
-          yield* awaited(this.applyReloadedResources());
-          this.mode.editorSlot.show(this.mode.editor);
-        } catch (error) {
-          if (!reload.reloadBoxDismissed) this.mode.editorSlot.show(reload.previousEditor);
-          this.mode.display.status.showError(`Reload failed: ${toErrorMessage(error)}`);
-        }
-      }, this),
-    );
+    return promisedWith(function* () {
+      if (this.mode.session.isStreaming) {
+        this.mode.display.status.showWarning(
+          "Wait for the current response to finish before reloading.",
+        );
+        return;
+      }
+      if (this.mode.session.compaction.manual.isCompacting) {
+        this.mode.display.status.showWarning("Wait for compaction to finish before reloading.");
+        return;
+      }
+      const reload = yield* performed(this.mode.commands.reloadBlocker.showReloadBlocker());
+      let { chatRestoredBeforeSessionStart } = reload;
+      const restoreChatBeforeSessionStart = () => {
+        if (chatRestoredBeforeSessionStart) return;
+        this.mode.display.thinking.hideThinkingBlock =
+          this.mode.settingsManager.display.getHideThinkingBlock();
+        this.mode.display.thinking.outputPad = this.mode.settingsManager.terminal.getOutputPad();
+        this.mode.view.history.rebuildChatFromMessages();
+        chatRestoredBeforeSessionStart = true;
+      };
+      try {
+        yield* awaited(
+          this.mode.session.extensions.runtime.reload({
+            beforeSessionStart: restoreChatBeforeSessionStart,
+          }),
+        );
+        restoreChatBeforeSessionStart();
+        yield* awaited(this.applyReloadedResources());
+        this.mode.editorSlot.show(this.mode.editor);
+      } catch (error) {
+        if (!reload.reloadBoxDismissed) this.mode.editorSlot.show(reload.previousEditor);
+        this.mode.display.status.showError(`Reload failed: ${toErrorMessage(error)}`);
+      }
+    }, this);
   }
 }

@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import type agentSessionRuntimeTypes from "../core/agent-session-runtime.types.ts";
 import agentSessionServices from "../core/agent-session-services.ts";
 import type agentSessionServicesTypes from "../core/agent-session-services.types.ts";
@@ -11,7 +9,7 @@ import runtimeSession from "./runtime-session.ts";
 import RuntimeTrust from "./runtime-trust.ts";
 
 const { createAgentSessionServices } = agentSessionServices;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const { cliResourcePaths, runtimeDiagnostics, scopedModelsFor } = runtimeInputs;
 const { sessionFromServices } = runtimeSession;
 
@@ -33,25 +31,23 @@ export default class RuntimeFactory {
   }
 
   readonly create: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = (args) =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const { parsed, telemetry } = this.startup;
-        const trustDiagnostics: Diagnostic[] = [];
-        const services = yield* awaited(this.servicesFor(args, trustDiagnostics));
-        const diagnostics = yield* awaited(
-          runtimeDiagnostics(services, trustDiagnostics, {
-            agentDir: args.agentDir,
-            cwd: args.cwd,
-          }),
-        );
-        const scopedModels = yield* awaited(scopedModelsFor(parsed, services));
-        return yield* sessionFromServices(parsed, services, scopedModels, diagnostics, {
-          sessionManager: args.sessionManager,
-          sessionStartEvent: args.sessionStartEvent,
-          telemetry,
-        });
-      }, this),
-    );
+    promisedWith(function* () {
+      const { parsed, telemetry } = this.startup;
+      const trustDiagnostics: Diagnostic[] = [];
+      const services = yield* awaited(this.servicesFor(args, trustDiagnostics));
+      const diagnostics = yield* awaited(
+        runtimeDiagnostics(services, trustDiagnostics, {
+          agentDir: args.agentDir,
+          cwd: args.cwd,
+        }),
+      );
+      const scopedModels = yield* awaited(scopedModelsFor(parsed, services));
+      return yield* sessionFromServices(parsed, services, scopedModels, diagnostics, {
+        sessionManager: args.sessionManager,
+        sessionStartEvent: args.sessionStartEvent,
+        telemetry,
+      });
+    }, this);
 
   private servicesFor(
     args: FactoryArgs,

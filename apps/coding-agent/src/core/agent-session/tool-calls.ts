@@ -10,7 +10,7 @@ import NestedToolCallRunner from "../nested-tool-call-runner.ts";
 import type nestedToolCallsTypes from "../nested-tool-calls.types.ts";
 import usageTotalsModule from "../usage-totals.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { combineUsage } = usageTotalsModule;
 const { normalizeToolResultImages } = toolResultImages;
 const { runToolCall } = agentModule;
@@ -145,12 +145,10 @@ export default class SessionToolCalls {
     return awaitingWith(function* () {
       this.nestedToolCalls ??= new NestedToolCallRunner({
         emit: (event) =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              yield* awaited(this.session.extensions.binding.extensionRunnerInternal.emit(event));
-              this.session.emit(event);
-            }, this),
-          ),
+          promisedWith(function* () {
+            yield* awaited(this.session.extensions.binding.extensionRunnerInternal.emit(event));
+            this.session.emit(event);
+          }, this),
         getTools: () => this.session.tools.loadout.getCallableTools(),
         isSequential: () => this.session.agent.toolExecution === "sequential",
         runToolCall: (toolCall, parentId, signal, onUpdate) => {

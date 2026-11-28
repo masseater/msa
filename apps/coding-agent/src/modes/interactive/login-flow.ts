@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import awaitingModule from "../../core/awaiting.ts";
 import type loginFlowTypes from "./login-flow.types.ts";
 import LoginPrompts from "./login-flow/login-prompts.ts";
@@ -10,7 +8,7 @@ import LoginProviderOptions from "./login-flow/provider-options.ts";
 import ProviderSelection from "./login-flow/provider-selection.ts";
 import ServiceLogin from "./login-flow/service-login.ts";
 
-const { awaitingWith, performed } = awaitingModule;
+const { performed, promisedWith } = awaitingModule;
 
 export default class LoginFlow {
   readonly providers: LoginProviderOptions;
@@ -24,37 +22,35 @@ export default class LoginFlow {
   host!: loginFlowTypes.LoginFlowHost;
 
   login(providerRef?: string): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const normalizedRef = providerRef?.trim().toLowerCase();
-        if (normalizedRef === undefined || normalizedRef === "") {
-          this.selection.showAuthTypeSelector();
-          return;
-        }
-        const service = this.services.serviceByRef(normalizedRef);
-        if (service !== undefined) {
-          yield* performed(this.services.loginService(service));
-          return;
-        }
+    return promisedWith(function* () {
+      const normalizedRef = providerRef?.trim().toLowerCase();
+      if (normalizedRef === undefined || normalizedRef === "") {
+        this.selection.showAuthTypeSelector();
+        return;
+      }
+      const service = this.services.serviceByRef(normalizedRef);
+      if (service !== undefined) {
+        yield* performed(this.services.loginService(service));
+        return;
+      }
 
-        const providerOptions = this.providers
-          .getProviderOptions()
-          .filter(
-            (provider) =>
-              provider.id.toLowerCase() === normalizedRef ||
-              provider.name.toLowerCase() === normalizedRef,
-          );
-        if (providerOptions.length === 1) {
-          yield* performed(this.providerLogin.startProviderLogin(providerOptions[0]!));
-          return;
-        }
-        if (new Set(providerOptions.map((provider) => provider.id)).size === 1) {
-          this.selection.showAuthTypeSelector(providerOptions);
-          return;
-        }
-        this.selection.showProviderSelector(undefined, providerRef);
-      }, this),
-    );
+      const providerOptions = this.providers
+        .getProviderOptions()
+        .filter(
+          (provider) =>
+            provider.id.toLowerCase() === normalizedRef ||
+            provider.name.toLowerCase() === normalizedRef,
+        );
+      if (providerOptions.length === 1) {
+        yield* performed(this.providerLogin.startProviderLogin(providerOptions[0]!));
+        return;
+      }
+      if (new Set(providerOptions.map((provider) => provider.id)).size === 1) {
+        this.selection.showAuthTypeSelector(providerOptions);
+        return;
+      }
+      this.selection.showProviderSelector(undefined, providerRef);
+    }, this);
   }
 
   constructor(host: loginFlowTypes.LoginFlowHost) {

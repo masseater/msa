@@ -10,7 +10,7 @@ import type InteractiveMode from "../interactive-mode.ts";
 const { killTrackedDetachedChildren } = shell;
 const { isDeadTerminalError } = interactiveModeHelpers;
 const { formatResumeCommand } = interactiveModeSupport;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 
 export default class ModeShutdown {
   private readonly mode: InteractiveMode;
@@ -63,33 +63,31 @@ export default class ModeShutdown {
   }
 
   shutdown(options?: { fromSignal?: boolean }): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.isShuttingDown) return;
-        this.isShuttingDown = true;
+    return promisedWith(function* () {
+      if (this.isShuttingDown) return;
+      this.isShuttingDown = true;
 
-        if (options?.fromSignal === true) {
-          yield* awaited(this.mode.runtimeHost.dispose());
-          this.mode.display.theme.themeController.disableAutoSync();
-          yield* awaited(this.mode.ui.terminal.drainInput(1000));
-          this.stop();
-          process.exit(0);
-        }
-
+      if (options?.fromSignal === true) {
+        yield* awaited(this.mode.runtimeHost.dispose());
         this.mode.display.theme.themeController.disableAutoSync();
         yield* awaited(this.mode.ui.terminal.drainInput(1000));
-
         this.stop();
-        yield* awaited(this.mode.runtimeHost.dispose());
-
-        const resumeCommand = yield* awaited(formatResumeCommand(this.mode.sessionManager));
-        if (resumeCommand !== undefined && resumeCommand !== "") {
-          process.stdout.write(`${chalk.dim("To resume this session:")} ${resumeCommand}\n`);
-        }
-
         process.exit(0);
-      }, this),
-    );
+      }
+
+      this.mode.display.theme.themeController.disableAutoSync();
+      yield* awaited(this.mode.ui.terminal.drainInput(1000));
+
+      this.stop();
+      yield* awaited(this.mode.runtimeHost.dispose());
+
+      const resumeCommand = yield* awaited(formatResumeCommand(this.mode.sessionManager));
+      if (resumeCommand !== undefined && resumeCommand !== "") {
+        process.stdout.write(`${chalk.dim("To resume this session:")} ${resumeCommand}\n`);
+      }
+
+      process.exit(0);
+    }, this);
   }
 
   checkShutdownRequested(): Effect.Effect<void> {

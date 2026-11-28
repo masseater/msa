@@ -17,7 +17,7 @@ const {
   isReplayable,
 } = cacheWarmerSupport;
 const { nowMs, scheduleUnref } = platform;
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, promisedWith } = awaitingModule;
 const {
   IDLE_CONTINUATION_PROBABILITY,
   MAX_IDLE_WARMING_AGE_MS,
@@ -160,46 +160,44 @@ export default class CacheWarmer {
   }
 
   private refresh(run: cacheWarmerInternalTypes.ActiveRun): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        run.timer = undefined;
-        if (!this.validateRun(run)) return;
-        if (this.refreshDeadlineMissed(run)) return;
-        const decision = this.evaluate(run);
-        const { warmCost, missCost, continuationProbability } = decision;
-        let action = decision.action;
-        try {
-          action = yield* awaited(
-            this.decide({
-              action,
-              continuationProbability,
-              missCost,
-              type: "cache_warming_decision",
-              warmCost,
-            }),
-          );
-        } catch {}
-        if (!this.validateRun(run) || this.refreshDeadlineMissed(run)) return;
-        const extensionOverride = action !== decision.action;
-        if (action === "stop") {
-          const reason = extensionOverride
-            ? "stopped by extension"
-            : decision.economicsAvailable
-              ? "expected savings below threshold"
-              : "cache economics unavailable";
-          this.stop(reason, { decision, extensionOverride });
-          return;
-        }
+    return promisedWith(function* () {
+      run.timer = undefined;
+      if (!this.validateRun(run)) return;
+      if (this.refreshDeadlineMissed(run)) return;
+      const decision = this.evaluate(run);
+      const { warmCost, missCost, continuationProbability } = decision;
+      let action = decision.action;
+      try {
+        action = yield* awaited(
+          this.decide({
+            action,
+            continuationProbability,
+            missCost,
+            type: "cache_warming_decision",
+            warmCost,
+          }),
+        );
+      } catch {}
+      if (!this.validateRun(run) || this.refreshDeadlineMissed(run)) return;
+      const extensionOverride = action !== decision.action;
+      if (action === "stop") {
+        const reason = extensionOverride
+          ? "stopped by extension"
+          : decision.economicsAvailable
+            ? "expected savings below threshold"
+            : "cache economics unavailable";
+        this.stop(reason, { decision, extensionOverride });
+        return;
+      }
 
-        run.extensionOverride = extensionOverride;
-        try {
-          const message = yield* this.warmupModel(run);
-          if (!this.validateRun(run)) return;
-          this.recordUsage(message, extensionOverride);
-        } catch {}
-        if (this.run === run) this.schedule(run);
-      }, this),
-    );
+      run.extensionOverride = extensionOverride;
+      try {
+        const message = yield* this.warmupModel(run);
+        if (!this.validateRun(run)) return;
+        this.recordUsage(message, extensionOverride);
+      } catch {}
+      if (this.run === run) this.schedule(run);
+    }, this);
   }
 
   private recordUsage(

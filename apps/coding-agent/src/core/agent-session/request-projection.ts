@@ -13,7 +13,7 @@ import type virtualModelsTypes from "../virtual-models.types.ts";
 const { nowMs } = platform;
 const { isVirtualModel, VIRTUAL_MODEL_STATE_ENTRY, getVirtualModelState } = virtualModels;
 const { getCurrentSystemMessage } = ai;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { convertToLlm } = messagesModule;
 
 const withoutHiddenToolChanges = (
@@ -45,17 +45,15 @@ export default class SessionRequestProjection {
   installHiddenDeclarationsProjection(): void {
     const previousTransformContext = this.session.agent.transformContext;
     this.session.agent.transformContext = (messages, signal) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          const transformed =
-            previousTransformContext === undefined
-              ? messages
-              : yield* awaited(previousTransformContext(messages, signal));
-          const hidden = this.session.tools.loadout.hiddenDeclarations;
-          if (hidden.size === 0) return transformed;
-          return transformed.map((message) => withoutHiddenToolChanges(message, hidden));
-        }, this),
-      );
+      promisedWith(function* () {
+        const transformed =
+          previousTransformContext === undefined
+            ? messages
+            : yield* awaited(previousTransformContext(messages, signal));
+        const hidden = this.session.tools.loadout.hiddenDeclarations;
+        if (hidden.size === 0) return transformed;
+        return transformed.map((message) => withoutHiddenToolChanges(message, hidden));
+      }, this);
   }
 
   private prepareProjectedRequest(
@@ -63,51 +61,47 @@ export default class SessionRequestProjection {
     request: Parameters<NonNullable<agentTypes.Agent["prepareRequest"]>>[0],
     signal: AbortSignal | undefined,
   ) {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const projection = this.session.sessionManager.buildSessionProjection();
-        const canonicalContext = {
-          ...request.context,
-          messages: projection.messages,
-          tools: this.session.agent.state.tools.slice(),
-        };
-        const previous = yield* awaited(
-          previousPrepareRequest?.(
-            {
-              ...request,
-              context: canonicalContext,
-              model: this.session.agent.state.model,
-              thinkingLevel: this.session.agent.state.thinkingLevel,
-            },
-            signal,
-          ),
-        );
-        return { context: previous?.context ?? canonicalContext, previous, projection };
-      }, this),
-    );
+    return promisedWith(function* () {
+      const projection = this.session.sessionManager.buildSessionProjection();
+      const canonicalContext = {
+        ...request.context,
+        messages: projection.messages,
+        tools: this.session.agent.state.tools.slice(),
+      };
+      const previous = yield* awaited(
+        previousPrepareRequest?.(
+          {
+            ...request,
+            context: canonicalContext,
+            model: this.session.agent.state.model,
+            thinkingLevel: this.session.agent.state.thinkingLevel,
+          },
+          signal,
+        ),
+      );
+      return { context: previous?.context ?? canonicalContext, previous, projection };
+    }, this);
   }
 
   installAgentForcedPromptProjection(): void {
     const previousTransformContext = this.session.agent.transformContext;
     this.session.agent.transformContext = (messages, signal) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          const transformed =
-            previousTransformContext === undefined
-              ? messages
-              : yield* awaited(previousTransformContext(messages, signal));
-          const forced = this.session.tools.prompt.runSystemPromptOptions?.forceSystemPrompt;
-          if (forced === undefined) return transformed;
-          const current = getCurrentSystemMessage(transformed);
-          const head: compatTypes.SystemMessage = {
-            content: forced,
-            role: "system",
-            timestamp: current?.timestamp ?? nowMs(),
-            ...(current?.toolsAdded === undefined ? {} : { toolsAdded: current.toolsAdded }),
-          };
-          return [head, ...transformed.filter((message) => message.role !== "system")];
-        }, this),
-      );
+      promisedWith(function* () {
+        const transformed =
+          previousTransformContext === undefined
+            ? messages
+            : yield* awaited(previousTransformContext(messages, signal));
+        const forced = this.session.tools.prompt.runSystemPromptOptions?.forceSystemPrompt;
+        if (forced === undefined) return transformed;
+        const current = getCurrentSystemMessage(transformed);
+        const head: compatTypes.SystemMessage = {
+          content: forced,
+          role: "system",
+          timestamp: current?.timestamp ?? nowMs(),
+          ...(current?.toolsAdded === undefined ? {} : { toolsAdded: current.toolsAdded }),
+        };
+        return [head, ...transformed.filter((message) => message.role !== "system")];
+      }, this);
   }
 
   private routeVirtualRequest(
@@ -196,41 +190,37 @@ export default class SessionRequestProjection {
       (this.session.agent.prepareNextTurn === undefined
         ? undefined
         : (_turn: agentTypes.PrepareNextTurnContext, signal?: AbortSignal) =>
-            Effect.runPromise(
-              awaitingWith(function* () {
-                return yield* awaited(this.session.agent.prepareNextTurn?.(signal));
-              }, this),
-            ));
+            promisedWith(function* () {
+              return yield* awaited(this.session.agent.prepareNextTurn?.(signal));
+            }, this));
     this.session.agent.prepareNextTurnWithContext = (turn, signal) =>
-      Effect.runPromise(
-        awaitingWith(function* () {
-          const context = yield* performed(
-            this.session.compaction.auto.compactBeforeNextAssistantResponse(turn.context),
-          );
-          const previousSnapshot = yield* awaited(
-            previousPrepareNextTurnWithContext?.({ ...turn, context }, signal),
-          );
-          const nextContext = previousSnapshot?.context ?? context;
-          const options = this.session.tools.prompt.nextTurnPromptOptions();
-          const updateMessage = this.session.tools.loadout.preparePromptAndToolLoadout(
-            options,
-            nextContext.messages,
-          );
-          this.session.tools.prompt.runSystemPromptOptions = options;
+      promisedWith(function* () {
+        const context = yield* performed(
+          this.session.compaction.auto.compactBeforeNextAssistantResponse(turn.context),
+        );
+        const previousSnapshot = yield* awaited(
+          previousPrepareNextTurnWithContext?.({ ...turn, context }, signal),
+        );
+        const nextContext = previousSnapshot?.context ?? context;
+        const options = this.session.tools.prompt.nextTurnPromptOptions();
+        const updateMessage = this.session.tools.loadout.preparePromptAndToolLoadout(
+          options,
+          nextContext.messages,
+        );
+        this.session.tools.prompt.runSystemPromptOptions = options;
 
-          return {
-            ...previousSnapshot,
-            context: {
-              ...nextContext,
-              tools: this.session.agent.state.tools.slice(),
-            },
-            ...(updateMessage === undefined
-              ? {}
-              : { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }),
-            model: this.session.agent.state.model,
-            thinkingLevel: this.session.agent.state.thinkingLevel,
-          };
-        }, this),
-      );
+        return {
+          ...previousSnapshot,
+          context: {
+            ...nextContext,
+            tools: this.session.agent.state.tools.slice(),
+          },
+          ...(updateMessage === undefined
+            ? {}
+            : { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }),
+          model: this.session.agent.state.model,
+          thinkingLevel: this.session.agent.state.thinkingLevel,
+        };
+      }, this);
   }
 }

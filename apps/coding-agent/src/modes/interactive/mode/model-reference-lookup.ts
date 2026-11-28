@@ -8,7 +8,7 @@ import errorsModule from "../../../utils/errors.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import modelCatalogRefresh from "../model-catalog-refresh.ts";
 
-const { awaited, awaitingWith } = awaitingModule;
+const { awaited, awaitingWith, promisedWith } = awaitingModule;
 const { findExactModelReferenceMatch } = modelResolver;
 
 const REFRESH_TIMEOUT_MS = 15_000;
@@ -62,18 +62,16 @@ function findExactModelMatch(
   mode: InteractiveMode,
   searchTerm: string,
 ): Promise<Model | undefined> {
-  return Effect.runPromise(
-    awaitingWith(function* () {
-      const cachedMatch = findExactModelReferenceMatch(searchTerm, cachedModels(mode));
-      if (cachedMatch !== undefined || mode.session.models.selection.scopedModels.length > 0) {
-        return cachedMatch;
-      }
-      yield* refreshCatalogs(mode);
-      return findExactModelReferenceMatch(searchTerm, [
-        ...mode.session.models.selection.modelRuntime.getAvailableSnapshot(),
-      ]);
-    }, mode),
-  );
+  return promisedWith(function* () {
+    const cachedMatch = findExactModelReferenceMatch(searchTerm, cachedModels(mode));
+    if (cachedMatch !== undefined || mode.session.models.selection.scopedModels.length > 0) {
+      return cachedMatch;
+    }
+    yield* refreshCatalogs(mode);
+    return findExactModelReferenceMatch(searchTerm, [
+      ...mode.session.models.selection.modelRuntime.getAvailableSnapshot(),
+    ]);
+  }, mode);
 }
 
 const modelReferenceLookup = {

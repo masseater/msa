@@ -10,7 +10,7 @@ import loginFlowHelpers from "../login-flow-helpers.ts";
 import type LoginFlow from "../login-flow.ts";
 import type loginFlowTypes from "../login-flow.types.ts";
 
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { CREDENTIAL_TIMEOUT_MS, LOGIN_CANCELLED } = loginFlowHelpers;
 const { toErrorMessage } = errorsModule;
 
@@ -41,31 +41,29 @@ export default class LogoutFlow {
   }
 
   logout(): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const { host } = this;
-        let providerOptions: oauthSelectorTypes.AuthSelectorProvider[];
-        try {
-          providerOptions = yield* performed(this.providers.getLogoutProviderOptions());
-        } catch (error) {
-          host.showError(`Could not read stored credentials: ${toErrorMessage(error)}`);
-          return;
-        }
-        let services;
-        ({ services, providerOptions } = yield* this.providers.withSignedInServices(
-          host,
-          providerOptions,
-        ));
-        if (providerOptions.length === 0) {
-          host.showStatus(
-            "No stored credentials to remove. /logout only removes credentials saved by /login; environment variables and models.json config are unchanged.",
-          );
-          return;
-        }
+    return promisedWith(function* () {
+      const { host } = this;
+      let providerOptions: oauthSelectorTypes.AuthSelectorProvider[];
+      try {
+        providerOptions = yield* performed(this.providers.getLogoutProviderOptions());
+      } catch (error) {
+        host.showError(`Could not read stored credentials: ${toErrorMessage(error)}`);
+        return;
+      }
+      let services;
+      ({ services, providerOptions } = yield* this.providers.withSignedInServices(
+        host,
+        providerOptions,
+      ));
+      if (providerOptions.length === 0) {
+        host.showStatus(
+          "No stored credentials to remove. /logout only removes credentials saved by /login; environment variables and models.json config are unchanged.",
+        );
+        return;
+      }
 
-        this.logouts.showLogoutSelector(host, providerOptions, services);
-      }, this.flow),
-    );
+      this.logouts.showLogoutSelector(host, providerOptions, services);
+    }, this.flow);
   }
 
   private showLogoutSelector(
@@ -78,21 +76,19 @@ export default class LogoutFlow {
         "logout",
         providerOptions,
         (providerId: string) =>
-          Effect.runPromise(
-            awaitingWith(function* () {
-              done();
-              const providerOption = providerOptions.find((provider) => provider.id === providerId);
-              if (providerOption === undefined) {
-                return;
-              }
-              const service = services.find((candidate) => candidate.id === providerId);
-              if (service !== undefined) {
-                yield* performed(this.logouts.logoutService(service));
-                return;
-              }
-              yield* this.logouts.logoutProvider(host, providerOption);
-            }, this.flow),
-          ),
+          promisedWith(function* () {
+            done();
+            const providerOption = providerOptions.find((provider) => provider.id === providerId);
+            if (providerOption === undefined) {
+              return;
+            }
+            const service = services.find((candidate) => candidate.id === providerId);
+            if (service !== undefined) {
+              yield* performed(this.logouts.logoutService(service));
+              return;
+            }
+            yield* this.logouts.logoutProvider(host, providerOption);
+          }, this.flow),
         () => {
           done();
           host.ui.requestRender();

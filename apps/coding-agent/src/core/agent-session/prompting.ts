@@ -11,7 +11,7 @@ import platform from "../platform/index.ts";
 import promptTemplates from "../prompt-templates.ts";
 
 const { nowMs } = platform;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed, promisedWith } = awaitingModule;
 const { formatNoModelSelectedMessage } = authGuidance;
 const { expandPromptTemplate } = promptTemplates;
 
@@ -81,45 +81,41 @@ export default class SessionPrompting {
     message: Pick<messagesTypes.CustomMessage<T>, "customType" | "content" | "display" | "details">,
     options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const appMessage = {
-          content: message.content ?? [],
-          customType: message.customType,
-          details: message.details,
-          display: message.display,
-          role: "custom" as const,
-          timestamp: nowMs(),
-        } satisfies messagesTypes.CustomMessage<T>;
-        if (options?.deliverAs === "nextTurn") {
-          this.pendingNextTurnMessages.push(appMessage);
-        } else if (this.session.isStreaming && options?.triggerTurn !== false) {
-          if (options?.deliverAs === "followUp") {
-            this.session.agent.followUp(appMessage);
-          } else {
-            this.session.agent.steer(appMessage);
-          }
-        } else if (options?.triggerTurn === true) {
-          if (this.session.run.lifecycle.isEmittingAgentSettled) {
-            this.session.run.lifecycle.deferredSettledActions.push(() =>
-              Effect.runPromise(
-                awaitingWith(function* () {
-                  return yield* awaited(this.sendCustomMessage(message, options));
-                }, this),
-              ),
-            );
-            return;
-          }
-          yield* performed(
-            this.session.run.lifecycle.startRun({ message: appMessage, messageType: "custom" }),
-          );
-        } else if (this.session.isStreaming) {
-          this.pendingCustomMessages.push(appMessage);
+    return promisedWith(function* () {
+      const appMessage = {
+        content: message.content ?? [],
+        customType: message.customType,
+        details: message.details,
+        display: message.display,
+        role: "custom" as const,
+        timestamp: nowMs(),
+      } satisfies messagesTypes.CustomMessage<T>;
+      if (options?.deliverAs === "nextTurn") {
+        this.pendingNextTurnMessages.push(appMessage);
+      } else if (this.session.isStreaming && options?.triggerTurn !== false) {
+        if (options?.deliverAs === "followUp") {
+          this.session.agent.followUp(appMessage);
         } else {
-          this.appendCustomMessage(appMessage);
+          this.session.agent.steer(appMessage);
         }
-      }, this),
-    );
+      } else if (options?.triggerTurn === true) {
+        if (this.session.run.lifecycle.isEmittingAgentSettled) {
+          this.session.run.lifecycle.deferredSettledActions.push(() =>
+            promisedWith(function* () {
+              return yield* awaited(this.sendCustomMessage(message, options));
+            }, this),
+          );
+          return;
+        }
+        yield* performed(
+          this.session.run.lifecycle.startRun({ message: appMessage, messageType: "custom" }),
+        );
+      } else if (this.session.isStreaming) {
+        this.pendingCustomMessages.push(appMessage);
+      } else {
+        this.appendCustomMessage(appMessage);
+      }
+    }, this);
   }
 
   private expandPromptText(
@@ -133,87 +129,82 @@ export default class SessionPrompting {
   }
 
   prompt(text: string, options?: agentSessionTypes.PromptOptions): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.session.run.lifecycle.isEmittingAgentSettled) {
-          this.session.run.lifecycle.deferredSettledActions.push(() => this.prompt(text, options));
-          return;
-        }
-        if (yield* performed(this.session.commands.dispatch.runPromptCommand(text, options)))
-          return;
-        if (this.session.compaction.manual.compactionAbortController !== undefined) {
-          throw new Error(
-            "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
-          );
-        }
-        const processedInput = yield* performed(
-          this.runInputHandlers(
-            text,
-            options?.images,
-            options?.source ?? "interactive",
-            this.session.isStreaming ? options?.streamingBehavior : undefined,
-          ),
+    return promisedWith(function* () {
+      if (this.session.run.lifecycle.isEmittingAgentSettled) {
+        this.session.run.lifecycle.deferredSettledActions.push(() => this.prompt(text, options));
+        return;
+      }
+      if (yield* performed(this.session.commands.dispatch.runPromptCommand(text, options))) return;
+      if (this.session.compaction.manual.compactionAbortController !== undefined) {
+        throw new Error(
+          "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
         );
-        if (processedInput === undefined) {
-          options?.preflightResult?.("handled");
-          return;
-        }
-        const { text: currentText, images: currentImages } = processedInput;
-        const expandedText = yield* performed(this.expandPromptText(currentText, options));
-        if (this.session.isStreaming) {
-          yield* performed(
-            this.session.run.queue.queueWhileStreaming(expandedText, currentImages, options),
-          );
-          return;
-        }
-        const model = this.session.model;
-        if (model === undefined) throw new Error(formatNoModelSelectedMessage());
-        yield* performed(this.session.models.auth.ensurePromptAuth(model));
+      }
+      const processedInput = yield* performed(
+        this.runInputHandlers(
+          text,
+          options?.images,
+          options?.source ?? "interactive",
+          this.session.isStreaming ? options?.streamingBehavior : undefined,
+        ),
+      );
+      if (processedInput === undefined) {
+        options?.preflightResult?.("handled");
+        return;
+      }
+      const { text: currentText, images: currentImages } = processedInput;
+      const expandedText = yield* performed(this.expandPromptText(currentText, options));
+      if (this.session.isStreaming) {
         yield* performed(
-          this.session.run.lifecycle.startRun(
-            { images: currentImages, messageType: "user", prompt: expandedText },
-            () => options?.preflightResult?.("started"),
-            options?.mode,
-          ),
+          this.session.run.queue.queueWhileStreaming(expandedText, currentImages, options),
         );
-      }, this),
-    );
+        return;
+      }
+      const model = this.session.model;
+      if (model === undefined) throw new Error(formatNoModelSelectedMessage());
+      yield* performed(this.session.models.auth.ensurePromptAuth(model));
+      yield* performed(
+        this.session.run.lifecycle.startRun(
+          { images: currentImages, messageType: "user", prompt: expandedText },
+          () => options?.preflightResult?.("started"),
+          options?.mode,
+        ),
+      );
+    }, this);
   }
 
   sendUserMessage(
     content: string | (compatTypes.TextContent | compatTypes.ImageContent)[],
     options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
   ): Promise<void> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        let text: string;
-        let images: compatTypes.ImageContent[] | undefined;
+    return promisedWith(function* () {
+      let text: string;
+      let images: compatTypes.ImageContent[] | undefined;
 
-        if (typeof content === "string") {
-          text = content;
-        } else {
-          const textParts: string[] = [];
-          images = [];
-          for (const part of content) {
-            if (part.type === "text") {
-              textParts.push(part.text);
-            } else {
-              images.push(part);
-            }
+      if (typeof content === "string") {
+        text = content;
+      } else {
+        const textParts: string[] = [];
+        images = [];
+        for (const part of content) {
+          if (part.type === "text") {
+            textParts.push(part.text);
+          } else {
+            images.push(part);
           }
-          text = textParts.join("\n");
-          if (images.length === 0) images = undefined;
         }
+        text = textParts.join("\n");
+        if (images.length === 0) images = undefined;
+      }
 
-        yield* awaited(
-          this.prompt(text, {
-            expandPromptTemplates: options?.expandPromptTemplates ?? false,
-            images,
-            source: "extension",
-            streamingBehavior: options?.deliverAs,
-          }),
-        );
-      }, this),
-    );
+      yield* awaited(
+        this.prompt(text, {
+          expandPromptTemplates: options?.expandPromptTemplates ?? false,
+          images,
+          source: "extension",
+          streamingBehavior: options?.deliverAs,
+        }),
+      );
+    }, this);
   }
 }
