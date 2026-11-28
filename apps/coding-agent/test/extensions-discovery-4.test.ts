@@ -2,32 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import extensionsDiscoverySupport from "./extensions-discovery-support.ts";
 import tempDirKit from "./temp-dir.ts";
 
 const { awaited, joinPath, runTest, writeTextFile } = testing;
 
+const { extensionCode, extensionCodeWithTool } = extensionsDiscoverySupport;
+
 const { useExtensionsDir } = tempDirKit;
 
 const extTemp = useExtensionsDir("msa-ext-test-");
-
-const extensionCode = `
-		export default function(msa) {
-			msa.registerCommand("test", { handler: async () => {} });
-		}
-	`;
-
-const extensionCodeWithTool = (toolName: string) => `
-		import { Type } from "typebox";
-		export default function(msa) {
-			msa.registerTool({
-				name: "${toolName}",
-				label: "${toolName}",
-				description: "Test tool",
-				parameters: Type.Object({}),
-				execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
-			});
-		}
-	`;
 
 const loadextensionsOnlyLoadsExplicitPathsWithoutDiscovery = () =>
   runTest(

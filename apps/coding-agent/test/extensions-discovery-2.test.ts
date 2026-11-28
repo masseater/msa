@@ -3,34 +3,18 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import loader from "../src/core/extensions/loader.ts";
+import extensionsDiscoverySupport from "./extensions-discovery-support.ts";
 import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
+const { discoverCleanly, extensionCode, extensionCodeWithTool } = extensionsDiscoverySupport;
+
 const { useExtensionsDir } = tempDirKit;
 
 const extTemp = useExtensionsDir("msa-ext-test-");
-
-const extensionCode = `
-		export default function(msa) {
-			msa.registerCommand("test", { handler: async () => {} });
-		}
-	`;
-
-const extensionCodeWithTool = (toolName: string) => `
-		import { Type } from "typebox";
-		export default function(msa) {
-			msa.registerTool({
-				name: "${toolName}",
-				label: "${toolName}",
-				description: "Test tool",
-				parameters: Type.Object({}),
-				execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
-			});
-		}
-	`;
 
 const keepsPackageJsonMsaExtensionEntriesWith = () =>
   runTest(
@@ -77,10 +61,7 @@ const packageJsonCanDeclareMultipleExtensions = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(2);
+      yield* discoverCleanly(extTemp, 2);
     }),
   );
 
@@ -101,10 +82,7 @@ const packageJsonWithMsaFieldTakesPrecedence = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("custom.ts");
 
       expect(result.extensions[0]?.tools.has("from-custom")).toBe(true);
@@ -126,10 +104,7 @@ const ignoresPackageJsonWithoutMsaFieldFalls = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("index.ts");
     }),
   );
@@ -142,10 +117,7 @@ const ignoresSubdirectoryWithoutIndexOrPackageJson = () =>
       yield* writeTextFile(joinPath(subdir, "helper.ts"), extensionCode);
       yield* writeTextFile(joinPath(subdir, "utils.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(0);
+      yield* discoverCleanly(extTemp, 0);
     }),
   );
 
@@ -158,10 +130,7 @@ const doesNotRecurseBeyondOneLevel = () =>
       yield* makeDirectory(nested);
       yield* writeTextFile(joinPath(nested, "index.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(0);
+      yield* discoverCleanly(extTemp, 0);
     }),
   );
 
@@ -182,10 +151,7 @@ const handlesMixedDirectFilesAndSubdirectories = () =>
         yield* toJsonText({ msa: { extensions: ["./entry.ts"] } }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(3);
+      yield* discoverCleanly(extTemp, 3);
     }),
   );
 
@@ -204,10 +170,7 @@ const skipsNonExistentPathsDeclaredInPackage = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("exists.ts");
     }),
   );
@@ -217,10 +180,7 @@ const loadsExtensionsAndRegistersCommands = () =>
     Effect.gen(function* () {
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-command.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.commands.has("test")).toBe(true);
     }),
   );
@@ -233,10 +193,7 @@ const loadsExtensionsAndRegistersTools = () =>
         extensionCodeWithTool("my-tool"),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.tools.has("my-tool")).toBe(true);
     }),
   );

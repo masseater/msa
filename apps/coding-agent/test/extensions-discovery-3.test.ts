@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import loader from "../src/core/extensions/loader.ts";
+import extensionsDiscoverySupport from "./extensions-discovery-support.ts";
 import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
@@ -12,30 +13,13 @@ const { discoverAndLoadExtensions } = loader;
 const { awaited, dirnameOf, joinPath, makeDirectory, resolvePath, runTest, writeTextFile } =
   testing;
 
+const { discoverCleanly, extensionCode, extensionCodeWithTool } = extensionsDiscoverySupport;
+
 const { useExtensionsDir } = tempDirKit;
 
 const extTemp = useExtensionsDir("msa-ext-test-");
 
 const currentDir = dirnameOf(fileURLToPath(import.meta.url));
-
-const extensionCode = `
-		export default function(msa) {
-			msa.registerCommand("test", { handler: async () => {} });
-		}
-	`;
-
-const extensionCodeWithTool = (toolName: string) => `
-		import { Type } from "typebox";
-		export default function(msa) {
-			msa.registerTool({
-				name: "${toolName}",
-				label: "${toolName}",
-				description: "Test tool",
-				parameters: Type.Object({}),
-				execute: async () => ({ content: [{ type: "text", text: "ok" }] }),
-			});
-		}
-	`;
 
 const reportsErrorsForInvalidExtensionCode = () =>
   runTest(
@@ -60,12 +44,7 @@ const handlesExplicitlyConfiguredPaths = () =>
       yield* makeDirectory(dirnameOf(customPath));
       yield* writeTextFile(customPath, extensionCode);
 
-      const result = yield* awaited(
-        discoverAndLoadExtensions([customPath], extTemp.path, extTemp.path),
-      );
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1, [customPath]);
       expect(result.extensions[0]?.path).toContain("my-ext.ts");
     }),
   );
@@ -75,12 +54,7 @@ const resolvesDependenciesFromExtensionSOwnNode = () =>
     Effect.gen(function* () {
       const extPath = resolvePath(currentDir, "../examples/extensions/with-deps");
 
-      const result = yield* awaited(
-        discoverAndLoadExtensions([extPath], extTemp.path, extTemp.path),
-      );
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1, [extPath]);
       expect(result.extensions[0]?.path).toContain("with-deps");
 
       expect(result.extensions[0]?.tools.has("parse_duration")).toBe(true);
@@ -105,10 +79,7 @@ const registersMessageAndEntryRenderers = () =>
 		`;
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-renderer.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.markdownTransformer).toBeDefined();
       expect(result.extensions[0]?.messageRenderers.has("my-custom-type")).toBe(true);
       expect(result.extensions[0]?.entryRenderers?.has("my-entry-type")).toBe(true);
@@ -163,10 +134,7 @@ const allowsMultipleExtensionsToRegisterDifferentTools = () =>
         extensionCodeWithTool("tool-b"),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(2);
+      const result = yield* discoverCleanly(extTemp, 2);
 
       const allTools = new Set<string>();
       for (const ext of result.extensions) {
@@ -191,10 +159,7 @@ const loadsExtensionWithEventHandlers = () =>
 		`;
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-handlers.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.handlers.has("agent_start")).toBe(true);
       expect(result.extensions[0]?.handlers.has("tool_call")).toBe(true);
       expect(result.extensions[0]?.handlers.has("agent_end")).toBe(true);
@@ -214,10 +179,7 @@ const loadsExtensionWithShortcuts = () =>
 		`;
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-shortcut.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.shortcuts.has("ctrl+t")).toBe(true);
     }),
   );
@@ -235,10 +197,7 @@ const loadsExtensionWithFlags = () =>
 		`;
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "with-flag.ts"), extCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.flags.has("my-flag")).toBe(true);
     }),
   );

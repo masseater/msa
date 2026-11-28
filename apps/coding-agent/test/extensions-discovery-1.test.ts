@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import loader from "../src/core/extensions/loader.ts";
+import extensionsDiscoverySupport from "./extensions-discovery-support.ts";
 import tempDirKit from "./temp-dir.ts";
 
 const { discoverAndLoadExtensions } = loader;
@@ -10,15 +11,11 @@ const { discoverAndLoadExtensions } = loader;
 const { awaited, basenameOf, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } =
   testing;
 
+const { discoverCleanly, extensionCode } = extensionsDiscoverySupport;
+
 const { useExtensionsDir } = tempDirKit;
 
 const extTemp = useExtensionsDir("msa-ext-test-");
-
-const extensionCode = `
-		export default function(msa) {
-			msa.registerCommand("test", { handler: async () => {} });
-		}
-	`;
 
 const discoversDirectTsFilesInExtensions = () =>
   runTest(
@@ -26,10 +23,7 @@ const discoversDirectTsFilesInExtensions = () =>
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "foo.ts"), extensionCode);
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "bar.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(2);
+      const result = yield* discoverCleanly(extTemp, 2);
       expect(result.extensions.map((e) => basenameOf(e.path)).sort()).toEqual(["bar.ts", "foo.ts"]);
     }),
   );
@@ -48,10 +42,7 @@ const loadsTheCodingAgentEntrypointWithoutRewriting = () =>
 			`,
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      yield* discoverCleanly(extTemp, 1);
     }),
   );
 
@@ -125,10 +116,7 @@ const discoversDirectJsFilesInExtensions = () =>
     Effect.gen(function* () {
       yield* writeTextFile(joinPath(extTemp.extensionsDir, "foo.js"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       const [extension] = result.extensions;
       if (extension === undefined) throw new Error("expected a loaded extension");
       expect(basenameOf(extension.path)).toBe("foo.js");
@@ -142,10 +130,7 @@ const discoversSubdirectoryWithIndexTs = () =>
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("my-extension");
       expect(result.extensions[0]?.path).toContain("index.ts");
     }),
@@ -158,10 +143,7 @@ const discoversSubdirectoryWithIndexJs = () =>
       yield* makeDirectory(subdir);
       yield* writeTextFile(joinPath(subdir, "index.js"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("index.js");
     }),
   );
@@ -174,10 +156,7 @@ const prefersIndexTsOverIndexJs = () =>
       yield* writeTextFile(joinPath(subdir, "index.ts"), extensionCode);
       yield* writeTextFile(joinPath(subdir, "index.js"), extensionCode);
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("index.ts");
     }),
   );
@@ -200,10 +179,7 @@ const discoversSubdirectoryWithPackageJsonMsaField = () =>
         }),
       );
 
-      const result = yield* awaited(discoverAndLoadExtensions([], extTemp.path, extTemp.path));
-
-      expect(result.errors).toHaveLength(0);
-      expect(result.extensions).toHaveLength(1);
+      const result = yield* discoverCleanly(extTemp, 1);
       expect(result.extensions[0]?.path).toContain("src");
       expect(result.extensions[0]?.path).toContain("main.ts");
     }),
