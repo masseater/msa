@@ -67,6 +67,6 @@ function entryParts(entry: unknown): Part[] {
   return Predicate.isObject(message) ? messageParts(message) : [];
 }
 
-const entryPartsModule = { entryParts };
+const entryPartsModule = { blockTexts, entryParts };
 
 export default entryPartsModule;

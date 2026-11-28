@@ -25,6 +25,12 @@ const formatBytes = (value: number): string => {
 const rate = (part: number, total: number, value: number | null): string =>
   value === null ? "n/a" : formatPercent(part, total).padStart(6);
 
+const section = (title: string, rows: ReadonlyArray<string>): ReadonlyArray<string> => [
+  "",
+  title,
+  ...rows,
+];
+
 const isPresent = (value: string | null): value is string => value !== null && value !== "";
 
 const FILTER_PARTS: ReadonlyArray<
@@ -103,7 +109,12 @@ const groupTable = (
   groups: ReadonlyArray<editToolSummaryTypes.EditGroupStats>,
   formatter: (group: editToolSummaryTypes.EditGroupStats) => string,
 ): ReadonlyArray<string> =>
-  groups.length === 0 ? [] : ["", title, ...groups.map((group) => formatter(group))];
+  groups.length === 0
+    ? []
+    : section(
+        title,
+        groups.map((group) => formatter(group)),
+      );
 
 const inflationLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const { counts, inflation } = summary;
@@ -133,16 +144,14 @@ const inflationLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArra
 const clusterLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const clusters = summary.sameFileClusters;
   const ratio = clusters.ratioClusterAssistantMessagesToMultiEditAssistantMessages;
-  return [
-    "",
-    "Same-file multi-call behavior",
+  return section("Same-file multi-call behavior", [
     `  assistant msgs with 2+ edit calls to same file: ${formatInt(clusters.assistantMessagesWithCluster)}`,
     `  total same-file clusters:                      ${formatInt(clusters.clustersCount)}`,
     `  calls inside those clusters:                  ${formatInt(clusters.callsInsideClusters)}`,
     `  average calls per cluster:                    ${clusters.averageCallsPerCluster === null ? "n/a" : clusters.averageCallsPerCluster.toFixed(2)}`,
     `  assistant msgs using one multi-edit call:     ${formatInt(clusters.assistantMessagesWithMultiEdit)}`,
     `  ratio multi-call / multi-edit assistant msgs: ${ratio === null ? "n/a" : ratio.toFixed(2)}`,
-  ];
+  ]);
 };
 
 const failureLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => [
@@ -161,15 +170,15 @@ const failureLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<
   ),
 ];
 
-const exampleLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => [
-  "",
-  `Worst ${formatInt(summary.worstExamples.length)} examples`,
-  ...summary.worstExamples.flatMap((example, index) => [
-    `  ${index + 1}. ${example.providerModel} ${example.extension} inflation=${formatRatio(example.inflationRatio)} failed=${example.failed ? example.errorKind : "false"}`,
-    `     path: ${example.path}`,
-    `     totalEditBytes=${formatBytes(example.totalEditBytes)} coreBytes=${formatBytes(example.coreBytes)} mode=${example.mode} edits=${example.editsCount}`,
-  ]),
-];
+const exampleLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> =>
+  section(
+    `Worst ${formatInt(summary.worstExamples.length)} examples`,
+    summary.worstExamples.flatMap((example, index) => [
+      `  ${index + 1}. ${example.providerModel} ${example.extension} inflation=${formatRatio(example.inflationRatio)} failed=${example.failed ? example.errorKind : "false"}`,
+      `     path: ${example.path}`,
+      `     totalEditBytes=${formatBytes(example.totalEditBytes)} coreBytes=${formatBytes(example.coreBytes)} mode=${example.mode} edits=${example.editsCount}`,
+    ]),
+  );
 
 const parserNotes = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const { scan } = summary;
@@ -181,7 +190,7 @@ const parserNotes = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<s
       ? [`  unmatched edit tool results: ${formatInt(scan.unmatchedToolResults)}`]
       : []),
   ];
-  return notes.length === 0 ? [] : ["", "Parser notes", ...notes];
+  return notes.length === 0 ? [] : section("Parser notes", notes);
 };
 
 const buildEditTextReport = (summary: editToolSummaryTypes.EditSummary): string =>
