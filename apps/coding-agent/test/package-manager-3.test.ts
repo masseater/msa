@@ -13,9 +13,9 @@ const { usePackageManagerFixture } = packageManagerFixture;
 const fixture = usePackageManagerFixture();
 const { readEnv } = platform;
 
-const { packagePaths, skillOf, writeSkill } = packageManagerSupport;
+const { packagePaths, writeSkill } = packageManagerSupport;
 
-const { awaited, joinPath, makeDirectory, makeSymlink, runTest, writeTextFile } = testing;
+const { awaited, joinPath, makeDirectory, makeSymlink, runTest } = testing;
 
 const shouldIgnoreRootMarkdownFilesInAgents = () =>
   runTest(
@@ -34,16 +34,10 @@ const shouldIgnoreRootMarkdownFilesInAgents = () =>
         "pack",
         "deep-skill.md",
       );
-      yield* writeTextFile(rootSkill, skillOf("root-file", "Root markdown file", ""));
-      yield* writeTextFile(nestedSkill, skillOf("nested-skill", "Nested skill", ""));
-      yield* writeTextFile(
-        nestedMarkdownSkill,
-        skillOf("child-skill", "Nested markdown skill", ""),
-      );
-      yield* writeTextFile(
-        deeplyNestedMarkdownSkill,
-        skillOf("deep-skill", "Deep markdown skill", ""),
-      );
+      yield* writeSkill(rootSkill, "root-file", "Root markdown file", "");
+      yield* writeSkill(nestedSkill, "nested-skill", "Nested skill", "");
+      yield* writeSkill(nestedMarkdownSkill, "child-skill", "Nested markdown skill", "");
+      yield* writeSkill(deeplyNestedMarkdownSkill, "deep-skill", "Deep markdown skill", "");
 
       const pm = new DefaultPackageManager({
         agentDir: fixture.agentDir,

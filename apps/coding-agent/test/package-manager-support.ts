@@ -37,7 +37,7 @@ const { dirnameOf, makeDirectory, writeTextFile } = testing;
 const skillOf = (name: string, description: string, body = "Content"): string =>
   `---\nname: ${name}\ndescription: ${description}\n---\n${body}`;
 
-const writeSkill = (file: string, name: string, description: string, body = "") =>
+const writeSkill = (file: string, name: string, description: string, body = "Content") =>
   Effect.gen(function* () {
     yield* makeDirectory(dirnameOf(file));
     yield* writeTextFile(file, skillOf(name, description, body));

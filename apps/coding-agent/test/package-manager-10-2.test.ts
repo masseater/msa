@@ -14,7 +14,7 @@ const { readEnv } = platform;
 
 const { filesOf, resolves } = packageManagerScenario;
 
-const { packagePaths, skillOf } = packageManagerSupport;
+const { packagePaths, skillOf, writeSkill } = packageManagerSupport;
 
 const { awaited, joinPath, makeDirectory, runTest, writeTextFile } = testing;
 
@@ -28,7 +28,7 @@ const shouldExpandInExclusionAndExactPatterns = () =>
         const skillsDir = joinPath(fixture.tempDir, "extra", "skills");
         for (const name of ["keep", "glob-excluded", "exact-excluded"]) {
           yield* makeDirectory(joinPath(skillsDir, name));
-          yield* writeTextFile(joinPath(skillsDir, name, "SKILL.md"), skillOf(name, name, ""));
+          yield* writeSkill(joinPath(skillsDir, name, "SKILL.md"), name, name, "");
         }
 
         fixture.settingsManager.resources.setSkillPaths([
