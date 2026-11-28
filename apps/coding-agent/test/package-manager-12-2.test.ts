@@ -3,135 +3,76 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import packageManagerFixture from "./package-manager-fixture.ts";
+import packageManagerScenario from "./package-manager-scenario.ts";
 import packageManagerSupport from "./package-manager-support.ts";
 
 const { usePackageManagerFixture } = packageManagerFixture;
 
 const fixture = usePackageManagerFixture();
 
+const { filesOf, resolves } = packageManagerScenario;
+
 const { packagePaths } = packageManagerSupport;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
-const shouldForceIncludeExtensionsWithPatternAfter = () =>
-  runTest(
-    Effect.gen(function* () {
-      const extDir = joinPath(fixture.agentDir, "extensions");
-      yield* makeDirectory(extDir);
-      yield* writeTextFile(joinPath(extDir, "keep.ts"), "export default function() {}");
-      yield* writeTextFile(joinPath(extDir, "excluded.ts"), "export default function() {}");
-      yield* writeTextFile(joinPath(extDir, "force-back.ts"), "export default function() {}");
+const SOURCE = "export default function() {}";
+const skillOf = (name: string, label: string) =>
+  `---\nname: ${name}\ndescription: ${label}\n---\nContent`;
 
-      fixture.settingsManager.resources.setExtensionPaths([
-        "extensions",
-        "!extensions/*.ts",
-        "+extensions/force-back.ts",
-      ]);
-
-      const result = yield* awaited(fixture.packageManager.resolution.resolve());
-      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "keep.ts"))).toBe(true);
-      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "excluded.ts"))).toBe(true);
-      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "force-back.ts"))).toBe(true);
-    }),
-  );
-
-const shouldForceIncludeOverridesExcludeInPackage = () =>
-  runTest(
-    Effect.gen(function* () {
-      const pkgDir = joinPath(fixture.tempDir, "force-pkg");
-      yield* makeDirectory(joinPath(pkgDir, "extensions"));
-      yield* writeTextFile(
-        joinPath(pkgDir, "extensions", "alpha.ts"),
-        "export default function() {}",
-      );
-      yield* writeTextFile(
-        joinPath(pkgDir, "extensions", "beta.ts"),
-        "export default function() {}",
-      );
-      yield* writeTextFile(
-        joinPath(pkgDir, "extensions", "gamma.ts"),
-        "export default function() {}",
-      );
-
-      fixture.settingsManager.resources.setPackages([
-        {
-          extensions: ["!**/*.ts", "+extensions/beta.ts"],
-          prompts: [],
-          skills: [],
-          source: pkgDir,
-          themes: [],
-        },
-      ]);
-
-      const result = yield* awaited(fixture.packageManager.resolution.resolve());
-      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "alpha.ts"))).toBe(true);
-      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "beta.ts"))).toBe(true);
-      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "gamma.ts"))).toBe(true);
-    }),
-  );
-
-const shouldForceIncludeMultipleResources = () =>
-  runTest(
-    Effect.gen(function* () {
-      const pkgDir = joinPath(fixture.tempDir, "multi-force-pkg");
-      yield* makeDirectory(joinPath(pkgDir, "skills/skill-a"));
-      yield* makeDirectory(joinPath(pkgDir, "skills/skill-b"));
-      yield* makeDirectory(joinPath(pkgDir, "skills/skill-c"));
-      yield* writeTextFile(
-        joinPath(pkgDir, "skills/skill-a", "SKILL.md"),
-        "---\nname: skill-a\ndescription: A\n---\nContent",
-      );
-      yield* writeTextFile(
-        joinPath(pkgDir, "skills/skill-b", "SKILL.md"),
-        "---\nname: skill-b\ndescription: B\n---\nContent",
-      );
-      yield* writeTextFile(
-        joinPath(pkgDir, "skills/skill-c", "SKILL.md"),
-        "---\nname: skill-c\ndescription: C\n---\nContent",
-      );
-
-      fixture.settingsManager.resources.setPackages([
-        {
-          extensions: [],
-          prompts: [],
-          skills: ["!**/*", "+skills/skill-a", "+skills/skill-c"],
-          source: pkgDir,
-          themes: [],
-        },
-      ]);
-
-      const result = yield* awaited(fixture.packageManager.resolution.resolve());
-      expect(result.skills.some((r) => packagePaths.isEnabled(r, "skill-a", "includes"))).toBe(
-        true,
-      );
-      expect(result.skills.some((r) => packagePaths.isDisabled(r, "skill-b", "includes"))).toBe(
-        true,
-      );
-      expect(result.skills.some((r) => packagePaths.isEnabled(r, "skill-c", "includes"))).toBe(
-        true,
-      );
-    }),
-  );
-
-const shouldForceIncludeAfterSpecificExclusion = () =>
-  runTest(
-    Effect.gen(function* () {
-      const extDir = joinPath(fixture.agentDir, "extensions");
-      yield* makeDirectory(extDir);
-      yield* writeTextFile(joinPath(extDir, "a.ts"), "export default function() {}");
-      yield* writeTextFile(joinPath(extDir, "b.ts"), "export default function() {}");
-
-      fixture.settingsManager.resources.setExtensionPaths([
-        "extensions",
-        "!extensions/b.ts",
-        "+extensions/b.ts",
-      ]);
-
-      const result = yield* awaited(fixture.packageManager.resolution.resolve());
-      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "a.ts"))).toBe(true);
-      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "b.ts"))).toBe(true);
-    }),
-  );
+const scenarios = [
+  {
+    name: "should force-include extensions with + pattern after exclusion",
+    scenario: {
+      disabled: ["keep.ts", "excluded.ts"],
+      enabled: ["force-back.ts"],
+      files: filesOf(
+        ["extensions/keep.ts", "extensions/excluded.ts", "extensions/force-back.ts"],
+        SOURCE,
+      ),
+      kind: "extensions",
+      patterns: ["extensions", "!extensions/*.ts", "+extensions/force-back.ts"],
+      where: { agent: true },
+    },
+  },
+  {
+    name: "should force-include overrides exclude in package filters",
+    scenario: {
+      disabled: ["alpha.ts", "gamma.ts"],
+      enabled: ["beta.ts"],
+      files: filesOf(["extensions/alpha.ts", "extensions/beta.ts", "extensions/gamma.ts"], SOURCE),
+      kind: "extensions",
+      patterns: ["!**/*.ts", "+extensions/beta.ts"],
+      where: { packageNamed: "force-pkg" },
+    },
+  },
+  {
+    name: "should force-include multiple resources",
+    scenario: {
+      disabled: ["skill-b"],
+      enabled: ["skill-a", "skill-c"],
+      files: {
+        "skills/skill-a/SKILL.md": skillOf("skill-a", "A"),
+        "skills/skill-b/SKILL.md": skillOf("skill-b", "B"),
+        "skills/skill-c/SKILL.md": skillOf("skill-c", "C"),
+      },
+      kind: "skills",
+      match: "includes",
+      patterns: ["!**/*", "+skills/skill-a", "+skills/skill-c"],
+      where: { packageNamed: "multi-force-pkg" },
+    },
+  },
+  {
+    name: "should force-include after specific exclusion",
+    scenario: {
+      enabled: ["a.ts", "b.ts"],
+      files: filesOf(["extensions/a.ts", "extensions/b.ts"], SOURCE),
+      kind: "extensions",
+      patterns: ["extensions", "!extensions/b.ts", "+extensions/b.ts"],
+      where: { agent: true },
+    },
+  },
+] as const;
 
 const shouldHandleForceIncludeInManifestPatterns = () =>
   runTest(
@@ -171,19 +112,9 @@ const shouldHandleForceIncludeInManifestPatterns = () =>
 
 describe("DefaultPackageManager", () => {
   describe("force-include patterns", () => {
-    it(
-      "should force-include extensions with + pattern after exclusion",
-      shouldForceIncludeExtensionsWithPatternAfter,
-    );
-
-    it(
-      "should force-include overrides exclude in package filters",
-      shouldForceIncludeOverridesExcludeInPackage,
-    );
-
-    it("should force-include multiple resources", shouldForceIncludeMultipleResources);
-
-    it("should force-include after specific exclusion", shouldForceIncludeAfterSpecificExclusion);
+    for (const { name, scenario } of scenarios) {
+      it(name, () => runTest(resolves(fixture, scenario)));
+    }
 
     it(
       "should handle force-include in manifest patterns",
