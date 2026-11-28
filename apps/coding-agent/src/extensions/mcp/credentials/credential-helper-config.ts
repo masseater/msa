@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import config from "../../../config.ts";
 import platform from "../../../core/platform/index.ts";
 import type secretStoresTypes from "./secret-stores.types.ts";
@@ -8,12 +10,9 @@ const { exists, readText } = platform.files;
 
 type CredentialHelperConfig = secretStoresTypes.CredentialHelperConfig;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 function parseCredentialHelper(value: unknown): CredentialHelperConfig | string | undefined {
   if (value === undefined) return undefined;
-  if (!isRecord(value) || typeof value["command"] !== "string" || value["command"] === "")
+  if (!Predicate.isObject(value) || typeof value["command"] !== "string" || value["command"] === "")
     return "credentialHelper must be an object with a command";
   const args: unknown = value["args"];
   if (args === undefined) return { command: value["command"] };
@@ -36,7 +35,7 @@ function readCredentialHelper(agentDir: string): Promise<CredentialHelperConfig 
     .then((content) => {
       if (content === undefined) return undefined;
       const parsed: unknown = JSON.parse(content);
-      const helper = isRecord(parsed)
+      const helper = Predicate.isObject(parsed)
         ? parseCredentialHelper(parsed["credentialHelper"])
         : undefined;
       if (typeof helper === "string") throw new Error(`${path}: ${helper}`);

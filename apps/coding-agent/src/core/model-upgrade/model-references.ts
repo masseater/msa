@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import type modelUpgradeTypes from "../model-upgrade.types.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 
@@ -94,7 +96,7 @@ function rewriteRecordKeys(
   path = `${key} key`,
 ): void {
   const current = settings[key];
-  if (!isRecord(current)) return;
+  if (!Predicate.isObject(current)) return;
   let changed = false;
   const next = Object.entries(current).map(([entryKey, value]) => {
     const replacement = rewrite(entryKey);
@@ -108,13 +110,9 @@ function rewriteRecordKeys(
   if (changed) settings[key] = Object.fromEntries(next);
 }
 
-function isRecord(value: unknown): value is SettingsRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function rewriteSections(record: SettingsRecord, rewrite: Rewrite, changes: Change[]): void {
   const { compaction, decision, goal, modelPolicy, orchestrator } = record;
-  if (isRecord(compaction)) {
+  if (Predicate.isObject(compaction)) {
     rewriteRecordKeys(
       compaction,
       "modelOverrides",
@@ -123,17 +121,17 @@ function rewriteSections(record: SettingsRecord, rewrite: Rewrite, changes: Chan
       "compaction.modelOverrides key",
     );
   }
-  if (isRecord(modelPolicy)) {
+  if (Predicate.isObject(modelPolicy)) {
     rewriteStringArray(modelPolicy, "allow", rewrite, changes, "modelPolicy.allow[]");
     rewriteStringArray(modelPolicy, "deny", rewrite, changes, "modelPolicy.deny[]");
   }
-  if (isRecord(goal)) {
+  if (Predicate.isObject(goal)) {
     rewriteString(goal, "evaluatorModel", rewrite, changes, "goal.evaluatorModel");
   }
-  if (isRecord(decision)) {
+  if (Predicate.isObject(decision)) {
     rewriteString(decision, "model", rewrite, changes, "decision.model");
   }
-  if (isRecord(orchestrator)) {
+  if (Predicate.isObject(orchestrator)) {
     rewriteString(orchestrator, "workerModel", rewrite, changes, "orchestrator.workerModel");
     rewriteString(orchestrator, "reviewModel", rewrite, changes, "orchestrator.reviewModel");
   }

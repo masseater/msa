@@ -1,9 +1,8 @@
-import json from "../utils/json.ts";
+import { Predicate } from "effect";
+
 import text from "../utils/text.ts";
 import type manifestTypes from "./manifest.types.ts";
 import platform from "./platform/index.ts";
-
-const { isObject } = json;
 
 const { stripBom } = text;
 
@@ -16,10 +15,14 @@ function readMsaManifest(packageJsonPath: string): Promise<manifestTypes.MsaMani
 function manifestOf(content: string): manifestTypes.MsaManifest | null {
   try {
     const pkg: unknown = JSON.parse(stripBom(content));
-    if (!isObject(pkg)) {
+    if (!Predicate.isObject(pkg)) {
       return null;
     }
-    const section = isObject(pkg["msa"]) ? pkg["msa"] : isObject(pkg["pi"]) ? pkg["pi"] : null;
+    const section = Predicate.isObject(pkg["msa"])
+      ? pkg["msa"]
+      : Predicate.isObject(pkg["pi"])
+        ? pkg["pi"]
+        : null;
     if (section === null) {
       return null;
     }

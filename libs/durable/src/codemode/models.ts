@@ -1,13 +1,13 @@
 import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { Type } from "typebox";
 
 import define from "../harness/define.ts";
 import type typesModule from "../harness/types.types.ts";
 import modelInputs from "./model-inputs.ts";
 
-const { checkClassifierContext, checkImagesContext, describeValue, isRecord } = modelInputs;
+const { checkClassifierContext, checkImagesContext, describeValue } = modelInputs;
 const { defineTool } = define;
 
 const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
@@ -101,7 +101,7 @@ function resolveModel<TType extends "classifier" | "image">(
 ): aiTypes.ModelTypeMap[TType] {
   const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
   if (
-    !isRecord(model) ||
+    !Predicate.isObject(model) ||
     typeof model["provider"] !== "string" ||
     typeof model["id"] !== "string"
   ) {

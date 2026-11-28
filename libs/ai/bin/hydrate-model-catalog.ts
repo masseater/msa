@@ -1,9 +1,8 @@
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 
 import jsonCodec from "../src/utils/json-codec.ts";
 import scriptOutput from "../src/utils/script-output.ts";
 import type hydrateModelCatalogTypes from "./hydrate-model-catalog.types.ts";
-import modelDataChecks from "./model-data-checks.ts";
 import ModelDataError from "./model-data-error.ts";
 import modelData from "./model-data.ts";
 import type modelDataTypes from "./model-data.types.ts";
@@ -11,7 +10,6 @@ import scriptFiles from "./script-files.ts";
 
 const { decodeJson, encodeJson } = jsonCodec;
 
-const { isRecord } = modelDataChecks;
 const {
   MODEL_DATA_MANIFEST_FILE,
   createModelDataManifest,
@@ -32,7 +30,7 @@ const fail = (message: string) => Effect.fail(ModelDataError.make({ message }));
 
 function isCatalogEntry(value: unknown): value is CatalogEntry {
   return (
-    isRecord(value) &&
+    Predicate.isObject(value) &&
     typeof value["type"] === "string" &&
     typeof value["id"] === "string" &&
     typeof value["api"] === "string" &&
@@ -46,7 +44,7 @@ const readCatalog = Effect.fn("readCatalog")(function* (catalogPath: string) {
     Effect.flatMap(decodeJson),
     Effect.mapError((error) => ModelDataError.make({ message: error.message })),
   );
-  if (!isRecord(catalog)) return yield* fail("Model catalog must be an object");
+  if (!Predicate.isObject(catalog)) return yield* fail("Model catalog must be an object");
   return catalog;
 });
 

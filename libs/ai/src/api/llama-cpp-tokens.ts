@@ -1,17 +1,17 @@
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 
 import llamaCppHttp from "./llama-cpp-http.ts";
 import type llamaCppHttpTypes from "./llama-cpp-http.types.ts";
 import llamaCppPrompt from "./llama-cpp-prompt.ts";
 
-const { isRecord, post } = llamaCppHttp;
+const { post } = llamaCppHttp;
 const { LABEL } = llamaCppPrompt;
 
 function tokenIds(body: unknown): number[] {
-  if (!isRecord(body) || !Array.isArray(body["tokens"]))
+  if (!Predicate.isObject(body) || !Array.isArray(body["tokens"]))
     throw new Error(`${LABEL} returned an unexpected tokenization`);
   return body["tokens"].map((token) => {
-    const id = isRecord(token) ? token["id"] : token;
+    const id = Predicate.isObject(token) ? token["id"] : token;
     if (typeof id !== "number") throw new Error(`${LABEL} returned an unexpected tokenization`);
     return id;
   });

@@ -34,10 +34,6 @@ function timeoutError(timeoutMs: number): HttpError {
   return error;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function llamaServerRoot(baseUrl: string): string {
   return baseUrl.replace(/\/+$/u, "").replace(/\/v1$/u, "");
 }
@@ -136,7 +132,6 @@ const post = Effect.fn("post")(function* (
 
 const llamaCppHttp = {
   httpError,
-  isRecord,
   llamaServerRoot,
   observePayload,
   post,

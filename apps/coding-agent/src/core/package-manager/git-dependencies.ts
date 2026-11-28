@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import * as Effect from "effect/Effect";
 
 import text from "../../utils/text.ts";
@@ -14,9 +15,7 @@ const { awaited, awaitingWith, performed } = awaitingModule;
 const dependencyNames = (content: string): string[] => {
   const manifest = JSON.parse(stripBom(content)) as { dependencies?: unknown };
   const { dependencies } = manifest;
-  return typeof dependencies === "object" && dependencies !== null && !Array.isArray(dependencies)
-    ? Object.keys(dependencies)
-    : [];
+  return Predicate.isObject(dependencies) ? Object.keys(dependencies) : [];
 };
 
 const anyDependencyMissing = (nodeModulesDir: string, names: string[]): Promise<boolean> =>

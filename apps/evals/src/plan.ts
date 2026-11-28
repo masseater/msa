@@ -1,12 +1,9 @@
+import { Predicate } from "effect";
 import { dual } from "effect/Function";
 
 import type planTypes from "./plan.types.ts";
 
 const DOCUMENTATION_VARIANTS = ["without_docs", "with_docs"] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 const evalSetOf = (file: string): string => {
   const base = file.split("/").at(-1) ?? file;
@@ -17,7 +14,11 @@ function parseDiscoveredCases(value: unknown): planTypes.DiscoveredEvalCase[] {
   if (!Array.isArray(value)) throw new TypeError("Discovered eval cases must be an array.");
   const identities = new Set<string>();
   return value.map((item) => {
-    if (!isRecord(item) || typeof item["name"] !== "string" || typeof item["file"] !== "string") {
+    if (
+      !Predicate.isObject(item) ||
+      typeof item["name"] !== "string" ||
+      typeof item["file"] !== "string"
+    ) {
       throw new TypeError("Discovered eval case is invalid.");
     }
     const caseId = item["name"];

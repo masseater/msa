@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Effect, Exit, Option, Schema, Scope } from "effect";
+import { Effect, Exit, Option, Predicate, Schema, Scope } from "effect";
 
 import type acmeServerTypes from "./acme-server.types.ts";
 
@@ -42,10 +42,6 @@ type ServerMode = "openai" | "stream";
 
 type Probe = { validRequestReceived: boolean };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function rejectRequest(status: number, message: string): Response {
   return new Response(message, { headers: { "content-type": "text/plain" }, status });
 }
@@ -61,7 +57,7 @@ function firstUserPrompt(payload: Record<string, unknown>): string | undefined {
   const messages = Array.isArray(payload["messages"]) ? payload["messages"] : [];
   const userMessage = messages.find(
     (message): message is Record<string, unknown> =>
-      isRecord(message) && message["role"] === "user",
+      Predicate.isObject(message) && message["role"] === "user",
   );
   const content = userMessage?.["content"];
   return typeof content === "string" ? content : undefined;
@@ -150,7 +146,7 @@ const handle =
       }
       const payload = yield* readJson(request);
       if (Option.isNone(payload)) return rejectRequest(400, "Invalid JSON");
-      if (!isRecord(payload.value)) return rejectRequest(422, "Expected a JSON object");
+      if (!Predicate.isObject(payload.value)) return rejectRequest(422, "Expected a JSON object");
       const prompt = firstUserPrompt(payload.value);
       return mode === "stream"
         ? streamResponse(request, payload.value, prompt, probe)

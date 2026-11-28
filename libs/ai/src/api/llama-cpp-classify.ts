@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Predicate } from "effect";
 
 import type typesModule from "../types.types.ts";
 import errorBody from "../utils/error-body.ts";
@@ -21,7 +21,7 @@ const {
   peakConfidence,
 } = llamaCppReadout;
 
-const { isRecord, llamaServerRoot, post } = llamaCppHttp;
+const { llamaServerRoot, post } = llamaCppHttp;
 
 const { LABEL, SYSTEM_PROMPT, renderQuestion } = llamaCppPrompt;
 
@@ -44,23 +44,23 @@ const renderPrompt = Effect.fn("renderPrompt")(function* (
     observe: false,
     path: "/apply-template",
   });
-  if (!isRecord(body) || typeof body["prompt"] !== "string")
+  if (!Predicate.isObject(body) || typeof body["prompt"] !== "string")
     return yield* Effect.die(new Error(`${LABEL} did not return a prompt`));
   return body["prompt"].endsWith("<think>") ? `${body["prompt"]}</think>` : body["prompt"];
 });
 
 function readLogprobs(body: unknown, tokens: readonly number[]): Array<number | undefined> {
   const first =
-    isRecord(body) && Array.isArray(body["completion_probabilities"])
+    Predicate.isObject(body) && Array.isArray(body["completion_probabilities"])
       ? body["completion_probabilities"][0]
       : undefined;
-  if (!isRecord(first) || !Array.isArray(first["top_logprobs"])) {
+  if (!Predicate.isObject(first) || !Array.isArray(first["top_logprobs"])) {
     throw new Error(`${LABEL} did not return token probabilities`);
   }
   const byToken = new Map<number, number>();
   for (const entry of first["top_logprobs"]) {
     if (
-      isRecord(entry) &&
+      Predicate.isObject(entry) &&
       typeof entry["id"] === "number" &&
       typeof entry["logprob"] === "number"
     ) {

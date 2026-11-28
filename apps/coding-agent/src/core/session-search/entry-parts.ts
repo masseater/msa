@@ -1,15 +1,14 @@
+import { Predicate } from "effect";
+
 import type sessionSearchTypes from "./session-search.types.ts";
 
 type Part = sessionSearchTypes.Part;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 function blockTexts(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
-    .filter((block) => isRecord(block) && block["type"] === "text")
+    .filter((block) => Predicate.isObject(block) && block["type"] === "text")
     .map((block) => String((block as Record<string, unknown>)["text"] ?? ""))
     .join("\n");
 }
@@ -18,7 +17,7 @@ function valueLines(value: unknown, label: string): string[] {
   const prefix = label === "" ? "" : `${label}: `;
   if (typeof value === "string") return [`${prefix}${value}`];
   if (Array.isArray(value)) return value.flatMap((item) => valueLines(item, label));
-  if (isRecord(value)) {
+  if (Predicate.isObject(value)) {
     return Object.entries(value).flatMap(([key, item]) =>
       valueLines(item, label === "" ? key : `${label}.${key}`),
     );
@@ -32,7 +31,7 @@ function assistantParts(content: unknown): Part[] {
   const text = blockTexts(content);
   if (text.trim() !== "") parts.push({ kind: "assistant", text, tool: null });
   for (const block of content) {
-    if (!isRecord(block) || block["type"] !== "toolCall") continue;
+    if (!Predicate.isObject(block) || block["type"] !== "toolCall") continue;
     parts.push({
       kind: "tool_call",
       text: valueLines(block["arguments"] ?? {}, "").join("\n"),
@@ -63,11 +62,11 @@ function messageParts(message: Record<string, unknown>): Part[] {
 }
 
 function entryParts(entry: unknown): Part[] {
-  if (!isRecord(entry) || entry["type"] !== "message") return [];
+  if (!Predicate.isObject(entry) || entry["type"] !== "message") return [];
   const message = entry["message"];
-  return isRecord(message) ? messageParts(message) : [];
+  return Predicate.isObject(message) ? messageParts(message) : [];
 }
 
-const entryPartsModule = { entryParts, isRecord };
+const entryPartsModule = { entryParts };
 
 export default entryPartsModule;

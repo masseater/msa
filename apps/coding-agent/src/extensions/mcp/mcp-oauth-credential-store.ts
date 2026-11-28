@@ -1,4 +1,5 @@
 import type oauthTypes from "@msa/mcp/oauth.types";
+import { Predicate } from "effect";
 
 import config from "../../config.ts";
 import type authStorageTypes from "../../core/auth-storage.types.ts";
@@ -14,7 +15,7 @@ type StoredStates = Map<string, oauthTypes.McpOAuthState>;
 function parseStates(content: string | undefined): StoredStates {
   if (content === undefined || content.trim() === "") return new Map();
   const parsed: unknown = JSON.parse(content);
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+  return Predicate.isObject(parsed)
     ? new Map(Object.entries(parsed as Record<string, oauthTypes.McpOAuthState>))
     : new Map();
 }

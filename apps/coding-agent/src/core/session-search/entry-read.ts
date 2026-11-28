@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 import sessionFormat from "../session-manager/session-format.ts";
 import entryPartsModule from "./entry-parts.ts";
 import indexer from "./indexer.ts";
@@ -5,7 +7,7 @@ import lineScan from "./line-scan.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
 
 const { parseSessionEntryLine } = sessionFormat;
-const { entryParts, isRecord } = entryPartsModule;
+const { entryParts } = entryPartsModule;
 
 type ReadEntry = sessionSearchTypes.ReadEntry;
 
@@ -15,7 +17,7 @@ function readEntry(path: string, offset: number, length: number): Promise<ReadEn
   return indexer.readSlice(path, offset, offset + length).then(
     (bytes) => {
       const entry = parseSessionEntryLine(new TextDecoder().decode(bytes));
-      if (!isRecord(entry)) return EMPTY;
+      if (!Predicate.isObject(entry)) return EMPTY;
       return {
         at: lineScan.timeOf(entry["timestamp"]),
         entryId: typeof entry["id"] === "string" ? entry["id"] : null,

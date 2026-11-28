@@ -1,8 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { Predicate } from "effect";
 
 function describeValue(value: unknown): string {
   if (value === undefined || value === null) return String(value);
@@ -26,7 +23,7 @@ function checkClassifierImages(images: unknown, fail: Fail): void {
     throw fail(`context.images must be an array, got ${describeValue(images)}`);
   images.forEach((image: unknown, index) => {
     if (
-      !isRecord(image) ||
+      !Predicate.isObject(image) ||
       image["type"] !== "image" ||
       typeof image["data"] !== "string" ||
       typeof image["mimeType"] !== "string"
@@ -41,13 +38,13 @@ const isStrings = (values: unknown[]): boolean =>
 
 function checkQuestion(id: string, question: unknown, fail: Fail): void {
   const at = `context.questions.${id}`;
-  if (!isRecord(question))
+  if (!Predicate.isObject(question))
     throw fail(`${at} must be a question object, got ${describeValue(question)}`);
   if (typeof question["instructions"] !== "string")
     throw fail(`${at}.instructions must be a string`);
   const { criteria } = question;
   if (question["type"] === "choice") {
-    if (!isRecord(criteria) || !isStrings(Object.values(criteria)))
+    if (!Predicate.isObject(criteria) || !isStrings(Object.values(criteria)))
       throw fail(`${at} is a "choice" question, so criteria must map each label to its meaning`);
   } else if (question["type"] === "score") {
     if (!Array.isArray(criteria) || !isStrings(criteria)) {
@@ -57,7 +54,7 @@ function checkQuestion(id: string, question: unknown, fail: Fail): void {
     }
   } else if (question["type"] === "bool") {
     if (
-      !isRecord(criteria) ||
+      !Predicate.isObject(criteria) ||
       typeof criteria["true"] !== "string" ||
       typeof criteria["false"] !== "string"
     ) {
@@ -73,13 +70,13 @@ function checkQuestion(id: string, question: unknown, fail: Fail): void {
 function checkClassifierContext(context: unknown): aiTypes.ClassifierContext {
   const fail: Fail = (problem) =>
     new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
-  if (!isRecord(context))
+  if (!Predicate.isObject(context))
     throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
-  if (!isRecord(context["state"]))
+  if (!Predicate.isObject(context["state"]))
     throw fail(`context.state must be an object, got ${describeValue(context["state"])}`);
   checkClassifierImages(context["images"], fail);
   const { questions } = context;
-  if (!isRecord(questions) || Object.keys(questions).length === 0) {
+  if (!Predicate.isObject(questions) || Object.keys(questions).length === 0) {
     throw fail(
       `context.questions must map question IDs to questions, got ${describeValue(questions)}`,
     );
@@ -93,16 +90,17 @@ function checkImagesContext(context: unknown): aiTypes.ImagesContext {
     new Error(
       `models.generateImages() ${problem}. Expected context: { input: [{ type: "text", text: <prompt> }, ...optional { type: "image", data: <base64>, mimeType } references] }.`,
     );
-  if (!isRecord(context))
+  if (!Predicate.isObject(context))
     throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
   const { input } = context;
   if (!Array.isArray(input) || input.length === 0) {
     throw fail(`context.input must be a non-empty array of blocks, got ${describeValue(input)}`);
   }
   input.forEach((block: unknown, index) => {
-    if (isRecord(block) && block["type"] === "text" && typeof block["text"] === "string") return;
+    if (Predicate.isObject(block) && block["type"] === "text" && typeof block["text"] === "string")
+      return;
     if (
-      isRecord(block) &&
+      Predicate.isObject(block) &&
       block["type"] === "image" &&
       typeof block["data"] === "string" &&
       typeof block["mimeType"] === "string"
@@ -119,7 +117,6 @@ const modelInputs = {
   checkClassifierContext,
   checkImagesContext,
   describeValue,
-  isRecord,
 };
 
 export default modelInputs;

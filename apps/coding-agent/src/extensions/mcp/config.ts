@@ -1,4 +1,4 @@
-import { dual } from "effect/Function";
+import { Function as Fn, Predicate } from "effect";
 
 import configModule from "../../config.ts";
 import mcpServers from "../../core/mcp-servers.ts";
@@ -18,10 +18,6 @@ const { toErrorMessage } = errorsModule;
 const { dirname, join } = platformModule;
 const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { CONFIG_DIR_NAME } = configModule;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 interface McpConfigState {
   readonly memoryUrl: string;
@@ -63,8 +59,8 @@ function applyConfigText(input: {
     return;
   }
   if (
-    !isRecord(parsed) ||
-    (parsed["mcpServers"] !== undefined && !isRecord(parsed["mcpServers"]))
+    !Predicate.isObject(parsed) ||
+    (parsed["mcpServers"] !== undefined && !Predicate.isObject(parsed["mcpServers"]))
   ) {
     errors.push(`${path}: expected an object with an "mcpServers" object`);
     return;
@@ -88,7 +84,7 @@ function applyServers(input: {
   const { memoryUrl, servers, errors } = state;
   for (const [name, value] of Object.entries(input.servers)) {
     if (isSepiaceServer(name, value, memoryUrl)) continue;
-    if (scope === "project" && isRecord(value) && isOverride(value)) {
+    if (scope === "project" && Predicate.isObject(value) && isOverride(value)) {
       applyOverride(value, servers.get(name), errors, path, name, servers);
       continue;
     }
@@ -160,7 +156,8 @@ function updateMcpServerConfigImpl(
       server = {};
       next.set(name, server);
     }
-    if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
+    if (!Predicate.isObject(server))
+      throw new Error(`${path} does not define MCP server "${name}"`);
     const keepDefaults = isOverride(server);
     if (patch.enabled !== undefined) {
       if (patch.enabled && !keepDefaults) delete server["enabled"];
@@ -186,7 +183,7 @@ const updateMcpServerConfig: {
     patch: configTypes.McpServerConfigPatch,
     options?: { override?: boolean },
   ): (path: string) => Promise<void>;
-} = dual((args: IArguments) => args.length >= 3, updateMcpServerConfigImpl);
+} = Fn.dual((args: IArguments) => args.length >= 3, updateMcpServerConfigImpl);
 
 function addMcpServerConfigImpl(
   path: string,
@@ -204,7 +201,7 @@ function addMcpServerConfigImpl(
 const addMcpServerConfig: {
   (path: string, name: string, config: mcpServersTypes.McpServerConfig): Promise<boolean>;
   (name: string, config: mcpServersTypes.McpServerConfig): (path: string) => Promise<boolean>;
-} = dual((args: IArguments) => args.length >= 3, addMcpServerConfigImpl);
+} = Fn.dual((args: IArguments) => args.length >= 3, addMcpServerConfigImpl);
 
 function removeMcpServerConfigImpl(path: string, name: string): Promise<boolean> {
   let removed = false;
@@ -224,7 +221,7 @@ function removeMcpServerConfigImpl(path: string, name: string): Promise<boolean>
 const removeMcpServerConfig: {
   (path: string, name: string): Promise<boolean>;
   (name: string): (path: string) => Promise<boolean>;
-} = dual((args: IArguments) => args.length >= 2, removeMcpServerConfigImpl);
+} = Fn.dual((args: IArguments) => args.length >= 2, removeMcpServerConfigImpl);
 
 function editMcpServers(path: string, edit: McpServersEdit): Promise<void> {
   return exists(path)
@@ -244,12 +241,12 @@ function writeEdited(input: {
   const { content: text, edit, path } = input;
   const parsed: unknown = text === undefined ? {} : JSON.parse(text);
   if (
-    !isRecord(parsed) ||
-    (parsed["mcpServers"] !== undefined && !isRecord(parsed["mcpServers"]))
+    !Predicate.isObject(parsed) ||
+    (parsed["mcpServers"] !== undefined && !Predicate.isObject(parsed["mcpServers"]))
   ) {
     throw new Error(`${path}: expected an object with an "mcpServers" object`);
   }
-  const servers = isRecord(parsed["mcpServers"])
+  const servers = Predicate.isObject(parsed["mcpServers"])
     ? new Map(Object.entries(parsed["mcpServers"]))
     : undefined;
   const next = edit(servers);
