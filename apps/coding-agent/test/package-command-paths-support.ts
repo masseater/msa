@@ -1,16 +1,18 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, vi } from "vite-plus/test";
+import { afterEach, beforeEach, expect, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import platform from "../src/core/platform/index.ts";
+import mainModule from "../src/main.ts";
 import packageManagerCli from "../src/package-manager-cli.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 import testNetworkEnv from "./test-network-env.ts";
 
 const { readEnv } = platform;
 const { ENV_AGENT_DIR, VERSION } = config;
+const { main } = mainModule;
 const { handlePackageCommand } = packageManagerCli;
 
 const { allowNetwork } = testNetworkEnv;
@@ -82,6 +84,27 @@ const teardownPackageTest = (
     return removePath(state.tempDir);
   });
 
+const joinedCalls = (spy: { readonly mock: { readonly calls: readonly unknown[][] } }): string =>
+  spy.mock.calls.map(([message]) => String(message)).join("\n");
+
+const captureConsole = () => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  return {
+    errorSpy,
+    logSpy,
+    stderr: () => joinedCalls(errorSpy),
+    stdout: () => joinedCalls(logSpy),
+  };
+};
+
+const mainOutput = (args: string[], stream: "error" | "log" = "log") =>
+  Effect.gen(function* () {
+    const output = captureConsole();
+    yield* awaited(expect(main(args)).resolves.toBeUndefined());
+    return stream === "log" ? output.stdout() : output.stderr();
+  });
+
 const usePackageTest = (): packageCommandPathsSupportTypes.PackageTestState => {
   const holder = {} as packageCommandPathsSupportTypes.PackageTestState;
   beforeEach(() =>
@@ -126,8 +149,10 @@ const extension = (
 const paths = { extension };
 
 const packageCommandPathsSupport = {
+  captureConsole,
   env,
   getNewerPatchVersion,
+  mainOutput,
   paths,
   runPackageCommandDirectly,
   setupPackageTest,

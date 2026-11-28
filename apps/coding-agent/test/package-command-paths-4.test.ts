@@ -9,7 +9,7 @@ import packageCommandPathsSupport from "./package-command-paths-support.ts";
 const { readEnv } = platform;
 const { PACKAGE_NAME, VERSION } = config;
 
-const { env, getNewerPatchVersion, runPackageCommandDirectly, usePackageTest } =
+const { captureConsole, env, getNewerPatchVersion, runPackageCommandDirectly, usePackageTest } =
   packageCommandPathsSupport;
 
 const pkg = usePackageTest();
@@ -36,17 +36,14 @@ const allowsExplicitSelfUpdateChecksWhenAutomatic = Effect.gen(function* () {
     effectRunPromise(awaited(Response.json({ tag_name: `v${VERSION}` }))),
   );
   vi.stubGlobal("fetch", fetchMock);
-  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const output = captureConsole();
 
   try {
     yield* runPackageCommandDirectly(["update", "--self"]);
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(logSpy.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
-      `msa is already up to date (v${VERSION})`,
-    );
-    expect(errorSpy).not.toHaveBeenCalled();
+    expect(output.stdout()).toContain(`msa is already up to date (v${VERSION})`);
+    expect(output.errorSpy).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
   } finally {
     env.restore("MSA_SKIP_VERSION_CHECK", previousSkipVersionCheck);
@@ -62,17 +59,14 @@ const retriesATransientSelfUpdateVersionCheck = Effect.gen(function* () {
     .mockRejectedValueOnce(new Error("fetch failed"))
     .mockResolvedValueOnce(Response.json({ tag_name: `v${VERSION}` }));
   vi.stubGlobal("fetch", fetchMock);
-  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const output = captureConsole();
 
   try {
     yield* runPackageCommandDirectly(["update", "--self"]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(errorSpy).not.toHaveBeenCalled();
+    expect(output.errorSpy).not.toHaveBeenCalled();
   } finally {
     env.restore("MSA_SKIP_VERSION_CHECK", previousSkipVersionCheck);
-    logSpy.mockRestore();
-    errorSpy.mockRestore();
   }
 });
 
@@ -129,26 +123,20 @@ const selfUpdatesThroughTheGlobalNpmPrefix = Effect.gen(function* () {
   );
   vi.stubGlobal("fetch", fetchMock);
 
-  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const output = captureConsole();
 
-  try {
-    yield* runPackageCommandDirectly(["update", "--self", "--force"]);
+  yield* runPackageCommandDirectly(["update", "--self", "--force"]);
 
-    expect(process.exitCode).toBeUndefined();
-    expect(errorSpy).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-    const recordedArgs = (yield* fromJsonText(yield* readTextFile(recordPath))) as string[];
-    expect(recordedArgs).toContain(globalPrefix);
-    expect(recordedArgs).toContain(`${PACKAGE_NAME}@${VERSION}`);
-    expect(recordedArgs).not.toContain(PACKAGE_NAME);
-    expect(recordedArgs).not.toContain(projectPrefix);
-    expect(stdout).toContain(`Updated msa from ${VERSION} to ${VERSION}`);
-  } finally {
-    logSpy.mockRestore();
-    errorSpy.mockRestore();
-  }
+  expect(process.exitCode).toBeUndefined();
+  expect(output.errorSpy).not.toHaveBeenCalled();
+  expect(fetchMock).toHaveBeenCalledOnce();
+  const stdout = output.stdout();
+  const recordedArgs = (yield* fromJsonText(yield* readTextFile(recordPath))) as string[];
+  expect(recordedArgs).toContain(globalPrefix);
+  expect(recordedArgs).toContain(`${PACKAGE_NAME}@${VERSION}`);
+  expect(recordedArgs).not.toContain(PACKAGE_NAME);
+  expect(recordedArgs).not.toContain(projectPrefix);
+  expect(stdout).toContain(`Updated msa from ${VERSION} to ${VERSION}`);
 });
 
 const installsTheLatestReleaseOfTheCurrentSetup = () =>
@@ -196,24 +184,18 @@ else fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(args)
   );
   vi.stubGlobal("fetch", fetchMock);
 
-  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const output = captureConsole();
 
-  try {
-    yield* runPackageCommandDirectly(["update", "--self"]);
+  yield* runPackageCommandDirectly(["update", "--self"]);
 
-    expect(process.exitCode).toBeUndefined();
-    expect(errorSpy).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-    const recordedArgs = (yield* fromJsonText(yield* readTextFile(recordPath))) as string[];
-    expect(recordedArgs).toContain(`${PACKAGE_NAME}@${targetVersion}`);
-    expect(recordedArgs).not.toContain(PACKAGE_NAME);
-    expect(stdout).toContain(`Updated msa from ${VERSION} to ${targetVersion}`);
-  } finally {
-    logSpy.mockRestore();
-    errorSpy.mockRestore();
-  }
+  expect(process.exitCode).toBeUndefined();
+  expect(output.errorSpy).not.toHaveBeenCalled();
+  expect(fetchMock).toHaveBeenCalledOnce();
+  const stdout = output.stdout();
+  const recordedArgs = (yield* fromJsonText(yield* readTextFile(recordPath))) as string[];
+  expect(recordedArgs).toContain(`${PACKAGE_NAME}@${targetVersion}`);
+  expect(recordedArgs).not.toContain(PACKAGE_NAME);
+  expect(stdout).toContain(`Updated msa from ${VERSION} to ${targetVersion}`);
 });
 
 describe("package commands", () => {

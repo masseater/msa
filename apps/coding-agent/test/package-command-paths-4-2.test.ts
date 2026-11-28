@@ -9,7 +9,7 @@ import packageCommandPathsSupport from "./package-command-paths-support.ts";
 const { PACKAGE_NAME, VERSION } = config;
 const { readEnv } = platform;
 
-const { getNewerPatchVersion, runPackageCommandDirectly, usePackageTest } =
+const { captureConsole, getNewerPatchVersion, runPackageCommandDirectly, usePackageTest } =
   packageCommandPathsSupport;
 
 const pkg = usePackageTest();
@@ -53,19 +53,10 @@ const installFailingPnpm = Effect.fn("installFailingPnpm")(function* () {
 
 const printsAPnpmMetadataHintWhenSelf = Effect.gen(function* () {
   yield* installFailingPnpm();
-  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-  const joined = (spy: typeof logSpy) =>
-    spy.mock.calls.map(([message]) => String(message)).join("\n");
-  const { stderr, stdout } = yield* runPackageCommandDirectly(["update", "--self"]).pipe(
-    Effect.map(() => ({ stderr: joined(errorSpy), stdout: joined(logSpy) })),
-    Effect.ensuring(
-      Effect.sync(() => {
-        logSpy.mockRestore();
-        errorSpy.mockRestore();
-      }),
-    ),
-  );
+  const output = captureConsole();
+  yield* runPackageCommandDirectly(["update", "--self"]);
+  const stderr = output.stderr();
+  const stdout = output.stdout();
   expect(process.exitCode).toBe(1);
   expect(stdout).not.toContain("Updated msa");
   expect(stderr).toContain("exited with code 23");

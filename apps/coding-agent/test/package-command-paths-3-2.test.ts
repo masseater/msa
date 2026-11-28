@@ -14,7 +14,8 @@ const { DefaultPackageManager, SettingsManager } = codingAgent;
 const { initTheme } = themeModule;
 const { main } = mainModule;
 
-const { paths, toJsonTextSync, usePackageTest } = packageCommandPathsSupport;
+const { captureConsole, mainOutput, paths, toJsonTextSync, usePackageTest } =
+  packageCommandPathsSupport;
 
 const pkg = usePackageTest();
 
@@ -141,20 +142,12 @@ const cyclesProjectBuiltInExtensionOverridesIn = () =>
 const showsAFriendlyErrorForUnknownInstall = () =>
   runTest(
     Effect.gen(function* () {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["install", "--unknown"])).resolves.toBeUndefined());
-
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain('Unknown option --unknown for "install".');
-        expect(stderr).toContain(
-          'Use "msa --help" or "msa install <source> [-l] [--approve|--no-approve]".',
-        );
-        expect(process.exitCode).toBe(1);
-      } finally {
-        errorSpy.mockRestore();
-      }
+      const stderr = yield* mainOutput(["install", "--unknown"], "error");
+      expect(stderr).toContain('Unknown option --unknown for "install".');
+      expect(stderr).toContain(
+        'Use "msa --help" or "msa install <source> [-l] [--approve|--no-approve]".',
+      );
+      expect(process.exitCode).toBe(1);
     }),
   );
 
@@ -164,45 +157,31 @@ const suggestsTheConfiguredSourceWhenUpdateInput = () =>
       const settingsPath = joinPath(pkg.agentDir, "settings.json");
       yield* writeTextFile(settingsPath, yield* toJsonText({ packages: ["npm:msa-formatter"] }));
 
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const output = captureConsole();
 
-      try {
-        yield* awaited(expect(main(["update", "msa-formatter"])).resolves.toBeUndefined());
+      yield* awaited(expect(main(["update", "msa-formatter"])).resolves.toBeUndefined());
 
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain("Did you mean npm:msa-formatter?");
-        expect(stdout).not.toContain("Updated msa-formatter");
-        expect(process.exitCode).toBe(1);
+      const stderr = output.stderr();
+      const stdout = output.stdout();
+      expect(stderr).toContain("Did you mean npm:msa-formatter?");
+      expect(stdout).not.toContain("Updated msa-formatter");
+      expect(process.exitCode).toBe(1);
 
-        const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
-          packages?: string[];
-        };
-        expect(settings.packages).toContain("npm:msa-formatter");
-      } finally {
-        errorSpy.mockRestore();
-        logSpy.mockRestore();
-      }
+      const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
+        packages?: string[];
+      };
+      expect(settings.packages).toContain("npm:msa-formatter");
     }),
   );
 
 const showsAFriendlyErrorForMissingInstall = () =>
   runTest(
     Effect.gen(function* () {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["install"])).resolves.toBeUndefined());
-
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain("Missing install source.");
-        expect(stderr).toContain("Usage: msa install <source> [-l]");
-        expect(stderr).not.toContain("at ");
-        expect(process.exitCode).toBe(1);
-      } finally {
-        errorSpy.mockRestore();
-      }
+      const stderr = yield* mainOutput(["install"], "error");
+      expect(stderr).toContain("Missing install source.");
+      expect(stderr).toContain("Usage: msa install <source> [-l]");
+      expect(stderr).not.toContain("at ");
+      expect(process.exitCode).toBe(1);
     }),
   );
 

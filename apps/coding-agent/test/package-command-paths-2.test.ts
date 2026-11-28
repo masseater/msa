@@ -1,13 +1,13 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import ProjectTrustStore from "../src/core/project-trust-store.ts";
 import mainModule from "../src/main.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 
 const { main } = mainModule;
-const { usePackageTest } = packageCommandPathsSupport;
+const { captureConsole, mainOutput, usePackageTest } = packageCommandPathsSupport;
 
 const pkg = usePackageTest();
 
@@ -36,19 +36,11 @@ const usesDefaultProjectTrustForList = () =>
         joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["list"])).resolves.toBeUndefined());
-
-        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stdout).toContain("Project packages:");
-        expect(stdout).toContain("npm:@project/pkg");
-        expect(stdout).not.toContain("No packages installed.");
-        expect(process.exitCode).toBeUndefined();
-      } finally {
-        logSpy.mockRestore();
-      }
+      const stdout = yield* mainOutput(["list"]);
+      expect(stdout).toContain("Project packages:");
+      expect(stdout).toContain("npm:@project/pkg");
+      expect(stdout).not.toContain("No packages installed.");
+      expect(process.exitCode).toBeUndefined();
     }),
   );
 
@@ -60,29 +52,25 @@ const usesProjectTrustExtensionsForPackageCommands = () =>
         joinPath(pkg.projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const output = captureConsole();
 
-      try {
-        yield* awaited(
-          expect(
-            main(["list"], {
-              extensionFactories: [
-                (msa) => {
-                  msa.on("project_trust", () => ({ trusted: "yes" }));
-                },
-              ],
-            }),
-          ).resolves.toBeUndefined(),
-        );
+      yield* awaited(
+        expect(
+          main(["list"], {
+            extensionFactories: [
+              (msa) => {
+                msa.on("project_trust", () => ({ trusted: "yes" }));
+              },
+            ],
+          }),
+        ).resolves.toBeUndefined(),
+      );
 
-        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stdout).toContain("Project packages:");
-        expect(stdout).toContain("npm:@project/pkg");
-        expect(stdout).not.toContain("No packages installed.");
-        expect(process.exitCode).toBeUndefined();
-      } finally {
-        logSpy.mockRestore();
-      }
+      const stdout = output.stdout();
+      expect(stdout).toContain("Project packages:");
+      expect(stdout).toContain("npm:@project/pkg");
+      expect(stdout).not.toContain("No packages installed.");
+      expect(process.exitCode).toBeUndefined();
     }),
   );
 
@@ -108,30 +96,26 @@ const doesNotPromptOrAskExtensionsFor = () =>
         }),
       );
       let projectTrustCalled = false;
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      captureConsole();
 
-      try {
-        yield* awaited(
-          expect(
-            main(["update", "--extensions"], {
-              extensionFactories: [
-                (msa) => {
-                  msa.on("project_trust", () => {
-                    projectTrustCalled = true;
-                    return { trusted: "yes" };
-                  });
-                },
-              ],
-            }),
-          ).resolves.toBeUndefined(),
-        );
+      yield* awaited(
+        expect(
+          main(["update", "--extensions"], {
+            extensionFactories: [
+              (msa) => {
+                msa.on("project_trust", () => {
+                  projectTrustCalled = true;
+                  return { trusted: "yes" };
+                });
+              },
+            ],
+          }),
+        ).resolves.toBeUndefined(),
+      );
 
-        expect(projectTrustCalled).toBe(false);
-        expect(yield* pathExists(recordPath)).toBe(false);
-        expect(process.exitCode).toBeUndefined();
-      } finally {
-        logSpy.mockRestore();
-      }
+      expect(projectTrustCalled).toBe(false);
+      expect(yield* pathExists(recordPath)).toBe(false);
+      expect(process.exitCode).toBeUndefined();
     }),
   );
 
@@ -153,16 +137,12 @@ const usesSavedProjectTrustDuringUpdate = () =>
         }),
       );
       yield* awaited(new ProjectTrustStore(pkg.agentDir).set(pkg.projectDir, true));
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      captureConsole();
 
-      try {
-        yield* awaited(expect(main(["update", "--extensions"])).resolves.toBeUndefined());
+      yield* awaited(expect(main(["update", "--extensions"])).resolves.toBeUndefined());
 
-        expect(yield* pathExists(recordPath)).toBe(true);
-        expect(process.exitCode).toBeUndefined();
-      } finally {
-        logSpy.mockRestore();
-      }
+      expect(yield* pathExists(recordPath)).toBe(true);
+      expect(process.exitCode).toBeUndefined();
     }),
   );
 
@@ -179,18 +159,10 @@ const letsTrustJsonOverrideDefaultProjectTrust = () =>
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
       yield* awaited(new ProjectTrustStore(pkg.agentDir).set(pkg.projectDir, false));
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["list"])).resolves.toBeUndefined());
-
-        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stdout).toContain("No packages installed.");
-        expect(stdout).not.toContain("Project packages:");
-        expect(process.exitCode).toBeUndefined();
-      } finally {
-        logSpy.mockRestore();
-      }
+      const stdout = yield* mainOutput(["list"]);
+      expect(stdout).toContain("No packages installed.");
+      expect(stdout).not.toContain("Project packages:");
+      expect(process.exitCode).toBeUndefined();
     }),
   );
 
@@ -199,19 +171,11 @@ const blocksLocalPackageChangesWhenProjectIs = () =>
     Effect.gen(function* () {
       yield* makeDirectory(joinPath(pkg.projectDir, ".msa"));
       yield* writeTextFile(joinPath(pkg.projectDir, ".msa", "settings.json"), "{}");
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      try {
-        yield* awaited(expect(main(["install", "-l", "./local-package"])).resolves.toBeUndefined());
-
-        const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stderr).toContain(
-          "Project is not trusted. Use --approve to modify local package config.",
-        );
-        expect(process.exitCode).toBe(1);
-      } finally {
-        errorSpy.mockRestore();
-      }
+      const stderr = yield* mainOutput(["install", "-l", "./local-package"], "error");
+      expect(stderr).toContain(
+        "Project is not trusted. Use --approve to modify local package config.",
+      );
+      expect(process.exitCode).toBe(1);
     }),
   );
 

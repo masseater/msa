@@ -8,7 +8,7 @@ import mainModule from "../src/main.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 
 const { main } = mainModule;
-const { runPackageCommandDirectly, usePackageTest } = packageCommandPathsSupport;
+const { captureConsole, runPackageCommandDirectly, usePackageTest } = packageCommandPathsSupport;
 
 const pkg = usePackageTest();
 
@@ -17,21 +17,15 @@ const { awaited, joinPath, runTest } = testing;
 const showsInstallSubcommandHelp = () =>
   runTest(
     Effect.gen(function* () {
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const output = captureConsole();
 
-      try {
-        yield* awaited(expect(main(["install", "--help"])).resolves.toBeUndefined());
+      yield* awaited(expect(main(["install", "--help"])).resolves.toBeUndefined());
 
-        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-        expect(stdout).toContain("Usage:");
-        expect(stdout).toContain("msa install <source> [-l]");
-        expect(errorSpy).not.toHaveBeenCalled();
-        expect(process.exitCode).toBeUndefined();
-      } finally {
-        logSpy.mockRestore();
-        errorSpy.mockRestore();
-      }
+      const stdout = output.stdout();
+      expect(stdout).toContain("Usage:");
+      expect(stdout).toContain("msa install <source> [-l]");
+      expect(output.errorSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).toBeUndefined();
     }),
   );
 
@@ -46,8 +40,7 @@ const refreshesOnlyModelCatalogsWithUpdateModels = () =>
       const create = vi
         .spyOn(ModelRuntime, "create")
         .mockResolvedValue({ refresh } as unknown as modelRuntimeTypes.ModelRuntime);
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const output = captureConsole();
 
       yield* runPackageCommandDirectly(["update", "--models"]);
 
@@ -62,10 +55,8 @@ const refreshesOnlyModelCatalogsWithUpdateModels = () =>
         force: true,
         signal: expect.any(AbortSignal),
       });
-      expect(logSpy.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
-        "Model catalogs refreshed",
-      );
-      expect(errorSpy).not.toHaveBeenCalled();
+      expect(output.stdout()).toContain("Model catalogs refreshed");
+      expect(output.errorSpy).not.toHaveBeenCalled();
       expect(process.exitCode).toBeUndefined();
     }),
   );
@@ -74,14 +65,12 @@ const rejectsUpdateModelsCombinedWithAnotherUpdate = () =>
   runTest(
     Effect.gen(function* () {
       const create = vi.spyOn(ModelRuntime, "create");
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const output = captureConsole();
 
       yield* runPackageCommandDirectly(["update", "--models", "--self"]);
 
       expect(create).not.toHaveBeenCalled();
-      expect(errorSpy.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
-        "--models cannot be combined with --self",
-      );
+      expect(output.stderr()).toContain("--models cannot be combined with --self");
       expect(process.exitCode).toBe(1);
     }),
   );
