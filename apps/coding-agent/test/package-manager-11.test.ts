@@ -9,7 +9,7 @@ const { usePackageManagerFixture } = packageManagerFixture;
 
 const fixture = usePackageManagerFixture();
 
-const { packagePaths } = packageManagerSupport;
+const { packagePaths, skillOf } = packageManagerSupport;
 
 const {
   awaited,
@@ -30,11 +30,11 @@ const shouldExpandPositiveGlobManifestEntriesBefore = () =>
       yield* makeDirectory(joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api"));
       yield* writeTextFile(
         joinPath(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown", "SKILL.md"),
-        "---\nname: pdf-to-markdown\ndescription: PDF to Markdown\n---\nContent",
+        skillOf("pdf-to-markdown", "PDF to Markdown"),
       );
       yield* writeTextFile(
         joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api", "SKILL.md"),
-        "---\nname: document-processor-api\ndescription: DWS\n---\nContent",
+        skillOf("document-processor-api", "DWS"),
       );
       yield* writeTextFile(
         joinPath(pkgDir, "package.json"),
@@ -81,7 +81,7 @@ const shouldSortManifestGlobMatchesAndUseSetup = () =>
     yield* writeTextFile(joinPath(extensionGroupDir, "index.ts"), "export default function() {}");
     yield* writeTextFile(
       joinPath(pkgDir, "plugins", "local", "skills", "local-skill", "SKILL.md"),
-      "---\nname: local-skill\ndescription: Local\n---\n",
+      skillOf("local-skill", "Local", ""),
     );
     return { linkedPluginSource, pkgDir };
   });
@@ -92,7 +92,7 @@ const shouldSortManifestGlobMatchesAndUse = () =>
       const { linkedPluginSource, pkgDir } = yield* shouldSortManifestGlobMatchesAndUseSetup();
       yield* writeTextFile(
         joinPath(linkedPluginSource, "skills", "linked-skill", "SKILL.md"),
-        "---\nname: linked-skill\ndescription: Linked\n---\n",
+        skillOf("linked-skill", "Linked", ""),
       );
       yield* makeSymlink(linkedPluginSource, joinPath(pkgDir, "plugins", "linked"));
       yield* writeTextFile(

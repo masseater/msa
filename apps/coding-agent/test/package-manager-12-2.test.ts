@@ -12,14 +12,11 @@ const fixture = usePackageManagerFixture();
 
 const { filesOf, resolves } = packageManagerScenario;
 
-const { packagePaths } = packageManagerSupport;
+const { packagePaths, skillOf } = packageManagerSupport;
 
 const { awaited, joinPath, makeDirectory, runTest, toJsonText, writeTextFile } = testing;
 
 const SOURCE = "export default function() {}";
-const skillOf = (name: string, label: string) =>
-  `---\nname: ${name}\ndescription: ${label}\n---\nContent`;
-
 const scenarios = [
   {
     name: "should force-include extensions with + pattern after exclusion",

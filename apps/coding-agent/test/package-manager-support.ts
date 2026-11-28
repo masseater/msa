@@ -29,9 +29,13 @@ const isDisabled = (
 };
 const packagePaths = { isDisabled, isEnabled, pathEndsWith };
 
+const skillOf = (name: string, description: string, body = "Content"): string =>
+  `---\nname: ${name}\ndescription: ${description}\n---\n${body}`;
+
 const packageManagerSupport = {
   normalizeForMatch,
   packagePaths,
+  skillOf,
 };
 
 export default packageManagerSupport;

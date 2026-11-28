@@ -4,6 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import packageManagerFixture from "./package-manager-fixture.ts";
+import packageManagerSupport from "./package-manager-support.ts";
+
+const { skillOf } = packageManagerSupport;
 
 const { usePackageManagerFixture } = packageManagerFixture;
 
@@ -27,15 +30,15 @@ const shouldScanAgentsSkillsFromCwdUp = () =>
         "SKILL.md",
       );
       yield* makeDirectory(joinPath(fixture.tempDir, ".agents", "skills", "above-repo"));
-      yield* writeTextFile(aboveRepoSkill, "---\nname: above-repo\ndescription: above\n---\n");
+      yield* writeTextFile(aboveRepoSkill, skillOf("above-repo", "above", ""));
 
       const repoRootSkill = joinPath(repoRoot, ".agents", "skills", "repo-root", "SKILL.md");
       yield* makeDirectory(joinPath(repoRoot, ".agents", "skills", "repo-root"));
-      yield* writeTextFile(repoRootSkill, "---\nname: repo-root\ndescription: repo\n---\n");
+      yield* writeTextFile(repoRootSkill, skillOf("repo-root", "repo", ""));
 
       const nestedSkill = joinPath(repoRoot, "packages", ".agents", "skills", "nested", "SKILL.md");
       yield* makeDirectory(joinPath(repoRoot, "packages", ".agents", "skills", "nested"));
-      yield* writeTextFile(nestedSkill, "---\nname: nested\ndescription: nested\n---\n");
+      yield* writeTextFile(nestedSkill, skillOf("nested", "nested", ""));
 
       const pm = new DefaultPackageManager({
         agentDir: fixture.agentDir,
@@ -59,11 +62,11 @@ const shouldScanAgentsSkillsUpToFilesystem = () =>
 
       const rootSkill = joinPath(nonRepoRoot, ".agents", "skills", "root", "SKILL.md");
       yield* makeDirectory(joinPath(nonRepoRoot, ".agents", "skills", "root"));
-      yield* writeTextFile(rootSkill, "---\nname: root\ndescription: root\n---\n");
+      yield* writeTextFile(rootSkill, skillOf("root", "root", ""));
 
       const middleSkill = joinPath(nonRepoRoot, "a", ".agents", "skills", "middle", "SKILL.md");
       yield* makeDirectory(joinPath(nonRepoRoot, "a", ".agents", "skills", "middle"));
-      yield* writeTextFile(middleSkill, "---\nname: middle\ndescription: middle\n---\n");
+      yield* writeTextFile(middleSkill, skillOf("middle", "middle", ""));
 
       const pm = new DefaultPackageManager({
         agentDir: fixture.agentDir,
