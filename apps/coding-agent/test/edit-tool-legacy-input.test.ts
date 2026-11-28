@@ -26,53 +26,6 @@ const keepsLegacyFieldsOutOfThePublic = () => {
   expect(definition.parameters.properties).not.toHaveProperty("newText");
 };
 
-const foldsTopLevelOldtextNewtextIntoEdits = () => {
-  const definition = createEditToolDefinition(process.cwd());
-  const prepared = definition.prepareArguments!({
-    newText: "after",
-    oldText: "before",
-    path: "file.txt",
-  });
-  expect(prepared).toEqual({
-    edits: [{ newText: "after", oldText: "before" }],
-    path: "file.txt",
-  });
-};
-
-const appendsLegacyReplacementToExistingEdits = () => {
-  const definition = createEditToolDefinition(process.cwd());
-  const prepared = definition.prepareArguments!({
-    edits: [{ newText: "b", oldText: "a" }],
-    newText: "d",
-    oldText: "c",
-    path: "file.txt",
-  });
-  expect(prepared).toEqual({
-    edits: [
-      { newText: "b", oldText: "a" },
-      { newText: "d", oldText: "c" },
-    ],
-    path: "file.txt",
-  });
-};
-
-const passesThroughValidInputUnchanged = () => {
-  const definition = createEditToolDefinition(process.cwd());
-  const input = {
-    edits: [{ newText: "b", oldText: "a" }],
-    path: "file.txt",
-  };
-  const prepared = definition.prepareArguments!(input);
-  expect(prepared).toBe(input);
-};
-
-const passesThroughNonObjectInputUnchanged = () => {
-  const definition = createEditToolDefinition(process.cwd());
-  expect(definition.prepareArguments!(null)).toBe(null);
-  expect(definition.prepareArguments!(undefined)).toBe(undefined);
-  expect(definition.prepareArguments!("garbage")).toBe("garbage");
-};
-
 const preparedArgsExecuteCorrectly = () =>
   runTest(
     Effect.gen(function* () {
@@ -103,46 +56,64 @@ const preparedArgsExecuteCorrectly = () =>
     }),
   );
 
+const validInput = {
+  edits: [{ newText: "b", oldText: "a" }],
+  path: "file.txt",
+};
+
+const rewrittenCases = [
+  {
+    expected: { edits: [{ newText: "after", oldText: "before" }], path: "file.txt" },
+    input: { newText: "after", oldText: "before", path: "file.txt" },
+    name: "folds top-level oldText/newText into edits",
+  },
+  {
+    expected: {
+      edits: [
+        { newText: "b", oldText: "a" },
+        { newText: "d", oldText: "c" },
+      ],
+      path: "file.txt",
+    },
+    input: {
+      edits: [{ newText: "b", oldText: "a" }],
+      newText: "d",
+      oldText: "c",
+      path: "file.txt",
+    },
+    name: "appends legacy replacement to existing edits",
+  },
+  {
+    expected: { edits: [{ newText: "b", oldText: "a" }], path: "file.txt" },
+    input: { edits: JSON.stringify([{ newText: "b", oldText: "a" }]), path: "file.txt" },
+    name: "parses edits from a JSON string",
+  },
+  {
+    expected: { edits: "not json", path: "file.txt" },
+    input: { edits: "not json", path: "file.txt" },
+    name: "leaves edits alone when the string is not valid JSON",
+  },
+];
+
+const passedThroughCases = [
+  { input: validInput, name: "passes through valid input unchanged" },
+  { input: null, name: "passes through null unchanged" },
+  { input: undefined, name: "passes through undefined unchanged" },
+  { input: "garbage", name: "passes through a string unchanged" },
+];
+
 describe("edit tool prepareArguments", () => {
   it("keeps legacy fields out of the public schema", keepsLegacyFieldsOutOfThePublic);
 
-  it("folds top-level oldText/newText into edits", foldsTopLevelOldtextNewtextIntoEdits);
+  it.each(rewrittenCases)("$name", ({ expected, input }) => {
+    const definition = createEditToolDefinition(process.cwd());
+    expect(definition.prepareArguments!(input)).toEqual(expected);
+  });
 
-  it("appends legacy replacement to existing edits", appendsLegacyReplacementToExistingEdits);
-
-  it("passes through valid input unchanged", passesThroughValidInputUnchanged);
-
-  it("passes through non-object input unchanged", passesThroughNonObjectInputUnchanged);
+  it.each(passedThroughCases)("$name", ({ input }) => {
+    const definition = createEditToolDefinition(process.cwd());
+    expect(definition.prepareArguments!(input)).toBe(input);
+  });
 
   it("prepared args execute correctly", preparedArgsExecuteCorrectly);
-});
-
-const parsesEditsFromAJsonString = () => {
-  const definition = createEditToolDefinition(process.cwd());
-  const prepared = definition.prepareArguments!({
-    edits: JSON.stringify([{ newText: "b", oldText: "a" }]),
-    path: "file.txt",
-  });
-  expect(prepared).toEqual({
-    edits: [{ newText: "b", oldText: "a" }],
-    path: "file.txt",
-  });
-};
-
-const leavesEditsAloneWhenTheStringIs = () => {
-  const definition = createEditToolDefinition(process.cwd());
-  const prepared = definition.prepareArguments!({
-    edits: "not json",
-    path: "file.txt",
-  });
-  expect(prepared).toEqual({
-    edits: "not json",
-    path: "file.txt",
-  });
-};
-
-describe("edit tool stringified edits", () => {
-  it("parses edits from a JSON string", parsesEditsFromAJsonString);
-
-  it("leaves edits alone when the string is not valid JSON", leavesEditsAloneWhenTheStringIs);
 });

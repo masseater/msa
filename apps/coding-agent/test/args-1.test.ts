@@ -76,76 +76,56 @@ const parsesRShorthand = () => {
   expect(result.resume).toBe(true);
 };
 
-const parsesProvider = () => {
-  const result = parseArgs(["--provider", "openai"]);
-  expect(result.provider).toBe("openai");
-};
-
-const parsesModel = () => {
-  const result = parseArgs(["--model", "gpt-4o"]);
-  expect(result.model).toBe("gpt-4o");
-};
-
-const parsesApiKey = () => {
-  const result = parseArgs(["--api-key", "sk-test-key"]);
-  expect(result.apiKey).toBe("sk-test-key");
-};
-
-const parsesSystemPrompt = () => {
-  const result = parseArgs(["--system-prompt", "You are a helpful assistant"]);
-  expect(result.systemPrompt).toBe("You are a helpful assistant");
-};
-
-const parsesAppendSystemPrompt = () => {
-  const result = parseArgs(["--append-system-prompt", "Additional context"]);
-  expect(result.appendSystemPrompt).toEqual(["Additional context"]);
-};
-
-const parsesMultipleAppendSystemPromptFlags = () => {
-  const result = parseArgs([
-    "--append-system-prompt",
-    "Context A",
-    "--append-system-prompt",
-    "Context B",
-  ]);
-  expect(result.appendSystemPrompt).toEqual(["Context A", "Context B"]);
-};
-
-const parsesSession = () => {
-  const result = parseArgs(["--session", "/path/to/session.jsonl"]);
-  expect(result.session).toBe("/path/to/session.jsonl");
-};
-
-const parsesSessionId = () => {
-  const result = parseArgs(["--session-id", "orchestrated-session"]);
-  expect(result.sessionId).toBe("orchestrated-session");
-};
-
-const parsesFork = () => {
-  const result = parseArgs(["--fork", "1234abcd"]);
-  expect(result.fork).toBe("1234abcd");
-  expect(result.messages).toEqual([]);
-};
-
-const parsesExport = () => {
-  const result = parseArgs(["--export", "session.jsonl"]);
-  expect(result.export).toBe("session.jsonl");
-};
-
-const parsesThinking = () => {
-  const result = parseArgs(["--thinking", "high"]);
-  expect(result.thinking).toBe("high");
-};
-
-const parsesModelsAsCommaSeparatedList = () => {
-  const result = parseArgs(["--models", "gpt-4o,claude-sonnet,gemini-pro"]);
-  expect(result.models).toEqual(["gpt-4o", "claude-sonnet", "gemini-pro"]);
-};
-
-const ignoresEmptyEntriesInModels = () => {
-  const result = parseArgs(["--models", "gpt-4o, ,claude-sonnet,"]);
-  expect(result.models).toEqual(["gpt-4o", "claude-sonnet"]);
-};
+const valueFlagCases = [
+  { argv: ["--provider", "openai"], expected: { provider: "openai" }, name: "--provider" },
+  { argv: ["--model", "gpt-4o"], expected: { model: "gpt-4o" }, name: "--model" },
+  {
+    argv: ["--api-key", "sk-test-key"],
+    expected: { apiKey: "sk-test-key" },
+    name: "--api-key",
+  },
+  {
+    argv: ["--system-prompt", "You are a helpful assistant"],
+    expected: { systemPrompt: "You are a helpful assistant" },
+    name: "--system-prompt",
+  },
+  {
+    argv: ["--append-system-prompt", "Additional context"],
+    expected: { appendSystemPrompt: ["Additional context"] },
+    name: "--append-system-prompt",
+  },
+  {
+    argv: ["--append-system-prompt", "Context A", "--append-system-prompt", "Context B"],
+    expected: { appendSystemPrompt: ["Context A", "Context B"] },
+    name: "multiple --append-system-prompt flags",
+  },
+  {
+    argv: ["--session", "/path/to/session.jsonl"],
+    expected: { session: "/path/to/session.jsonl" },
+    name: "--session",
+  },
+  {
+    argv: ["--session-id", "orchestrated-session"],
+    expected: { sessionId: "orchestrated-session" },
+    name: "--session-id",
+  },
+  {
+    argv: ["--fork", "1234abcd"],
+    expected: { fork: "1234abcd", messages: [] },
+    name: "--fork",
+  },
+  {
+    argv: ["--export", "session.jsonl"],
+    expected: { export: "session.jsonl" },
+    name: "--export",
+  },
+  { argv: ["--thinking", "high"], expected: { thinking: "high" }, name: "--thinking" },
+  {
+    argv: ["--models", "gpt-4o,claude-sonnet,gemini-pro"],
+    expected: { models: ["gpt-4o", "claude-sonnet", "gemini-pro"] },
+    name: "--models as comma-separated list",
+  },
+];
 
 describe("parseArgs", () => {
   describe("--version flag", () => {
@@ -190,30 +170,15 @@ describe("parseArgs", () => {
 
 describe("parseArgs", () => {
   describe("flags with values", () => {
-    test("parses --provider", parsesProvider);
+    test.each(valueFlagCases)("parses $name", ({ argv, expected }) => {
+      expect(parseArgs(argv)).toMatchObject(expected);
+    });
 
-    test("parses --model", parsesModel);
-
-    test("parses --api-key", parsesApiKey);
-
-    test("parses --system-prompt", parsesSystemPrompt);
-
-    test("parses --append-system-prompt", parsesAppendSystemPrompt);
-
-    test("parses multiple --append-system-prompt flags", parsesMultipleAppendSystemPromptFlags);
-
-    test("parses --session", parsesSession);
-
-    test("parses --session-id", parsesSessionId);
-
-    test("parses --fork", parsesFork);
-
-    test("parses --export", parsesExport);
-
-    test("parses --thinking", parsesThinking);
-
-    test("parses --models as comma-separated list", parsesModelsAsCommaSeparatedList);
-
-    test("ignores empty entries in --models", ignoresEmptyEntriesInModels);
+    test("ignores empty entries in --models", () => {
+      expect(parseArgs(["--models", "gpt-4o, ,claude-sonnet,"]).models).toEqual([
+        "gpt-4o",
+        "claude-sonnet",
+      ]);
+    });
   });
 });

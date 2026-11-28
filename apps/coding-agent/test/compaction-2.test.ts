@@ -1,4 +1,3 @@
-import type compatTypes from "@msa/ai/compat.types";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import compaction from "../src/core/compaction/index.ts";
@@ -19,66 +18,56 @@ beforeEach(() => {
   resetEntryCounter();
 });
 
-const shouldFindTheLastNonAbortedAssistant = () => {
-  const entries: sessionManagerTypes.SessionEntry[] = [
-    createMessageEntry(createUserMessage("Hello")),
-    createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50))),
-    createMessageEntry(createUserMessage("How are you?")),
-    createMessageEntry(createAssistantMessage("Good", createMockUsage(200, 100))),
-  ];
+const hello = () => createMessageEntry(createUserMessage("Hello"));
+const hi = () => createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50)));
 
-  const usage = getLastAssistantUsage(entries);
-  expect(usage).not.toBeNull();
-  expect(usage!.input).toBe(200);
-};
-
-const shouldSkipAbortedMessages = () => {
-  const abortedMsg: compatTypes.AssistantMessage = {
-    ...createAssistantMessage("Aborted", createMockUsage(300, 150)),
-    stopReason: "aborted",
-  };
-
-  const entries: sessionManagerTypes.SessionEntry[] = [
-    createMessageEntry(createUserMessage("Hello")),
-    createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50))),
-    createMessageEntry(createUserMessage("How are you?")),
-    createMessageEntry(abortedMsg),
-  ];
-
-  const usage = getLastAssistantUsage(entries);
-  expect(usage).not.toBeNull();
-  expect(usage!.input).toBe(100);
-};
-
-const shouldSkipAllZeroAssistantUsage = () => {
-  const entries: sessionManagerTypes.SessionEntry[] = [
-    createMessageEntry(createUserMessage("Hello")),
-    createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50))),
-    createMessageEntry(createUserMessage("continue")),
-    createMessageEntry(createAssistantMessage("Partial", createMockUsage(0, 0))),
-  ];
-
-  const usage = getLastAssistantUsage(entries);
-  expect(usage).not.toBeNull();
-  expect(usage!.input).toBe(100);
-};
-
-const shouldReturnUndefinedIfNoAssistantMessages = () => {
-  const entries: sessionManagerTypes.SessionEntry[] = [
-    createMessageEntry(createUserMessage("Hello")),
-  ];
-  expect(getLastAssistantUsage(entries)).toBeUndefined();
-};
+const usageCases: {
+  readonly entries: () => sessionManagerTypes.SessionEntry[];
+  readonly expectedInput: number | undefined;
+  readonly name: string;
+}[] = [
+  {
+    entries: () => [
+      hello(),
+      hi(),
+      createMessageEntry(createUserMessage("How are you?")),
+      createMessageEntry(createAssistantMessage("Good", createMockUsage(200, 100))),
+    ],
+    expectedInput: 200,
+    name: "should find the last non-aborted assistant message usage",
+  },
+  {
+    entries: () => [
+      hello(),
+      hi(),
+      createMessageEntry(createUserMessage("How are you?")),
+      createMessageEntry({
+        ...createAssistantMessage("Aborted", createMockUsage(300, 150)),
+        stopReason: "aborted",
+      }),
+    ],
+    expectedInput: 100,
+    name: "should skip aborted messages",
+  },
+  {
+    entries: () => [
+      hello(),
+      hi(),
+      createMessageEntry(createUserMessage("continue")),
+      createMessageEntry(createAssistantMessage("Partial", createMockUsage(0, 0))),
+    ],
+    expectedInput: 100,
+    name: "should skip all-zero assistant usage",
+  },
+  {
+    entries: () => [hello()],
+    expectedInput: undefined,
+    name: "should return undefined if no assistant messages",
+  },
+];
 
 describe("getLastAssistantUsage", () => {
-  it(
-    "should find the last non-aborted assistant message usage",
-    shouldFindTheLastNonAbortedAssistant,
-  );
-  it("should skip aborted messages", shouldSkipAbortedMessages);
-  it("should skip all-zero assistant usage", shouldSkipAllZeroAssistantUsage);
-  it(
-    "should return undefined if no assistant messages",
-    shouldReturnUndefinedIfNoAssistantMessages,
-  );
+  it.each(usageCases)("$name", ({ entries, expectedInput }) => {
+    expect(getLastAssistantUsage(entries())?.input).toBe(expectedInput);
+  });
 });

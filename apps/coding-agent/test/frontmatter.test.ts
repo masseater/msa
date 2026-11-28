@@ -14,12 +14,6 @@ const parsesKeysStripsQuotesAndReturnsBody = () => {
   expect(body).toBe("Body text");
 };
 
-const normalizesNewlinesAndHandlesCrlf = () => {
-  const input = "---\r\nname: test\r\n---\r\nLine one\r\nLine two";
-  const { body } = parseFrontmatter<Record<string, string>>(input);
-  expect(body).toBe("Line one\nLine two");
-};
-
 const throwsOnInvalidYamlFrontmatter = () => {
   const input = "---\nfoo: [bar\n---\nBody";
   expect(() => parseFrontmatter<Record<string, string>>(input)).toThrow(/at line 1, column 10/u);
@@ -52,8 +46,6 @@ const returnsEmptyObjectForEmptyOrComment = () => {
 describe("parseFrontmatter", () => {
   it("parses keys, strips quotes, and returns body", parsesKeysStripsQuotesAndReturnsBody);
 
-  it("normalizes newlines and handles CRLF", normalizesNewlinesAndHandlesCrlf);
-
   it("throws on invalid YAML frontmatter", throwsOnInvalidYamlFrontmatter);
 
   it("parses | multiline yaml syntax", parsesMultilineYamlSyntax);
@@ -69,18 +61,31 @@ describe("parseFrontmatter", () => {
   );
 });
 
-const removesFrontmatterAndTrimsBody = () => {
-  const input = "---\nkey: value\n---\n\nBody\n";
-  expect(stripFrontmatter(input)).toBe("Body");
-};
+const bodyOfParsed = (input: string) => parseFrontmatter<Record<string, string>>(input).body;
 
-const returnsBodyWhenNoFrontmatterPresent = () => {
-  const input = "\n  No frontmatter body  \n";
-  expect(stripFrontmatter(input)).toBe("\n  No frontmatter body  \n");
-};
+const bodyCases = [
+  {
+    body: "Line one\nLine two",
+    input: "---\r\nname: test\r\n---\r\nLine one\r\nLine two",
+    name: "parseFrontmatter normalizes newlines and handles CRLF",
+    read: bodyOfParsed,
+  },
+  {
+    body: "Body",
+    input: "---\nkey: value\n---\n\nBody\n",
+    name: "stripFrontmatter removes frontmatter and trims body",
+    read: stripFrontmatter,
+  },
+  {
+    body: "\n  No frontmatter body  \n",
+    input: "\n  No frontmatter body  \n",
+    name: "stripFrontmatter returns body when no frontmatter present",
+    read: stripFrontmatter,
+  },
+];
 
-describe("stripFrontmatter", () => {
-  it("removes frontmatter and trims body", removesFrontmatterAndTrimsBody);
-
-  it("returns body when no frontmatter present", returnsBodyWhenNoFrontmatterPresent);
+describe("frontmatter body", () => {
+  it.each(bodyCases)("$name", ({ body, input, read }) => {
+    expect(read(input)).toBe(body);
+  });
 });

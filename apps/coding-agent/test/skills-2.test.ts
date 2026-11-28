@@ -10,29 +10,32 @@ const { runTest } = testing;
 
 const MINIMUM_FIXTURE_SKILLS = 6;
 
-const shouldLoadAllSkillsFromFixtureDirectory = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills } = yield* loadedFrom(fixturesDir);
+type Loaded = Effect.Success<ReturnType<typeof loadedFrom>>;
 
+const loadCases: {
+  readonly dir: string;
+  readonly name: string;
+  readonly verify: (loaded: Loaded) => void;
+}[] = [
+  {
+    dir: fixturesDir,
+    name: "should load all skills from fixture directory",
+    verify: ({ skills }) => {
       expect(skills.length).toBeGreaterThanOrEqual(MINIMUM_FIXTURE_SKILLS);
-    }),
-  );
-
-const shouldReturnEmptyForNonExistentDirectory = () =>
-  runTest(
-    Effect.gen(function* () {
-      const { skills, diagnostics } = yield* loadedFrom("/non/existent/path");
-
+    },
+  },
+  {
+    dir: "/non/existent/path",
+    name: "should return empty for non-existent directory",
+    verify: ({ skills, diagnostics }) => {
       expect(skills).toHaveLength(0);
       expect(diagnostics).toHaveLength(0);
-    }),
-  );
+    },
+  },
+];
 
 describe("skills", () => {
   describe("loadSkillsFromDir", () => {
-    it("should load all skills from fixture directory", shouldLoadAllSkillsFromFixtureDirectory);
-
-    it("should return empty for non-existent directory", shouldReturnEmptyForNonExistentDirectory);
+    it.each(loadCases)("$name", ({ dir, verify }) => runTest(Effect.map(loadedFrom(dir), verify)));
   });
 });
