@@ -1,6 +1,4 @@
-import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
-import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -12,9 +10,9 @@ const { completeSummarization, generateSummary, generateSummaryWithUsage } = com
 
 const { normalizeContext } = ai;
 
-const { createModel } = compactionSummaryReasoning1Support;
+const { createModel, messages, mockSummaryResponse } = compactionSummaryReasoning1Support;
 
-const { awaited, currentTimeMillis, runTest } = testing;
+const { awaited, runTest } = testing;
 
 const { completeSimpleMock } = vi.hoisted(() => ({
   completeSimpleMock: vi.fn(),
@@ -31,28 +29,6 @@ vi.mock("@msa/ai/compat", (importOriginal) =>
     }),
   ),
 );
-
-const mockSummaryResponse: aiTypes.AssistantMessage = {
-  api: "anthropic-messages" as const,
-  content: [{ text: "## Goal\nTest summary", type: "text" as const }],
-  model: "claude-sonnet-4-5",
-  provider: "anthropic-api",
-  role: "assistant",
-  stopReason: "stop",
-  timestamp: currentTimeMillis(),
-  usage: {
-    cacheRead: 0,
-    cacheWrite: 0,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-    input: 10,
-    output: 10,
-    totalTokens: 20,
-  },
-};
-
-const messages: agentTypes.AgentMessage[] = [
-  { content: "Summarize this.", role: "user", timestamp: currentTimeMillis() },
-];
 
 const usesTheProvidedThinkingLevelForReasoning = () =>
   runTest(
